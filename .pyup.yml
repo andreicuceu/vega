@@ -3,6 +3,10 @@
 # allowed: all, insecure, False
 update: all
 
+# set the default branch
+# default: empty, the default branch on GitHub
+branch: update
+
 # update schedule
 # default: empty
 # allowed: "every day", "every week", ..
