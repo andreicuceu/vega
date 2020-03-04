@@ -6,7 +6,7 @@ from scipy.sparse import csr_matrix
 from lyafit.model import model
 import lyafit.parser as parser
 
-
+@pytest.mark.skip
 def test_model():
     filename = "D:\\work\\run\\DR16\\chi2.ini"
     dic_init = parser.parse_chi2(filename)
