@@ -11,7 +11,8 @@ if (sys.version_info > (3, 0)):
 else:
     import ConfigParser
 
-import fitsio
+# import fitsio
+from astropy.io import fits
 from . import data, utils, priors
 
 def parse_chi2(filename):
@@ -29,14 +30,14 @@ def parse_chi2(filename):
         p = resource_filename('picca', 'fitter2')+'/models/{}'.format(p)
     print('INFO: reading input Pk {}'.format(p))
 
-    h = fitsio.FITS(p)
-    zref = h[1].read_header()['ZREF']
+    h =fits.open(p)
+    zref = h[1].header['ZREF']
     dic_init['fiducial']['zref'] = zref
-    dic_init['fiducial']['Om'] = h[1].read_header()['OM']
-    dic_init['fiducial']['OL'] = h[1].read_header()['OL']
-    dic_init['fiducial']['k'] = h[1]['K'][:]
-    dic_init['fiducial']['pk'] = h[1]['PK'][:]
-    dic_init['fiducial']['pksb'] = h[1]['PKSB'][:]
+    dic_init['fiducial']['Om'] = h[1].header['OM']
+    dic_init['fiducial']['OL'] = h[1].header['OL']
+    dic_init['fiducial']['k'] = h[1].data['K'][:]
+    dic_init['fiducial']['pk'] = h[1].data['PK'][:]
+    dic_init['fiducial']['pksb'] = h[1].data['PKSB'][:]
     h.close()
     try: ## For Python2.7 compatibility
         dic_init['fiducial']['full-shape'] = int(cp['fiducial']['full-shape'])==1

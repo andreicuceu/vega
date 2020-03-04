@@ -1,5 +1,6 @@
-import fitsio
+# import fitsio
 from functools import partial
+from astropy.io import fits
 import scipy as sp
 from scipy import linalg
 from scipy.sparse import csr_matrix
@@ -9,7 +10,7 @@ from . import pk, xi
 
 class data:
     def __init__(self,dic_init):
-
+        self.dic_init = dic_init
         self.name = dic_init['data']['name']
         self.tracer1 = {}
         self.tracer2 = {}
@@ -30,23 +31,23 @@ class data:
 
 
         fdata = dic_init['data']['filename']
-        h = fitsio.FITS(fdata)
-        da = h[1]['DA'][:]
-        co = h[1]['CO'][:]
-        dm = csr_matrix(h[1]['DM'][:])
-        rp = h[1]['RP'][:]
-        rt = h[1]['RT'][:]
-        z = h[1]['Z'][:]
+        h = fits.open(fdata)
+        da = h[1].data['DA'][:]
+        co = h[1].data['CO'][:]
+        dm = csr_matrix(h[1].data['DM'][:])
+        rp = h[1].data['RP'][:]
+        rt = h[1].data['RT'][:]
+        z = h[1].data['Z'][:]
         try:
-            dmrp = h[2]['DMRP'][:]
-            dmrt = h[2]['DMRT'][:]
-            dmz = h[2]['DMZ'][:]
+            dmrp = h[2].data['DMRP'][:]
+            dmrt = h[2].data['DMRT'][:]
+            dmz = h[2].data['DMZ'][:]
         except (IOError, ValueError):
             dmrp = rp.copy()
             dmrt = rt.copy()
             dmz = z.copy()
         coef_binning_model = sp.sqrt(dmrp.size/rp.size)
-        head = h[1].read_header()
+        head = h[1].header
 
         h.close()
 
@@ -250,7 +251,7 @@ class data:
                 for m in dic_init['metals']['in tracer2']:
                     self.tracerMet[m] = { 'name':m, 'type':'continuous' }
 
-            hmet = fitsio.FITS(dic_init['metals']['filename'])
+            hmet = fits.open(dic_init['metals']['filename'])
 
             assert 'in tracer1' in dic_init['metals'] or 'in tracer2' in dic_init['metals']
 
@@ -259,46 +260,46 @@ class data:
 
                 for m in dic_init['metals']['in tracer1']:
                     self.z_evol[m] = partial(getattr(xi, dic_init['metals']['z evol']), zref=zeff)
-                    self.rp_met[(self.tracer1['name'], m)] = hmet[2]["RP_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.rt_met[(self.tracer1['name'], m)] = hmet[2]["RT_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.z_met[(self.tracer1['name'], m)] = hmet[2]["Z_{}_{}".format(self.tracer1['name'],m)][:]
+                    self.rp_met[(self.tracer1['name'], m)] = hmet[2].data["RP_{}_{}".format(self.tracer1['name'],m)][:]
+                    self.rt_met[(self.tracer1['name'], m)] = hmet[2].data["RT_{}_{}".format(self.tracer1['name'],m)][:]
+                    self.z_met[(self.tracer1['name'], m)] = hmet[2].data["Z_{}_{}".format(self.tracer1['name'],m)][:]
 
                     try:
-                        self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[2]["DM_{}_{}".format(self.tracer1['name'],m)][:])
+                        self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[2].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
                     except:
-                        self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[3]["DM_{}_{}".format(self.tracer1['name'],m)][:])
+                        self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[3].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
 
-                    self.rp_met[(m, self.tracer1['name'])] = hmet[2]["RP_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.rt_met[(m, self.tracer1['name'])] = hmet[2]["RT_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.z_met[(m, self.tracer1['name'])] = hmet[2]["Z_{}_{}".format(self.tracer1['name'],m)][:]
+                    self.rp_met[(m, self.tracer1['name'])] = hmet[2].data["RP_{}_{}".format(self.tracer1['name'],m)][:]
+                    self.rt_met[(m, self.tracer1['name'])] = hmet[2].data["RT_{}_{}".format(self.tracer1['name'],m)][:]
+                    self.z_met[(m, self.tracer1['name'])] = hmet[2].data["Z_{}_{}".format(self.tracer1['name'],m)][:]
                     try:
-                        self.dm_met[(m, self.tracer1['name'])] = csr_matrix(hmet[2]["DM_{}_{}".format(self.tracer1['name'],m)][:])
+                        self.dm_met[(m, self.tracer1['name'])] = csr_matrix(hmet[2].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
                     except:
-                        self.dm_met[(m, self.tracer1['name'])] = csr_matrix(hmet[3]["DM_{}_{}".format(self.tracer1['name'],m)][:])
+                        self.dm_met[(m, self.tracer1['name'])] = csr_matrix(hmet[3].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
 
             else:
                 if 'in tracer2' in dic_init['metals']:
                     for m in dic_init['metals']['in tracer2']:
                         self.z_evol[m] = partial(getattr(xi, dic_init['metals']['z evol']), zref=zeff)
-                        self.rp_met[(self.tracer1['name'], m)] = hmet[2]["RP_{}_{}".format(self.tracer1['name'],m)][:]
-                        self.rt_met[(self.tracer1['name'], m)] = hmet[2]["RT_{}_{}".format(self.tracer1['name'],m)][:]
-                        self.z_met[(self.tracer1['name'], m)] = hmet[2]["Z_{}_{}".format(self.tracer1['name'],m)][:]
+                        self.rp_met[(self.tracer1['name'], m)] = hmet[2].data["RP_{}_{}".format(self.tracer1['name'],m)][:]
+                        self.rt_met[(self.tracer1['name'], m)] = hmet[2].data["RT_{}_{}".format(self.tracer1['name'],m)][:]
+                        self.z_met[(self.tracer1['name'], m)] = hmet[2].data["Z_{}_{}".format(self.tracer1['name'],m)][:]
                         try:
-                            self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[2]["DM_{}_{}".format(self.tracer1['name'],m)][:])
+                            self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[2].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
                         except:
-                            self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[3]["DM_{}_{}".format(self.tracer1['name'],m)][:])
+                            self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[3].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
 
                 if 'in tracer1' in dic_init['metals']:
                     for m in dic_init['metals']['in tracer1']:
                         self.z_evol[m] = partial(getattr(xi, dic_init['metals']['z evol']), zref=zeff)
-                        self.rp_met[(m, self.tracer2['name'])] = hmet[2]["RP_{}_{}".format(m, self.tracer2['name'])][:]
-                        self.rt_met[(m, self.tracer2['name'])] = hmet[2]["RT_{}_{}".format(m, self.tracer2['name'])][:]
-                        self.z_met[(m, self.tracer2['name'])] = hmet[2]["Z_{}_{}".format(m, self.tracer2['name'])][:]
+                        self.rp_met[(m, self.tracer2['name'])] = hmet[2].data["RP_{}_{}".format(m, self.tracer2['name'])][:]
+                        self.rt_met[(m, self.tracer2['name'])] = hmet[2].data["RT_{}_{}".format(m, self.tracer2['name'])][:]
+                        self.z_met[(m, self.tracer2['name'])] = hmet[2].data["Z_{}_{}".format(m, self.tracer2['name'])][:]
 
                         try:
-                            self.dm_met[(m, self.tracer2['name'])] = csr_matrix(hmet[2]["DM_{}_{}".format(m, self.tracer2['name'])][:])
+                            self.dm_met[(m, self.tracer2['name'])] = csr_matrix(hmet[2].data["DM_{}_{}".format(m, self.tracer2['name'])][:])
                         except:
-                            self.dm_met[(m, self.tracer2['name'])] = csr_matrix(hmet[3]["DM_{}_{}".format(m, self.tracer2['name'])][:])
+                            self.dm_met[(m, self.tracer2['name'])] = csr_matrix(hmet[3].data["DM_{}_{}".format(m, self.tracer2['name'])][:])
 
             ## add metal-metal cross correlations
             if 'in tracer1' in dic_init['metals'] and 'in tracer2' in dic_init['metals']:
@@ -307,13 +308,13 @@ class data:
                     if self.tracer1 == self.tracer2:
                         j0=i
                     for m2 in dic_init['metals']['in tracer2'][j0:]:
-                        self.rp_met[(m1, m2)] = hmet[2]["RP_{}_{}".format(m1,m2)][:]
-                        self.rt_met[(m1, m2)] = hmet[2]["RT_{}_{}".format(m1,m2)][:]
-                        self.z_met[(m1, m2)] = hmet[2]["Z_{}_{}".format(m1,m2)][:]
+                        self.rp_met[(m1, m2)] = hmet[2].data["RP_{}_{}".format(m1,m2)][:]
+                        self.rt_met[(m1, m2)] = hmet[2].data["RT_{}_{}".format(m1,m2)][:]
+                        self.z_met[(m1, m2)] = hmet[2].data["Z_{}_{}".format(m1,m2)][:]
                         try:
-                            self.dm_met[(m1, m2)] = csr_matrix(hmet[2]["DM_{}_{}".format(m1,m2)][:])
+                            self.dm_met[(m1, m2)] = csr_matrix(hmet[2].data["DM_{}_{}".format(m1,m2)][:])
                         except ValueError:
-                            self.dm_met[(m1, m2)] = csr_matrix(hmet[3]["DM_{}_{}".format(m1,m2)][:])
+                            self.dm_met[(m1, m2)] = csr_matrix(hmet[3].data["DM_{}_{}".format(m1,m2)][:])
 
             hmet.close()
 

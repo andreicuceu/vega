@@ -7,12 +7,24 @@ from scipy.sparse import csr_matrix
 
 from . import pk, xi
 
+
 class model:
     """
     Class for computing Lyman-alpha forest correlation function models
     """
 
-    def __init__(self, dic_init, r = None, mu = None):
+    def __init__(self, dic_init, r=None, mu=None, z=None, dm=None):
+
+        # ! For now we need to import r, mu, z and dm,
+        # ! until I figure out how to compute defaults
+        assert r is not None
+        assert mu is not None
+        assert z is not None
+        self.r = r
+        self.mu = mu
+        self.z = z
+        self.dm = dm
+
         self.name = dic_init['data']['name']
         self.tracer1 = {}
         self.tracer2 = {}
@@ -30,18 +42,6 @@ class model:
         zref = dic_init['model']['zref']
         Om = dic_init['model']['Om']
         OL = dic_init['model']['OL']
-
-        rp_min = dic_init['cuts']['rp-min']
-        rp_max = dic_init['cuts']['rp-max']
-
-        rt_min = dic_init['cuts']['rt-min']
-        rt_max = dic_init['cuts']['rt-max']
-
-        r_min = dic_init['cuts']['r-min']
-        r_max = dic_init['cuts']['r-max']
-
-        mu_min = dic_init['cuts']['mu-min']
-        mu_max = dic_init['cuts']['mu-max']
 
         if 'hcd_model' in dic_init:
             self.pk = pk.pk(getattr(pk, dic_init['model']['model-pk']), dic_init['hcd_model']['name_hcd_model'])
@@ -89,7 +89,7 @@ class model:
         self.par_limit = dic_init['parameters']['limits']
         self.par_fixed = dic_init['parameters']['fix']
 
-    def xi_model(self, xi, k, pk_lin, pars):
+    def xi_model(self, k, pk_lin, pars):
         xi = self.xi(self.r, self.mu, k, pk_lin, self.pk,
                     tracer1 = self.tracer1, tracer2 = self.tracer2, ell_max = self.ell_max, **pars)
 
