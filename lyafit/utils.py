@@ -148,6 +148,24 @@ def convert_instance_to_dictionary(inst):
     dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith('__'))
     return dic
 
+def get_hcd_pars(pars):
+    """Get the right HCD parameters to be used for the pk
+
+    Parameters
+    ----------
+    pars : dict
+        Computation parameters
+    """
+    key = "bias_hcd_{}".format(pars['name'])
+    if key in pars :
+        bias_hcd = pars[key]
+    else :
+        bias_hcd = pars["bias_hcd"]
+    beta_hcd = pars["beta_hcd"]
+    L0 = pars["L0_hcd"]
+
+    return bias_hcd, beta_hcd, L0
+
 def timeit(method):
     def timed(*args, **kw):
         ts = time.time()
