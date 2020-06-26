@@ -1,4 +1,5 @@
 import scipy as sp
+import numpy as np
 from . import utils
 from pkg_resources import resource_filename
 
@@ -29,12 +30,15 @@ def pk_NL(k, pk_lin, tracer1, tracer2, **kwargs):
     kt = k*sp.sqrt(1-muk**2)
     st2 = kwargs['sigmaNL_per']**2
     sp2 = kwargs['sigmaNL_par']**2
-    return sp.exp(-(kp**2*sp2+kt**2*st2)/2)
-
+    
+    pk = sp.exp(-(kp**2*sp2+kt**2*st2)/2)
+    print('NL peak old:', np.sum(pk))
+    return pk
 def pk_kaiser(k, pk_lin, tracer1, tracer2, **kwargs):
     bias1, beta1, bias2, beta2 = bias_beta(kwargs, tracer1, tracer2)
     pk = bias1*bias2*pk_lin*(1+beta1*muk**2)*(1+beta2*muk**2)
-
+    
+    print('kaiser old:', np.sum(pk))
     return pk
 
 def pk_hcd(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -55,7 +59,7 @@ def pk_hcd(k, pk_lin, tracer1, tracer2, **kwargs):
     beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
 
     pk = pk_lin*bias_eff1*bias_eff2*(1 + beta_eff1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd old:', np.sum(pk))
     return pk
 
 def pk_hcd_Rogers2018(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -90,7 +94,7 @@ def pk_hcd_Rogers2018(k, pk_lin, tracer1, tracer2, **kwargs):
     beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
 
     pk = pk_lin*bias_eff1*bias_eff2*(1 + beta_eff1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_Rogers2018 old:', np.sum(pk))
     return pk
 
 def pk_hcd_no_mask(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -125,7 +129,7 @@ def pk_hcd_no_mask(k, pk_lin, tracer1, tracer2, **kwargs):
     beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
 
     pk = pk_lin*bias_eff1*bias_eff2*(1 + beta_eff1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_no_mask old:', np.sum(pk))
     return pk
 
 def pk_uv(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -143,7 +147,9 @@ def pk_uv(k, pk_lin, tracer1, tracer2, **kwargs):
     beta2 = beta2/(1 + bias_gamma/bias2*W/(1 + bias_prim*W))
     bias2 = bias2 + bias_gamma*W/(1+bias_prim*W)
 
-    return pk_lin*bias1*bias2*(1+beta1*muk**2)*(1+beta2*muk**2)
+    pk = pk_lin*bias1*bias2*(1+beta1*muk**2)*(1+beta2*muk**2)
+    print('pk_uv old:', np.sum(pk))
+    return pk
 
 def pk_hcd_uv(k, pk_lin, tracer1, tracer2, **kwargs):
     bias1, beta1, bias2, beta2 = bias_beta(kwargs, tracer1, tracer2)
@@ -173,7 +179,7 @@ def pk_hcd_uv(k, pk_lin, tracer1, tracer2, **kwargs):
     beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
 
     pk = pk_lin*bias_eff1*bias_eff2*(1 + beta_eff1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_uv old:', np.sum(pk))
     return pk
 
 def pk_hcd_Rogers2018_uv(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -208,13 +214,15 @@ def pk_hcd_Rogers2018_uv(k, pk_lin, tracer1, tracer2, **kwargs):
     beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
 
     pk = pk_lin*bias_eff1*bias_eff2*(1 + beta_eff1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_Rogers2018_uv old:', np.sum(pk))
     return pk
 
 def dnl_mcdonald(k, pk_lin, tracer1, tracer2, pk_fid, **kwargs):
     assert tracer1['name']=="LYA" and tracer2['name']=="LYA"
     kvel = 1.22*(1+k/0.923)**0.451
     dnl = sp.exp((k/6.4)**0.569-(k/15.3)**2.01-(k*muk/kvel)**1.5)
+    print('dnl_mcdonald')
+    print(np.sum(dnl))
     return dnl
 
 def dnl_arinyo(k, pk_lin, tracer1, tracer2, pk_fid, **kwargs):
@@ -226,9 +234,12 @@ def dnl_arinyo(k, pk_lin, tracer1, tracer2, pk_fid, **kwargs):
     kp = kwargs["dnl_arinyo_kp"]
 
     growth = q1*k*k*k*pk_fid/(2*sp.pi*sp.pi)
+    print(np.sum(pk_fid))
     pecvelocity = sp.power(k/kv,av)*sp.power(sp.fabs(muk),bv)
     pressure = (k/kp)*(k/kp)
     dnl = sp.exp(growth*(1-pecvelocity)-pressure)
+    print('dnl_arinyo')
+    print(np.sum(dnl))
     return dnl
 
 def cached_g2(function):
@@ -238,7 +249,7 @@ def cached_g2(function):
     dataset_name = kwargs['dataset_name']
     Lpar = kwargs["par binsize {}".format(dataset_name)]
     Lper = kwargs["per binsize {}".format(dataset_name)]
-
+    print('cached_g2')
     if dataset_name in memo and sp.allclose(memo[dataset_name][0], [Lpar, Lper]):
       return memo[dataset_name][1]
     else:
@@ -254,7 +265,10 @@ def G2(k, pk_lin, tracer1, tracer2, dataset_name = None, **kwargs):
 
     kp = k*muk
     kt = k*sp.sqrt(1-muk**2)
-    return utils.sinc(kp*Lpar/2)*utils.sinc(kt*Lper/2)
+    
+    g2 = utils.sinc(kp*Lpar/2)*utils.sinc(kt*Lper/2)
+    print('Gk old:', np.sum(g2))
+    return g2
 
 def pk_hcd_cross(k, pk_lin, tracer1, tracer2, **kwargs):
     bias1, beta1, bias2, beta2 = bias_beta(kwargs, tracer1, tracer2)
@@ -275,7 +289,7 @@ def pk_hcd_cross(k, pk_lin, tracer1, tracer2, **kwargs):
         bias_eff2 = bias2 + bias_hcd*F_hcd
         beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
         pk = pk_lin*bias1*bias_eff2*(1 + beta1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_cross')
     return pk
 
 def pk_hcd_Rogers2018_cross(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -301,7 +315,7 @@ def pk_hcd_Rogers2018_cross(k, pk_lin, tracer1, tracer2, **kwargs):
         bias_eff2 = bias2 + bias_hcd*F_hcd
         beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
         pk = pk_lin*bias1*bias_eff2*(1 + beta1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_Rogers2018_cross')
     return pk
 
 def pk_hcd_cross_no_mask(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -329,7 +343,7 @@ def pk_hcd_cross_no_mask(k, pk_lin, tracer1, tracer2, **kwargs):
         bias_eff2 = bias2 + bias_hcd*F_hcd
         beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
         pk = pk_lin*bias1*bias_eff2*(1 + beta1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_cross_no_mask')
     return pk
 
 def pk_uv_cross(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -348,7 +362,7 @@ def pk_uv_cross(k, pk_lin, tracer1, tracer2, **kwargs):
     else:
         beta2 = beta2/(1 + bias_gamma/bias2*W/(1 + bias_prim*W))
         bias2 = bias2 + bias_gamma*W/(1+bias_prim*W)
-
+    print('pk_uv_cross')
     return pk_lin*bias1*bias2*(1+beta1*muk**2)*(1+beta2*muk**2)
 
 def pk_hcd_uv_cross(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -380,7 +394,7 @@ def pk_hcd_uv_cross(k, pk_lin, tracer1, tracer2, **kwargs):
         bias_eff2 = bias2 + bias_hcd*F_hcd
         beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
         pk = pk_lin*bias1*bias_eff2*(1 + beta1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_uv_cross')
     return pk
 
 def pk_hcd_Rogers2018_uv_cross(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -416,7 +430,7 @@ def pk_hcd_Rogers2018_uv_cross(k, pk_lin, tracer1, tracer2, **kwargs):
         bias_eff2 = bias2 + bias_hcd*F_hcd
         beta_eff2 = (bias2 * beta2 + bias_hcd*beta_hcd*F_hcd)/(bias2 + bias_hcd*F_hcd)
         pk = pk_lin*bias1*bias_eff2*(1 + beta1*muk**2)*(1 + beta_eff2*muk**2)
-
+    print('pk_hcd_Rogers2018_uv_cross')
     return pk
 
 def pk_gauss_smoothing(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -428,6 +442,7 @@ def pk_gauss_smoothing(k, pk_lin, tracer1, tracer2, **kwargs):
     kt  = k*sp.sqrt(1.-muk**2)
     st2 = kwargs['per_sigma_smooth']**2
     sp2 = kwargs['par_sigma_smooth']**2
+    print('pk_gauss_smoothing')
     return sp.exp(-(kp**2*sp2+kt**2*st2)/2.)
 
 def pk_gauss_exp_smoothing(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -442,7 +457,7 @@ def pk_gauss_exp_smoothing(k, pk_lin, tracer1, tracer2, **kwargs):
 
     et2 = kwargs['per_exp_smooth']**2
     ep2 = kwargs['par_exp_smooth']**2
-
+    print('pk_gauss_exp_smoothing')
     return sp.exp(-(kp**2*sp2+kt**2*st2)/2.)*sp.exp(-(sp.absolute(kp)*ep2+sp.absolute(kt)*et2) )
 
 def pk_velo_gaus(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -453,6 +468,7 @@ def pk_velo_gaus(k, pk_lin, tracer1, tracer2, **kwargs):
         smooth *= sp.exp( -0.25*(kp*kwargs['sigma_velo_gaus_'+tracer1['name']])**2)
     if tracer2['type']=='discrete':
         smooth *= sp.exp( -0.25*(kp*kwargs['sigma_velo_gaus_'+tracer2['name']])**2)
+    print('pk_velo_gaus')
     return smooth
 
 def pk_velo_lorentz(k, pk_lin, tracer1, tracer2, **kwargs):
@@ -463,4 +479,5 @@ def pk_velo_lorentz(k, pk_lin, tracer1, tracer2, **kwargs):
         smooth *= 1./sp.sqrt(1.+(kp*kwargs['sigma_velo_lorentz_'+tracer1['name']])**2)
     if tracer2['type']=='discrete':
         smooth *= 1./sp.sqrt(1.+(kp*kwargs['sigma_velo_lorentz_'+tracer2['name']])**2)
+    print('pk_velo_lorentz')
     return smooth

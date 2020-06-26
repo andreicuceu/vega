@@ -11,6 +11,7 @@ def test_model():
     filename = "D:\\work\\run\\DR16\\chi2.ini"
     dic_init = parser.parse_chi2(filename)
 
+    # names = dic_init['data sets']['data'][0].par_names
     pars = dic_init['data sets']['data'][0].pars_init
     k = dic_init['fiducial']['k']
     pk_lin = dic_init['fiducial']['pk']
@@ -38,4 +39,4 @@ def test_model():
 
 
 # if __name__ == "__main__":
-#     model_test()
+    # test_model()
