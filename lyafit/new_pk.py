@@ -47,12 +47,11 @@ class PowerSpectrum:
                 self._add_uv = True
 
         self._Fvoigt_data = None
-        if 'fvoigt_model' in self._config:
-            fvoigt_model = self._config['fvoight_model']
-            path = '{}/models/fvoigt_models/Fvoigt_{}.txt'.format(
-                            resource_filename('lyafit', 'lyafit'),
+        if 'fvoigt_model' in self._config.keys():
+            fvoigt_model = self._config['fvoigt_model']
+            path = '{}\\fvoigt_models\\Fvoigt_{}.txt'.format(
+                            resource_filename('lyafit', 'models'),
                             fvoigt_model)
-
             self._Fvoigt_data = sp.loadtxt(path)
 
         self._dataset_name = dataset_name
@@ -115,6 +114,7 @@ class PowerSpectrum:
         # Compute kaiser model
         pk = pk_lin * self.pk_kaiser(bias1, beta1, bias2, beta2)
         print('kaiser new:', np.sum(pk))
+
         # TODO gauss smoothing
         # TODO vel dispersion
 
@@ -131,12 +131,10 @@ class PowerSpectrum:
         # model the effect of binning
         if self._pk_Gk is None:
             self._pk_Gk = self.Gk()
-        print('Gk new:', np.sum(self._pk_Gk))
         pk *= self._pk_Gk
 
         # add non linear large scales
         if self._params['peak']:
-            print('NL peak new:', np.sum(self.pk_NL()))
             pk *= self.pk_NL()
 
         return pk
@@ -260,7 +258,11 @@ class PowerSpectrum:
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
 
-        F_hcd = np.interp(L0 * kp, k_data, F_data, left=0, right=0)
+        if self._tracer1['name'] == self._tracer2['name']:
+            F_hcd = np.interp(L0 * kp, k_data, F_data, left=0, right=0)
+        else:
+            F_hcd = np.interp(L0 * kp, k_data, F_data)
+
         return F_hcd
 
     def pk_NL(self):
