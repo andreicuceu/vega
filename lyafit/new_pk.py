@@ -1,34 +1,34 @@
 import numpy as np
-import scipy as sp
 from pkg_resources import resource_filename
-from . import utils
-
-# ! This should be moved here and propagated to FHT
-muk = utils.muk
+from . import new_utils as utils
 
 class PowerSpectrum:
     """Power Spectrum computation and handling
-    """
+
     # ! Slow operations should be kept in init as that is only called once
     # ! Compute is called many times and should be fast
-    # * Extensions should be have their separate method which is
-    # * called from compute
-
-    def __init__(self, config, tracer1, tracer2, dataset_name=None, pk_fid=None):
-        """[summary]
+    # * Extensions should have their separate method which is
+    # * called from init/compute
+    """
+    def __init__(self, config, tracer1, tracer2, dataset_name=None):
+        """Initialize power spectrum
 
         Parameters
         ----------
         config : dict
             pk config object
-        tracer1 : string
-            Name of tracer 1
-        tracer2 : string
-            Name of tracer 1
+        tracer1 : dict
+            Dict of tracer 1
+        tracer2 : dict
+            Dict of tracer 1
+        dataset_name : string
+            Name of data
         """
         self._config = config
         self._tracer1 = tracer1
         self._tracer2 = tracer2
+        self._dataset_name = dataset_name
+        self.k = config['k']
 
         pk_model = None
         if 'model-pk' in self._config.keys():
@@ -52,20 +52,25 @@ class PowerSpectrum:
             path = '{}\\fvoigt_models\\Fvoigt_{}.txt'.format(
                             resource_filename('lyafit', 'models'),
                             fvoigt_model)
-            self._Fvoigt_data = sp.loadtxt(path)
+            self._Fvoigt_data = np.loadtxt(path)
 
-        self._dataset_name = dataset_name
-        self._pk_fid = pk_fid
         self._pk_Gk = None
+        self._pk_fid = config['pk'] * ((1 + config['zfid']) / (1. + config['zeff']))**2
+
+        # ! This should become a static variable
+        # TODO better names
+        nmuk = 1000
+        muk=(np.arange(nmuk)+0.5)/nmuk
+        self.dmuk = 1. / nmuk
+        self.muk = muk[:, None]
+
         pass
 
-    def compute(self, k, pk_lin, params):
+    def compute(self, pk_lin, params):
         """Handles computation of the Power Spectrum for the input tracers
 
         Parameters
         ----------
-        k : 1D array
-            k bins for the pk
         pk_lin : 1D array
             Linear Power Spectrum
         params : dict
@@ -73,10 +78,9 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
+        ND Array
             pk
         """
-        self._k = k
         self._params = params
 
         bias_beta = utils.bias_beta(params, self._tracer1, self._tracer2)
@@ -112,8 +116,7 @@ class PowerSpectrum:
                                                   bias_hcd, beta_hcd, F_hcd)
 
         # Compute kaiser model
-        pk = pk_lin * self.pk_kaiser(bias1, beta1, bias2, beta2)
-        print('kaiser new:', np.sum(pk))
+        pk = pk_lin * self.pk_kaiser(bias1, beta1, bias2, beta2, self.muk)
 
         # TODO gauss smoothing
         # TODO vel dispersion
@@ -137,15 +140,15 @@ class PowerSpectrum:
         if self._params['peak']:
             pk *= self.pk_NL()
 
-        return pk
+        return self.k, self.muk, pk
 
     @staticmethod
-    def pk_kaiser(bias1, beta1, bias2, beta2):
+    def pk_kaiser(bias1, beta1, bias2, beta2, muk):
         """Compute Kaiser model
 
         Returns
         -------
-        1D Array
+        ND Array
             pk kaiser
         """
         pk = bias1 * bias2
@@ -200,7 +203,7 @@ class PowerSpectrum:
         bias_prim = self._params["bias_prim"]
         lambda_uv = self._params["lambda_uv"]
 
-        W = np.arctan(self._k * lambda_uv) / (self._k * lambda_uv)
+        W = np.arctan(self.k * lambda_uv) / (self.k * lambda_uv)
         beta_eff = beta / (1 + bias_gamma / bias * W / (1 + bias_prim * W))
         bias_eff = bias + bias_gamma * W / (1 + bias_prim * W)
 
@@ -219,7 +222,7 @@ class PowerSpectrum:
         1D Array
             F_hcd
         """
-        kp = self._k * muk
+        kp = self.k * self.muk
         return utils.sinc(kp * L0)
 
     def hcd_Rogers2018(self, L0):
@@ -236,8 +239,8 @@ class PowerSpectrum:
         1D Array
             F_hcd
         """
-        kp = self._k * muk
-        return sp.exp(-L0 * kp)
+        kp = self.k * self.muk
+        return np.exp(-L0 * kp)
 
     def hcd_no_mask(self, L0):
         """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
@@ -254,7 +257,7 @@ class PowerSpectrum:
         1D Array
             F_hcd
         """
-        kp = self._k * muk
+        kp = self.k * self.muk
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
 
@@ -273,8 +276,8 @@ class PowerSpectrum:
         1D Array
             pk
         """
-        kp = self._k * muk
-        kt = self._k * sp.sqrt(1 - muk**2)
+        kp = self.k * self.muk
+        kt = self.k * np.sqrt(1 - self.muk**2)
         st2 = self._params['sigmaNL_per']**2
         sp2 = self._params['sigmaNL_par']**2
         return np.exp(-(kp**2 * sp2 + kt**2 * st2) / 2)
@@ -290,9 +293,9 @@ class PowerSpectrum:
         assert self._tracer1['name'] == "LYA"
         assert self._tracer2['name'] == "LYA"
 
-        kvel = 1.22 * (1 + self._k / 0.923)**0.451
-        dnl = (self._k / 6.4)**0.569 - (self._k / 15.3)**2.01
-        dnl = dnl - (self._k * muk / kvel)**1.5
+        kvel = 1.22 * (1 + self.k / 0.923)**0.451
+        dnl = (self.k / 6.4)**0.569 - (self.k / 15.3)**2.01
+        dnl = dnl - (self.k * self.muk / kvel)**1.5
         return np.exp(dnl)
 
     def dnl_arinyo(self):
@@ -312,9 +315,9 @@ class PowerSpectrum:
         kp = self._params["dnl_arinyo_kp"]
 
         growth = q1 * self._k**3 * self._pk_fid / (2 * np.pi**2)
-        pecvelocity = (self._k / kv)**av * np.fabs(muk)**bv
-        pressure = (self._k / kp) * (self._k / kp)
-        dnl = sp.exp(growth * (1 - pecvelocity) - pressure)
+        pecvelocity = (self.k / kv)**av * np.fabs(self.muk)**bv
+        pressure = (self.k / kp) * (self.k / kp)
+        dnl = np.exp(growth * (1 - pecvelocity) - pressure)
         return dnl
 
     def Gk(self):
@@ -328,6 +331,6 @@ class PowerSpectrum:
         L_par = self._params["par binsize {}".format(self._dataset_name)]
         L_per = self._params["per binsize {}".format(self._dataset_name)]
 
-        kp = self._k * muk
-        kt = self._k * sp.sqrt(1 - muk**2)
+        kp = self.k * self.muk
+        kt = self.k * np.sqrt(1 - self.muk**2)
         return utils.sinc(kp * L_par / 2) * utils.sinc(kt * L_per / 2)

@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 
 def xi(r, mu, k, pk_lin, pk_func, tracer1=None, tracer2=None, ell_max=None, **pars):
     pk_full = pk_func(k, pk_lin, tracer1, tracer2, **pars)
-
+    # print('pk:', sp.sum(pk_full))
     ap, at = utils.cosmo_fit_func(pars)
     rp = r*mu
     rt = r*sp.sqrt(1-mu**2)
@@ -237,8 +237,8 @@ def cached_growth_factor_de(z, zref=None, Om=None, OL=None, **kwargs):
     for i in range(nbins):
         a = 1/(1+z[i])
         D1[i] = 5/2.*Om*hubble(z[i], *pars)*quad(dD1, 0, a, args=pars)[0]
-
     D1 = interp1d(z, D1)
+    # print('d1 o:',D1(1.))
     return D1
 
 ### Lya bias evolution

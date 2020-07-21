@@ -9,15 +9,10 @@ import time
 
 from . import myGamma
 
-nmuk = 1000
-muk=(np.arange(nmuk)+0.5)/nmuk
-dmuk = 1./nmuk
-muk=muk[:,None]
-
 def sinc(x):
     return sp.sin(x)/x
 
-def Pk2Mp(ar,k,pk,ell_vals,tform=None):
+def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
     """
     Implementation of FFTLog from A.J.S. Hamilton (2000)
     assumes log(k) are equally spaced
@@ -65,48 +60,48 @@ def Pk2Mp(ar,k,pk,ell_vals,tform=None):
 
     return xi
 
-def Pk2Xi(ar,mur,k,pk,ell_max=None):
+def Pk2Xi(ar, mur, k, pk, muk, dmuk,ell_max=None):
     ell_vals=[ell for ell in range(0,ell_max+1,2)]
-    xi=Pk2Mp(ar,k,pk,ell_vals)
+    xi=Pk2Mp(ar, k, pk, ell_vals, muk, dmuk)
     for ell in ell_vals:
         xi[ell//2,:]*=L(mur,ell)
     return sp.sum(xi,axis=0)
 
-def Pk2XiRel(ar,mur,k,pk,kwargs):
-    """Calculate the cross-correlation contribution from relativistic effects (Bonvin et al. 2014).
+# def Pk2XiRel(ar,mur,k,pk,kwargs):
+#     """Calculate the cross-correlation contribution from relativistic effects (Bonvin et al. 2014).
 
-    Args:
-        ar (float): r coordinates
-        mur (float): mu coordinates
-        k (float): wavenumbers
-        pk (float): linear matter power spectrum
-        kwargs: dictionary of fit parameters
+#     Args:
+#         ar (float): r coordinates
+#         mur (float): mu coordinates
+#         k (float): wavenumbers
+#         pk (float): linear matter power spectrum
+#         kwargs: dictionary of fit parameters
 
-    Returns:
-        sum of dipole and octupole correlation terms (float)
+#     Returns:
+#         sum of dipole and octupole correlation terms (float)
 
-    """
-    ell_vals=[1,3]
-    xi=Pk2Mp(ar,k,pk,ell_vals,tform="rel")
-    return kwargs["Arel1"]*xi[1//2,:]*L(mur,1) + kwargs["Arel3"]*xi[3//2,:]*L(mur,3)
+#     """
+#     ell_vals=[1,3]
+#     xi=Pk2Mp(ar,k,pk,ell_vals,tform="rel")
+#     return kwargs["Arel1"]*xi[1//2,:]*L(mur,1) + kwargs["Arel3"]*xi[3//2,:]*L(mur,3)
 
-def Pk2XiAsy(ar,mur,k,pk,kwargs):
-    """Calculate the cross-correlation contribution from standard asymmetry (Bonvin et al. 2014).
+# def Pk2XiAsy(ar,mur,k,pk,kwargs):
+#     """Calculate the cross-correlation contribution from standard asymmetry (Bonvin et al. 2014).
 
-    Args:
-        ar (float): r coordinates
-        mur (float): mu coordinates
-        k (float): wavenumbers
-        pk (float): linear matter power spectrum
-        kwargs: dictionary of fit parameters
+#     Args:
+#         ar (float): r coordinates
+#         mur (float): mu coordinates
+#         k (float): wavenumbers
+#         pk (float): linear matter power spectrum
+#         kwargs: dictionary of fit parameters
 
-    Returns:
-        sum of dipole and octupole correlation terms (float)
+#     Returns:
+#         sum of dipole and octupole correlation terms (float)
 
-    """
-    ell_vals=[0,2]
-    xi=Pk2Mp(ar,k,pk,ell_vals,tform="asy")
-    return (kwargs["Aasy0"]*xi[0//2,:] - kwargs["Aasy2"]*xi[2//2,:])*ar*L(mur,1) + kwargs["Aasy3"]*xi[2//2,:]*ar*L(mur,3)
+#     """
+#     ell_vals=[0,2]
+#     xi=Pk2Mp(ar,k,pk,ell_vals,tform="asy")
+#     return (kwargs["Aasy0"]*xi[0//2,:] - kwargs["Aasy2"]*xi[2//2,:])*ar*L(mur,1) + kwargs["Aasy3"]*xi[2//2,:]*ar*L(mur,3)
 
 ### Legendre Polynomial
 def L(mu,ell):
@@ -126,43 +121,43 @@ def bias_beta(kwargs, tracer1, tracer2):
 
     return bias1, beta1, bias2, beta2
 
-def ap_at(kwargs):
-    if kwargs['SB'] and kwargs['peak']:
-        ap = kwargs['ap_sb']
-        at = kwargs['at_sb']
-    elif kwargs['SB']:
+def ap_at(pars):
+    if pars['peak']:
+        return pars['ap'], pars['at']
+
+    if pars['smooth_scaling']:
+        ap = pars['ap_sb']
+        at = pars['at_sb']
+    else:
         ap = 1.
         at = 1.
-    else:
-        ap = kwargs['ap']
-        at = kwargs['at']
+
     return ap, at
 
-def phi_am(kwargs):
-    if kwargs['SB'] and kwargs['peak']:
-        # print('here')
-        phi = kwargs['phi_sb']
-        am = kwargs['am_sb']
-    elif kwargs['SB']:
+def phi_am(pars):
+    if pars['peak']:
+        phi = pars['phi']
+        am = pars['am']
+    elif pars['smooth_scaling']:
+        phi = pars['phi_sb']
+        am = pars['am_sb']
+    else:
         phi = 1.
         am = 1.
-    else:
-        phi = kwargs['phi']
-        am = kwargs['am']
 
     ap = 2 * am / (1 + phi)
     at = ap * phi
     return ap, at
 
-def aiso_epsilon(kwargs):
-    if kwargs['SB']:
-        ap = 1.
-        at = 1.
-    else:
-        aiso = kwargs['aiso']
-        eps = kwargs['1+epsilon']
+def aiso_epsilon(pars):
+    if pars['peak']:
+        aiso = pars['aiso']
+        eps = pars['1+epsilon']
         ap = aiso*eps*eps
         at = aiso/eps
+    else:
+        ap = 1.
+        at = 1.
     return ap, at
 
 def convert_instance_to_dictionary(inst):

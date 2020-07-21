@@ -221,8 +221,8 @@ def dnl_mcdonald(k, pk_lin, tracer1, tracer2, pk_fid, **kwargs):
     assert tracer1['name']=="LYA" and tracer2['name']=="LYA"
     kvel = 1.22*(1+k/0.923)**0.451
     dnl = sp.exp((k/6.4)**0.569-(k/15.3)**2.01-(k*muk/kvel)**1.5)
-    print('dnl_mcdonald')
-    print(np.sum(dnl))
+    # print('dnl_mcdonald')
+    # print(np.sum(dnl))
     return dnl
 
 def dnl_arinyo(k, pk_lin, tracer1, tracer2, pk_fid, **kwargs):
@@ -234,7 +234,7 @@ def dnl_arinyo(k, pk_lin, tracer1, tracer2, pk_fid, **kwargs):
     kp = kwargs["dnl_arinyo_kp"]
 
     growth = q1*k*k*k*pk_fid/(2*sp.pi*sp.pi)
-    print(np.sum(pk_fid))
+    # print(np.sum(pk_fid))
     pecvelocity = sp.power(k/kv,av)*sp.power(sp.fabs(muk),bv)
     pressure = (k/kp)*(k/kp)
     dnl = sp.exp(growth*(1-pecvelocity)-pressure)
