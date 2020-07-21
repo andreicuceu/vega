@@ -92,9 +92,13 @@ class model:
     def xi_model(self, k, pk_lin, pars):
         xi = self.xi(self.r, self.mu, k, pk_lin, self.pk,
                     tracer1 = self.tracer1, tracer2 = self.tracer2, ell_max = self.ell_max, **pars)
-
-        xi *= self.z_evol[self.tracer1['name']](self.z, self.tracer1, **pars)*self.z_evol[self.tracer2['name']](self.z, self.tracer2, **pars)
-        xi *= self.growth_function(self.z, **pars)**2
+        print('Base:',np.sum(xi))
+        evol = self.z_evol[self.tracer1['name']](self.z, self.tracer1, **pars)*self.z_evol[self.tracer2['name']](self.z, self.tracer2, **pars)
+        xi *= evol
+        print('Evol:', np.sum(xi))
+        growth = self.growth_function(self.z, **pars)**2
+        xi *= growth
+        print('Growth:', np.sum(growth))
 
         if self.xi_rad_model is not None and pars['SB'] == True:
             xi += self.xi_rad_model(self.r, self.mu, self.tracer1, self.tracer2, **pars)
