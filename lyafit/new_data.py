@@ -8,28 +8,29 @@ class Data:
     """Class for handling lya forest correlation function data
     An instance of this is required for each cf component
     """
-    def __init__(self, data_config):
+    def __init__(self, corr_item):
         """Read the config file and initialize the data
 
         Parameters
         ----------
-        data_config : ConfigParser
-            Config file for a cf component
+        data_config : CorrelationItem
+            Item object with the component config
         """
-        # First read the config and initialize some variables we need
-        self._name = data_config['data'].get('name')
-        self._tracer1 = {}
-        self._tracer2 = {}
-        self._tracer1['name'] = data_config['data'].get('tracer1')
-        self._tracer1['type'] = data_config['data'].get('tracer1-type')
-        self._tracer2['name'] = data_config['data'].get('tracer2',
-                                                        self._tracer1['name'])
-        self._tracer2['type'] = data_config['data'].get('tracer2-type',
-                                                        self._tracer1['type'])
+        # First save the tracer info
+        self.corr_item = corr_item
+        self.tracer1 = corr_item.tracer1
+        self.tracer2 = corr_item.tracer2
 
         # Read the data file
-        data_path = data_config['data'].get('filename')
-        self._read_data(data_path, data_config['cuts'])
+        data_path = corr_item.config['data'].get('filename')
+        self._read_data(data_path, corr_item.config['cuts'])
+
+        # Read the metal file and init metals in the corr item
+        self.has_metals = False
+        if 'metals' in corr_item.config:
+            tracer_catalog, metal_correlations = self._init_metals(
+                                                 corr_item.config['metals'])
+            self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
     def _read_data(self, data_path, cuts_config):
         """Read the data, mask it and prepare the environment
@@ -65,6 +66,8 @@ class Data:
         self.masked_data_vec = np.zeros(self.mask.sum())
         self.masked_data_vec[:] = self.data_vec[self.mask]
 
+        hdul.close()
+
         # TODO This section can be massively optimized by only performing one
         # TODO Cholesky decomposition for the masked cov (instead of 3)
         # Compute inverse and determinant of the covariance matrix
@@ -85,9 +88,9 @@ class Data:
         # Compute the log determinant using and LDL^T decomposition
         # |C| = Product of Diagonal components of D
         _, d, __ = linalg.ldl(masked_cov)
-        self.log_co_det = np.log(d.diagonal()).sum()
+        self.log_cov_det = np.log(d.diagonal()).sum()
 
-        # ! Why are these named square? Is there a better name?
+        # ? Why are these named square? Is there a better name?
         self.r_square = np.sqrt(rp**2 + rt**2)
         self.mu_square = np.zeros(self.r_square.size)
         w = self.r_square > 0.
@@ -102,7 +105,8 @@ class Data:
         w = self.r > 0.
         self.mu[w] = self.rp[w] / self.r[w]
 
-    def _build_mask(self, rp, rt, cuts_config, data_header):
+    @staticmethod
+    def _build_mask(rp, rt, cuts_config, data_header):
         """Build the mask for the data by comparing
         the cuts from config with the data limits
 
@@ -164,3 +168,113 @@ class Data:
         mask &= (bin_center_mu > mu_min) & (bin_center_mu < mu_max)
 
         return mask
+
+    def _init_metals(self, metal_config):
+        """Read the metal file and initialize all the metal data
+
+        Parameters
+        ----------
+        metal_config : ConfigParser
+            metals section from the config file
+
+        Returns
+        -------
+        dict
+            Dictionary containing all tracer objects (metals and the core ones)
+        list
+            list of all metal correlations we need to compute
+        """
+        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
+
+        # Read metal tracers
+        metals_in_tracer1 = None
+        metals_in_tracer2 = None
+        if 'in tracer1' in metal_config:
+            metals_in_tracer1 = metal_config.get('in tracer1').split()
+        if 'in tracer2' in metal_config:
+            metals_in_tracer2 = metal_config.get('in tracer2').split()
+
+        self.metal_mats = {}
+        self.metal_rp = {}
+        self.metal_rt = {}
+        self.metal_z = {}
+
+        # Build tracer Catalog
+        tracer_catalog = {}
+        tracer_catalog[self.tracer1['name']] = self.tracer1
+        tracer_catalog[self.tracer2['name']] = self.tracer2
+
+        if metals_in_tracer1 is not None:
+            for metal in metals_in_tracer1:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+
+        if metals_in_tracer2 is not None:
+            for metal in metals_in_tracer2:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+
+        # Read the metal file
+        metal_hdul = fits.open(metal_config.get('filename'))
+
+        metal_correlations = []
+        # First look for correlations between tracer1 and metals
+        if 'in tracer2' in metal_config:
+            for metal in metals_in_tracer2:
+                tracers = (self.tracer1['name'], metal)
+                name = self.tracer1['name'] + '_' + metal
+                self.read_metal_correlation(metal_hdul, tracers, name)
+                metal_correlations.append(tracers)
+
+        # Then look for correlations between metals and tracer2
+        # If we have an auto-cf the files are saved in the format tracer-metal
+        if 'in tracer1' in metal_config:
+            for metal in metals_in_tracer1:
+                tracers = (metal, self.tracer2['name'])
+                name = metal + '_' + self.tracer2['name']
+                if self.tracer1 == self.tracer2:
+                    name = self.tracer2['name'] + '_' + metal
+                self.read_metal_correlation(metal_hdul, tracers, name)
+                metal_correlations.append(tracers)
+
+        # Finally look for metal-metal correlations
+        # Some files are reversed order, so reverse order if we don't find it
+        if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
+            for i, metal1 in enumerate(metals_in_tracer1):
+                j0 = 0
+                if self.tracer1 == self.tracer2:
+                    j0 = i
+
+                for metal2 in metals_in_tracer2[j0:]:
+                    tracers = (metal1, metal2)
+                    name = metal1 + '_' + metal2
+
+                    if 'RP_' + name not in metal_hdul[2].columns.names:
+                        name = metal2 + '_' + metal1
+                    self.read_metal_correlation(metal_hdul, tracers, name)
+                    metal_correlations.append(tracers)
+
+        metal_hdul.close()
+
+        return tracer_catalog, metal_correlations
+
+    def read_metal_correlation(self, metal_hdul, tracers, name):
+        """Read a metal correlation from the metal file and add
+        the data to the existing member dictionaries
+
+        Parameters
+        ----------
+        metal_hdul : hduList
+            hduList object for the metal file
+        tracers : tuple
+            Tuple with the names of the two tracers
+        name : string
+            The name of the specific correlation to be read from file
+        """
+        self.metal_rp[tracers] = metal_hdul[2].data['RP_' + name][:]
+        self.metal_rt[tracers] = metal_hdul[2].data['RT_' + name][:]
+        self.metal_z[tracers] = metal_hdul[2].data['Z_' + name][:]
+
+        dm_name = 'DM_' + name
+        if dm_name in metal_hdul[2].columns.names:
+            self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
+        else:
+            self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])

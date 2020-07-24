@@ -1,24 +1,45 @@
-#!/usr/bin/env python
-
-"""Tests for `lyafit` package."""
-
 import pytest
+import numpy as np
+
+import lyafit.parser as parser
+
+from lyafit.lyafit import LyaFit
 
 
-from lyafit import lyafit
+@pytest.mark.skip
+def test_lyafit():
+    filename = "D:\\work\\run\\DR16\\chi2.ini"
+    dic_init = parser.parse_chi2(filename)
+    pars = dic_init['data sets']['data'][0].pars_init
+
+    # New
+    lyafit = LyaFit(filename)
+    pk_full = lyafit.fiducial['pk_full']
+    pk_smooth = lyafit.fiducial['pk_smooth']
+    auto_model = lyafit.models['lyaxlya']
+    new_xi = auto_model.compute(pars, pk_full, pk_smooth)
+
+    # Old
+    k = lyafit.fiducial['k']
+    full_shape = False
+    pars['SB'] = False
+    old_data = dic_init['data sets']['data'][0]
+    chi2 = old_data.chi2(k, pk_full, pk_smooth, full_shape, pars)
+
+    # print('new peak xi:', np.sum(auto_model.xi['peak']))
+    # print('new smooth xi:', np.sum(auto_model.xi['smooth']))
+    # for name1, name2, in auto_model.corr_item.metal_correlations:
+    #     print(name1 + '_' + name2)
+        # print('new peak r:', np.sum(auto_model.Xi_metal[(name1, name2)]._r))
+        # print('new peak mu:', np.sum(auto_model.Xi_metal[(name1, name2)]._mu))
+        # print('new peak xi:', np.sum(auto_model.xi_metal['peak'][(name1, name2)]))
+        # print('new smooth xi:', np.sum(auto_model.xi_metal['smooth'][(name1, name2)]))
+
+    print('old xi full', np.sum(old_data.xi_full))
+    print('new xi full', np.sum(new_xi))
+    print('old xi full', np.sum(np.log(np.abs(old_data.xi_full))))
+    print('new xi full', np.sum(np.log(np.abs(new_xi))))
 
 
-@pytest.fixture
-def response():
-    """Sample pytest fixture.
-
-    See more at: http://doc.pytest.org/en/latest/fixture.html
-    """
-    # import requests
-    # return requests.get('https://github.com/audreyr/cookiecutter-pypackage')
-
-
-def test_content(response):
-    """Sample pytest test function with the pytest fixture as an argument."""
-    # from bs4 import BeautifulSoup
-    # assert 'GitHub' in BeautifulSoup(response.content).title.string
+# if __name__ == "__main__":
+    # test_lyafit()

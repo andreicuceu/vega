@@ -329,6 +329,7 @@ class data:
         for tracer1, tracer2 in self.dm_met:
             rp = self.rp_met[(tracer1, tracer2)]
             rt = self.rt_met[(tracer1, tracer2)]
+
             z = self.z_met[(tracer1, tracer2)]
             dm_met = self.dm_met[(tracer1, tracer2)]
             r = np.sqrt(rp**2+rt**2)
@@ -386,6 +387,7 @@ class data:
         pars['sigmaNL_per'] = sigmaNL_per
 
         xi_full = pars['bao_amp']*xi_peak + xi_sb
+        self.xi_full = xi_full
         dxi = self.da_cut-xi_full[self.mask]
 
         return dxi.T.dot(self.ico.dot(dxi))

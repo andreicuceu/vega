@@ -5,7 +5,6 @@ from scipy.interpolate import interp1d
 
 def xi(r, mu, k, pk_lin, pk_func, tracer1=None, tracer2=None, ell_max=None, **pars):
     pk_full = pk_func(k, pk_lin, tracer1, tracer2, **pars)
-    # print('pk:', sp.sum(pk_full))
     ap, at = utils.cosmo_fit_func(pars)
     rp = r*mu
     rt = r*sp.sqrt(1-mu**2)
@@ -14,6 +13,11 @@ def xi(r, mu, k, pk_lin, pk_func, tracer1=None, tracer2=None, ell_max=None, **pa
     ar = sp.sqrt(arp**2+art**2)
     amu = arp/ar
 
+    # if tracer1['name'] != 'LYA' or tracer2['name'] != 'LYA':
+        # print(tracer1['name'] + '_' + tracer2['name'])
+        # print('old xi:', sp.sum(xi_full))
+        # print('k:', sp.sum(k))
+        # print('pk_full:', sp.sum(pk_full))
     xi_full = utils.Pk2Xi(ar, amu, k, pk_full, ell_max = ell_max)
     return xi_full
 
