@@ -127,10 +127,7 @@ def bias_beta(kwargs, tracer1, tracer2):
     return bias1, beta1, bias2, beta2
 
 def ap_at(kwargs):
-    if kwargs['SB'] and kwargs['peak']:
-        ap = kwargs['ap_sb']
-        at = kwargs['at_sb']
-    elif kwargs['SB']:
+    if kwargs['SB']:
         ap = 1.
         at = 1.
     else:

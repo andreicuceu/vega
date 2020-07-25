@@ -344,7 +344,7 @@ class PowerSpectrum:
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
 
-        growth = q1 * self._k**3 * self._pk_fid / (2 * np.pi**2)
+        growth = q1 * self.k**3 * self._pk_fid / (2 * np.pi**2)
         pec_velocity = (self.k / kv)**av * np.abs(self.muk_grid)**bv
         pressure = (self.k / kp) * (self.k / kp)
         dnl = np.exp(growth * (1 - pec_velocity) - pressure)

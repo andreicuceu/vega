@@ -26,7 +26,6 @@ class Data:
         self._read_data(data_path, corr_item.config['cuts'])
 
         # Read the metal file and init metals in the corr item
-        self.has_metals = False
         if 'metals' in corr_item.config:
             tracer_catalog, metal_correlations = self._init_metals(
                                                  corr_item.config['metals'])
@@ -65,6 +64,7 @@ class Data:
         self.mask = self._build_mask(rp, rt, cuts_config, hdul[1].header)
         self.masked_data_vec = np.zeros(self.mask.sum())
         self.masked_data_vec[:] = self.data_vec[self.mask]
+        self.data_size = len(self.masked_data_vec)
 
         hdul.close()
 
@@ -89,6 +89,7 @@ class Data:
         # |C| = Product of Diagonal components of D
         _, d, __ = linalg.ldl(masked_cov)
         self.log_cov_det = np.log(d.diagonal()).sum()
+        assert isinstance(self.log_cov_det, float)
 
         # ? Why are these named square? Is there a better name?
         self.r_square = np.sqrt(rp**2 + rt**2)

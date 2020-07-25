@@ -8,18 +8,18 @@ from lyafit.lyafit import LyaFit
 
 @pytest.mark.skip
 def test_lyafit():
-    filename = "D:\\work\\run\\DR16\\chi2.ini"
-    dic_init = parser.parse_chi2(filename)
-    pars = dic_init['data sets']['data'][0].pars_init
-
     # New
-    lyafit = LyaFit(filename)
+    main_config = "D:\\work\\run\\DR16_new\\main.ini"
+    lyafit = LyaFit(main_config)
     pk_full = lyafit.fiducial['pk_full']
     pk_smooth = lyafit.fiducial['pk_smooth']
     auto_model = lyafit.models['lyaxlya']
-    new_xi = auto_model.compute(pars, pk_full, pk_smooth)
+    new_xi = auto_model.compute(lyafit.params, pk_full, pk_smooth)
 
     # Old
+    filename = "D:\\work\\run\\DR16\\chi2.ini"
+    dic_init = parser.parse_chi2(filename)
+    pars = dic_init['data sets']['data'][0].pars_init
     k = lyafit.fiducial['k']
     full_shape = False
     pars['SB'] = False
