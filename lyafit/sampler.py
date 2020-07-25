@@ -5,7 +5,7 @@ import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
 
-from . import priors, utils, chi2
+# from . import priors, utils, chi2
 
 class sampler:
     ''' Interface between picca and the nested sampler PolyChord '''
@@ -22,16 +22,16 @@ class sampler:
         self.pksb_lin = dic_init['fiducial']['pksb']
         self.full_shape = dic_init['fiducial']['full-shape']
 
-    def log_lik(self, pars):
-        pars['SB'] = False
-        log_lik = 0
-        for d in self.data:
-            log_lik += d.log_lik(self.k,self.pk_lin,self.pksb_lin,self.full_shape,pars)
+    # def log_lik(self, pars):
+    #     pars['SB'] = False
+    #     log_lik = 0
+    #     for d in self.data:
+    #         log_lik += d.log_lik(self.k,self.pk_lin,self.pksb_lin,self.full_shape,pars)
 
-        for prior in priors.prior_dic.values():
-            log_lik += prior(pars) 
+    #     for prior in priors.prior_dic.values():
+    #         log_lik += prior(pars) 
 
-        return log_lik
+    #     return log_lik
 
     def run(self):
         '''

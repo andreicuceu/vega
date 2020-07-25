@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import lyafit.parser as parser
+import lyafit.old_fitter.parser as parser
 
 from lyafit.lyafit import LyaFit
 

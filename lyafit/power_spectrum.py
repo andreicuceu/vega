@@ -1,6 +1,6 @@
 import numpy as np
 from pkg_resources import resource_filename
-from . import new_utils as utils
+from . import utils
 
 
 class PowerSpectrum:

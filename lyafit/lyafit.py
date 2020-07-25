@@ -5,10 +5,7 @@ from astropy.io import fits
 from pkg_resources import resource_filename
 import configparser
 
-from .correlation_item import CorrelationItem
-from .new_data import Data
-from .new_model import Model
-from . import new_utils
+from . import correlation_item, data, model, utils
 
 
 class LyaFit:
@@ -40,23 +37,23 @@ class LyaFit:
             config.read(os.path.expandvars(path))
 
             name = config['data'].get('name')
-            self.corr_items[name] = CorrelationItem(config)
+            self.corr_items[name] = correlation_item.CorrelationItem(config)
 
         # TODO Can we make this completely optional?
         # initialize the data
         self.data = {}
         for name, corr_item in self.corr_items.items():
-            self.data[name] = Data(corr_item)
+            self.data[name] = data.Data(corr_item)
 
         # initialize the models
         self.models = {}
         for name, corr_item in self.corr_items.items():
-            self.models[name] = Model(corr_item, self.data[name],
-                                      self.fiducial)
+            self.models[name] = model.Model(corr_item, self.data[name],
+                                            self.fiducial)
 
         # TODO Get rid of this and replace with something better
-        new_utils.cosmo_fit_func = getattr(
-            new_utils, self.main_config.get('cosmo-fit type', 'cosmo fit func'))
+        utils.cosmo_fit_func = getattr(
+            utils, self.main_config.get('cosmo-fit type', 'cosmo fit func'))
 
         # TODO add option to read a setup config
         # Read parameters
@@ -162,7 +159,6 @@ class LyaFit:
         # Next get the parameters in the main config
         for param, value in self.main_config.items('parameters'):
             self.params[param] = float(value)
-        print(self.params)
 
     @staticmethod
     def _read_fiducial(fiducial_config):

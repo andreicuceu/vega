@@ -13,7 +13,7 @@ else:
 
 # import fitsio
 from astropy.io import fits
-from . import data, utils, priors, new_utils
+from . import data, utils, priors
 
 def parse_chi2(filename):
     cp = ConfigParser.ConfigParser()
@@ -52,8 +52,6 @@ def parse_chi2(filename):
     dic_init['data sets']['data'] = [data.data(parse_data(os.path.expandvars(d),zeff,dic_init['fiducial'])) for d in cp.get('data sets','ini files').split()]
 
     utils.cosmo_fit_func = getattr(utils, cp.get('cosmo-fit type','cosmo fit func'))
-
-    new_utils.cosmo_fit_func = getattr(new_utils, cp.get('cosmo-fit type','cosmo fit func'))
 
     dic_init['outfile'] = cp.get('output','filename')
 

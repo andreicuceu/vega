@@ -1,114 +1,183 @@
-from functools import partial
 import numpy as np
 
-import scipy
-from scipy import linalg
-from scipy.sparse import csr_matrix
-
-from . import pk, xi
+# from . import new_pk, new_xi
+from . import power_spectrum
+from . import correlation_func as corr_func
 
 
-class model:
+class Model:
     """
     Class for computing Lyman-alpha forest correlation function models
     """
 
-    def __init__(self, dic_init, r=None, mu=None, z=None, dm=None):
+    def __init__(self, corr_item, data, fiducial):
+        """Initialize the model computation
 
-        # ! For now we need to import r, mu, z and dm,
-        # ! until I figure out how to compute defaults
-        assert r is not None
-        assert mu is not None
-        assert z is not None
-        self.r = r
-        self.mu = mu
-        self.z = z
-        self.dm = dm
+        Parameters
+        ----------
+        corr_item : CorrelationItem
+            Item object with the component config
+        data : Data
+            data object corresponding to the cf component
+        fiducial : dict
+            fiducial config
+        """
+        self.corr_item = corr_item
 
-        self.name = dic_init['data']['name']
-        self.tracer1 = {}
-        self.tracer2 = {}
-        self.tracer1['name'] = dic_init['data']['tracer1']
-        self.tracer1['type'] = dic_init['data']['tracer1-type']
-        if 'tracer2' in dic_init['data']:
-            self.tracer2['name'] = dic_init['data']['tracer2']
-            self.tracer2['type'] = dic_init['data']['tracer2-type']
-        else:
-            self.tracer2['name'] = self.tracer1['name']
-            self.tracer2['type'] = self.tracer1['type']
+        # ! For now we need to import r, mu, z
+        # ! until I add defaults
+        assert data.r is not None
+        assert data.mu is not None
+        assert data.z is not None
+        self._coords_grid = {}
+        self._coords_grid['r'] = data.r
+        self._coords_grid['mu'] = data.mu
+        self._coords_grid['z'] = data.z
 
-        self.ell_max = dic_init['data']['ell-max']
-        zeff = dic_init['model']['zeff']
-        zref = dic_init['model']['zref']
-        Om = dic_init['model']['Om']
-        OL = dic_init['model']['OL']
+        self._data = data
+        self._full_shape = fiducial.get('full-shape', False)
+        self._smooth_scaling = fiducial.get('smooth-scaling', False)
 
-        if 'hcd_model' in dic_init:
-            self.pk = pk.pk(getattr(pk, dic_init['model']['model-pk']), dic_init['hcd_model']['name_hcd_model'])
-        else:
-            self.pk = pk.pk(getattr(pk, dic_init['model']['model-pk']))
+        self.save_components = fiducial.get('save-components', False)
+        if self.save_components:
+            self.pk = {'peak': {}, 'smooth': {}}
+            self.xi = {'peak': {}, 'smooth': {}}
+            self.xi_distorted = {'peak': {}, 'smooth': {}}
 
-        self.pk *= partial(getattr(pk, 'G2'), dataset_name=self.name)
+        # Initialize main Power Spectrum object
+        self.Pk_core = power_spectrum.PowerSpectrum(
+            self.corr_item.config['model'], fiducial, self.corr_item.tracer1,
+            self.corr_item.tracer2, self.corr_item.name)
 
-        if 'pk-gauss-smoothing' in dic_init['model']:
-            self.pk *= partial(getattr(pk, dic_init['model']['pk-gauss-smoothing']))
-        if 'small scale nl' in dic_init['model']:
-            self.pk *= partial(getattr(pk, dic_init['model']['small scale nl']), pk_fid=dic_init['model']['pk']*((1+zref)/(1.+zeff))**2)
+        # Initialize main Correlation function object
+        self.Xi_core = corr_func.CorrelationFunction(
+            self.corr_item.config['model'], fiducial, self._coords_grid,
+            self.corr_item.tracer1, self.corr_item.tracer2)
 
-        if 'velocity dispersion' in dic_init['model']:
-            self.pk *= getattr(pk, dic_init['model']['velocity dispersion'])
+        # Initialize metals
+        self.Pk_metal = {}
+        self.Xi_metal = {}
+        if self.corr_item.has_metals:
+            for name1, name2 in self.corr_item.metal_correlations:
+                # Get the tracer info
+                tracer1 = self.corr_item.tracer_catalog[name1]
+                tracer2 = self.corr_item.tracer_catalog[name2]
 
-        # add non linear large scales
-        self.pk *= pk.pk_NL
+                # Read rp and rt for the metal correlation
+                rp = data.metal_rp[(name1, name2)]
+                rt = data.metal_rt[(name1, name2)]
 
-        self.xi = partial(getattr(xi, dic_init['model']['model-xi']), name=self.name)
+                # Compute the corresponding r/mu coords
+                r = np.sqrt(rp**2 + rt**2)
+                w = r == 0
+                r[w] = 1e-6
+                mu = rp / r
 
-        self.z_evol = {}
-        self.z_evol[self.tracer1['name']] = partial(getattr(xi, dic_init['model']['z evol {}'.format(self.tracer1['name'])]),zref=zeff)
-        self.z_evol[self.tracer2['name']] = partial(getattr(xi, dic_init['model']['z evol {}'.format(self.tracer2['name'])]),zref=zeff)
-        if dic_init['model']['growth function'] in ['growth_factor_de']:
-            self.growth_function = partial(getattr(xi, dic_init['model']['growth function']), zref=zref, Om=Om, OL=OL)
-        else:
-            self.growth_function = partial(getattr(xi, dic_init['model']['growth function']), zref=zref)
+                # Initialize the coords grid dictionary
+                coords_grid = {}
+                coords_grid['r'] = r
+                coords_grid['mu'] = mu
+                coords_grid['z'] = data.metal_z[(name1, name2)]
 
-        self.xi_rad_model = None
-        if 'radiation effects' in dic_init['model']:
-            self.xi_rad_model = partial(getattr(xi, dic_init['model']['radiation effects']), name=self.name)
+                # Initialize the metal correlation P(k)
+                self.Pk_metal[(name1, name2)] = power_spectrum.PowerSpectrum(
+                                    self.corr_item.config['metals'], fiducial,
+                                    tracer1, tracer2, self.corr_item.name)
 
-        self.xi_rel_model = None
-        if 'relativistic correction' in dic_init['model']:
-            self.xi_rel_model = partial(getattr(xi, dic_init['model']['relativistic correction']), name=self.name)
+                # Initialize the metal correlation Xi
+                self.Xi_metal[(name1, name2)] = corr_func.CorrelationFunction(
+                                    self.corr_item.config['metals'], fiducial,
+                                    coords_grid, tracer1, tracer2)
 
-        self.xi_asy_model = None
-        if 'standard asymmetry' in dic_init['model']:
-            self.xi_asy_model = partial(getattr(xi, dic_init['model']['standard asymmetry']), name=self.name)
+    def _compute_model(self, pars, pk_lin, component='smooth'):
+        """Compute a model correlation function given the input pars
+        and a fiducial linear power spectrum.
+        This is used internally for computing the peak and smooth
+        components separately.
 
-        self.par_names = dic_init['parameters']['values'].keys()
-        self.pars_init = dic_init['parameters']['values']
-        self.par_error = dic_init['parameters']['errors']
-        self.par_limit = dic_init['parameters']['limits']
-        self.par_fixed = dic_init['parameters']['fix']
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_lin : 1D Array
+            Linear power spectrum
+        component : str, optional
+            Name of pk component, used as key for dictionary of saved
+            components ('peak' or 'smooth'), by default 'smooth'
 
-    def xi_model(self, k, pk_lin, pars):
-        xi = self.xi(self.r, self.mu, k, pk_lin, self.pk,
-                    tracer1 = self.tracer1, tracer2 = self.tracer2, ell_max = self.ell_max, **pars)
-        print('Base:',np.sum(xi))
-        evol = self.z_evol[self.tracer1['name']](self.z, self.tracer1, **pars)*self.z_evol[self.tracer2['name']](self.z, self.tracer2, **pars)
-        xi *= evol
-        print('Evol:', np.sum(xi))
-        growth = self.growth_function(self.z, **pars)**2
-        xi *= growth
-        print('Growth:', np.sum(growth))
+        Returns
+        -------
+        1D Array
+            Model correlation function for the specified component
+        """
+        # Compute core model correlation function
+        k, muk, pk_model = self.Pk_core.compute(pk_lin, pars)
+        xi_model = self.Xi_core.compute(k, muk, pk_model, pars)
 
-        if self.xi_rad_model is not None and pars['SB'] == True:
-            xi += self.xi_rad_model(self.r, self.mu, self.tracer1, self.tracer2, **pars)
+        # Save the components
+        if self.save_components:
+            self.pk[component]['core'] = pk_model.copy()
+            self.xi[component]['core'] = xi_model.copy()
 
-        if self.xi_rel_model is not None:
-            xi += self.xi_rel_model(self.r, self.mu, k, pk_lin, self.tracer1, self.tracer2, **pars)
+        # Compute metal correlation function
+        if self.corr_item.has_metals:
+            for name1, name2, in self.corr_item.metal_correlations:
+                k, muk, pk_metal = self.Pk_metal[(name1, name2)].compute(
+                                                        pk_lin, pars)
+                xi_metal = self.Xi_metal[(name1, name2)].compute(
+                                                        k, muk, pk_metal, pars)
 
-        if self.xi_asy_model is not None:
-            xi += self.xi_asy_model(self.r, self.mu, k, pk_lin, self.tracer1, self.tracer2, **pars)
+                # Save the components
+                if self.save_components:
+                    self.pk[component][(name1, name2)] = pk_metal.copy()
+                    self.xi[component][(name1, name2)] = xi_metal.copy()
 
-        xi = self.dm.dot(xi)
+                # Apply the metal matrix
+                if self._data.metal_mats is not None:
+                    xi_metal = self._data.metal_mats[(name1, name2)].dot(
+                                                        xi_metal)
+                    if self.save_components:
+                        self.xi_distorted[component][(name1, name2)] = \
+                            xi_metal.copy()
 
-        return xi
+                # Add the metal component to the full xi
+                xi_model += xi_metal
+
+        # Apply the distortion matrix
+        if self._data.distortion_mat is not None:
+            xi_model = self._data.distortion_mat.dot(xi_model)
+
+            if self.save_components:
+                self.xi_distorted[component]['core'] = xi_model.copy()
+
+        return xi_model
+
+    def compute(self, pars, pk_full, pk_smooth):
+        """Compute full correlation function model using the input parameters,
+        a fiducial linear power spectrum and its smooth component
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_full : 1D Array
+            Full fiducial linear power spectrum
+        pk_smooth : 1D Array
+            Smooth component of the fiducial linear power spectrum
+
+        Returns
+        -------
+        1D Array
+            Full correlation function
+        """
+        pars['smooth_scaling'] = self._smooth_scaling
+        pars['full-shape'] = self._full_shape
+
+        pars['peak'] = True
+        xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
+
+        pars['peak'] = False
+        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
+
+        xi_full = pars['bao_amp'] * xi_peak + xi_smooth
+        return xi_full

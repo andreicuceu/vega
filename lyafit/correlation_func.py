@@ -1,6 +1,5 @@
 import numpy as np
-import copy
-from . import new_utils as utils
+from . import utils
 
 
 class CorrelationFunction:

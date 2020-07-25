@@ -1,401 +1,281 @@
-# import fitsio
-from functools import partial
-from astropy.io import fits
-import scipy as sp
 import numpy as np
+from astropy.io import fits
 from scipy import linalg
 from scipy.sparse import csr_matrix
 
-from . import pk, xi
 
+class Data:
+    """Class for handling lya forest correlation function data
+    An instance of this is required for each cf component
+    """
+    def __init__(self, corr_item):
+        """Read the config file and initialize the data
 
-class data:
-    def __init__(self,dic_init):
-        self.dic_init = dic_init
-        self.name = dic_init['data']['name']
-        self.tracer1 = {}
-        self.tracer2 = {}
-        self.tracer1['name'] = dic_init['data']['tracer1']
-        self.tracer1['type'] = dic_init['data']['tracer1-type']
-        if 'tracer2' in dic_init['data']:
-            self.tracer2['name'] = dic_init['data']['tracer2']
-            self.tracer2['type'] = dic_init['data']['tracer2-type']
+        Parameters
+        ----------
+        data_config : CorrelationItem
+            Item object with the component config
+        """
+        # First save the tracer info
+        self.corr_item = corr_item
+        self.tracer1 = corr_item.tracer1
+        self.tracer2 = corr_item.tracer2
+
+        # Read the data file
+        data_path = corr_item.config['data'].get('filename')
+        self._read_data(data_path, corr_item.config['cuts'])
+
+        # Read the metal file and init metals in the corr item
+        if 'metals' in corr_item.config:
+            tracer_catalog, metal_correlations = self._init_metals(
+                                                 corr_item.config['metals'])
+            self.corr_item.init_metals(tracer_catalog, metal_correlations)
+
+    def _read_data(self, data_path, cuts_config):
+        """Read the data, mask it and prepare the environment
+
+        Parameters
+        ----------
+        data_path : string
+            Path to fits data file
+        cuts_config : ConfigParser
+            cuts section from the config file
+        """
+        hdul = fits.open(data_path)
+
+        self.data_vec = hdul[1].data['DA'][:]
+        self.cov_mat = hdul[1].data['CO'][:]
+        self.distortion_mat = csr_matrix(hdul[1].data['DM'][:])
+        rp = hdul[1].data['RP'][:]
+        rt = hdul[1].data['RT'][:]
+        z = hdul[1].data['Z'][:]
+
+        if len(hdul) > 2:
+            dist_rp = hdul[2].data['DMRP'][:]
+            dist_rt = hdul[2].data['DMRT'][:]
+            dist_z = hdul[2].data['DMZ'][:]
         else:
-            self.tracer2['name'] = self.tracer1['name']
-            self.tracer2['type'] = self.tracer1['type']
+            dist_rp = rp.copy()
+            dist_rt = rt.copy()
+            dist_z = z.copy()
+        self.coeff_binning_model = np.sqrt(dist_rp.size / rp.size)
 
-        self.ell_max = dic_init['data']['ell-max']
-        zeff = dic_init['model']['zeff']
-        zref = dic_init['model']['zref']
-        Om = dic_init['model']['Om']
-        OL = dic_init['model']['OL']
+        # Compute the mask and use it on the data
+        self.mask = self._build_mask(rp, rt, cuts_config, hdul[1].header)
+        self.masked_data_vec = np.zeros(self.mask.sum())
+        self.masked_data_vec[:] = self.data_vec[self.mask]
+        self.data_size = len(self.masked_data_vec)
 
+        hdul.close()
 
-        fdata = dic_init['data']['filename']
-        h = fits.open(fdata)
-        da = h[1].data['DA'][:]
-        co = h[1].data['CO'][:]
-        dm = csr_matrix(h[1].data['DM'][:])
-        rp = h[1].data['RP'][:]
-        rt = h[1].data['RT'][:]
-        z = h[1].data['Z'][:]
+        # TODO This section can be massively optimized by only performing one
+        # TODO Cholesky decomposition for the masked cov (instead of 3)
+        # Compute inverse and determinant of the covariance matrix
+        masked_cov = self.cov_mat[:, self.mask]
+        masked_cov = masked_cov[self.mask, :]
         try:
-            dmrp = h[2].data['DMRP'][:]
-            dmrt = h[2].data['DMRT'][:]
-            dmz = h[2].data['DMZ'][:]
-        except (IOError, ValueError):
-            dmrp = rp.copy()
-            dmrt = rt.copy()
-            dmz = z.copy()
-        coef_binning_model = np.sqrt(dmrp.size/rp.size)
-        head = h[1].header
+            linalg.cholesky(self.cov_mat)
+            print('LOG: Full matrix is positive definite')
+        except linalg.LinAlgError:
+            print('WARNING: Full matrix is not positive definite')
+        try:
+            linalg.cholesky(masked_cov)
+            print('LOG: Reduced matrix is positive definite')
+        except linalg.LinAlgError:
+            print('WARNING: Reduced matrix is not positive definite')
+        self.inv_masked_cov = linalg.inv(masked_cov)
 
-        h.close()
+        # Compute the log determinant using and LDL^T decomposition
+        # |C| = Product of Diagonal components of D
+        _, d, __ = linalg.ldl(masked_cov)
+        self.log_cov_det = np.log(d.diagonal()).sum()
+        assert isinstance(self.log_cov_det, float)
 
-        rp_min = dic_init['cuts']['rp-min']
-        rp_max = dic_init['cuts']['rp-max']
+        # ? Why are these named square? Is there a better name?
+        self.r_square = np.sqrt(rp**2 + rt**2)
+        self.mu_square = np.zeros(self.r_square.size)
+        w = self.r_square > 0.
+        self.mu_square[w] = rp[w] / self.r_square[w]
 
-        rt_min = dic_init['cuts']['rt-min']
-        rt_max = dic_init['cuts']['rt-max']
+        # Save the coordinate grid
+        self.rp = dist_rp
+        self.rt = dist_rt
+        self.z = dist_z
+        self.r = np.sqrt(self.rp**2 + self.rt**2)
+        self.mu = np.zeros(self.r.size)
+        w = self.r > 0.
+        self.mu[w] = self.rp[w] / self.r[w]
 
-        r_min = dic_init['cuts']['r-min']
-        r_max = dic_init['cuts']['r-max']
+    @staticmethod
+    def _build_mask(rp, rt, cuts_config, data_header):
+        """Build the mask for the data by comparing
+        the cuts from config with the data limits
 
-        mu_min = dic_init['cuts']['mu-min']
-        mu_max = dic_init['cuts']['mu-max']
+        Parameters
+        ----------
+        rp : 1D Array
+            Vector of data rp coordinates
+        rt : 1D Array
+            Vector of data rt coordinates
+        cuts_config : ConfigParser
+            cuts section from config
+        data_header : fits header
+            Data file header
 
-        bin_size_rp = (head['RPMAX']-head['RPMIN'])/head['NP']
+        Returns
+        -------
+        ND Array
+            Mask
+        """
+        # Read the cuts
+        rp_min = cuts_config.getfloat('rp-min', 0.)
+        rp_max = cuts_config.getfloat('rp-max', 200.)
+
+        rt_min = cuts_config.getfloat('rt-min', 0.)
+        rt_max = cuts_config.getfloat('rt-max', 200.)
+
+        r_min = cuts_config.getfloat('r-min', 10.)
+        r_max = cuts_config.getfloat('r-max', 180.)
+
+        mu_min = cuts_config.getfloat('mu-min', -1.)
+        mu_max = cuts_config.getfloat('mu-max', +1.)
+
+        # TODO If RTMIN is ever added to the cf data files this needs modifying
+        # Get the data bin size
+        bin_size_rp = (data_header['RPMAX'] - data_header['RPMIN'])
+        bin_size_rp /= data_header['NP']
+        bin_size_rt = data_header['RTMAX'] / data_header['NT']
+
+        # Compute bin centers
         bin_center_rp = np.zeros(rp.size)
-        for i,trp in enumerate(rp):
-            idx = ( (trp-head['RPMIN'])/bin_size_rp ).astype(int)
-            bin_center_rp[i] = head['RPMIN']+(idx+0.5)*bin_size_rp
+        for i, rp_value in enumerate(rp):
+            bin_index = np.floor((rp_value - data_header['RPMIN'])
+                                 / bin_size_rp)
+            bin_center_rp[i] = data_header['RPMIN'] \
+                + (bin_index + 0.5) * bin_size_rp
 
-        bin_size_rt = head['RTMAX']/head['NT']
         bin_center_rt = np.zeros(rt.size)
-        for i,trt in enumerate(rt):
-            idx = ( trt/bin_size_rt ).astype(int)
-            bin_center_rt[i] = (idx+0.5)*bin_size_rt
+        for i, rt_value in enumerate(rt):
+            bin_index = np.floor(rt_value / bin_size_rt)
+            bin_center_rt[i] = (bin_index + 0.5) * bin_size_rt
 
-        bin_center_r = np.sqrt(bin_center_rp**2+bin_center_rt**2)
-        bin_center_mu = bin_center_rp/bin_center_r
+        bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
+        bin_center_mu = bin_center_rp / bin_center_r
 
-        ## select data within cuts
+        # Build the mask by comparing the data bins to the cuts
         mask = (bin_center_rp > rp_min) & (bin_center_rp < rp_max)
         mask &= (bin_center_rt > rt_min) & (bin_center_rt < rt_max)
         mask &= (bin_center_r > r_min) & (bin_center_r < r_max)
         mask &= (bin_center_mu > mu_min) & (bin_center_mu < mu_max)
 
-        self.mask = mask
-        self.da = da
-        self.da_cut = np.zeros(mask.sum())
-        self.da_cut[:] = da[mask]
-        self.co = co
-        ico = co[:,mask]
-        ico = ico[mask,:]
-        try:
-            sp.linalg.cholesky(co)
-            print('LOG: Full matrix is positive definite')
-        except sp.linalg.LinAlgError:
-            print('WARNING: Full matrix is not positive definite')
-        try:
-            sp.linalg.cholesky(ico)
-            print('LOG: Reduced matrix is positive definite')
-        except sp.linalg.LinAlgError:
-            print('WARNING: Reduced matrix is not positive definite')
-        _, d, __ = linalg.ldl(ico)
-        self.log_co_det = np.log(d.diagonal()).sum()
-        self.ico = linalg.inv(ico)
-        self.dm = dm
+        return mask
 
-        self.rsquare = np.sqrt(rp**2+rt**2)
-        self.musquare = np.zeros(self.rsquare.size)
-        w = self.rsquare>0.
-        self.musquare[w] = rp[w]/self.rsquare[w]
+    def _init_metals(self, metal_config):
+        """Read the metal file and initialize all the metal data
 
-        self.rp = dmrp
-        self.rt = dmrt
-        self.z = dmz
-        self.r = np.sqrt(self.rp**2+self.rt**2)
-        self.mu = np.zeros(self.r.size)
-        w = self.r>0.
-        self.mu[w] = self.rp[w]/self.r[w]
+        Parameters
+        ----------
+        metal_config : ConfigParser
+            metals section from the config file
 
+        Returns
+        -------
+        dict
+            Dictionary containing all tracer objects (metals and the core ones)
+        list
+            list of all metal correlations we need to compute
+        """
+        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
 
-        if 'hcd_model' in dic_init:
-            self.pk = pk.pk(getattr(pk, dic_init['model']['model-pk']),dic_init['hcd_model']['name_hcd_model'])
+        # Read metal tracers
+        metals_in_tracer1 = None
+        metals_in_tracer2 = None
+        if 'in tracer1' in metal_config:
+            metals_in_tracer1 = metal_config.get('in tracer1').split()
+        if 'in tracer2' in metal_config:
+            metals_in_tracer2 = metal_config.get('in tracer2').split()
+
+        self.metal_mats = {}
+        self.metal_rp = {}
+        self.metal_rt = {}
+        self.metal_z = {}
+
+        # Build tracer Catalog
+        tracer_catalog = {}
+        tracer_catalog[self.tracer1['name']] = self.tracer1
+        tracer_catalog[self.tracer2['name']] = self.tracer2
+
+        if metals_in_tracer1 is not None:
+            for metal in metals_in_tracer1:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+
+        if metals_in_tracer2 is not None:
+            for metal in metals_in_tracer2:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+
+        # Read the metal file
+        metal_hdul = fits.open(metal_config.get('filename'))
+
+        metal_correlations = []
+        # First look for correlations between tracer1 and metals
+        if 'in tracer2' in metal_config:
+            for metal in metals_in_tracer2:
+                tracers = (self.tracer1['name'], metal)
+                name = self.tracer1['name'] + '_' + metal
+                self.read_metal_correlation(metal_hdul, tracers, name)
+                metal_correlations.append(tracers)
+
+        # Then look for correlations between metals and tracer2
+        # If we have an auto-cf the files are saved in the format tracer-metal
+        if 'in tracer1' in metal_config:
+            for metal in metals_in_tracer1:
+                tracers = (metal, self.tracer2['name'])
+                name = metal + '_' + self.tracer2['name']
+                if self.tracer1 == self.tracer2:
+                    name = self.tracer2['name'] + '_' + metal
+                self.read_metal_correlation(metal_hdul, tracers, name)
+                metal_correlations.append(tracers)
+
+        # Finally look for metal-metal correlations
+        # Some files are reversed order, so reverse order if we don't find it
+        if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
+            for i, metal1 in enumerate(metals_in_tracer1):
+                j0 = 0
+                if self.tracer1 == self.tracer2:
+                    j0 = i
+
+                for metal2 in metals_in_tracer2[j0:]:
+                    tracers = (metal1, metal2)
+                    name = metal1 + '_' + metal2
+
+                    if 'RP_' + name not in metal_hdul[2].columns.names:
+                        name = metal2 + '_' + metal1
+                    self.read_metal_correlation(metal_hdul, tracers, name)
+                    metal_correlations.append(tracers)
+
+        metal_hdul.close()
+
+        return tracer_catalog, metal_correlations
+
+    def read_metal_correlation(self, metal_hdul, tracers, name):
+        """Read a metal correlation from the metal file and add
+        the data to the existing member dictionaries
+
+        Parameters
+        ----------
+        metal_hdul : hduList
+            hduList object for the metal file
+        tracers : tuple
+            Tuple with the names of the two tracers
+        name : string
+            The name of the specific correlation to be read from file
+        """
+        self.metal_rp[tracers] = metal_hdul[2].data['RP_' + name][:]
+        self.metal_rt[tracers] = metal_hdul[2].data['RT_' + name][:]
+        self.metal_z[tracers] = metal_hdul[2].data['Z_' + name][:]
+
+        dm_name = 'DM_' + name
+        if dm_name in metal_hdul[2].columns.names:
+            self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         else:
-            self.pk = pk.pk(getattr(pk, dic_init['model']['model-pk']))
-        self.pk *= partial(getattr(pk,'G2'), dataset_name=self.name)
-        if 'pk-gauss-smoothing' in dic_init['model']:
-            self.pk *= partial(getattr(pk, dic_init['model']['pk-gauss-smoothing']))
-        if 'small scale nl' in dic_init['model']:
-            self.pk *= partial(getattr(pk, dic_init['model']['small scale nl']), pk_fid=dic_init['model']['pk']*((1+zref)/(1.+zeff))**2)
-
-        if 'velocity dispersion' in dic_init['model']:
-            self.pk *= getattr(pk, dic_init['model']['velocity dispersion'])
-
-        ## add non linear large scales
-        self.pk *= pk.pk_NL
-
-        self.xi = partial(getattr(xi, dic_init['model']['model-xi']), name=self.name)
-
-        self.z_evol = {}
-        self.z_evol[self.tracer1['name']] = partial(getattr(xi, dic_init['model']['z evol {}'.format(self.tracer1['name'])]),zref=zeff)
-        self.z_evol[self.tracer2['name']] = partial(getattr(xi, dic_init['model']['z evol {}'.format(self.tracer2['name'])]),zref=zeff)
-        if dic_init['model']['growth function'] in ['growth_factor_de']:
-            self.growth_function = partial(getattr(xi, dic_init['model']['growth function']),zref=zref, Om=Om, OL=OL)
-        else:
-            self.growth_function = partial(getattr(xi, dic_init['model']['growth function']),zref=zref)
-
-        self.xi_rad_model = None
-        if 'radiation effects' in dic_init['model']:
-            self.xi_rad_model = partial(getattr(xi, dic_init['model']['radiation effects']), name=self.name)
-
-        self.xi_rel_model = None
-        if 'relativistic correction' in dic_init['model']:
-            self.xi_rel_model = partial(getattr(xi, dic_init['model']['relativistic correction']), name=self.name)
-
-        self.xi_asy_model = None
-        if 'standard asymmetry' in dic_init['model']:
-            self.xi_asy_model = partial(getattr(xi, dic_init['model']['standard asymmetry']), name=self.name)
-
-        self.bb = {}
-        self.bb['pre-add'] = []
-        self.bb['pos-add'] = []
-        self.bb['pre-mul'] = []
-        self.bb['pos-mul'] = []
-        if 'broadband' in dic_init:
-            for ibb,dic_bb in enumerate( [el for el in dic_init['broadband'] if el['func']!='broadband_sky']):
-                deg_r_min = dic_bb['deg_r_min']
-                deg_r_max = dic_bb['deg_r_max']
-                ddeg_r = dic_bb['ddeg_r']
-
-                deg_mu_min = dic_bb['deg_mu_min']
-                deg_mu_max = dic_bb['deg_mu_max']
-                ddeg_mu = dic_bb['ddeg_mu']
-
-                tbin_size_rp = bin_size_rp
-                if dic_bb['pre']=='pre':
-                    tbin_size_rp /= coef_binning_model
-
-                name = 'BB-{}-{} {} {} {}'.format(self.name,
-                        ibb,dic_bb['type'],dic_bb['pre'],dic_bb['rp_rt'])
-
-                bb_pars = {'{} ({},{})'.format(name,i,j):0\
-                    for i in range(deg_r_min,deg_r_max+1,ddeg_r)\
-                        for j in range(deg_mu_min, deg_mu_max+1, ddeg_mu)}
-
-                for k,v in bb_pars.items():
-                    dic_init['parameters']['values'][k] = v
-                    dic_init['parameters']['errors']['error_'+k] = 0.01
-
-                bb = partial( getattr(xi, dic_bb['func']),
-                    deg_r_min=deg_r_min,
-                    deg_r_max=deg_r_max, ddeg_r=ddeg_r,
-                    deg_mu_min=deg_mu_min, deg_mu_max=deg_mu_max,
-                    ddeg_mu=ddeg_mu,rp_rt = dic_bb['rp_rt']=='rp,rt',
-                    bin_size_rp=tbin_size_rp, name=name)
-                bb.name = name
-
-                self.bb[dic_bb['pre']+"-"+dic_bb['type']].append(bb)
-
-            size_bb = len(self.bb['pre-add'])+len(self.bb['pos-add'])+len(self.bb['pre-mul'])+len(self.bb['pos-mul'])
-            for ibb,dic_bb in enumerate( [el for el in dic_init['broadband'] if el['func']=='broadband_sky']):
-                ibb += size_bb
-                name = 'BB-{}-{}-{}'.format(self.name,ibb,dic_bb['func'])
-
-                tbin_size_rp = bin_size_rp
-                if dic_bb['pre']=='pre':
-                    tbin_size_rp /= coef_binning_model
-
-                for k in ['scale-sky','sigma-sky']:
-                    if not name+'-'+k in dic_init['parameters']['values']:
-                        dic_init['parameters']['values'][name+'-'+k] = 1.
-                        dic_init['parameters']['errors']['error_'+name+'-'+k] = 0.01
-
-                bb = partial( getattr(xi, dic_bb['func']),
-                    bin_size_rp=tbin_size_rp, name=name)
-
-                bb.name = name
-                self.bb[dic_bb['pre']+'-'+dic_bb['type']].append(bb)
-
-        self.par_names = dic_init['parameters']['values'].keys()
-        self.pars_init = dic_init['parameters']['values']
-        self.par_error = dic_init['parameters']['errors']
-        self.par_limit = dic_init['parameters']['limits']
-        self.par_fixed = dic_init['parameters']['fix']
-
-        self.dm_met = {}
-        self.rp_met = {}
-        self.rt_met = {}
-        self.z_met = {}
-
-        if 'metals' in dic_init:
-            self.pk_met = pk.pk(getattr(pk, dic_init['metals']['model-pk-met']))
-            self.pk_met *= partial(getattr(pk,'G2'), dataset_name=self.name)
-
-            if 'velocity dispersion' in dic_init['model']:
-                self.pk_met *= getattr(pk, dic_init['model']['velocity dispersion'])
-
-            ## add non linear large scales
-            self.pk_met *= pk.pk_NL
-
-            self.xi_met = partial(getattr(xi, dic_init['metals']['model-xi-met']), name=self.name)
-
-            self.tracerMet = {}
-            self.tracerMet[self.tracer1['name']] = self.tracer1
-            self.tracerMet[self.tracer2['name']] = self.tracer2
-            if 'in tracer1' in dic_init['metals']:
-                for m in dic_init['metals']['in tracer1']:
-                    self.tracerMet[m] = { 'name':m, 'type':'continuous' }
-            if 'in tracer2' in dic_init['metals']:
-                for m in dic_init['metals']['in tracer2']:
-                    self.tracerMet[m] = { 'name':m, 'type':'continuous' }
-
-            hmet = fits.open(dic_init['metals']['filename'])
-
-            assert 'in tracer1' in dic_init['metals'] or 'in tracer2' in dic_init['metals']
-
-            if self.tracer1 == self.tracer2:
-                assert dic_init['metals']['in tracer1'] == dic_init['metals']['in tracer2']
-
-                for m in dic_init['metals']['in tracer1']:
-                    self.z_evol[m] = partial(getattr(xi, dic_init['metals']['z evol']), zref=zeff)
-                    self.rp_met[(self.tracer1['name'], m)] = hmet[2].data["RP_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.rt_met[(self.tracer1['name'], m)] = hmet[2].data["RT_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.z_met[(self.tracer1['name'], m)] = hmet[2].data["Z_{}_{}".format(self.tracer1['name'],m)][:]
-
-                    try:
-                        self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[2].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
-                    except:
-                        self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[3].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
-
-                    self.rp_met[(m, self.tracer1['name'])] = hmet[2].data["RP_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.rt_met[(m, self.tracer1['name'])] = hmet[2].data["RT_{}_{}".format(self.tracer1['name'],m)][:]
-                    self.z_met[(m, self.tracer1['name'])] = hmet[2].data["Z_{}_{}".format(self.tracer1['name'],m)][:]
-                    try:
-                        self.dm_met[(m, self.tracer1['name'])] = csr_matrix(hmet[2].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
-                    except:
-                        self.dm_met[(m, self.tracer1['name'])] = csr_matrix(hmet[3].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
-
-            else:
-                if 'in tracer2' in dic_init['metals']:
-                    for m in dic_init['metals']['in tracer2']:
-                        self.z_evol[m] = partial(getattr(xi, dic_init['metals']['z evol']), zref=zeff)
-                        self.rp_met[(self.tracer1['name'], m)] = hmet[2].data["RP_{}_{}".format(self.tracer1['name'],m)][:]
-                        self.rt_met[(self.tracer1['name'], m)] = hmet[2].data["RT_{}_{}".format(self.tracer1['name'],m)][:]
-                        self.z_met[(self.tracer1['name'], m)] = hmet[2].data["Z_{}_{}".format(self.tracer1['name'],m)][:]
-                        try:
-                            self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[2].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
-                        except:
-                            self.dm_met[(self.tracer1['name'], m)] = csr_matrix(hmet[3].data["DM_{}_{}".format(self.tracer1['name'],m)][:])
-
-                if 'in tracer1' in dic_init['metals']:
-                    for m in dic_init['metals']['in tracer1']:
-                        self.z_evol[m] = partial(getattr(xi, dic_init['metals']['z evol']), zref=zeff)
-                        self.rp_met[(m, self.tracer2['name'])] = hmet[2].data["RP_{}_{}".format(m, self.tracer2['name'])][:]
-                        self.rt_met[(m, self.tracer2['name'])] = hmet[2].data["RT_{}_{}".format(m, self.tracer2['name'])][:]
-                        self.z_met[(m, self.tracer2['name'])] = hmet[2].data["Z_{}_{}".format(m, self.tracer2['name'])][:]
-
-                        try:
-                            self.dm_met[(m, self.tracer2['name'])] = csr_matrix(hmet[2].data["DM_{}_{}".format(m, self.tracer2['name'])][:])
-                        except:
-                            self.dm_met[(m, self.tracer2['name'])] = csr_matrix(hmet[3].data["DM_{}_{}".format(m, self.tracer2['name'])][:])
-
-            ## add metal-metal cross correlations
-            if 'in tracer1' in dic_init['metals'] and 'in tracer2' in dic_init['metals']:
-                for i,m1 in enumerate(dic_init['metals']['in tracer1']):
-                    j0=0
-                    if self.tracer1 == self.tracer2:
-                        j0=i
-                    for m2 in dic_init['metals']['in tracer2'][j0:]:
-                        self.rp_met[(m1, m2)] = hmet[2].data["RP_{}_{}".format(m1,m2)][:]
-                        self.rt_met[(m1, m2)] = hmet[2].data["RT_{}_{}".format(m1,m2)][:]
-                        self.z_met[(m1, m2)] = hmet[2].data["Z_{}_{}".format(m1,m2)][:]
-                        try:
-                            self.dm_met[(m1, m2)] = csr_matrix(hmet[2].data["DM_{}_{}".format(m1,m2)][:])
-                        except ValueError:
-                            self.dm_met[(m1, m2)] = csr_matrix(hmet[3].data["DM_{}_{}".format(m1,m2)][:])
-
-            hmet.close()
-
-    def xi_model(self, k, pk_lin, pars):
-        xi = self.xi(self.r, self.mu, k, pk_lin, self.pk, \
-                    tracer1 = self.tracer1, tracer2 = self.tracer2, ell_max = self.ell_max, **pars)
-
-        xi *= self.z_evol[self.tracer1['name']](self.z, self.tracer1, **pars)*self.z_evol[self.tracer2['name']](self.z, self.tracer2, **pars)
-        xi *= self.growth_function(self.z, **pars)**2
-
-        for tracer1, tracer2 in self.dm_met:
-            rp = self.rp_met[(tracer1, tracer2)]
-            rt = self.rt_met[(tracer1, tracer2)]
-
-            z = self.z_met[(tracer1, tracer2)]
-            dm_met = self.dm_met[(tracer1, tracer2)]
-            r = np.sqrt(rp**2+rt**2)
-            w = r == 0
-            r[w] = 1e-6
-            mu = rp/r
-            xi_met = self.xi_met(r, mu, k, pk_lin, self.pk_met, \
-                tracer1 = self.tracerMet[tracer1], tracer2 = self.tracerMet[tracer2], ell_max = self.ell_max, **pars)
-
-            xi_met *= self.z_evol[tracer1](z, self.tracerMet[tracer1], **pars)*self.z_evol[tracer2](z, self.tracerMet[tracer2], **pars)
-            xi_met *= self.growth_function(z, **pars)**2
-            xi_met = dm_met.dot(xi_met)
-            xi += xi_met
-
-        if self.xi_rad_model is not None and pars['SB']==True:
-            xi += self.xi_rad_model(self.r, self.mu, self.tracer1, self.tracer2, **pars)
-
-        if self.xi_rel_model is not None:
-            xi += self.xi_rel_model(self.r, self.mu, k, pk_lin, self.tracer1, self.tracer2, **pars)
-
-        if self.xi_asy_model is not None:
-            xi += self.xi_asy_model(self.r, self.mu, k, pk_lin, self.tracer1, self.tracer2, **pars)
-
-        ## pre-distortion broadband
-        for bb in self.bb['pre-mul']:
-            xi *= 1+ bb(self.r, self.mu,**pars)
-
-        ## pre-distortion additive
-        for bb in self.bb['pre-add']:
-            xi += bb(self.r, self.mu, **pars)
-
-        xi = self.dm.dot(xi)
-
-        ## pos-distortion multiplicative
-        for bb in self.bb['pos-mul']:
-            xi *= 1+bb(self.rsquare, self.musquare, **pars)
-
-        ## pos-distortion additive
-        for bb in self.bb['pos-add']:
-            xi += bb(self.rsquare, self.musquare, **pars)
-
-        return xi
-
-    def chi2(self, k, pk_lin, pksb_lin, full_shape, pars):
-        xi_peak = self.xi_model(k, pk_lin-pksb_lin, pars)
-
-        pars['SB'] = True & (not full_shape)
-        sigmaNL_par = pars['sigmaNL_par']
-        sigmaNL_per = pars['sigmaNL_per']
-        pars['sigmaNL_par'] = 0.
-        pars['sigmaNL_per'] = 0.
-        xi_sb = self.xi_model(k, pksb_lin, pars)
-        pars['SB'] = False
-        pars['sigmaNL_par'] = sigmaNL_par
-        pars['sigmaNL_per'] = sigmaNL_per
-
-        xi_full = pars['bao_amp']*xi_peak + xi_sb
-        self.xi_full = xi_full
-        dxi = self.da_cut-xi_full[self.mask]
-
-        return dxi.T.dot(self.ico.dot(dxi))
-
-    def log_lik(self, k, pk_lin, pksb_lin, full_shape, pars):
-        
-        chi2 = self.chi2(k, pk_lin, pksb_lin, full_shape, pars)
-        log_lik = - 0.5 * len(self.da_cut) * np.log(2 * np.pi) - 0.5 * self.log_co_det
-        log_lik -= 0.5 * chi2
-
-        return log_lik
+            self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
