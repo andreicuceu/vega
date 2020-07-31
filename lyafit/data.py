@@ -31,6 +31,47 @@ class Data:
                                                  corr_item.config['metals'])
             self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
+        self.cholesky = None
+        self.scale = 1.
+
+    def create_monte_carlo(self, fiducial_model, scale=1., seed=0):
+        """Create monte carlo mock of data using a fiducial model
+
+        Parameters
+        ----------
+        fiducial_model : 1D Array
+            Fiducial model of the data
+        scale : float, optional
+            Scaling for the covariance, by default 1.
+        seed : int, optional
+            Seed for the random number generator, by default 0
+
+        Returns
+        -------
+        1D Array
+            Monte Carlo mock of the data
+        """
+        # Check if scale has changed and we need to recompute
+        if np.isclose(scale, self.scale):
+            self._recompute = False
+        else:
+            self.scale = scale
+            self._recompute = True
+            self.scaled_inv_masked_cov = self.inv_masked_cov / self.scale
+            self.scaled_log_cov_det = np.log(self.scale) + self.log_cov_det
+
+        # Compute cholesky decomposition
+        if self.cholesky is None or self._recompute:
+            self.cholesky = linalg.cholesky(self.scale * self.cov_mat)
+
+        # Create the mock
+        np.random.seed(seed)
+        ran_vec = np.random.randn(self.full_data_size)
+        self.mc_mock = self.cholesky.dot(ran_vec) + fiducial_model
+        self.masked_mc_mock = self.mc_mock[self.mask]
+
+        return self.masked_mc_mock
+
     def _read_data(self, data_path, cuts_config):
         """Read the data, mask it and prepare the environment
 
@@ -64,7 +105,9 @@ class Data:
         self.mask = self._build_mask(rp, rt, cuts_config, hdul[1].header)
         self.masked_data_vec = np.zeros(self.mask.sum())
         self.masked_data_vec[:] = self.data_vec[self.mask]
+
         self.data_size = len(self.masked_data_vec)
+        self.full_data_size = len(self.data_vec)
 
         hdul.close()
 
@@ -222,7 +265,7 @@ class Data:
             for metal in metals_in_tracer2:
                 tracers = (self.tracer1['name'], metal)
                 name = self.tracer1['name'] + '_' + metal
-                self.read_metal_correlation(metal_hdul, tracers, name)
+                self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
         # Then look for correlations between metals and tracer2
@@ -233,7 +276,7 @@ class Data:
                 name = metal + '_' + self.tracer2['name']
                 if self.tracer1 == self.tracer2:
                     name = self.tracer2['name'] + '_' + metal
-                self.read_metal_correlation(metal_hdul, tracers, name)
+                self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
         # Finally look for metal-metal correlations
@@ -250,14 +293,14 @@ class Data:
 
                     if 'RP_' + name not in metal_hdul[2].columns.names:
                         name = metal2 + '_' + metal1
-                    self.read_metal_correlation(metal_hdul, tracers, name)
+                    self._read_metal_correlation(metal_hdul, tracers, name)
                     metal_correlations.append(tracers)
 
         metal_hdul.close()
 
         return tracer_catalog, metal_correlations
 
-    def read_metal_correlation(self, metal_hdul, tracers, name):
+    def _read_metal_correlation(self, metal_hdul, tracers, name):
         """Read a metal correlation from the metal file and add
         the data to the existing member dictionaries
 

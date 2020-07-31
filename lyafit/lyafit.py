@@ -5,7 +5,7 @@ from astropy.io import fits
 from pkg_resources import resource_filename
 import configparser
 
-from . import correlation_item, data, model, utils
+from . import correlation_item, data, model, utils, analysis
 
 
 class LyaFit:
@@ -57,15 +57,26 @@ class LyaFit:
 
         # TODO add option to read a setup config
         # Read parameters
-        self._read_parameters()
+        self.params = self._read_parameters(self.corr_items,
+                                            self.main_config['parameters'])
+        self.sample_params = self._read_sample(self.main_config['sample'])
+
+        # Check for sampler
+        self.has_sampler = self.main_config['control'].getboolean(
+            'sampler', False)
+        if self.has_sampler:
+            if 'Polychord' not in self.main_config:
+                raise RuntimeError('run_sampler called, but \
+                                    no sampler initialized')
+        self.monte_carlo = False
 
     def compute_model(self, params=None):
         """Compute correlation function model using input parameters
 
         Parameters
         ----------
-        params : dict
-            Computation parameters, will overwrite the saved ones
+        params : dict, optional
+            Computation parameters, by default None
 
         Returns
         -------
@@ -81,7 +92,8 @@ class LyaFit:
         model_cf = {}
         for name in self.corr_items:
             model_cf[name] = self.models[name].compute(
-                params, self.fiducial['pk_ful'], self.fiducial['pk_smooth'])
+                self.params, self.fiducial['pk_full'],
+                self.fiducial['pk_smooth'])
 
         return model_cf
 
@@ -90,8 +102,8 @@ class LyaFit:
 
         Parameters
         ----------
-        params : dict
-            Computation parameters, will overwrite the saved ones
+        params : dict, optional
+            Computation parameters, by default None
 
         Returns
         -------
@@ -106,12 +118,19 @@ class LyaFit:
         # Go trough each component and compute the chi^2
         chi2 = 0
         for name in self.corr_items:
-            model_cf = self.models[name].compute(
-                params, self.fiducial['pk_ful'], self.fiducial['pk_smooth'])
+            model_cf = self.models[name].compute(self.params,
+                                                 self.fiducial['pk_full'],
+                                                 self.fiducial['pk_smooth'])
 
-            diff = self.data[name].masked_data_vec \
-                - model_cf[self.data[name].mask]
-            chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+            if self.monte_carlo:
+                diff = self.data[name].masked_mc_mock \
+                    - model_cf[self.data[name].mask]
+                chi2 += diff.T.dot(
+                    self.data[name].scaled_inv_masked_cov.dot(diff))
+            else:
+                diff = self.data[name].masked_data_vec \
+                    - model_cf[self.data[name].mask]
+                chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         assert isinstance(chi2, float)
         return chi2
@@ -121,8 +140,8 @@ class LyaFit:
 
         Parameters
         ----------
-        params : dict
-            Computation parameters, will overwrite the saved ones
+        params : dict, optional
+            Computation parameters, by default None
 
         Returns
         -------
@@ -136,29 +155,52 @@ class LyaFit:
         log_norm = 0
         for name in self.corr_items:
             log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
-            log_norm -= 0.5 * self.data[name].log_cov_det
+
+            if self.monte_carlo:
+                log_norm -= 0.5 * self.data[name].scaled_log_cov_det
+            else:
+                log_norm -= 0.5 * self.data[name].log_cov_det
 
         # Compute log lik
         log_lik = log_norm - 0.5 * chi2
 
         return log_lik
 
-    def _read_parameters(self):
-        """Read computation parameters
-        If a parameter is specified multiple times,
-        the parameters in the main config file have priority
+    def monte_carlo_sim(self, params=None, scale=1., seed=0):
+        """Compute Monte Carlo simulations for each Correlation item
+
+        Parameters
+        ----------
+        params : dict, optional
+            Computation parameters, by default None
+        scale : float, optional
+            Scaling for the covariance, by default 1.
+        seed : int, optional
+            Seed for the random number generator, by default 0
+
+        Returns
+        -------
+        dict
+            Dictionary with MC mocks for each item
         """
-        self.params = {}
+        # Overwrite computation parameters
+        if params is not None:
+            for par, val in params.items():
+                self.params[par] = val
 
-        # First get the parameters from each component config
-        for name, corr_item in self.corr_items.items():
-            if 'parameters' in corr_item.config:
-                for param, value in corr_item.config.items('parameters'):
-                    self.params[param] = float(value)
+        mocks = {}
+        for name in self.corr_items:
+            # Compute fiducial model
+            fiducial_model = self.models[name].compute(
+                self.params, self.fiducial['pk_full'],
+                self.fiducial['pk_smooth'])
 
-        # Next get the parameters in the main config
-        for param, value in self.main_config.items('parameters'):
-            self.params[param] = float(value)
+            # Create the mock
+            mocks[name] = self.data[name].create_monte_carlo(fiducial_model,
+                                                             scale, seed)
+
+        self.monte_carlo = True
+        return mocks
 
     @staticmethod
     def _read_fiducial(fiducial_config):
@@ -204,3 +246,88 @@ class LyaFit:
             territories, precede at your own risk.')
 
         return fiducial
+
+    @staticmethod
+    def _read_parameters(corr_items, parameters_config):
+        """Read computation parameters
+        If a parameter is specified multiple times,
+        the parameters in the main config file have priority
+
+        Parameters
+        ----------
+        corr_items : dict
+            Dictionary of correlation items
+        parameters_config : ConfigParser
+            parameters section from main config
+
+        Returns
+        -------
+        dict
+            Computation parameters
+        """
+        params = {}
+
+        # First get the parameters from each component config
+        for name, corr_item in corr_items.items():
+            if 'parameters' in corr_item.config:
+                for param, value in corr_item.config.items('parameters'):
+                    params[param] = float(value)
+
+        # Next get the parameters in the main config
+        for param, value in parameters_config.items():
+            params[param] = float(value)
+
+        return params
+
+    @staticmethod
+    def _read_sample(sample_config):
+        """Read sample parameters
+
+        These must be of the form:
+        param = min max / for sampler only
+        or
+        param = min max val err / for both sampler and fitter
+
+        Fitter accepts None for min/max, but the sampler does not
+
+        Parameters
+        ----------
+        sample_config : ConfigParser
+            sample section from main config
+
+        Returns
+        -------
+        dict
+            Config for the sampled parameters
+        """
+        # Initialize the dictionaries we need
+        sample_params = {}
+        sample_params['limits'] = {}
+        sample_params['values'] = {}
+        sample_params['errors'] = {}
+        sample_params['fix'] = {}
+
+        for param, values in sample_config.items():
+            values_list = values.split()
+            assert len(values_list) >= 2
+
+            # First get the limits
+            # ! Sampler needs actual values (no None)
+            lower_limit = None
+            upper_limit = None
+            if values_list[0] != 'None':
+                lower_limit = float(values_list[0])
+            if values_list[1] != 'None':
+                lower_limit = float(values_list[1])
+            sample_params['limits'][param] = (lower_limit, upper_limit)
+
+            # Get the values and errors for the fitter
+            if len(values_list) > 2:
+                assert len(values_list) == 4
+                sample_params['values'][param] = float(values_list[2])
+                sample_params['errors'][param] = float(values_list[3])
+
+            # Populate the fix values
+            sample_params['fix'][param] = False
+
+        return sample_params
