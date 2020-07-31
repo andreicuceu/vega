@@ -1,4 +1,4 @@
-from lyafit import lyafit, sampler_interface
+from lyafit import LyaFit, Sampler
 import argparse
 
 if __name__ == '__main__':
@@ -10,12 +10,11 @@ if __name__ == '__main__':
     args = pars.parse_args()
 
     # Initialize LyaFit
-    lf = lyafit.LyaFit(args.config)
+    lf = LyaFit(args.config)
 
     # Run sampler
     if lf.has_sampler:
-        sampler = sampler_interface.Sampler(lf.main_config['Polychord'],
-                                            lf.sample_params['limits'],
-                                            lf.log_lik)
+        sampler = Sampler(lf.main_config['Polychord'],
+                          lf.sample_params['limits'], lf.log_lik)
 
         sampler.run()

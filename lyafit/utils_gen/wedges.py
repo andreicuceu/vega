@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class wedge:
+class Wedge:
     """
     Computes a wedge for a 2D function
     """
