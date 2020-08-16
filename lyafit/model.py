@@ -26,13 +26,13 @@ class Model:
 
         # ! For now we need to import r, mu, z
         # ! until I add defaults
-        assert data.r is not None
-        assert data.mu is not None
-        assert data.z is not None
+        assert data.r_grid is not None
+        assert data.mu_grid is not None
+        assert data.z_grid is not None
         self._coords_grid = {}
-        self._coords_grid['r'] = data.r
-        self._coords_grid['mu'] = data.mu
-        self._coords_grid['z'] = data.z
+        self._coords_grid['r'] = data.r_grid
+        self._coords_grid['mu'] = data.mu_grid
+        self._coords_grid['z'] = data.z_grid
 
         self._data = data
         self._full_shape = fiducial.get('full-shape', False)
@@ -64,20 +64,20 @@ class Model:
                 tracer2 = self.corr_item.tracer_catalog[name2]
 
                 # Read rp and rt for the metal correlation
-                rp = data.metal_rp[(name1, name2)]
-                rt = data.metal_rt[(name1, name2)]
+                rp_grid = data.metal_rp_grids[(name1, name2)]
+                rt_grid = data.metal_rt_grids[(name1, name2)]
 
                 # Compute the corresponding r/mu coords
-                r = np.sqrt(rp**2 + rt**2)
-                w = r == 0
-                r[w] = 1e-6
-                mu = rp / r
+                r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
+                w = r_grid == 0
+                r_grid[w] = 1e-6
+                mu_grid = rp_grid / r_grid
 
                 # Initialize the coords grid dictionary
                 coords_grid = {}
-                coords_grid['r'] = r
-                coords_grid['mu'] = mu
-                coords_grid['z'] = data.metal_z[(name1, name2)]
+                coords_grid['r'] = r_grid
+                coords_grid['mu'] = mu_grid
+                coords_grid['z'] = data.metal_z_grids[(name1, name2)]
 
                 # Initialize the metal correlation P(k)
                 self.Pk_metal[(name1, name2)] = power_spectrum.PowerSpectrum(

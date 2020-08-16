@@ -87,22 +87,23 @@ class Data:
         self.data_vec = hdul[1].data['DA'][:]
         self.cov_mat = hdul[1].data['CO'][:]
         self.distortion_mat = csr_matrix(hdul[1].data['DM'][:])
-        rp = hdul[1].data['RP'][:]
-        rt = hdul[1].data['RT'][:]
-        z = hdul[1].data['Z'][:]
+        rp_grid = hdul[1].data['RP'][:]
+        rt_grid = hdul[1].data['RT'][:]
+        z_grid = hdul[1].data['Z'][:]
 
         if len(hdul) > 2:
-            dist_rp = hdul[2].data['DMRP'][:]
-            dist_rt = hdul[2].data['DMRT'][:]
-            dist_z = hdul[2].data['DMZ'][:]
+            dist_rp_grid = hdul[2].data['DMRP'][:]
+            dist_rt_grid = hdul[2].data['DMRT'][:]
+            dist_z_grid = hdul[2].data['DMZ'][:]
         else:
-            dist_rp = rp.copy()
-            dist_rt = rt.copy()
-            dist_z = z.copy()
-        self.coeff_binning_model = np.sqrt(dist_rp.size / rp.size)
+            dist_rp_grid = rp_grid.copy()
+            dist_rt_grid = rt_grid.copy()
+            dist_z_grid = z_grid.copy()
+        self.coeff_binning_model = np.sqrt(dist_rp_grid.size / rp_grid.size)
 
         # Compute the mask and use it on the data
-        self.mask = self._build_mask(rp, rt, cuts_config, hdul[1].header)
+        self.mask = self._build_mask(rp_grid, rt_grid, cuts_config,
+                                     hdul[1].header)
         self.masked_data_vec = np.zeros(self.mask.sum())
         self.masked_data_vec[:] = self.data_vec[self.mask]
 
@@ -135,30 +136,30 @@ class Data:
         assert isinstance(self.log_cov_det, float)
 
         # ? Why are these named square? Is there a better name?
-        self.r_square = np.sqrt(rp**2 + rt**2)
-        self.mu_square = np.zeros(self.r_square.size)
-        w = self.r_square > 0.
-        self.mu_square[w] = rp[w] / self.r_square[w]
+        self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
+        self.mu_square_grid = np.zeros(self.r_square_grid.size)
+        w = self.r_square_grid > 0.
+        self.mu_square_grid[w] = rp_grid[w] / self.r_square_grid[w]
 
-        # Save the coordinate grid
-        self.rp = dist_rp
-        self.rt = dist_rt
-        self.z = dist_z
-        self.r = np.sqrt(self.rp**2 + self.rt**2)
-        self.mu = np.zeros(self.r.size)
-        w = self.r > 0.
-        self.mu[w] = self.rp[w] / self.r[w]
+        # Save the coordinate grids
+        self.rp_grid = dist_rp_grid
+        self.rt_grid = dist_rt_grid
+        self.z_grid = dist_z_grid
+        self.r_grid = np.sqrt(self.rp_grid**2 + self.rt_grid**2)
+        self.mu_grid = np.zeros(self.r_grid.size)
+        w = self.r_grid > 0.
+        self.mu_grid[w] = self.rp_grid[w] / self.r_grid[w]
 
     @staticmethod
-    def _build_mask(rp, rt, cuts_config, data_header):
+    def _build_mask(rp_grid, rt_grid, cuts_config, data_header):
         """Build the mask for the data by comparing
         the cuts from config with the data limits
 
         Parameters
         ----------
-        rp : 1D Array
+        rp_grid : 1D Array
             Vector of data rp coordinates
-        rt : 1D Array
+        rt_grid : 1D Array
             Vector of data rt coordinates
         cuts_config : ConfigParser
             cuts section from config
@@ -190,15 +191,15 @@ class Data:
         bin_size_rt = data_header['RTMAX'] / data_header['NT']
 
         # Compute bin centers
-        bin_center_rp = np.zeros(rp.size)
-        for i, rp_value in enumerate(rp):
+        bin_center_rp = np.zeros(rp_grid.size)
+        for i, rp_value in enumerate(rp_grid):
             bin_index = np.floor((rp_value - data_header['RPMIN'])
                                  / bin_size_rp)
             bin_center_rp[i] = data_header['RPMIN'] \
                 + (bin_index + 0.5) * bin_size_rp
 
-        bin_center_rt = np.zeros(rt.size)
-        for i, rt_value in enumerate(rt):
+        bin_center_rt = np.zeros(rt_grid.size)
+        for i, rt_value in enumerate(rt_grid):
             bin_index = np.floor(rt_value / bin_size_rt)
             bin_center_rt[i] = (bin_index + 0.5) * bin_size_rt
 
@@ -239,9 +240,9 @@ class Data:
             metals_in_tracer2 = metal_config.get('in tracer2').split()
 
         self.metal_mats = {}
-        self.metal_rp = {}
-        self.metal_rt = {}
-        self.metal_z = {}
+        self.metal_rp_grids = {}
+        self.metal_rt_grids = {}
+        self.metal_z_grids = {}
 
         # Build tracer Catalog
         tracer_catalog = {}
@@ -313,9 +314,9 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_rp[tracers] = metal_hdul[2].data['RP_' + name][:]
-        self.metal_rt[tracers] = metal_hdul[2].data['RT_' + name][:]
-        self.metal_z[tracers] = metal_hdul[2].data['Z_' + name][:]
+        self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name][:]
+        self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name][:]
+        self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name][:]
 
         dm_name = 'DM_' + name
         if dm_name in metal_hdul[2].columns.names:

@@ -31,7 +31,7 @@ class PowerSpectrum:
         self._tracer1 = tracer1
         self._tracer2 = tracer2
         self._name = dataset_name
-        self.k = fiducial['k']
+        self.k_grid = fiducial['k']
 
         # Check for the old config
         pk_model = self._config.get('model-pk', None)
@@ -130,7 +130,7 @@ class PowerSpectrum:
         if params['peak']:
             pk_full *= self.compute_peak_nl(params)
 
-        return self.k, self.muk_grid, pk_full
+        return self.k_grid, self.muk_grid, pk_full
 
     def compute_kaiser(self, bias1, beta1, bias2, beta2):
         """Compute Kaiser model
@@ -177,7 +177,7 @@ class PowerSpectrum:
         bias_prim = params["bias_prim"]
         lambda_uv = params["lambda_uv"]
 
-        W = np.arctan(self.k * lambda_uv) / (self.k * lambda_uv)
+        W = np.arctan(self.k_grid * lambda_uv) / (self.k_grid * lambda_uv)
         beta_eff = beta / (1 + bias_gamma / bias * W / (1 + bias_prim * W))
         bias_eff = bias + bias_gamma * W / (1 + bias_prim * W)
 
@@ -242,7 +242,7 @@ class PowerSpectrum:
         1D Array
             F_hcd
         """
-        kp = self.k * self.muk_grid
+        kp = self.k_grid * self.muk_grid
         return utils.sinc(kp * L0)
 
     def _hcd_Rogers2018(self, L0):
@@ -259,7 +259,7 @@ class PowerSpectrum:
         1D Array
             F_hcd
         """
-        kp = self.k * self.muk_grid
+        kp = self.k_grid * self.muk_grid
         return np.exp(-L0 * kp)
 
     def _hcd_no_mask(self, L0):
@@ -277,7 +277,7 @@ class PowerSpectrum:
         1D Array
             F_hcd
         """
-        kp = self.k * self.muk_grid
+        kp = self.k_grid * self.muk_grid
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
 
@@ -301,8 +301,8 @@ class PowerSpectrum:
         1D Array
             pk
         """
-        kp = self.k * self.muk_grid
-        kt = self.k * np.sqrt(1 - self.muk_grid**2)
+        kp = self.k_grid * self.muk_grid
+        kt = self.k_grid * np.sqrt(1 - self.muk_grid**2)
         st2 = params['sigmaNL_per']**2
         sp2 = params['sigmaNL_par']**2
         return np.exp(-(kp**2 * sp2 + kt**2 * st2) / 2)
@@ -318,9 +318,9 @@ class PowerSpectrum:
         assert self._tracer1['name'] == "LYA"
         assert self._tracer2['name'] == "LYA"
 
-        kvel = 1.22 * (1 + self.k / 0.923)**0.451
-        dnl = (self.k / 6.4)**0.569 - (self.k / 15.3)**2.01
-        dnl = dnl - (self.k * self.muk_grid / kvel)**1.5
+        kvel = 1.22 * (1 + self.k_grid / 0.923)**0.451
+        dnl = (self.k_grid / 6.4)**0.569 - (self.k_grid / 15.3)**2.01
+        dnl = dnl - (self.k_grid * self.muk_grid / kvel)**1.5
         return np.exp(dnl)
 
     def compute_dnl_arinyo(self, params):
@@ -344,9 +344,9 @@ class PowerSpectrum:
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
 
-        growth = q1 * self.k**3 * self._pk_fid / (2 * np.pi**2)
-        pec_velocity = (self.k / kv)**av * np.abs(self.muk_grid)**bv
-        pressure = (self.k / kp) * (self.k / kp)
+        growth = q1 * self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+        pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
+        pressure = (self.k_grid / kp) * (self.k_grid / kp)
         dnl = np.exp(growth * (1 - pec_velocity) - pressure)
         return dnl
 
@@ -366,6 +366,6 @@ class PowerSpectrum:
         L_par = params["par binsize {}".format(self._name)]
         L_per = params["per binsize {}".format(self._name)]
 
-        kp = self.k * self.muk_grid
-        kt = self.k * np.sqrt(1 - self.muk_grid**2)
+        kp = self.k_grid * self.muk_grid
+        kt = self.k_grid * np.sqrt(1 - self.muk_grid**2)
         return utils.sinc(kp * L_par / 2) * utils.sinc(kt * L_per / 2)
