@@ -10,33 +10,33 @@ class Model:
     Class for computing Lyman-alpha forest correlation function models
     """
 
-    def __init__(self, corr_item, data, fiducial):
+    def __init__(self, corr_item, fiducial, data=None):
         """Initialize the model computation
 
         Parameters
         ----------
         corr_item : CorrelationItem
             Item object with the component config
-        data : Data
-            data object corresponding to the cf component
         fiducial : dict
             fiducial config
+        data : Data, optional
+            data object corresponding to the cf component, by default None
         """
-        self.corr_item = corr_item
+        self._corr_item = corr_item
 
-        # ! For now we need to import r, mu, z
-        # ! until I add defaults
-        assert data.r_grid is not None
-        assert data.mu_grid is not None
-        assert data.z_grid is not None
+        assert corr_item.r_mu_grid is not None
+        assert corr_item.z_grid is not None
         self._coords_grid = {}
-        self._coords_grid['r'] = data.r_grid
-        self._coords_grid['mu'] = data.mu_grid
-        self._coords_grid['z'] = data.z_grid
+        self._coords_grid['r'] = corr_item.r_mu_grid[0]
+        self._coords_grid['mu'] = corr_item.r_mu_grid[1]
+        self._coords_grid['z'] = corr_item.z_grid
 
         self._data = data
         self._full_shape = fiducial.get('full-shape', False)
         self._smooth_scaling = fiducial.get('smooth-scaling', False)
+        self._has_distortion_mat = False
+        if self._data is not None:
+            self._has_distortion_mat = self._data.distortion_mat is not None
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -46,22 +46,22 @@ class Model:
 
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
-            self.corr_item.config['model'], fiducial, self.corr_item.tracer1,
-            self.corr_item.tracer2, self.corr_item.name)
+            self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
+            self._corr_item.tracer2, self._corr_item.name)
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
-            self.corr_item.config['model'], fiducial, self._coords_grid,
-            self.corr_item.tracer1, self.corr_item.tracer2)
+            self._corr_item.config['model'], fiducial, self._coords_grid,
+            self._corr_item.tracer1, self._corr_item.tracer2)
 
         # Initialize metals
         self.Pk_metal = {}
         self.Xi_metal = {}
-        if self.corr_item.has_metals:
-            for name1, name2 in self.corr_item.metal_correlations:
+        if self._corr_item.has_metals:
+            for name1, name2 in self._corr_item.metal_correlations:
                 # Get the tracer info
-                tracer1 = self.corr_item.tracer_catalog[name1]
-                tracer2 = self.corr_item.tracer_catalog[name2]
+                tracer1 = self._corr_item.tracer_catalog[name1]
+                tracer2 = self._corr_item.tracer_catalog[name2]
 
                 # Read rp and rt for the metal correlation
                 rp_grid = data.metal_rp_grids[(name1, name2)]
@@ -81,13 +81,17 @@ class Model:
 
                 # Initialize the metal correlation P(k)
                 self.Pk_metal[(name1, name2)] = power_spectrum.PowerSpectrum(
-                                    self.corr_item.config['metals'], fiducial,
-                                    tracer1, tracer2, self.corr_item.name)
+                                    self._corr_item.config['metals'], fiducial,
+                                    tracer1, tracer2, self._corr_item.name)
 
                 # Initialize the metal correlation Xi
                 self.Xi_metal[(name1, name2)] = corr_func.CorrelationFunction(
-                                    self.corr_item.config['metals'], fiducial,
+                                    self._corr_item.config['metals'], fiducial,
                                     coords_grid, tracer1, tracer2)
+
+            self._has_metal_mats = False
+            if self._data is not None:
+                self._has_metal_mats = self._data.metal_mats is not None
 
     def _compute_model(self, pars, pk_lin, component='smooth'):
         """Compute a model correlation function given the input pars
@@ -120,8 +124,8 @@ class Model:
             self.xi[component]['core'] = xi_model.copy()
 
         # Compute metal correlation function
-        if self.corr_item.has_metals:
-            for name1, name2, in self.corr_item.metal_correlations:
+        if self._corr_item.has_metals:
+            for name1, name2, in self._corr_item.metal_correlations:
                 k, muk, pk_metal = self.Pk_metal[(name1, name2)].compute(
                                                         pk_lin, pars)
                 xi_metal = self.Xi_metal[(name1, name2)].compute(
@@ -133,7 +137,7 @@ class Model:
                     self.xi[component][(name1, name2)] = xi_metal.copy()
 
                 # Apply the metal matrix
-                if self._data.metal_mats is not None:
+                if self._has_metal_mats:
                     xi_metal = self._data.metal_mats[(name1, name2)].dot(
                                                         xi_metal)
                     if self.save_components:
@@ -144,7 +148,7 @@ class Model:
                 xi_model += xi_metal
 
         # Apply the distortion matrix
-        if self._data.distortion_mat is not None:
+        if self._has_distortion_mat:
             xi_model = self._data.distortion_mat.dot(xi_model)
 
             if self.save_components:

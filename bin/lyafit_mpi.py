@@ -1,4 +1,5 @@
-from lyafit import LyaFit, Sampler
+from lyafit import LyaFit
+from lyafit.sampler_interface import Sampler
 import argparse
 
 if __name__ == '__main__':

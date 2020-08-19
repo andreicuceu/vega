@@ -17,60 +17,25 @@ class Data:
             Item object with the component config
         """
         # First save the tracer info
-        self.corr_item = corr_item
-        self.tracer1 = corr_item.tracer1
-        self.tracer2 = corr_item.tracer2
+        self._corr_item = corr_item
+        self._tracer1 = corr_item.tracer1
+        self._tracer2 = corr_item.tracer2
 
-        # Read the data file
+        # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
-        self._read_data(data_path, corr_item.config['cuts'])
+        rp_rt_grid, z_grid = self._read_data(data_path,
+                                             corr_item.config['cuts'])
+        self._corr_item.rp_rt_grid = rp_rt_grid
+        self._corr_item.z_grid = z_grid
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
             tracer_catalog, metal_correlations = self._init_metals(
                                                  corr_item.config['metals'])
-            self.corr_item.init_metals(tracer_catalog, metal_correlations)
+            self._corr_item.init_metals(tracer_catalog, metal_correlations)
 
-        self.cholesky = None
-        self.scale = 1.
-
-    def create_monte_carlo(self, fiducial_model, scale=1., seed=0):
-        """Create monte carlo mock of data using a fiducial model
-
-        Parameters
-        ----------
-        fiducial_model : 1D Array
-            Fiducial model of the data
-        scale : float, optional
-            Scaling for the covariance, by default 1.
-        seed : int, optional
-            Seed for the random number generator, by default 0
-
-        Returns
-        -------
-        1D Array
-            Monte Carlo mock of the data
-        """
-        # Check if scale has changed and we need to recompute
-        if np.isclose(scale, self.scale):
-            self._recompute = False
-        else:
-            self.scale = scale
-            self._recompute = True
-            self.scaled_inv_masked_cov = self.inv_masked_cov / self.scale
-            self.scaled_log_cov_det = np.log(self.scale) + self.log_cov_det
-
-        # Compute cholesky decomposition
-        if self.cholesky is None or self._recompute:
-            self.cholesky = linalg.cholesky(self.scale * self.cov_mat)
-
-        # Create the mock
-        np.random.seed(seed)
-        ran_vec = np.random.randn(self.full_data_size)
-        self.mc_mock = self.cholesky.dot(ran_vec) + fiducial_model
-        self.masked_mc_mock = self.mc_mock[self.mask]
-
-        return self.masked_mc_mock
+        self._cholesky = None
+        self._scale = 1.
 
     def _read_data(self, data_path, cuts_config):
         """Read the data, mask it and prepare the environment
@@ -141,14 +106,9 @@ class Data:
         w = self.r_square_grid > 0.
         self.mu_square_grid[w] = rp_grid[w] / self.r_square_grid[w]
 
-        # Save the coordinate grids
-        self.rp_grid = dist_rp_grid
-        self.rt_grid = dist_rt_grid
-        self.z_grid = dist_z_grid
-        self.r_grid = np.sqrt(self.rp_grid**2 + self.rt_grid**2)
-        self.mu_grid = np.zeros(self.r_grid.size)
-        w = self.r_grid > 0.
-        self.mu_grid[w] = self.rp_grid[w] / self.r_grid[w]
+        # return the coordinate grids
+        rp_rt_grid = np.array([dist_rp_grid, dist_rt_grid])
+        return rp_rt_grid, dist_z_grid
 
     @staticmethod
     def _build_mask(rp_grid, rt_grid, cuts_config, data_header):
@@ -246,8 +206,8 @@ class Data:
 
         # Build tracer Catalog
         tracer_catalog = {}
-        tracer_catalog[self.tracer1['name']] = self.tracer1
-        tracer_catalog[self.tracer2['name']] = self.tracer2
+        tracer_catalog[self._tracer1['name']] = self._tracer1
+        tracer_catalog[self._tracer2['name']] = self._tracer2
 
         if metals_in_tracer1 is not None:
             for metal in metals_in_tracer1:
@@ -264,8 +224,8 @@ class Data:
         # First look for correlations between tracer1 and metals
         if 'in tracer2' in metal_config:
             for metal in metals_in_tracer2:
-                tracers = (self.tracer1['name'], metal)
-                name = self.tracer1['name'] + '_' + metal
+                tracers = (self._tracer1['name'], metal)
+                name = self._tracer1['name'] + '_' + metal
                 self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
@@ -273,10 +233,10 @@ class Data:
         # If we have an auto-cf the files are saved in the format tracer-metal
         if 'in tracer1' in metal_config:
             for metal in metals_in_tracer1:
-                tracers = (metal, self.tracer2['name'])
-                name = metal + '_' + self.tracer2['name']
-                if self.tracer1 == self.tracer2:
-                    name = self.tracer2['name'] + '_' + metal
+                tracers = (metal, self._tracer2['name'])
+                name = metal + '_' + self._tracer2['name']
+                if self._tracer1 == self._tracer2:
+                    name = self._tracer2['name'] + '_' + metal
                 self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
@@ -285,7 +245,7 @@ class Data:
         if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
             for i, metal1 in enumerate(metals_in_tracer1):
                 j0 = 0
-                if self.tracer1 == self.tracer2:
+                if self._tracer1 == self._tracer2:
                     j0 = i
 
                 for metal2 in metals_in_tracer2[j0:]:
@@ -323,3 +283,41 @@ class Data:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         else:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
+
+    def create_monte_carlo(self, fiducial_model, scale=1., seed=0):
+        """Create monte carlo mock of data using a fiducial model
+
+        Parameters
+        ----------
+        fiducial_model : 1D Array
+            Fiducial model of the data
+        scale : float, optional
+            Scaling for the covariance, by default 1.
+        seed : int, optional
+            Seed for the random number generator, by default 0
+
+        Returns
+        -------
+        1D Array
+            Monte Carlo mock of the data
+        """
+        # Check if scale has changed and we need to recompute
+        if np.isclose(scale, self._scale):
+            self._recompute = False
+        else:
+            self._scale = scale
+            self._recompute = True
+            self.scaled_inv_masked_cov = self.inv_masked_cov / self._scale
+            self.scaled_log_cov_det = np.log(self._scale) + self.log_cov_det
+
+        # Compute cholesky decomposition
+        if self._cholesky is None or self._recompute:
+            self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
+
+        # Create the mock
+        np.random.seed(seed)
+        ran_vec = np.random.randn(self.full_data_size)
+        self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
+        self.masked_mc_mock = self.mc_mock[self.mask]
+
+        return self.masked_mc_mock

@@ -5,7 +5,8 @@ from astropy.io import fits
 from pkg_resources import resource_filename
 import configparser
 
-from . import correlation_item, data, model, utils, analysis
+from . import correlation_item, data, utils, analysis
+from lyafit.model import Model
 
 
 class LyaFit:
@@ -42,14 +43,22 @@ class LyaFit:
         # TODO Can we make this completely optional?
         # initialize the data
         self.data = {}
+        self._has_data = True
         for name, corr_item in self.corr_items.items():
-            self.data[name] = data.Data(corr_item)
+            has_datafile = corr_item.config['data'].getboolean('has_datafile',
+                                                               True)
+            if has_datafile:
+                self.data[name] = data.Data(corr_item)
+            else:
+                self.data[name] = None
+                self._has_data = False
 
         # initialize the models
         self.models = {}
-        for name, corr_item in self.corr_items.items():
-            self.models[name] = model.Model(corr_item, self.data[name],
-                                            self.fiducial)
+        if self._has_data:
+            for name, corr_item in self.corr_items.items():
+                self.models[name] = Model(corr_item, self.fiducial,
+                                          self.data[name])
 
         # TODO Get rid of this and replace with something better
         utils.cosmo_fit_func = getattr(
@@ -90,7 +99,10 @@ class LyaFit:
 
         # Go through each component and compute the model cf
         model_cf = {}
-        for name in self.corr_items:
+        self.models = {}
+        for name, corr_item in self.corr_items.items():
+            self.models[name] = Model(corr_item, self.fiducial,
+                                      self.data[name])
             model_cf[name] = self.models[name].compute(
                 self.params, self.fiducial['pk_full'],
                 self.fiducial['pk_smooth'])
@@ -110,6 +122,8 @@ class LyaFit:
         float
             chi^2
         """
+        assert self._has_data
+
         # Overwrite computation parameters
         if params is not None:
             for par, val in params.items():
@@ -148,6 +162,8 @@ class LyaFit:
         float
             log Likelihood
         """
+        assert self._has_data
+
         # Get the full chi2
         chi2 = self.chi2(params)
 
@@ -183,6 +199,8 @@ class LyaFit:
         dict
             Dictionary with MC mocks for each item
         """
+        assert self._has_data
+
         # Overwrite computation parameters
         if params is not None:
             for par, val in params.items():
@@ -318,7 +336,7 @@ class LyaFit:
             if values_list[0] != 'None':
                 lower_limit = float(values_list[0])
             if values_list[1] != 'None':
-                lower_limit = float(values_list[1])
+                upper_limit = float(values_list[1])
             sample_params['limits'][param] = (lower_limit, upper_limit)
 
             # Get the values and errors for the fitter
