@@ -8,7 +8,7 @@ class Wedge:
 
     def __init__(self, rp=(0., 200., 50),
                  rt=(0., 200., 50), r=(0., 200., 50),
-                 mu=(0.95, 1.0), scaling=10):
+                 mu=(0.95, 1.0), scaling=10, abs_mu=False):
         """Initialize computation of a wedge
 
         Parameters
@@ -23,6 +23,8 @@ class Wedge:
             (Min, Max) for mu (= rp / r), by default (0.95, 1.0)
         scaling : int, optional
             Scaling for grid computation, by default 10
+        abs_mu : bool, optional
+            Flag for working with absolute values of mu, by default False
         """
         # Init bin limits on the fine scaled grid and get centers
         rp_scaled_bins = np.linspace(rp[0], rp[1], (scaling * rp[2]) + 1)
@@ -34,6 +36,10 @@ class Wedge:
         rt_mesh, rp_mesh = np.meshgrid(rt_centers, rp_centers)
         r_mesh = np.sqrt(rp_mesh**2 + rt_mesh**2)
         mu_mesh = (rp_mesh/r_mesh)
+
+        # Check if we need the absolute value of mu
+        if abs_mu:
+            mu_mesh = np.absolute(mu_mesh)
 
         # Init the right bin limits
         rp_bins = np.linspace(rp[0], rp[1], rp[2] + 1)
