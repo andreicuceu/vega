@@ -49,14 +49,24 @@ class Wedge:
         # Compute the normal bin indices on the fine meshes
         rt_idx = np.digitize(rt_mesh, rt_bins) - 1
         rp_idx = np.digitize(rp_mesh, rp_bins) - 1
-        r_idx = np.digitize(r_mesh, r_bins) - 1
+
+        # For r we need to be careful because the mesh is computed
+        # from rp/rt while the bins are user defined so their range
+        # could be smaller than that of the mesh
+        r_idx = ((r_mesh - r[0]) / (r[1] - r[0]) * r[2]).astype(int)
 
         # Compute bins on mesh. The numbers are positions in weights array
         bins = rt_idx + rt[2] * rp_idx + rt[2] * rp[2] * r_idx
 
+        # Compute the r bin centers on the mesh array so we can check the cuts
+        # ? Is there a more elegant way to do this?
+        rp_centers = rp[0] + (rp_idx + 0.5) * (rp[1] - rp[0]) / rp[2]
+        rt_centers = rt[0] + (rt_idx + 0.5) * (rt[1] - rt[0]) / rt[2]
+        r_centers = np.sqrt(rp_centers**2 + rt_centers**2)
+
         # Compute the mask for the wedge
         mask = (mu_mesh >= mu[0]) & (mu_mesh <= mu[1])
-        mask &= (r_mesh > r[0]) & (r_mesh < r[1]) & (r_idx < r[2])
+        mask &= (r_centers > r[0]) & (r_centers < r[1]) & (r_idx < r[2])
 
         # Compute the right counts and their index
         wedge_bins = bins[mask]
@@ -64,7 +74,7 @@ class Wedge:
         positive_idx = np.where(counts != 0)
 
         # Initialize the weights and insert the right counts
-        self.weights = np.zeros((r[2], rt[2] * r[2]))
+        self.weights = np.zeros((r[2], rt[2] * rp[2]))
         weights_idx = np.unravel_index(positive_idx, np.shape(self.weights))
         self.weights[weights_idx] = counts[positive_idx]
         self.r = self.get_bin_centers(r_bins)
