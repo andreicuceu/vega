@@ -7,6 +7,7 @@ import configparser
 
 from . import correlation_item, data, utils, analysis
 from lyafit.model import Model
+from lyafit.minimizer import Minimizer
 
 
 class LyaFit:
@@ -70,6 +71,9 @@ class LyaFit:
                                             self.main_config['parameters'])
         self.sample_params = self._read_sample(self.main_config['sample'])
 
+        # Initialize the minimizer
+        self.minimizer = Minimizer(self.chi2, self.sample_params)
+
         # Check for sampler
         self.has_sampler = self.main_config['control'].getboolean(
             'sampler', False)
@@ -79,7 +83,7 @@ class LyaFit:
                                     no sampler initialized')
         self.monte_carlo = False
 
-    def compute_model(self, params=None):
+    def compute_model(self, params=None, run_init=True):
         """Compute correlation function model using input parameters
 
         Parameters
@@ -99,13 +103,15 @@ class LyaFit:
 
         # Go through each component and compute the model cf
         model_cf = {}
-        self.models = {}
+        if run_init:
+            self.models = {}
         for name, corr_item in self.corr_items.items():
-            self.models[name] = Model(corr_item, self.fiducial,
-                                      self.data[name])
+            if run_init:
+                self.models[name] = Model(corr_item, self.fiducial,
+                                          self.data[name])
             model_cf[name] = self.models[name].compute(
-                self.params, self.fiducial['pk_full'],
-                self.fiducial['pk_smooth'])
+                    self.params, self.fiducial['pk_full'],
+                    self.fiducial['pk_smooth'])
 
         return model_cf
 
@@ -219,6 +225,13 @@ class LyaFit:
 
         self.monte_carlo = True
         return mocks
+
+    def minimize(self):
+        self.minimizer.minimize()
+
+    @property
+    def bestfit(self):
+        return self.minimizer
 
     @staticmethod
     def _read_fiducial(fiducial_config):
