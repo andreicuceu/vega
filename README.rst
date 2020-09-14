@@ -16,12 +16,30 @@ lyafit
 
 
 
-Package for modeling and fitting 2-point statistics for the Lyman-alpha forest.
+Package for modeling and fitting the 3D Correlation Function for the Lyman-alpha forest.
 
 
 * Free software: MIT license
 * Documentation: https://lyafit.readthedocs.io.
 
+Stuff from fitter2 yet to be implemented
+--------
+
+* Full Broadband functionality (medium)
+* QSO Radiation model (easy)
+* Xi Relativistic (easy)
+* Xi Assymmetry (easy)
+* Velocity Dispersion models (easy)
+* Full pk smoothing models (easy)
+* More output in .h5 files (easy)
+* Large scale fastmc (easy)
+
+Stuff that needs improving
+--------
+
+* Coordinate rescaling models (in utils.py)
+* Fast Hankel Transform
+* Cache stuff that doesn't change between different components (e.g. peak_nl)
 
 Features
 --------
@@ -30,6 +48,8 @@ Features
 
 Credits
 -------
+
+This package is based on picca fitter2 found here: https://github.com/igmhub/picca/tree/master/py/picca/fitter2
 
 This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
 
