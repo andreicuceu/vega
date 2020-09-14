@@ -8,6 +8,7 @@ import configparser
 from . import correlation_item, data, utils, analysis
 from lyafit.model import Model
 from lyafit.minimizer import Minimizer
+from lyafit.analysis import Analysis
 
 
 class LyaFit:
@@ -71,8 +72,9 @@ class LyaFit:
                                             self.main_config['parameters'])
         self.sample_params = self._read_sample(self.main_config['sample'])
 
-        # Initialize the minimizer
+        # Initialize the minimizer and the analysis objects
         self.minimizer = Minimizer(self.chi2, self.sample_params)
+        self.analysis = Analysis(self.main_config, self.minimizer)
 
         # Check for sampler
         self.has_sampler = self.main_config['control'].getboolean(
@@ -97,9 +99,10 @@ class LyaFit:
             Dictionary of cf models for each component
         """
         # Overwrite computation parameters
+        local_params = self.params.copy()
         if params is not None:
             for par, val in params.items():
-                self.params[par] = val
+                local_params[par] = val
 
         # Go through each component and compute the model cf
         model_cf = {}
@@ -110,7 +113,7 @@ class LyaFit:
                 self.models[name] = Model(corr_item, self.fiducial,
                                           self.data[name])
             model_cf[name] = self.models[name].compute(
-                    self.params, self.fiducial['pk_full'],
+                    local_params, self.fiducial['pk_full'],
                     self.fiducial['pk_smooth'])
 
         return model_cf
@@ -131,14 +134,15 @@ class LyaFit:
         assert self._has_data
 
         # Overwrite computation parameters
+        local_params = self.params.copy()
         if params is not None:
             for par, val in params.items():
-                self.params[par] = val
+                local_params[par] = val
 
         # Go trough each component and compute the chi^2
         chi2 = 0
         for name in self.corr_items:
-            model_cf = self.models[name].compute(self.params,
+            model_cf = self.models[name].compute(local_params,
                                                  self.fiducial['pk_full'],
                                                  self.fiducial['pk_smooth'])
 
@@ -208,15 +212,16 @@ class LyaFit:
         assert self._has_data
 
         # Overwrite computation parameters
+        local_params = self.params.copy()
         if params is not None:
             for par, val in params.items():
-                self.params[par] = val
+                local_params[par] = val
 
         mocks = {}
         for name in self.corr_items:
             # Compute fiducial model
             fiducial_model = self.models[name].compute(
-                self.params, self.fiducial['pk_full'],
+                local_params, self.fiducial['pk_full'],
                 self.fiducial['pk_smooth'])
 
             # Create the mock

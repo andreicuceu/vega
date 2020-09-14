@@ -1,6 +1,4 @@
-# import numpy as np
 import iminuit
-import copy
 import time
 from sys import stdout
 
@@ -15,7 +13,7 @@ class Minimizer:
         ----------
         chi2_func : function
             Function that takes dictionary of params and returns a chi^2 value
-        sample_params : dictionary
+        sample_params : dict
             Dictionary with the sample params config
         """
         self.chi2_func = chi2_func
@@ -51,7 +49,7 @@ class Minimizer:
             and/or fix parameters, by default None
         """
         t0 = time.time()
-        kwargs = copy.deepcopy(self._config)
+        kwargs = self._config.copy()
         if params is not None:
             for param, val in params['values'].items():
                 kwargs[param] = val
@@ -60,7 +58,7 @@ class Minimizer:
         # Do an initial "fast" minimization over biases
         bias_flag = bool(len([par for par in self._names if 'bias' in par]))
         if bias_flag:
-            kwargs_init = copy.deepcopy(kwargs)
+            kwargs_init = kwargs.copy()
             for param in self._names:
                 if 'bias' not in param:
                     kwargs_init['fix_' + param] = True
@@ -108,6 +106,14 @@ class Minimizer:
             raise RuntimeError('Tried to access minimization results \
                                 before minimization.')
         return dict(self._minuit.errors)
+
+    @property
+    def covariance(self):
+        if not self._run_flag:
+            print('Run Minimizer.minimize() before asking for results')
+            raise RuntimeError('Tried to access minimization results \
+                                before minimization.')
+        return dict(self._minuit.covariance)
 
     @property
     def fmin(self):
