@@ -3,10 +3,10 @@ import numpy as np
 from astropy.io import fits
 from scipy.sparse import csr_matrix
 
-from lyafit.model import model
-import lyafit.parser as parser
-import lyafit.pk
-from lyafit.new_pk import PowerSpectrum
+# from lyafit.model import model
+# import lyafit.parser as parser
+# import lyafit.pk
+# from lyafit.new_pk import PowerSpectrum
 
 @pytest.mark.skip
 def test_model():

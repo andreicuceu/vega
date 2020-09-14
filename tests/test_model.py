@@ -3,8 +3,8 @@ import numpy as np
 from astropy.io import fits
 from scipy.sparse import csr_matrix
 
-from lyafit.new_model import Model
-import lyafit.parser as parser
+# from lyafit.new_model import Model
+# import lyafit.parser as parser
 
 @pytest.mark.skip
 def test_model():

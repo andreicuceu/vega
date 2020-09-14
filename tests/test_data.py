@@ -1,9 +1,9 @@
 import pytest
 import numpy as np
 import configparser
-import lyafit.parser as parser
-from lyafit.new_data import Data
-from lyafit.correlation_item import CorrelationItem
+# import lyafit.parser as parser
+# from lyafit.new_data import Data
+# from lyafit.correlation_item import CorrelationItem
 
 @pytest.mark.skip
 def test_data():
