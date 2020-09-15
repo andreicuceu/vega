@@ -29,6 +29,7 @@ class CorrelationItem:
         self.tracer2['type'] = config['data'].get('tracer2-type',
                                                   self.tracer1['type'])
         self.has_metals = False
+        self.has_bb = False
 
     def init_metals(self, tracer_catalog, metal_correlations):
         """Initialize the metal config
@@ -44,6 +45,21 @@ class CorrelationItem:
         self.tracer_catalog = tracer_catalog
         self.metal_correlations = metal_correlations
         self.has_metals = True
+
+    def init_broadband(self, bin_size_rp, coeff_binning_model):
+        """Initialize the parameters we need to compute
+        the broadband functions
+
+        Parameters
+        ----------
+        bin_size_rp : int
+            Size of r parallel bins
+        coeff_binning_model : float
+            Ratio of distorted coordinate grid bin size to undistorted bin size
+        """
+        self.bin_size_rp = bin_size_rp
+        self.coeff_binning_model = coeff_binning_model
+        self.has_bb = True
 
     @property
     def r_mu_grid(self):

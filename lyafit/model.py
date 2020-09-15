@@ -44,6 +44,14 @@ class Model:
             self.xi = {'peak': {}, 'smooth': {}}
             self.xi_distorted = {'peak': {}, 'smooth': {}}
 
+        # Initialize Broadband
+        self.bb_config = None
+        if 'broadband' in self._corr_item.config:
+            self.bb_config = self.init_broadband(
+                    self._corr_item.config['broadband'], self._corr_item.name,
+                    self._corr_item.bin_size_rp,
+                    self._corr_item.coeff_binning_model)
+
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
             self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
@@ -52,7 +60,7 @@ class Model:
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
             self._corr_item.config['model'], fiducial, self._coords_grid,
-            self._corr_item.tracer1, self._corr_item.tracer2)
+            self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config)
 
         # Initialize metals
         self.Pk_metal = {}
@@ -147,12 +155,25 @@ class Model:
                 # Add the metal component to the full xi
                 xi_model += xi_metal
 
+        # Apply pre distortion broadband
+        if self.bb_config is not None:
+            assert self.Xi_core.has_bb
+            xi_model *= self.Xi_core.compute_broadband(pars, 'pre-mul')
+            xi_model += self.Xi_core.compute_broadband(pars, 'pre-add')
+
         # Apply the distortion matrix
         if self._has_distortion_mat:
             xi_model = self._data.distortion_mat.dot(xi_model)
 
-            if self.save_components:
-                self.xi_distorted[component]['core'] = xi_model.copy()
+        # Apply post distortion broadband
+        if self.bb_config is not None:
+            assert self.Xi_core.has_bb
+            xi_model *= self.Xi_core.compute_broadband(pars, 'post-mul')
+            xi_model += self.Xi_core.compute_broadband(pars, 'post-add')
+
+        # Save final xi
+        if self.save_components:
+            self.xi_distorted[component]['core'] = xi_model.copy()
 
         return xi_model
 
@@ -185,3 +206,60 @@ class Model:
 
         xi_full = pars['bao_amp'] * xi_peak + xi_smooth
         return xi_full
+
+    @staticmethod
+    def init_broadband(bb_input, cf_name, bin_size_rp, coeff_binning_model):
+        """Read the broadband config and initialize what we need
+
+        Parameters
+        ----------
+        bb_input : ConfigParser
+            broadband section from the config file
+        cf_name : string
+            Name of corr item
+        bin_size_rp : int
+            Size of r parallel bins
+        coeff_binning_model : float
+            Ratio of distorted coordinate grid bin size to undistorted bin size
+
+        Returns
+        -------
+        list
+            list with configs of broadband terms
+        """
+        bb_config = []
+        for item, value in bb_input.items():
+            value = value.split()
+            config = {}
+            # Check if it's additive or multiplicative
+            assert value[0] == 'add' or value[0] == 'mul'
+            config['type'] = value[0]
+
+            # Check if it's pre distortion or post distortion
+            assert value[1] == 'pre' or value[1] == 'post'
+            config['pre'] = value[1]
+
+            # Check if it's over rp/rt or r/mu
+            assert value[2] == 'rp,rt' or value[2] == 'r,mu'
+            config['rp_rt'] = value[2]
+
+            # Check if it's normal or sky
+            if len(value) == 6:
+                config['func'] = value[5]
+            else:
+                config['func'] = 'broadband'
+
+            # Get the coordinate configs
+            r_min, r_max, dr = value[3].split(':')
+            mu_min, mu_max, dmu = value[4].split(':')
+            config['r_config'] = (int(r_min), int(r_max), int(dr))
+            config['mu_config'] = (int(mu_min), int(mu_max), int(dmu))
+            if config['pre'] == 'pre':
+                config['bin_size_rp'] = bin_size_rp
+            else:
+                config['bin_size_rp'] = bin_size_rp / coeff_binning_model
+
+            config['cf_name'] = cf_name
+            bb_config.append(config)
+
+        return bb_config

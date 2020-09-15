@@ -34,6 +34,11 @@ class Data:
                                                  corr_item.config['metals'])
             self._corr_item.init_metals(tracer_catalog, metal_correlations)
 
+        # Check if we have broadband
+        if 'broadband' in corr_item.config:
+            self._corr_item.init_broadband(self.bin_size_rp,
+                                           self.coeff_binning_model)
+
         self._cholesky = None
         self._scale = 1.
 
@@ -67,8 +72,9 @@ class Data:
         self.coeff_binning_model = np.sqrt(dist_rp_grid.size / rp_grid.size)
 
         # Compute the mask and use it on the data
-        self.mask = self._build_mask(rp_grid, rt_grid, cuts_config,
-                                     hdul[1].header)
+        self.mask, self.bin_size_rp = self._build_mask(rp_grid, rt_grid,
+                                                       cuts_config,
+                                                       hdul[1].header)
         self.masked_data_vec = np.zeros(self.mask.sum())
         self.masked_data_vec[:] = self.data_vec[self.mask]
 
@@ -172,7 +178,7 @@ class Data:
         mask &= (bin_center_r > r_min) & (bin_center_r < r_max)
         mask &= (bin_center_mu > mu_min) & (bin_center_mu < mu_max)
 
-        return mask
+        return mask, bin_size_rp
 
     def _init_metals(self, metal_config):
         """Read the metal file and initialize all the metal data

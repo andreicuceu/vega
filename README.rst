@@ -25,7 +25,6 @@ Package for modeling and fitting the 3D Correlation Function for the Lyman-alpha
 Stuff from fitter2 yet to be implemented
 --------
 
-* Full Broadband functionality (medium)
 * QSO Radiation model (easy)
 * Xi Relativistic (easy)
 * Xi Assymmetry (easy)

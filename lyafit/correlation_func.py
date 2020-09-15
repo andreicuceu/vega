@@ -10,7 +10,8 @@ class CorrelationFunction:
     # * Extensions should have their separate method of the form
     # * 'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, coords_grid, tracer1, tracer2):
+    def __init__(self, config, fiducial, coords_grid,
+                 tracer1, tracer2, bb_config=None):
         """Initialize the config, coordinate grid, tracer info,
         and everything else needed to compute the correlation function
 
@@ -26,6 +27,8 @@ class CorrelationFunction:
             Config of tracer 1
         tracer2 : dict
             Config of tracer 2
+        bb_config : list, optional
+            list with configs of broadband terms, by default None
         """
         self._config = config
         self._r = coords_grid['r']
@@ -49,6 +52,12 @@ class CorrelationFunction:
         self._Omega_de = fiducial['Omega_de']
         self.xi_growth = self.compute_growth(self._z, self._z_fid,
                                              self._Omega_m, self._Omega_de)
+
+        # Initialize the broadband
+        self.has_bb = False
+        if bb_config is not None:
+            self._init_broadband(bb_config)
+            self.has_bb = True
 
     def compute(self, k, muk, pk, params):
         """Compute correlation function for input P(k)
@@ -282,6 +291,176 @@ class CorrelationFunction:
 
         return growth**2
 
+    def _init_broadband(self, bb_config):
+        """Initialize the broadband terms
+
+        Parameters
+        ----------
+        bb_config : list
+            list with configs of broadband terms
+        """
+        self.bb_terms = {}
+        self.bb_terms['pre-add'] = []
+        self.bb_terms['post-add'] = []
+        self.bb_terms['pre-mul'] = []
+        self.bb_terms['post-mul'] = []
+
+        # First pick up the normal broadband terms
+        normal_broadbands = [el for el in bb_config
+                             if el['func'] != 'broadband_sky']
+        for index, config in enumerate(normal_broadbands):
+            # Create the name for the parameters of this term
+            name = 'BB-{}-{} {} {} {}'.format(config['cf_name'], index,
+                                              config['type'], config['pre'],
+                                              config['rp_rt'])
+
+            # Create the broadband term dictionary
+            bb = {}
+            bb['name'] = name
+            bb['func'] = config['func']
+            bb['rp_rt'] = config['rp_rt']
+            bb['r_config'] = config['r_config']
+            bb['mu_config'] = config['mu_config']
+            self.bb_terms[config['pre'] + "-" + config['type']].append(bb)
+
+        # Next pick up the sky broadban terms
+        sky_broadbands = [el for el in bb_config
+                          if el['func'] == 'broadband_sky']
+        for index, config in enumerate(sky_broadbands):
+            assert config['rp_rt'] == 'rp,rt'
+            # Create the name for the parameters of this term
+            name = 'BB-{}-{}-{}'.format(config['cf_name'],
+                                        index + len(normal_broadbands),
+                                        config['func'])
+
+            # Create the broadband term dictionary
+            bb = {}
+            bb['name'] = name
+            bb['func'] = config['func']
+            bb['bin_size_rp'] = config['bin_size_rp']
+            self.bb_terms[config['pre'] + "-" + config['type']].append(bb)
+
+    def compute_broadband(self, params, pos_type):
+        """Compute the broadband terms for
+        one position (pre-distortion/post-distortion)
+        and one type (multiplicative/additive)
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+        pos_type : string
+            String with position and type, must be one of:
+            'pre-mul' or 'pre-add' or 'post-mul' or 'post-add'
+
+        Returns
+        -------
+        1d Array
+            Output broadband
+        """
+        assert pos_type in ['pre-mul', 'pre-add', 'post-mul', 'post-add']
+        corr = None
+
+        # Loop over the right pos/type configuration
+        for bb_term in self.bb_terms[pos_type]:
+            # Check if it's sky or normal broadband
+            if bb_term['func'] != 'broadband_sky':
+                # Initialize the broadband and check
+                # if we need to add or multiply
+                if corr is None:
+                    corr = self.broadband(bb_term, params)
+                    if 'mul' in pos_type:
+                        corr = 1 + corr
+                elif 'mul' in pos_type:
+                    corr *= 1 + self.broadband(bb_term, params)
+                else:
+                    corr += self.broadband(bb_term, params)
+            else:
+                # Initialize the broadband and check
+                # if we need to add or multiply
+                if corr is None:
+                    corr = self.broadband_sky(bb_term, params)
+                    if 'mul' in pos_type:
+                        corr = 1 + corr
+                elif 'mul' in pos_type:
+                    corr *= 1 + self.broadband_sky(bb_term, params)
+                else:
+                    corr += self.broadband_sky(bb_term, params)
+
+        # Give defaults if corr is still None
+        if corr is None:
+            if 'mul' in pos_type:
+                corr = 1.
+            else:
+                corr = 0.
+        return corr
+
+    def broadband_sky(self, bb_term, params):
+        """Compute sky broadband term.
+        Calculates a Gaussian broadband in rp,rt for the sky residuals
+
+        Parameters
+        ----------
+        bb_term : dict
+            broadband term config
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        1d Array
+            Output broadband
+        """
+        rp = self._r * self._mu
+        rt = self._r * np.sqrt(1 - self._mu**2)
+        scale = params[bb_term['name'] + '-scale-sky']
+        sigma = params[bb_term['name'] + '-sigma-sky']
+
+        corr = scale / (sigma * np.sqrt(2. * np.pi))
+        corr *= np.exp(-0.5 * (rt / sigma)**2)
+        w = (rp >= 0.) & (rp < bb_term['bin_size_rp'])
+        corr[~w] = 0.
+
+        return corr
+
+    def broadband(self, bb_term, params):
+        """Compute broadband term.
+        Calculates a power-law broadband in r and mu or rp,rt
+
+        Parameters
+        ----------
+        bb_term : dict
+            broadband term config
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        1d Array
+            Output broadband
+        """
+        r1 = self._r / 100.
+        r2 = self._mu
+        if bb_term['rp_rt'] == 'rp,rt':
+            r1 = self._r / 100. * self._mu
+            r2 = self._r / 100. * np.sqrt(1 - self._mu**2)
+
+        r_min, r_max, dr = bb_term['r_config']
+        mu_min, mu_max, dmu = bb_term['mu_config']
+        r1_powers = np.arange(r_min, r_max + 1, dr)
+        r2_powers = np.arange(mu_min, mu_max + 1, dmu)
+
+        bb_params = []
+        for i in r1_powers:
+            for j in r2_powers:
+                bb_params.append(params['{} ({},{})'.format(
+                        bb_term['name'], i, j)])
+        bb_params = np.array(bb_params).reshape(-1, r_max - r_min + 1)
+
+        corr = (bb_params[:, :, None, None] * r1**r1_powers[:, None, None] *
+                r2**r2_powers[None, :, None]).sum(axis=(0, 1, 2))
+        return corr
+
 
 # ### QSO radiation model
 # def xi_qso_radiation(r, mu, tracer1, tracer2, **pars):
@@ -370,66 +549,3 @@ class CorrelationFunction:
 #     xi_asy = utils.Pk2XiAsy(ar, amu, k, pk_lin, pars)
 #     return xi_asy
 
-# def broadband_sky(r, mu, name=None, bin_size_rp=None, *pars, **kwargs):
-#     '''
-#         Broadband function interface.
-#         Calculates a Gaussian broadband in rp,rt for the sky residuals
-#     Arguments:
-#         - r,mu (array or float): where to calcualte the broadband
-#         - bin_size_rp (array): Bin size of the distortion matrix along the line-of-sight
-#         - name: (string) name ot identify the corresponding parameters,
-#                     typically the dataset name and whether it's multiplicative
-#                     of additive
-#         - *pars: additional parameters that are ignored (for convenience)
-#         **kwargs (dict): dictionary containing all the polynomial
-#                     coefficients. Any extra keywords are ignored
-#     Returns:
-#         - cor (array of float): Correlation function
-#     '''
-
-#     rp = r*mu
-#     rt = r*sp.sqrt(1-mu**2)
-#     cor = kwargs[name+'-scale-sky']/(kwargs[name+'-sigma-sky']*sp.sqrt(2.*sp.pi))*sp.exp(-0.5*(rt/kwargs[name+'-sigma-sky'])**2)
-#     w = (rp>=0.) & (rp<bin_size_rp)
-#     cor[~w] = 0.
-
-#     return cor
-
-# def broadband(r, mu, deg_r_min=None, deg_r_max=None,
-#         ddeg_r=None, deg_mu_min=None, deg_mu_max=None,
-#         ddeg_mu=None, deg_mu=None, name=None,
-#         rp_rt=False, bin_size_rp=None, *pars, **kwargs):
-#     '''
-#     Broadband function interface.
-#     Calculates a power-law broadband in r and mu or rp,rt
-#     Arguments:
-#         - r,mu: (array or float) where to calcualte the broadband
-#         - deg_r_min: (int) degree of the lowest-degree monomial in r or rp
-#         - deg_r_max: (int) degree of the highest-degree monomual in r or rp
-#         - ddeg_r: (int) degree step in r or rp
-#         - deg_mu_min: (int) degree of the lowest-degree monomial in mu or rt
-#         - deg_mu_max: (int) degree of the highest-degree monmial in mu or rt
-#         - ddeg_mu: (int) degree step in mu or rt
-#         - name: (string) name ot identify the corresponding parameters,
-#                     typically the dataset name and whether it's multiplicative
-#                     of additive
-#         - rt_rp: (bool) use r,mu (if False) or rp,rt (if True)
-#         - *pars: additional parameters that are ignored (for convenience)
-#         **kwargs: (dict) dictionary containing all the polynomial
-#                     coefficients. Any extra keywords are ignored
-#     '''
-
-#     r1 = r/100
-#     r2 = mu
-#     if rp_rt:
-#         r1 = (r/100)*mu
-#         r2 = (r/100)*sp.sqrt(1-mu**2)
-
-#     r1_pows = sp.arange(deg_r_min, deg_r_max+1, ddeg_r)
-#     r2_pows = sp.arange(deg_mu_min, deg_mu_max+1, ddeg_mu)
-#     BB = [kwargs['{} ({},{})'.format(name,i,j)] for i in r1_pows
-#             for j in r2_pows]
-#     BB = sp.array(BB).reshape(-1,deg_r_max-deg_r_min+1)
-
-#     return (BB[:,:,None,None]*r1**r1_pows[:,None,None]*\
-#             r2**r2_pows[None,:,None]).sum(axis=(0,1,2))

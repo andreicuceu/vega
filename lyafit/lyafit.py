@@ -20,6 +20,14 @@ class LyaFit:
     """
 
     def __init__(self, main_path):
+        """Initialize LyaFit. Reads the config files and prepares
+        everything needed.
+
+        Parameters
+        ----------
+        main_path : string
+            Path to main.ini config file
+        """
         # Read the main config file
         self.main_config = configparser.ConfigParser()
         self.main_config.optionxform = lambda option: option
