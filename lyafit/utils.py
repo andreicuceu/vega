@@ -8,8 +8,10 @@ import scipy.interpolate
 
 from . import myGamma
 
+
 def sinc(x):
-    return sp.sin(x)/x
+    return np.sin(x)/x
+
 
 def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
     """
@@ -18,17 +20,17 @@ def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
     """
 
     k0 = k[0]
-    l=sp.log(k.max()/k0)
+    l=np.log(k.max()/k0)
     r0=1.
 
     N=len(k)
     emm=N*fft.fftfreq(N)
-    r=r0*sp.exp(-emm*l/N)
-    dr=abs(sp.log(r[1]/r[0]))
-    s=sp.argsort(r)
+    r=r0*np.exp(-emm*l/N)
+    dr=abs(np.log(r[1]/r[0]))
+    s=np.argsort(r)
     r=r[s]
 
-    xi=sp.zeros([len(ell_vals),len(ar)])
+    xi=np.zeros([len(ell_vals),len(ar)])
 
     for ell in ell_vals:
         if tform=="rel":
@@ -38,74 +40,139 @@ def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
             pk_ell=pk
             n=2.
         else:
-            pk_ell=sp.sum(dmuk*L(muk,ell)*pk,axis=0)*(2*ell+1)*(-1)**(ell//2)/2/sp.pi**2
+            pk_ell=np.sum(dmuk*L(muk,ell)*pk,axis=0)*(2*ell+1)*(-1)**(ell//2)/2/np.pi**2
             n=2.
         mu=ell+0.5
         q=2-n-0.5
-        x=q+2*sp.pi*1j*emm/l
+        x=q+2*np.pi*1j*emm/l
         lg1=myGamma.LogGammaLanczos((mu+1+x)/2)
         lg2=myGamma.LogGammaLanczos((mu+1-x)/2)
 
-        um=(k0*r0)**(-2*sp.pi*1j*emm/l)*2**x*sp.exp(lg1-lg2)
-        um[0]=sp.real(um[0])
-        an=fft.fft(pk_ell*k**n*sp.sqrt(sp.pi/2))
+        um=(k0*r0)**(-2*np.pi*1j*emm/l)*2**x*np.exp(lg1-lg2)
+        um[0]=np.real(um[0])
+        an=fft.fft(pk_ell*k**n*np.sqrt(np.pi/2))
         an*=um
         xi_loc=fft.ifft(an)
         xi_loc=xi_loc[s]
         xi_loc/=r**(3-n)
         xi_loc[-1]=0
-        spline=sp.interpolate.splrep(sp.log(r)-dr/2,sp.real(xi_loc),k=3,s=0)
-        xi[ell//2,:]=sp.interpolate.splev(sp.log(ar),spline)
+        spline=sp.interpolate.splrep(np.log(r)-dr/2,np.real(xi_loc),k=3,s=0)
+        xi[ell//2,:]=sp.interpolate.splev(np.log(ar),spline)
 
     return xi
 
-def Pk2Xi(ar, mur, k, pk, muk, ell_max=None):
-    dmuk = 1 / len(muk)
 
-    ell_vals=[ell for ell in range(0,ell_max+1,2)]
-    xi=Pk2Mp(ar, k, pk, ell_vals, muk, dmuk)
+def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max):
+    """Compute the correlation function from an input power spectrum
+
+    Parameters
+    ----------
+    r_grid : 1D Array
+        Grid of r coordinates for the output correlation
+    mu_grid : 1D Array
+        Grid of mu coordinates for the output correlation
+    k_grid : 1D Array
+        Grid of k coordinates for the input power spectrum
+    muk_grid : ND Array
+        Grid of muk = kp/k coordinates for the input power spectrum
+    pk : ND Array
+        Input power spectrum
+    ell_max : int
+        Maximum multipole to sum over
+
+    Returns
+    -------
+    1D Array
+        Output correlation function
+    """
+    # Check what multipoles we need and compute them
+    dmuk = 1 / len(muk_grid)
+    ell_vals = np.arange(0, ell_max + 1, 2)
+    xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk)
+
+    # Add the Legendre polynomials and sum over the multipoles
     for ell in ell_vals:
-        xi[ell//2,:]*=L(mur,ell)
-    return sp.sum(xi,axis=0)
+        xi[ell//2, :] *= L(mu_grid, ell)
+    return np.sum(xi, axis=0)
 
-# def Pk2XiRel(ar,mur,k,pk,kwargs):
-#     """Calculate the cross-correlation contribution from relativistic effects (Bonvin et al. 2014).
 
-#     Args:
-#         ar (float): r coordinates
-#         mur (float): mu coordinates
-#         k (float): wavenumbers
-#         pk (float): linear matter power spectrum
-#         kwargs: dictionary of fit parameters
+def pk_to_xi_relativistic(r_grid, mu_grid, k_grid, muk_grid, pk, params):
+    """Calculate the cross-correlation contribution from
+    relativistic effects (Bonvin et al. 2014).
 
-#     Returns:
-#         sum of dipole and octupole correlation terms (float)
+    Parameters
+    ----------
+    r_grid : 1D Array
+        Grid of r coordinates for the output correlation
+    mu_grid : 1D Array
+        Grid of mu coordinates for the output correlation
+    k_grid : 1D Array
+        Grid of k coordinates for the input power spectrum
+    muk_grid : ND Array
+        Grid of muk = kp/k coordinates for the input power spectrum
+    pk : ND Array
+        Input power spectrum
+    params : dict
+        Computation parameters
 
-#     """
-#     ell_vals=[1,3]
-#     xi=Pk2Mp(ar,k,pk,ell_vals,tform="rel")
-#     return kwargs["Arel1"]*xi[1//2,:]*L(mur,1) + kwargs["Arel3"]*xi[3//2,:]*L(mur,3)
+    Returns
+    -------
+    1D Array
+        Output xi relativistic
+    """
+    # Compute the dipole and octupole terms
+    ell_vals = [1, 3]
+    dmuk = 1 / len(muk_grid)
+    xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk, tform='rel')
 
-# def Pk2XiAsy(ar,mur,k,pk,kwargs):
-#     """Calculate the cross-correlation contribution from standard asymmetry (Bonvin et al. 2014).
+    # Get the relativistic parameters and sum over the monopoles
+    A_rel_1 = params['Arel1']
+    A_rel_3 = params['Arel3']
+    xi_rel = A_rel_1 * xi[1//2, :] * L(mu_grid, 1)
+    xi_rel += A_rel_3 * xi[3//2, :] * L(mu_grid, 3)
+    return xi_rel
 
-#     Args:
-#         ar (float): r coordinates
-#         mur (float): mu coordinates
-#         k (float): wavenumbers
-#         pk (float): linear matter power spectrum
-#         kwargs: dictionary of fit parameters
 
-#     Returns:
-#         sum of dipole and octupole correlation terms (float)
+def pk_to_xi_asymmetry(r_grid, mu_grid, k_grid, muk_grid, pk, params):
+    """Calculate the cross-correlation contribution from
+    standard asymmetry (Bonvin et al. 2014).
 
-#     """
-#     ell_vals=[0,2]
-#     xi=Pk2Mp(ar,k,pk,ell_vals,tform="asy")
-#     return (kwargs["Aasy0"]*xi[0//2,:] - kwargs["Aasy2"]*xi[2//2,:])*ar*L(mur,1) + kwargs["Aasy3"]*xi[2//2,:]*ar*L(mur,3)
+    Parameters
+    ----------
+    r_grid : 1D Array
+        Grid of r coordinates for the output correlation
+    mu_grid : 1D Array
+        Grid of mu coordinates for the output correlation
+    k_grid : 1D Array
+        Grid of k coordinates for the input power spectrum
+    muk_grid : ND Array
+        Grid of muk = kp/k coordinates for the input power spectrum
+    pk : ND Array
+        Input power spectrum
+    params : dict
+        Computation parameters
+
+    Returns
+    -------
+    1D Array
+        Output xi asymmetry
+    """
+    # Compute the monopole and quadrupole terms
+    ell_vals = [0, 2]
+    dmuk = 1 / len(muk_grid)
+    xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk, tform='asy')
+
+    # Get the asymmetry parameters and sum over the monopoles
+    A_asy_0 = params['Aasy0']
+    A_asy_2 = params['Aasy2']
+    A_asy_3 = params['Aasy3']
+    xi_asy = (A_asy_0 * xi[0, :] - A_asy_2 * xi[1, :]) * r_grid * L(mu_grid, 1)
+    xi_asy += A_asy_3 * xi[1, :] * r_grid * L(mu_grid, 3)
+    return xi_asy
+
 
 ### Legendre Polynomial
-def L(mu,ell):
+def L(mu, ell):
     return special.legendre(ell)(mu)
 
 def bias_beta(kwargs, tracer1, tracer2):

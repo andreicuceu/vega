@@ -59,6 +59,27 @@ class CorrelationFunction:
             self._init_broadband(bb_config)
             self.has_bb = True
 
+        # Check for QSO radiation modeling and check if it is QSOxLYA
+        if 'radiation effects' in self._config:
+            self.radiation_flag = self._config.getboolean('radiation effects')
+            if self.radiation_flag:
+                names = [self._tracer1['name'], self._tracer2['name']]
+                if not ('QSO' in names and 'LYA' in names):
+                    raise ValueError('You asked for QSO radiation effects, \
+                        but it can only be applied to the cross (QSOxLya)')
+
+        # Check for relativistic effects and standard asymmetry
+        if 'relativistic correction' in self._config:
+            self.relativistic_flag = self._config.getboolean(
+                                     'relativistic correction')
+        if 'standard asymmetry' in self._config:
+            self.asymmetry_flag = self._config.getboolean('standard asymmetry')
+        if self.relativistic_flag or self.asymmetry_flag:
+            types = [self._tracer1['type'], self._tracer2['type']]
+            if ('continuous' not in types) or (types[0] == types[1]):
+                raise ValueError('You asked for relativistic effects \
+                    or standard assymetry, but they only work for the cross')
+
     def compute(self, k, muk, pk, params):
         """Compute correlation function for input P(k)
 
@@ -86,6 +107,18 @@ class CorrelationFunction:
 
         # Add growth
         xi *= self.xi_growth
+
+        # Add QSO radiation modeling for cross
+        if self.radiation_flag:
+            xi += self.compute_qso_radiation(params)
+
+        # Add relativistic effects
+        if self.relativistic_flag:
+            xi += self.compute_xi_relativistic(k, muk, pk, params)
+
+        # Add standard asymmetry
+        if self.asymmetry_flag:
+            xi += self.compute_xi_asymmetry(k, muk, pk, params)
 
         return xi
 
@@ -122,7 +155,7 @@ class CorrelationFunction:
                                                        ap, at, delta_rp)
 
         # Compute correlation function
-        xi = utils.Pk2Xi(rescaled_r, rescaled_mu, k, pk, muk, self._ell_max)
+        xi = utils.pk_to_xi(rescaled_r, rescaled_mu, k, muk, pk, self._ell_max)
 
         return xi
 
@@ -461,91 +494,105 @@ class CorrelationFunction:
                 r2**r2_powers[None, :, None]).sum(axis=(0, 1, 2))
         return corr
 
+    def compute_qso_radiation(self, params):
+        """Model the contribution of QSO radiation to the cross
+        (the transverse proximity effect)
 
-# ### QSO radiation model
-# def xi_qso_radiation(r, mu, tracer1, tracer2, **pars):
-#     assert (tracer1['name']=="QSO" or tracer2['name']=="QSO") and (tracer1['name']!=tracer2['name'])
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
 
-#     if tracer1['type']=='discrete':
-#         drp = pars['drp_'+tracer1['name']]
-#     elif tracer2['type']=='discrete':
-#         drp = pars['drp_'+tracer2['name']]
-#     rp = r*mu + drp
-#     rt = r*sp.sqrt(1-mu**2)
-#     r_shift = sp.sqrt(rp**2.+rt**2.)
-#     mu_shift = rp/r_shift
+        Returns
+        -------
+        1D
+            Xi QSO radiation model
+        """
+        assert 'QSO' in [self._tracer1['name'], self._tracer2['name']]
+        assert self._tracer1['name'] != self._tracer2['name']
 
-#     xi_rad = pars["qso_rad_strength"]/(r_shift**2.)
-#     xi_rad *= 1.-pars["qso_rad_asymmetry"]*(1.-mu_shift**2.)
-#     xi_rad *= sp.exp(-r_shift*( (1.+mu_shift)/pars["qso_rad_lifetime"] + 1./pars["qso_rad_decrease"]) )
+        # Compute the shifted r and mu grids
+        delta_rp = params[self._delta_rp_name]
+        rp = self._r * self._mu + delta_rp
+        rt = self._r * np.sqrt(1 - self._mu**2)
+        r_shift = np.sqrt(rp**2 + rt**2)
+        mu_shift = rp / r_shift
 
-#     return xi_rad
+        # Get the QSO radiation model parameters
+        strength = params['qso_rad_strength']
+        asymmetry = params['qso_rad_asymmetry']
+        lifetime = params['qso_rad_lifetime']
+        decrease = params['qso_rad_decrease']
 
-# def xi_relativistic(r, mu, k, pk_lin, tracer1, tracer2, **pars):
-#     """Calculate the cross-correlation contribution from relativistic effects (Bonvin et al. 2014).
+        # Compute the QSO radiation model
+        xi_rad = strength / (r_shift**2) * (1 - asymmetry * (1 - mu_shift**2))
+        xi_rad *= np.exp(-r_shift * ((1 + mu_shift) / lifetime + 1 / decrease))
+        return xi_rad
 
-#     Args:
-#         r (float): r coordinates
-#         mu (float): mu coordinates
-#         k (float): wavenumbers
-#         pk_lin (float): linear matter power spectrum
-#         tracer1: dictionary of tracer1
-#         tracer2: dictionary of tracer2
-#         pars: dictionary of fit parameters
+    def compute_xi_relativistic(self, k_grid, muk_grid, pk, params):
+        """Calculate the cross-correlation contribution from
+        relativistic effects (Bonvin et al. 2014).
 
-#     Returns:
-#         sum of dipole and octupole correlation terms (float)
+        Parameters
+        ----------
+        k_grid : 1D Array
+            Grid of k coordinates for the input power spectrum
+        muk_grid : ND Array
+            Grid of muk = kp/k coordinates for the input power spectrum
+        pk : ND Array
+            Input power spectrum
+        params : dict
+            Computation parameters
 
-#     """
-#     assert (tracer1['type']=="continuous" or tracer2['type']=="continuous") and (tracer1['type']!=tracer2['type'])
+        Returns
+        -------
+        1D Array
+            Output xi relativistic
+        """
+        assert 'continuous' in [self._tracer1['type'], self._tracer2['type']]
+        assert self._tracer1['type'] != self._tracer2['type']
 
-#     if tracer1['type']=='discrete':
-#         drp = pars['drp_'+tracer1['name']]
-#     elif tracer2['type']=='discrete':
-#         drp = pars['drp_'+tracer2['name']]
+        # Get rescaled Xi coordinates
+        delta_rp = params[self._delta_rp_name]
+        ap, at = utils.cosmo_fit_func(params)
+        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
+                                                       ap, at, delta_rp)
 
-#     ap, at = utils.cosmo_fit_func(pars)
-#     rp = r*mu + drp
-#     rt = r*sp.sqrt(1-mu**2)
-#     arp = ap*rp
-#     art = at*rt
-#     ar = sp.sqrt(arp**2+art**2)
-#     amu = arp/ar
+        # Compute the correlation function
+        xi_rel = utils.pk_to_xi_relativistic(rescaled_r, rescaled_mu,
+                                             k_grid, muk_grid, pk, params)
+        return xi_rel
 
-#     xi_rel = utils.Pk2XiRel(ar, amu, k, pk_lin, pars)
-#     return xi_rel
+    def compute_xi_asymmetry(self, k_grid, muk_grid, pk, params):
+        """Calculate the cross-correlation contribution from
+        standard asymmetry (Bonvin et al. 2014).
 
-# def xi_asymmetry(r, mu, k, pk_lin, tracer1, tracer2, **pars):
-#     """Calculate the cross-correlation contribution from standard asymmetry (Bonvin et al. 2014).
+        Parameters
+        ----------
+        k_grid : 1D Array
+            Grid of k coordinates for the input power spectrum
+        muk_grid : ND Array
+            Grid of muk = kp/k coordinates for the input power spectrum
+        pk : ND Array
+            Input power spectrum
+        params : dict
+            Computation parameters
 
-#     Args:
-#         r (float): r coordinates
-#         mu (float): mu coordinates
-#         k (float): wavenumbers
-#         pk_lin (float): linear matter power spectrum
-#         tracer1: dictionary of tracer1
-#         tracer2: dictionary of tracer2
-#         pars: dictionary of fit parameters
+        Returns
+        -------
+        1D Array
+            Output xi asymmetry
+        """
+        assert 'continuous' in [self._tracer1['type'], self._tracer2['type']]
+        assert self._tracer1['type'] != self._tracer2['type']
 
-#     Returns:
-#         sum of dipole and octupole correlation terms (float)
+        # Get rescaled Xi coordinates
+        delta_rp = params[self._delta_rp_name]
+        ap, at = utils.cosmo_fit_func(params)
+        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
+                                                       ap, at, delta_rp)
 
-#     """
-#     assert (tracer1['type']=="continuous" or tracer2['type']=="continuous") and (tracer1['type']!=tracer2['type'])
-
-#     if tracer1['type']=='discrete':
-#         drp = pars['drp_'+tracer1['name']]
-#     elif tracer2['type']=='discrete':
-#         drp = pars['drp_'+tracer2['name']]
-
-#     ap, at = utils.cosmo_fit_func(pars)
-#     rp = r*mu + drp
-#     rt = r*sp.sqrt(1-mu**2)
-#     arp = ap*rp
-#     art = at*rt
-#     ar = sp.sqrt(arp**2+art**2)
-#     amu = arp/ar
-
-#     xi_asy = utils.Pk2XiAsy(ar, amu, k, pk_lin, pars)
-#     return xi_asy
-
+        # Compute the correlation function
+        xi_asy = utils.pk_to_xi_asymmetry(rescaled_r, rescaled_mu,
+                                          k_grid, muk_grid, pk, params)
+        return xi_asy
