@@ -28,8 +28,6 @@ Stuff from fitter2 yet to be implemented
 * QSO Radiation model (easy)
 * Xi Relativistic (easy)
 * Xi Assymmetry (easy)
-* Velocity Dispersion models (easy)
-* Full pk smoothing models (easy)
 * More output in .h5 files (easy)
 * Large scale fastmc (easy)
 

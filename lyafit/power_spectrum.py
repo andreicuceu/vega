@@ -69,6 +69,9 @@ class PowerSpectrum:
         muk_grid = (np.arange(num_bins_muk) + 0.5) / num_bins_muk
         self.muk_grid = muk_grid[:, None]
 
+        self.k_par_grid = self.k_grid * self.muk_grid
+        self.k_trans_grid = self.k_grid * np.sqrt(1 - self.muk_grid**2)
+
     def compute(self, pk_lin, params):
         """Computes a power spectrum for the tracers using the input
         linear P(k) and parameters
@@ -108,9 +111,6 @@ class PowerSpectrum:
         # Compute kaiser model
         pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2)
 
-        # TODO full gauss smoothing
-        # TODO vel dispersion
-
         # add non linear small scales
         if 'small scale nl' in self._config.keys():
             if 'arinyo' in self._config.get('small scale nl'):
@@ -129,6 +129,28 @@ class PowerSpectrum:
         # add non linear large scales
         if params['peak']:
             pk_full *= self.compute_peak_nl(params)
+
+        # add full shape smoothing
+        if 'fullshape smoothing' in self._config:
+            smoothing_type = self._config.get('fullshape smoothing')
+            if 'gauss' in smoothing_type:
+                pk_full *= self.compute_fullshape_gauss_smoothing(params)
+            elif 'exp' in smoothing_type:
+                pk_full *= self.compute_fullshape_exp_smoothing(params)
+            else:
+                raise ValueError('"fullshape smoothing" must be of type \
+                                  "gauss" or "exp".')
+
+        # add velocity dispersion
+        if 'velocity dispersion' in self._config:
+            smoothing_type = self._config.get('velocity dispersion')
+            if 'gauss' in smoothing_type:
+                pk_full *= self.compute_velocity_dispersion_gauss(params)
+            elif 'lorentz' in smoothing_type:
+                pk_full *= self.compute_velocity_dispersion_lorentz(params)
+            else:
+                raise ValueError('"velocity dispersion" must be of type \
+                                  "gauss" or "lorentz".')
 
         return self.k_grid, self.muk_grid, pk_full
 
@@ -239,11 +261,10 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
+        ND Array
             F_hcd
         """
-        kp = self.k_grid * self.muk_grid
-        return utils.sinc(kp * L0)
+        return utils.sinc(self.k_par_grid * L0)
 
     def _hcd_Rogers2018(self, L0):
         """Model the effect of HCD systems with the Fourier transform
@@ -256,11 +277,10 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
+        ND Array
             F_hcd
         """
-        kp = self.k_grid * self.muk_grid
-        return np.exp(-L0 * kp)
+        return np.exp(-L0 * self.k_par_grid)
 
     def _hcd_no_mask(self, L0):
         """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
@@ -274,17 +294,17 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
+        ND Array
             F_hcd
         """
-        kp = self.k_grid * self.muk_grid
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
 
         if self._tracer1['name'] == self._tracer2['name']:
-            F_hcd = np.interp(L0 * kp, k_data, F_data, left=0, right=0)
+            F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data,
+                              left=0, right=0)
         else:
-            F_hcd = np.interp(L0 * kp, k_data, F_data)
+            F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data)
 
         return F_hcd
 
@@ -298,21 +318,21 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
-            pk
+        ND Array
+            Smoothing factor for the peak
         """
-        kp = self.k_grid * self.muk_grid
-        kt = self.k_grid * np.sqrt(1 - self.muk_grid**2)
-        st2 = params['sigmaNL_per']**2
-        sp2 = params['sigmaNL_par']**2
-        return np.exp(-(kp**2 * sp2 + kt**2 * st2) / 2)
+        sigma_par_sq = params['sigmaNL_par']**2
+        sigma_trans_sq = params['sigmaNL_per']**2
+        peak_nl = self.k_par_grid**2 * sigma_par_sq
+        peak_nl += self.k_trans_grid**2 * sigma_trans_sq
+        return np.exp(-peak_nl / 2)
 
     def compute_dnl_mcdonald(self):
         """Non linear term from McDonald 2003
 
         Returns
         -------
-        1D Array
+        ND Array
             D_NL factor
         """
         assert self._tracer1['name'] == "LYA"
@@ -333,7 +353,7 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
+        ND Array
             D_NL factor
         """
         assert self._tracer1['name'] == "LYA"
@@ -360,12 +380,109 @@ class PowerSpectrum:
 
         Returns
         -------
-        1D Array
+        ND Array
             G(k)
         """
         L_par = params["par binsize {}".format(self._name)]
         L_per = params["per binsize {}".format(self._name)]
 
-        kp = self.k_grid * self.muk_grid
-        kt = self.k_grid * np.sqrt(1 - self.muk_grid**2)
-        return utils.sinc(kp * L_par / 2) * utils.sinc(kt * L_per / 2)
+        Gk = utils.sinc(self.k_par_grid * L_par / 2)
+        Gk *= utils.sinc(self.k_trans_grid * L_per / 2)
+        return Gk
+
+    def compute_fullshape_gauss_smoothing(self, params):
+        """Compute a Gaussian smoothing for the full correlation function
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        ND Array
+            Smoothing factor
+        """
+        sigma_par_sq = params['par_sigma_smooth']**2
+        sigma_trans_sq = params['per_sigma_smooth']**2
+        gauss_smoothing = self.k_par_grid**2 * sigma_par_sq
+        gauss_smoothing += self.k_trans_grid**2 * sigma_trans_sq
+        return np.exp(-gauss_smoothing / 2)
+
+    def compute_fullshape_exp_smoothing(self, params):
+        """ Compute a Gaussian and exp smoothing for the full
+        correlation function (usefull for london_mocks_v6.0)
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        ND Array
+            Smoothing factor
+        """
+        # Get the parameters
+        sigma_par_sq = params['par_sigma_smooth']**2
+        sigma_trans_sq = params['per_sigma_smooth']**2
+        exp_par_sq = params['par_exp_smooth']**2
+        exp_trans_sq = params['per_exp_smooth']**2
+
+        # Compute the smoothing components
+        gauss_smoothing = self.k_par_grid**2 * sigma_par_sq
+        gauss_smoothing += self.k_trans_grid**2 * sigma_trans_sq
+        exp_smoothing = np.abs(self.k_par_grid) * exp_par_sq
+        exp_smoothing += np.abs(self.k_trans_grid) * exp_trans_sq
+
+        return np.exp(-gauss_smoothing / 2) * np.exp(-exp_smoothing)
+
+    def compute_velocity_dispersion_gauss(self, params):
+        """Compute a gaussian smoothing factor to model velocity dispersion
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        ND Array
+            Smoothing factor
+        """
+        assert 'discrete' in [self._tracer1['type'], self._tracer2['type']]
+
+        smoothing = np.ones(self.k_par_grid.shape)
+        if self._tracer1['type'] == 'discrete':
+            sigma = params['sigma_velo_disp_gauss' + self._tracer1['name']]
+            smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
+        if self._tracer2['type'] == 'discrete':
+            sigma = params['sigma_velo_disp_gauss' + self._tracer2['name']]
+            smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
+
+        return smoothing
+
+    def compute_velocity_dispersion_lorentz(self, params):
+        """Compute a lorentzian smoothing factor to model velocity dispersion
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        ND Array
+            Smoothing factor
+        """
+        assert 'discrete' in [self._tracer1['type'], self._tracer2['type']]
+
+        smoothing = np.ones(self.k_par_grid.shape)
+        if self._tracer1['type'] == 'discrete':
+            sigma = params['sigma_velo_disp_lorentz' + self._tracer1['name']]
+            smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
+        if self._tracer2['type'] == 'discrete':
+            sigma = params['sigma_velo_disp_lorentz' + self._tracer2['name']]
+            smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
+
+        return smoothing
