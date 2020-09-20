@@ -60,6 +60,7 @@ class CorrelationFunction:
             self.has_bb = True
 
         # Check for QSO radiation modeling and check if it is QSOxLYA
+        self.radiation_flag = False
         if 'radiation effects' in self._config:
             self.radiation_flag = self._config.getboolean('radiation effects')
             if self.radiation_flag:
@@ -69,9 +70,11 @@ class CorrelationFunction:
                         but it can only be applied to the cross (QSOxLya)')
 
         # Check for relativistic effects and standard asymmetry
+        self.relativistic_flag = False
         if 'relativistic correction' in self._config:
             self.relativistic_flag = self._config.getboolean(
                                      'relativistic correction')
+        self.asymmetry_flag = False
         if 'standard asymmetry' in self._config:
             self.asymmetry_flag = self._config.getboolean('standard asymmetry')
         if self.relativistic_flag or self.asymmetry_flag:
@@ -80,7 +83,7 @@ class CorrelationFunction:
                 raise ValueError('You asked for relativistic effects \
                     or standard assymetry, but they only work for the cross')
 
-    def compute(self, k, muk, pk, params):
+    def compute(self, k, muk, pk, pk_lin, params):
         """Compute correlation function for input P(k)
 
         Parameters
@@ -91,6 +94,8 @@ class CorrelationFunction:
             k_parallel / k
         pk : ND Array
             Power spectrum
+        pk_lin : 1D Array
+            Linear power spectrum
         params : dict
             Computation parameters
 
@@ -109,16 +114,16 @@ class CorrelationFunction:
         xi *= self.xi_growth
 
         # Add QSO radiation modeling for cross
-        if self.radiation_flag:
+        if self.radiation_flag and not params['peak']:
             xi += self.compute_qso_radiation(params)
 
         # Add relativistic effects
         if self.relativistic_flag:
-            xi += self.compute_xi_relativistic(k, muk, pk, params)
+            xi += self.compute_xi_relativistic(k, muk, pk_lin, params)
 
         # Add standard asymmetry
         if self.asymmetry_flag:
-            xi += self.compute_xi_asymmetry(k, muk, pk, params)
+            xi += self.compute_xi_asymmetry(k, muk, pk_lin, params)
 
         return xi
 
@@ -147,7 +152,7 @@ class CorrelationFunction:
         # Check for delta rp
         delta_rp = 0.
         if self._delta_rp_name is not None:
-            delta_rp = params[self._delta_rp_name]
+            delta_rp = params.get(self._delta_rp_name, 0.)
 
         # Get rescaled Xi coordinates
         ap, at = utils.cosmo_fit_func(params)
@@ -230,9 +235,9 @@ class CorrelationFunction:
         handle_name = 'z evol {}'.format(tracer_name)
 
         if handle_name in self._config:
-            evol_model = self._config.get(handle_name)
+            evol_model = self._config.get(handle_name, 'standard')
         else:
-            evol_model = self._config.get('z evol')
+            evol_model = self._config.get('z evol', 'standard')
 
         # Compute the bias evolution using the right model
         if 'croom' in evol_model:
@@ -512,7 +517,7 @@ class CorrelationFunction:
         assert self._tracer1['name'] != self._tracer2['name']
 
         # Compute the shifted r and mu grids
-        delta_rp = params[self._delta_rp_name]
+        delta_rp = params.get(self._delta_rp_name, 0.)
         rp = self._r * self._mu + delta_rp
         rt = self._r * np.sqrt(1 - self._mu**2)
         r_shift = np.sqrt(rp**2 + rt**2)
@@ -553,7 +558,7 @@ class CorrelationFunction:
         assert self._tracer1['type'] != self._tracer2['type']
 
         # Get rescaled Xi coordinates
-        delta_rp = params[self._delta_rp_name]
+        delta_rp = params.get(self._delta_rp_name, 0.)
         ap, at = utils.cosmo_fit_func(params)
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
                                                        ap, at, delta_rp)
@@ -587,7 +592,7 @@ class CorrelationFunction:
         assert self._tracer1['type'] != self._tracer2['type']
 
         # Get rescaled Xi coordinates
-        delta_rp = params[self._delta_rp_name]
+        delta_rp = params.get(self._delta_rp_name, 0.)
         ap, at = utils.cosmo_fit_func(params)
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
                                                        ap, at, delta_rp)

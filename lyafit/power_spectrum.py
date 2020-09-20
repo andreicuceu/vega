@@ -454,10 +454,10 @@ class PowerSpectrum:
 
         smoothing = np.ones(self.k_par_grid.shape)
         if self._tracer1['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_gauss' + self._tracer1['name']]
+            sigma = params['sigma_velo_disp_gauss_' + self._tracer1['name']]
             smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
         if self._tracer2['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_gauss' + self._tracer2['name']]
+            sigma = params['sigma_velo_disp_gauss_' + self._tracer2['name']]
             smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
 
         return smoothing
@@ -479,10 +479,10 @@ class PowerSpectrum:
 
         smoothing = np.ones(self.k_par_grid.shape)
         if self._tracer1['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_lorentz' + self._tracer1['name']]
+            sigma = params['sigma_velo_disp_lorentz_' + self._tracer1['name']]
             smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
         if self._tracer2['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_lorentz' + self._tracer2['name']]
+            sigma = params['sigma_velo_disp_lorentz_' + self._tracer2['name']]
             smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
 
         return smoothing

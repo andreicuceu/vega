@@ -124,7 +124,7 @@ class Model:
         """
         # Compute core model correlation function
         k, muk, pk_model = self.Pk_core.compute(pk_lin, pars)
-        xi_model = self.Xi_core.compute(k, muk, pk_model, pars)
+        xi_model = self.Xi_core.compute(k, muk, pk_model, pk_lin, pars)
 
         # Save the components
         if self.save_components:
@@ -137,7 +137,8 @@ class Model:
                 k, muk, pk_metal = self.Pk_metal[(name1, name2)].compute(
                                                         pk_lin, pars)
                 xi_metal = self.Xi_metal[(name1, name2)].compute(
-                                                        k, muk, pk_metal, pars)
+                                                        k, muk, pk_metal,
+                                                        pk_lin, pars)
 
                 # Save the components
                 if self.save_components:
