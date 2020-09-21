@@ -6,8 +6,8 @@ Vega
 .. image:: https://img.shields.io/pypi/v/lyafit.svg
         :target: https://pypi.python.org/pypi/lyafit
 
-.. image:: https://img.shields.io/travis/andreicuceu/lyafit.svg
-        :target: https://travis-ci.com/andreicuceu/lyafit
+.. image:: https://img.shields.io/travis/andreicuceu/Vega.svg
+        :target: https://travis-ci.com/andreicuceu/Vega
 
 .. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
         :target: https://vega.readthedocs.io/en/latest/?badge=latest
