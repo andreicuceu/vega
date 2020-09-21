@@ -14,7 +14,11 @@ Vega modules have some documentation here:
 .. toctree::
    :maxdepth: 2
 
-   modules
+   VegaInterface <vega>
+   Model
+   Data
+   Analysis
+   Sampler
 
 Other stuff:
 
