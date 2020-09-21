@@ -55,7 +55,7 @@ class PowerSpectrum:
         if 'fvoigt_model' in self._config.keys():
             fvoigt_model = self._config.get('fvoigt_model')
             path = '{}/fvoigt_models/Fvoigt_{}.txt'.format(
-                            resource_filename('lyafit', 'models'),
+                            resource_filename('vega', 'models'),
                             fvoigt_model)
             self._Fvoigt_data = np.loadtxt(path)
 

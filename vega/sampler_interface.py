@@ -5,7 +5,7 @@ from pypolychord.priors import UniformPrior
 
 
 class Sampler:
-    ''' Interface between LyaFit and the nested sampler PolyChord '''
+    ''' Interface between Vega and the nested sampler PolyChord '''
 
     def __init__(self, polychord_setup, limits, log_lik_func):
         """Initialize the sampler interface

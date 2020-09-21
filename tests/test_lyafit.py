@@ -1,9 +1,9 @@
 import pytest
 import numpy as np
 
-import lyafit.old_fitter.parser as parser
+# import lyafit.old_fitter.parser as parser
 
-from lyafit.lyafit import LyaFit
+# from lyafit.lyafit import LyaFit
 
 
 @pytest.mark.skip

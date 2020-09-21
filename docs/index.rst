@@ -1,4 +1,4 @@
-Welcome to lyafit's documentation!
+Welcome to Vega's documentation!
 ======================================
 
 .. toctree::

@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use lyafit in a project::
+To use Vega in a project::
 
-    import lyafit
+    import vega

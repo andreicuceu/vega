@@ -1,4 +1,4 @@
-* lyafit version:
+* Vega version:
 * Python version:
 * Operating System:
 

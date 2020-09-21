@@ -1,1 +1,1 @@
-"""Unit test package for lyafit."""
+"""Unit test package for Vega."""

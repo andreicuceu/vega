@@ -2,7 +2,7 @@ import numpy as np
 
 
 class Analysis:
-    """Lyafit analysis class
+    """Vega analysis class
     - Compute parameter scan
     - Create Monte Carlo realizations of the data
     - Run FastMC analysis
@@ -16,7 +16,7 @@ class Analysis:
         main_config : ConfigParser
             Main config file
         minimizer : Minimizer
-            Minimizer object initialized from the same lyafit instance
+            Minimizer object initialized from the same vega instance
         """
         self.config = main_config
         self.minimizer = minimizer

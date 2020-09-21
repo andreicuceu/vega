@@ -8,13 +8,13 @@ Installation
 Stable release
 --------------
 
-To install lyafit, run this command in your terminal:
+To install Vega, run this command in your terminal:
 
 .. code-block:: console
 
-    $ pip install lyafit
+    $ pip install vega
 
-This is the preferred method to install lyafit, as it will always install the most recent stable release.
+This is the preferred method to install Vega, as it will always install the most recent stable release.
 
 If you don't have `pip`_ installed, this `Python installation guide`_ can guide
 you through the process.
@@ -26,19 +26,19 @@ you through the process.
 From sources
 ------------
 
-The sources for lyafit can be downloaded from the `Github repo`_.
+The sources for vega can be downloaded from the `Github repo`_.
 
 You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/andreicuceu/lyafit
+    $ git clone git://github.com/andreicuceu/Vega
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl -OJL https://github.com/andreicuceu/lyafit/tarball/master
+    $ curl -OJL https://github.com/andreicuceu/Vega/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
@@ -47,5 +47,5 @@ Once you have a copy of the source, you can install it with:
     $ python setup.py install
 
 
-.. _Github repo: https://github.com/andreicuceu/lyafit
-.. _tarball: https://github.com/andreicuceu/lyafit/tarball/master
+.. _Github repo: https://github.com/andreicuceu/Vega
+.. _tarball: https://github.com/andreicuceu/Vega/tarball/master

@@ -1,21 +1,21 @@
-from lyafit import LyaFit
-from lyafit.sampler_interface import Sampler
+from vega import VegaInterface
+from vega.sampler_interface import Sampler
 import argparse
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description='Run Lyafit in parallel.')
+        description='Run Vega in parallel.')
 
     pars.add_argument('config', type=str, default=None, help='Config file')
     args = pars.parse_args()
 
-    # Initialize LyaFit
-    lf = LyaFit(args.config)
+    # Initialize Vega
+    vega = VegaInterface(args.config)
 
     # Run sampler
-    if lf.has_sampler:
-        sampler = Sampler(lf.main_config['Polychord'],
-                          lf.sample_params['limits'], lf.log_lik)
+    if vega.has_sampler:
+        sampler = Sampler(vega.main_config['Polychord'],
+                          vega.sample_params['limits'], vega.log_lik)
 
         sampler.run()

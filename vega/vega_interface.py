@@ -6,13 +6,13 @@ from pkg_resources import resource_filename
 import configparser
 
 from . import correlation_item, data, utils, analysis
-from lyafit.model import Model
-from lyafit.minimizer import Minimizer
-from lyafit.analysis import Analysis
+from vega.model import Model
+from vega.minimizer import Minimizer
+from vega.analysis import Analysis
 
 
-class LyaFit:
-    """Main lyafit class
+class VegaInterface:
+    """Main Vega class
     Handles the parsing of the main config
     Initializes a correlation item for each component
     Handles the data and model objects for each component
@@ -20,7 +20,7 @@ class LyaFit:
     """
 
     def __init__(self, main_path):
-        """Initialize LyaFit. Reads the config files and prepares
+        """Initialize Vega. Reads the config files and prepares
         everything needed.
 
         Parameters
@@ -264,7 +264,7 @@ class LyaFit:
         path = fiducial_config.get('filename')
         path = os.path.expandvars(path)
         if not os.path.isfile(path):
-            path = resource_filename('lyafit', 'models') + '/{}'.format(path)
+            path = resource_filename('vega', 'models') + '/{}'.format(path)
         print('INFO: reading input Pk {}'.format(path))
 
         fiducial = {}

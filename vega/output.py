@@ -4,7 +4,7 @@ import h5py
 
 
 class Output:
-    """Class for handling the lyafit output,
+    """Class for handling the Vega output,
     and reading/writing output files
     """
     def __init__(self, config):
