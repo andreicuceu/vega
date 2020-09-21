@@ -10,7 +10,7 @@ Vega
         :target: https://travis-ci.com/andreicuceu/lyafit
 
 .. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
-        :target: https://lyafit.readthedocs.io/en/latest/?badge=latest
+        :target: https://vega.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
 
@@ -20,7 +20,7 @@ Package for modeling and fitting the 3D Correlation Function for the Lyman-alpha
 
 
 * Free software: MIT license
-* Documentation: https://lyafit.readthedocs.io.
+* Documentation: https://vega.readthedocs.io.
 
 Stuff from fitter2 yet to be implemented
 --------
