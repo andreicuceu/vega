@@ -1,6 +1,6 @@
-======
-lyafit
-======
+====
+Vega
+====
 
 
 .. image:: https://img.shields.io/pypi/v/lyafit.svg
