@@ -5,11 +5,12 @@ from scipy.sparse import csr_matrix
 
 
 class Data:
-    """Class for handling lya forest correlation function data
+    """Class for handling lya forest correlation function data.
+
     An instance of this is required for each cf component
     """
     def __init__(self, corr_item):
-        """Read the config file and initialize the data
+        """
 
         Parameters
         ----------
@@ -43,7 +44,7 @@ class Data:
         self._scale = 1.
 
     def _read_data(self, data_path, cuts_config):
-        """Read the data, mask it and prepare the environment
+        """Read the data, mask it and prepare the environment.
 
         Parameters
         ----------
@@ -119,7 +120,7 @@ class Data:
     @staticmethod
     def _build_mask(rp_grid, rt_grid, cuts_config, data_header):
         """Build the mask for the data by comparing
-        the cuts from config with the data limits
+        the cuts from config with the data limits.
 
         Parameters
         ----------
@@ -181,7 +182,7 @@ class Data:
         return mask, bin_size_rp
 
     def _init_metals(self, metal_config):
-        """Read the metal file and initialize all the metal data
+        """Read the metal file and initialize all the metal data.
 
         Parameters
         ----------
@@ -269,7 +270,7 @@ class Data:
 
     def _read_metal_correlation(self, metal_hdul, tracers, name):
         """Read a metal correlation from the metal file and add
-        the data to the existing member dictionaries
+        the data to the existing member dictionaries.
 
         Parameters
         ----------
@@ -291,7 +292,7 @@ class Data:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
 
     def create_monte_carlo(self, fiducial_model, scale=1., seed=0):
-        """Create monte carlo mock of data using a fiducial model
+        """Create monte carlo mock of data using a fiducial model.
 
         Parameters
         ----------

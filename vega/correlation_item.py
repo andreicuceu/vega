@@ -3,14 +3,14 @@ import numpy as np
 
 class CorrelationItem:
     """Class for handling the info and config of
-    each correlation function component
+    each correlation function component.
     """
     _rp_rt_grid = None
     _r_mu_grid = None
     _z_grid = None
 
     def __init__(self, config):
-        """Read the config and get tracer info
+        """
 
         Parameters
         ----------
@@ -32,8 +32,9 @@ class CorrelationItem:
         self.has_bb = False
 
     def init_metals(self, tracer_catalog, metal_correlations):
-        """Initialize the metal config
-        This should be called from the data object if we have metal matrices
+        """Initialize the metal config.
+
+        This should be called from the data object if we have metal matrices.
 
         Parameters
         ----------

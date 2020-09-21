@@ -8,7 +8,7 @@ class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
     def __init__(self, polychord_setup, limits, log_lik_func):
-        """Initialize the sampler interface
+        """
 
         Parameters
         ----------
@@ -31,7 +31,7 @@ class Sampler:
 
     @staticmethod
     def get_polychord_settings(polychord_setup, num_params, num_derived):
-        """Extract polychord settings and create the settings object
+        """Extract polychord settings and create the settings object.
 
         Parameters
         ----------
@@ -103,10 +103,13 @@ class Sampler:
 
     def run(self):
         """Run Polychord. We need to pass three functions:
+
         log_lik: takes a list of parameter values and
             returns tuple: (log_lik, list of derived)
+        
         prior: takes a unit hypercube and converts it to the
             physical parameters
+        
         dumper: Optional function if we want to get some output while
             the chain is running. For now it's empty
         """

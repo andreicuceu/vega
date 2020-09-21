@@ -12,16 +12,17 @@ from vega.analysis import Analysis
 
 
 class VegaInterface:
-    """Main Vega class
-    Handles the parsing of the main config
-    Initializes a correlation item for each component
-    Handles the data and model objects for each component
-    Handles the parameters and calls the analysis class
+    """Main Vega class.
+
+    Parse the main config and initialize a correlation item for each component.
+
+    If there is data, initialize data and model objects for each component.
+    
+    Handle the parameter config and call the analysis class.
     """
 
     def __init__(self, main_path):
-        """Initialize Vega. Reads the config files and prepares
-        everything needed.
+        """
 
         Parameters
         ----------
@@ -94,7 +95,7 @@ class VegaInterface:
         self.monte_carlo = False
 
     def compute_model(self, params=None, run_init=True):
-        """Compute correlation function model using input parameters
+        """Compute correlation function model using input parameters.
 
         Parameters
         ----------
@@ -127,7 +128,7 @@ class VegaInterface:
         return model_cf
 
     def chi2(self, params=None):
-        """Compute full chi2 for all components
+        """Compute full chi2 for all components.
 
         Parameters
         ----------
@@ -168,7 +169,7 @@ class VegaInterface:
         return chi2
 
     def log_lik(self, params=None):
-        """Compute full log likelihood for all components
+        """Compute full log likelihood for all components.
 
         Parameters
         ----------
@@ -201,7 +202,7 @@ class VegaInterface:
         return log_lik
 
     def monte_carlo_sim(self, params=None, scale=1., seed=0):
-        """Compute Monte Carlo simulations for each Correlation item
+        """Compute Monte Carlo simulations for each Correlation item.
 
         Parameters
         ----------
@@ -248,7 +249,7 @@ class VegaInterface:
 
     @staticmethod
     def _read_fiducial(fiducial_config):
-        """Read the fiducial pk file and get the configs
+        """Read the fiducial pk file and get the configs.
 
         Parameters
         ----------
@@ -293,9 +294,10 @@ class VegaInterface:
 
     @staticmethod
     def _read_parameters(corr_items, parameters_config):
-        """Read computation parameters
+        """Read computation parameters.
+
         If a parameter is specified multiple times,
-        the parameters in the main config file have priority
+        the parameters in the main config file have priority.
 
         Parameters
         ----------
@@ -325,14 +327,15 @@ class VegaInterface:
 
     @staticmethod
     def _read_sample(sample_config):
-        """Read sample parameters
+        """Read sample parameters.
 
         These must be of the form:
+
         param = min max / for sampler only
         or
-        param = min max val err / for both sampler and fitter
+        param = min max val err / for both sampler and fitter.
 
-        Fitter accepts None for min/max, but the sampler does not
+        Fitter accepts None for min/max, but the sampler does not.
 
         Parameters
         ----------

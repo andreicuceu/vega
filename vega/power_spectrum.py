@@ -4,15 +4,17 @@ from . import utils
 
 
 class PowerSpectrum:
-    """Power Spectrum computation and handling
+    """Power Spectrum computation and handling.
 
     # ! Slow operations should be kept in init as that is only called once
+
     # ! Compute is called many times and should be fast
-    # * Extensions should have their separate method of the form
-    # * 'compute_extension' that can be called from outside
+    
+    Extensions should have their separate method of the form
+    'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, tracer1, tracer2, dataset_name=None):
-        """Initialize power spectrum
+        """
 
         Parameters
         ----------
@@ -74,7 +76,7 @@ class PowerSpectrum:
 
     def compute(self, pk_lin, params):
         """Computes a power spectrum for the tracers using the input
-        linear P(k) and parameters
+        linear P(k) and parameters.
 
         Parameters
         ----------
@@ -155,7 +157,7 @@ class PowerSpectrum:
         return self.k_grid, self.muk_grid, pk_full
 
     def compute_kaiser(self, bias1, beta1, bias2, beta2):
-        """Compute Kaiser model
+        """Compute Kaiser model.
 
         Parameters
         ----------
@@ -179,7 +181,7 @@ class PowerSpectrum:
         return pk
 
     def compute_bias_beta_uv(self, bias, beta, params):
-        """ Compute effective biases that include UV modeling
+        """ Compute effective biases that include UV modeling.
 
         Parameters
         ----------
@@ -206,7 +208,7 @@ class PowerSpectrum:
         return bias_eff, beta_eff
 
     def compute_bias_beta_hcd(self, bias, beta, params):
-        """ Compute effective biases that include HCD modeling
+        """ Compute effective biases that include HCD modeling.
 
         Parameters
         ----------
@@ -252,7 +254,7 @@ class PowerSpectrum:
         return bias_eff, beta_eff
 
     def _hcd_sinc(self, L0):
-        """HCD sinc model
+        """HCD sinc model.
 
         Parameters
         ----------
@@ -285,6 +287,7 @@ class PowerSpectrum:
     def _hcd_no_mask(self, L0):
         """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
         without masking them ! (L0 = 1)
+
         (If you want to mask them use Fvoigt_exp.txt and L0 = 10 as eBOSS DR14)
 
         Parameters
@@ -309,7 +312,7 @@ class PowerSpectrum:
         return F_hcd
 
     def compute_peak_nl(self, params):
-        """Compute the non-linear gaussian correction for the peak component
+        """Compute the non-linear gaussian correction for the peak component.
 
         Parameters
         ----------
@@ -328,7 +331,7 @@ class PowerSpectrum:
         return np.exp(-peak_nl / 2)
 
     def compute_dnl_mcdonald(self):
-        """Non linear term from McDonald 2003
+        """Non linear term from McDonald 2003.
 
         Returns
         -------
@@ -344,7 +347,7 @@ class PowerSpectrum:
         return np.exp(dnl)
 
     def compute_dnl_arinyo(self, params):
-        """Non linear term from Arinyo et al 2015
+        """Non linear term from Arinyo et al 2015.
 
         Parameters
         ----------
@@ -371,7 +374,7 @@ class PowerSpectrum:
         return dnl
 
     def compute_Gk(self, params):
-        """Model the effect of binning of the cf
+        """Model the effect of binning of the cf.
 
         Parameters
         ----------
@@ -391,7 +394,7 @@ class PowerSpectrum:
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):
-        """Compute a Gaussian smoothing for the full correlation function
+        """Compute a Gaussian smoothing for the full correlation function.
 
         Parameters
         ----------
@@ -411,7 +414,7 @@ class PowerSpectrum:
 
     def compute_fullshape_exp_smoothing(self, params):
         """ Compute a Gaussian and exp smoothing for the full
-        correlation function (usefull for london_mocks_v6.0)
+        correlation function (usefull for london_mocks_v6.0).
 
         Parameters
         ----------
@@ -438,7 +441,7 @@ class PowerSpectrum:
         return np.exp(-gauss_smoothing / 2) * np.exp(-exp_smoothing)
 
     def compute_velocity_dispersion_gauss(self, params):
-        """Compute a gaussian smoothing factor to model velocity dispersion
+        """Compute a gaussian smoothing factor to model velocity dispersion.
 
         Parameters
         ----------
@@ -463,7 +466,7 @@ class PowerSpectrum:
         return smoothing
 
     def compute_velocity_dispersion_lorentz(self, params):
-        """Compute a lorentzian smoothing factor to model velocity dispersion
+        """Compute a lorentzian smoothing factor to model velocity dispersion.
 
         Parameters
         ----------

@@ -7,11 +7,11 @@ from . import correlation_func as corr_func
 
 class Model:
     """
-    Class for computing Lyman-alpha forest correlation function models
+    Class for computing Lyman-alpha forest correlation function models.
     """
 
     def __init__(self, corr_item, fiducial, data=None):
-        """Initialize the model computation
+        """
 
         Parameters
         ----------
@@ -104,6 +104,7 @@ class Model:
     def _compute_model(self, pars, pk_lin, component='smooth'):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
+
         This is used internally for computing the peak and smooth
         components separately.
 
@@ -180,7 +181,7 @@ class Model:
 
     def compute(self, pars, pk_full, pk_smooth):
         """Compute full correlation function model using the input parameters,
-        a fiducial linear power spectrum and its smooth component
+        a fiducial linear power spectrum and its smooth component.
 
         Parameters
         ----------
@@ -210,7 +211,7 @@ class Model:
 
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp, coeff_binning_model):
-        """Read the broadband config and initialize what we need
+        """Read the broadband config and initialize what we need.
 
         Parameters
         ----------

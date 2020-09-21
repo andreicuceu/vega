@@ -3,17 +3,18 @@ from . import utils
 
 
 class CorrelationFunction:
-    """Correlation function computation and handling
+    """Correlation function computation and handling.
 
     # ! Slow operations should be kept in init as that is only called once
+    
     # ! Compute is called many times and should be fast
-    # * Extensions should have their separate method of the form
-    # * 'compute_extension' that can be called from outside
+    
+    Extensions should have their separate method of the form
+    'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, coords_grid,
                  tracer1, tracer2, bb_config=None):
-        """Initialize the config, coordinate grid, tracer info,
-        and everything else needed to compute the correlation function
+        """
 
         Parameters
         ----------
@@ -84,18 +85,18 @@ class CorrelationFunction:
                     or standard assymetry, but they only work for the cross')
 
     def compute(self, k, muk, pk, pk_lin, params):
-        """Compute correlation function for input P(k)
+        """Compute correlation function for input P(k).
 
         Parameters
         ----------
         k : 1D Array
             Wavenumber grid of power spectrum
         muk : ND Array
-            k_parallel / k
+            k_parallel / k grid for input power spectrum
         pk : ND Array
-            Power spectrum
+            Input power spectrum
         pk_lin : 1D Array
-            Linear power spectrum
+            Linear isotropic power spectrum
         params : dict
             Computation parameters
 
@@ -128,7 +129,8 @@ class CorrelationFunction:
         return xi
 
     def compute_core(self, k, muk, pk, params):
-        """Compute the core of the correlation function
+        """Compute the core of the correlation function.
+
         This does the Hankel transform of the input P(k),
         sums the necessary multipoles and rescales the coordinates
 
@@ -137,9 +139,9 @@ class CorrelationFunction:
         k : 1D Array
             Wavenumber grid of power spectrum
         muk : ND Array
-            k_parallel / k
+            k_parallel / k grid for input power spectrum
         pk : ND Array
-            Power spectrum
+            Input power spectrum
         params : dict
             Computation parameters
 
@@ -166,7 +168,7 @@ class CorrelationFunction:
 
     @staticmethod
     def _rescale_coords(r, mu, ap, at, delta_rp=0.):
-        """Rescale Xi coordinates using ap/at
+        """Rescale Xi coordinates using ap/at.
 
         Parameters
         ----------
@@ -199,7 +201,7 @@ class CorrelationFunction:
         return rescaled_r, rescaled_mu
 
     def compute_bias_evol(self, params):
-        """Compute bias evolution for the correlation function
+        """Compute bias evolution for the correlation function.
 
         Parameters
         ----------
@@ -218,7 +220,7 @@ class CorrelationFunction:
         return bias_evol
 
     def _get_tracer_evol(self, params, tracer_name):
-        """Compute tracer bias evolution
+        """Compute tracer bias evolution.
 
         Parameters
         ----------
@@ -248,7 +250,7 @@ class CorrelationFunction:
         return bias_evol
 
     def _bias_evol_std(self, params, tracer_name):
-        """Bias evolution standard model
+        """Bias evolution standard model.
 
         Parameters
         ----------
@@ -267,8 +269,7 @@ class CorrelationFunction:
         return bias_z
 
     def _bias_evol_croom(self, params, tracer_name):
-        """Bias evolution Croom model for QSO
-        See Croom et al. 2005
+        """Bias evolution Croom model for QSO, see Croom et al. 2005.
 
         Parameters
         ----------
@@ -290,8 +291,9 @@ class CorrelationFunction:
 
     def compute_growth(self, z_grid=None, z_fid=None,
                        Omega_m=None, Omega_de=None):
-        """Compute growth factor
-        Implements eq. 7.77 from S. Dodelson's Modern Cosmology book
+        """Compute growth factor.
+
+        Implements eq. 7.77 from S. Dodelson's Modern Cosmology book.
 
         Returns
         -------
@@ -330,7 +332,7 @@ class CorrelationFunction:
         return growth**2
 
     def _init_broadband(self, bb_config):
-        """Initialize the broadband terms
+        """Initialize the broadband terms.
 
         Parameters
         ----------
@@ -381,7 +383,7 @@ class CorrelationFunction:
     def compute_broadband(self, params, pos_type):
         """Compute the broadband terms for
         one position (pre-distortion/post-distortion)
-        and one type (multiplicative/additive)
+        and one type (multiplicative/additive).
 
         Parameters
         ----------
@@ -435,7 +437,8 @@ class CorrelationFunction:
 
     def broadband_sky(self, bb_term, params):
         """Compute sky broadband term.
-        Calculates a Gaussian broadband in rp,rt for the sky residuals
+
+        Calculates a Gaussian broadband in rp,rt for the sky residuals.
 
         Parameters
         ----------
@@ -463,7 +466,8 @@ class CorrelationFunction:
 
     def broadband(self, bb_term, params):
         """Compute broadband term.
-        Calculates a power-law broadband in r and mu or rp,rt
+
+        Calculates a power-law broadband in r and mu or rp,rt.
 
         Parameters
         ----------

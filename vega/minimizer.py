@@ -4,10 +4,10 @@ from sys import stdout
 
 
 class Minimizer:
-    """Class for handling the interface to the minimizer
+    """Class for handling the interface to the minimizer.
     """
     def __init__(self, chi2_func, sample_params):
-        """Initialize the config for minuit
+        """
 
         Parameters
         ----------
@@ -29,7 +29,7 @@ class Minimizer:
         self._run_flag = False
 
     def chi2(self, *pars):
-        """Wrapper of chi2 function for iminuit
+        """Wrapper of chi2 function for iminuit.
 
         Returns
         -------
@@ -40,7 +40,7 @@ class Minimizer:
         return self.chi2_func(sample_params)
 
     def minimize(self, params=None):
-        """Minimize the chi2
+        """Minimize the chi2.
 
         Parameters
         ----------

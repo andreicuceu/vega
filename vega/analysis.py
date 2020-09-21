@@ -2,14 +2,17 @@ import numpy as np
 
 
 class Analysis:
-    """Vega analysis class
+    """Vega analysis class.
+
     - Compute parameter scan
+    
     - Create Monte Carlo realizations of the data
+    
     - Run FastMC analysis
     """
 
     def __init__(self, main_config, minimizer):
-        """Save the stuff we need to run the analysis
+        """
 
         Parameters
         ----------
@@ -23,7 +26,7 @@ class Analysis:
         pass
 
     def chi2_scan(self):
-        """Compute a chi^2 scan over one or two parameters
+        """Compute a chi^2 scan over one or two parameters.
 
         Returns
         -------
