@@ -12,21 +12,20 @@ Vega
 
 
 
-
-Package for modeling and fitting the 3D Correlation Function for the Lyman-alpha forest.
+Vega is a tool for computing 3D correlation function models for tracers used by the Ly-:math:`\alpha` forest group (such as Ly-:math:`\alpha` flux, Quasar positions or different metal lines) and for fitting data produced by `picca <https://github.com/igmhub/picca>`__ primarily to measure Baryon Acoustic Oscillations (BAO).
 
 
 * Free software: MIT license
 * Documentation: https://vega.readthedocs.io.
 
 Stuff from fitter2 yet to be implemented
---------
+----------------------------------------
 
 * More output in .h5 files (easy)
 * Large scale fastmc (easy)
 
 Stuff that needs improving
---------
+--------------------------
 
 * Coordinate rescaling models (in utils.py)
 * Fast Hankel Transform
