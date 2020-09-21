@@ -3,9 +3,6 @@ Vega
 ====
 
 
-.. image:: https://img.shields.io/pypi/v/lyafit.svg
-        :target: https://pypi.python.org/pypi/lyafit
-
 .. image:: https://img.shields.io/travis/andreicuceu/Vega.svg
         :target: https://travis-ci.com/andreicuceu/Vega
 
