@@ -41,9 +41,10 @@ Once you have a copy of the source, you can install it with:
     $ pip install -r requirements.txt
     $ pip install .
 
-If you want to run the sampler you will need Polychord. Instructions can be found `here`_, and will be added to this repo soon.
+If you want to run the sampler you will need `Polychord`_. Instructions can be found `here`_, and will be added to this repo soon.
 
 .. _tarball: https://github.com/andreicuceu/Vega/tarball/master
+.. _Polychord: https://github.com/PolyChord/PolyChordLite
 .. _here: https://github.com/andreicuceu/fitter2_tutorial
 
 Usage
