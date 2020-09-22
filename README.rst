@@ -15,26 +15,37 @@ Vega
 Vega is a tool for computing 3D correlation function models for tracers used by the Ly-:math:`\alpha` forest group (such as Ly-:math:`\alpha` flux, Quasar positions or different metal lines) and for fitting data produced by `picca <https://github.com/igmhub/picca>`__ primarily to measure Baryon Acoustic Oscillations (BAO).
 
 
-* Free software: MIT license
+* Free software: GPL-3.0 License
 * Documentation: https://vega.readthedocs.io.
 
-Stuff from fitter2 yet to be implemented
-----------------------------------------
+Installation
+------------
 
-* More output in .h5 files (easy)
-* Large scale fastmc (easy)
+You can either clone the public repository:
 
-Stuff that needs improving
---------------------------
+.. code-block:: console
 
-* Coordinate rescaling models (in utils.py)
-* Fast Hankel Transform
-* Cache stuff that doesn't change between different components (e.g. peak_nl)
+    $ git clone git://github.com/andreicuceu/Vega
 
-Features
---------
+Or download the `tarball`_:
 
-* TODO
+.. code-block:: console
+
+    $ curl -OJL https://github.com/andreicuceu/Vega/tarball/master
+
+Once you have a copy of the source, you can install it with:
+
+.. code-block:: console
+
+    $ cd Vega
+    $ pip install -r requirements.txt
+    $ pip install .
+
+If you want to run the sampler you will need Polychord. Instructions can be found `here`_, and will be added to this repo soon.
+
+.. _tarball: https://github.com/andreicuceu/Vega/tarball/master
+.. _here: https://github.com/andreicuceu/fitter2_tutorial
+
 
 Credits
 -------
