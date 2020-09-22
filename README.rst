@@ -8,7 +8,6 @@ Vega
 
 .. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
         :target: https://vega.readthedocs.io/en/latest/?badge=latest
-        :alt: Documentation Status
 
 .. image:: https://codecov.io/gh/andreicuceu/Vega/branch/master/graph/badge.svg
         :target: https://codecov.io/gh/andreicuceu/Vega
