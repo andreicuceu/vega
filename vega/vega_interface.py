@@ -81,6 +81,15 @@ class VegaInterface:
                                             self.main_config['parameters'])
         self.sample_params = self._read_sample(self.main_config['sample'])
 
+        # Get priors
+        self.priors = {}
+        if 'priors' in self.main_config:
+            self.priors = self._init_priors(self.main_config['priors'])
+            for param in self.priors.keys():
+                if param not in self.sample_params['limits'].keys():
+                    print('Warning: Prior specified for a parameter that is \
+                            not sampled!')
+
         # Initialize the minimizer and the analysis objects
         self.minimizer = Minimizer(self.chi2, self.sample_params)
         self.analysis = Analysis(self.main_config, self.minimizer)
@@ -165,6 +174,11 @@ class VegaInterface:
                     - model_cf[self.data[name].mask]
                 chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
+        # Add priors
+        for param, prior in self.priors.items():
+            chi2 += self._gaussian_chi2_prior(local_params[param],
+                                              prior[0], prior[1])
+
         assert isinstance(chi2, float)
         return chi2
 
@@ -198,6 +212,10 @@ class VegaInterface:
 
         # Compute log lik
         log_lik = log_norm - 0.5 * chi2
+
+        # Add priors normalization
+        for param, prior in self.priors.items():
+            log_lik += self._gaussian_lik_prior(prior[1])
 
         return log_lik
 
@@ -241,10 +259,19 @@ class VegaInterface:
         return mocks
 
     def minimize(self):
+        """Minimize the chi2 over the sample parameters.
+        """
         self.minimizer.minimize()
 
     @property
     def bestfit(self):
+        """Access the bestfit results from iminuit.
+
+        Returns
+        -------
+        Minimizer
+            Returns the Minimizer class which stores the bestfit values
+        """
         return self.minimizer
 
     @staticmethod
@@ -378,3 +405,38 @@ class VegaInterface:
             sample_params['fix'][param] = False
 
         return sample_params
+
+    @staticmethod
+    def _gaussian_chi2_prior(value, mean, sigma):
+        return (value - mean)**2 / sigma**2
+
+    @staticmethod
+    def _gaussian_lik_prior(sigma):
+        return -0.5 * np.log(2 * np.pi) - np.log(sigma)
+
+    @staticmethod
+    def _init_priors(prior_config):
+        """Initialize the priors. Only gaussian priors are currently supported
+
+        Parameters
+        ----------
+        prior_config : ConfigParser
+            priors section from main config
+
+        Returns
+        -------
+        dict
+            Dictionary of priors (mean, sigma) with the keys as parameter names
+        """
+        prior_dict = {}
+        for param, prior in prior_config.items():
+            prior_list = prior.split()
+            if len(prior_list) != 3:
+                raise ValueError('Prior configuration must have the format: \
+                                  "<param> = gaussian <mean> <sigma>"')
+            if prior_list[0] not in ['gaussian', 'Gaussian']:
+                raise ValueError('Only gaussian priors are supported.')
+
+            prior_dict[param] = np.array(prior_list[1:]).astype(float)
+
+        return prior_dict
