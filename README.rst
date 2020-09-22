@@ -50,7 +50,7 @@ If you want to run the sampler you will need `Polychord`_. Instructions can be f
 Usage
 -----
 
-Vega can be used both interactively (e.g. from Jupyter Notebooks) or from the command line. It needs a config file to run (main.ini).
+Vega can be used both interactively (e.g. from Jupyter Notebooks) or from the command line. It needs a config file to run: main.ini.
 
 This main.ini file also must contain the paths to extra configuration files. One of these extra files is needed for each correlation component. E.g. for a run with LyaxLya and QSOxLya, you would need 3 config files:
 
