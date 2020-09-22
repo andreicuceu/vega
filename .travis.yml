@@ -3,7 +3,7 @@ python:
 - 3.8
 - 3.7
 - 3.6
-install: pip install -U tox-travis
+install: pip install -U tox-travis coverage
 script: tox
 deploy:
   provider: pypi
@@ -15,3 +15,5 @@ deploy:
     tags: true
     repo: andreicuceu/Vega
     python: 3.8
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
