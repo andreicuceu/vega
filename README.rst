@@ -46,6 +46,28 @@ If you want to run the sampler you will need Polychord. Instructions can be foun
 .. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _here: https://github.com/andreicuceu/fitter2_tutorial
 
+Usage
+-----
+
+Vega can be used both interactively (e.g. from Jupyter Notebooks) or from the command line. It needs a config file to run (main.ini).
+
+This main.ini file also must contain the paths to extra configuration files. One of these extra files is needed for each correlation component. E.g. for a run with LyaxLya and QSOxLya, you would need 3 config files:
+
+- main.ini
+- lyaxlya.ini
+- qsoxlya.ini
+
+Example config files can be found in the examples folder, and detailed descriptions of all the possible options can be found in the documentation. (Some of this is work in progress)
+
+Tutorials for the interactive use can also be found in the examples folder (link tutorial Jupyter Notebook). Most of Vega functionality can be accessed and used entirely from a Notebook, but compute times might be long if you try to minimize over too many parameters (especially if they are degenerate). 
+
+The only thing that needs to be run from the console is the sampler. It can be called using the 'vega_mpi.py' script in the bin folder like this:
+
+.. code-block:: console
+
+    $ python vega_mpi.py path_to/main.ini
+
+We strongly suggest you run the sampler in parallel on many cores, as normal run-times are of the order $10^2$ - $10^4$ core hours.
 
 Credits
 -------
