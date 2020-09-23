@@ -5,27 +5,44 @@ import h5py
 
 class Output:
     """Class for handling the Vega output,
-    and reading/writing output files
+    and reading/writing output files.
     """
     def __init__(self, config):
+        """
+
+        Parameters
+        ----------
+        config : ConfigParser
+            Output section of main config file
+        """
         self.outfile = Path(config['filename'])
 
     def write_results(self, minimizer, scan_results=None):
+        """Write Vega analysis results, including the bestfit
+        and chi2 scan results if they exist.
+
+        Parameters
+        ----------
+        minimizer : Minimizer
+            Minimizer object after minimization was done
+        scan_results : list, optional
+            List of scan results, by default None
+        """
         h5_file = h5py.File(self.outfile, 'w')
 
         # Write bestfit
         bf_group = h5_file.create_group("best fit")
-        bf_group = self.write_bestfit(bf_group, minimizer)
+        bf_group = self._write_bestfit(bf_group, minimizer)
 
         # Write scan results
         if scan_results is not None:
             scan_group = h5_file.create_group("chi2 scan")
-            scan_group = self.write_scan(scan_group, scan_results)
+            scan_group = self._write_scan(scan_group, scan_results)
 
         h5_file.close()
 
     @staticmethod
-    def write_bestfit(bf_group, minimizer):
+    def _write_bestfit(bf_group, minimizer):
         # Write the parameters values
         for param, value in minimizer.values.items():
             error = minimizer.errors[param]
@@ -42,7 +59,7 @@ class Output:
         return bf_group
 
     @staticmethod
-    def write_scan(scan_group, scan_results):
+    def _write_scan(scan_group, scan_results):
         # Get list of parameters and results
         params = list(scan_results[0].keys())
         results = []

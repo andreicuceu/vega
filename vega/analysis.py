@@ -5,9 +5,9 @@ class Analysis:
     """Vega analysis class.
 
     - Compute parameter scan
-    
+
     - Create Monte Carlo realizations of the data
-    
+
     - Run FastMC analysis
     """
 
@@ -79,7 +79,7 @@ class Analysis:
                 print('INFO: finished chi2scan iteration {} of {}'.format(
                     i + 1, len(grids[par1])))
         else:
-            par2 = list(grid.keys())[1]
+            par2 = list(grids.keys())[1]
             for i, value_1 in enumerate(grids[par1]):
                 for j, value_2 in enumerate(grids[par2]):
                     # Overwrite params with the grid values

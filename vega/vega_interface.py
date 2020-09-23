@@ -9,6 +9,7 @@ from . import correlation_item, data, utils, analysis
 from vega.model import Model
 from vega.minimizer import Minimizer
 from vega.analysis import Analysis
+from vega.output import Output
 
 
 class VegaInterface:
@@ -17,7 +18,7 @@ class VegaInterface:
     Parse the main config and initialize a correlation item for each component.
 
     If there is data, initialize data and model objects for each component.
-    
+
     Handle the parameter config and call the analysis class.
     """
 
@@ -101,6 +102,9 @@ class VegaInterface:
             if 'Polychord' not in self.main_config:
                 raise RuntimeError('run_sampler called, but \
                                     no sampler initialized')
+
+        self.output = Output(self.main_config['output'])
+
         self.monte_carlo = False
 
     def compute_model(self, params=None, run_init=True):
