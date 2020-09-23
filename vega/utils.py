@@ -8,7 +8,7 @@ import scipy.interpolate
 
 from . import myGamma
 
-
+@jit(nopython=True)
 def sinc(x):
     return np.sin(x)/x
 

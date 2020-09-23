@@ -1,5 +1,6 @@
 import numpy as np
 from pkg_resources import resource_filename
+from numba import jit, float64
 from . import utils
 
 
@@ -73,6 +74,8 @@ class PowerSpectrum:
 
         self.k_par_grid = self.k_grid * self.muk_grid
         self.k_trans_grid = self.k_grid * np.sqrt(1 - self.muk_grid**2)
+        self._arinyo_pars = None
+        self._peak_nl_pars = None
 
     def compute(self, pk_lin, params):
         """Computes a power spectrum for the tracers using the input
@@ -324,11 +327,19 @@ class PowerSpectrum:
         ND Array
             Smoothing factor for the peak
         """
-        sigma_par_sq = params['sigmaNL_par']**2
-        sigma_trans_sq = params['sigmaNL_per']**2
-        peak_nl = self.k_par_grid**2 * sigma_par_sq
-        peak_nl += self.k_trans_grid**2 * sigma_trans_sq
-        return np.exp(-peak_nl / 2)
+        sigma_par = params['sigmaNL_par']
+        sigma_trans = params['sigmaNL_per']
+        if self._peak_nl_pars is None:
+            self._peak_nl_pars = np.array([sigma_par, sigma_trans]) + 1
+
+        if not np.allclose(np.array([sigma_par, sigma_trans]),
+                           self._peak_nl_pars):
+            peak_nl = self.k_par_grid**2 * sigma_par**2
+            peak_nl += self.k_trans_grid**2 * sigma_trans**2
+            self._peak_nl_pars = np.array([sigma_par, sigma_trans])
+            self._peak_nl_cache = np.exp(-peak_nl / 2)
+
+        return self._peak_nl_cache
 
     def compute_dnl_mcdonald(self):
         """Non linear term from McDonald 2003.
@@ -367,10 +378,23 @@ class PowerSpectrum:
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
 
-        growth = q1 * self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
-        pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
-        pressure = (self.k_grid / kp) * (self.k_grid / kp)
-        dnl = np.exp(growth * (1 - pec_velocity) - pressure)
+        if self._arinyo_pars is None:
+            self._arinyo_pars = np.array([q1, kv, av, bv, kp]) + 1
+        if not np.allclose(np.array([q1, kv, av, bv, kp]), self._arinyo_pars):
+            growth = q1 * self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
+            pressure = (self.k_grid / kp) * (self.k_grid / kp)
+            dnl = np.exp(growth * (1 - pec_velocity) - pressure)
+
+            self._arinyo_pars = np.array([q1, kv, av, bv, kp])
+            self._arinyo_dnl_cache = dnl
+
+        return self._arinyo_dnl_cache
+
+    @staticmethod
+    @jit(nopython=True)
+    def _dnl_arinyo(k_grid, muk_grid, pk_fid, q1, kv, av, bv, kp):
+
         return dnl
 
     def compute_Gk(self, params):
