@@ -60,9 +60,9 @@ This main.ini file must also contain the paths to extra configuration files. One
 - lyaxlya.ini
 - qsoxlya.ini
 
-Example config files can be found in the examples folder, and detailed descriptions of all the possible options can be found in the documentation. (Some of this is work in progress)
+Example config files can be found in the `examples`_ folder, and detailed descriptions of all the possible options can be found in the documentation. (Work in progress)
 
-Tutorials for the interactive use can also be found in the examples folder (link tutorial Jupyter Notebook). Most of Vega functionality can be accessed and used entirely from a Notebook, but compute times might be long if you try to minimize over too many parameters (especially if they are degenerate). 
+Examples for the interactive use can be found in the `tutorial`_ . Most of Vega functionality can be accessed and used entirely from a Notebook, but compute times might be long if you try to minimize over too many parameters (especially if they are degenerate). 
 
 The only thing that needs to be run from the console is the sampler. It can be called using the 'vega_mpi.py' script in the bin folder like this:
 
@@ -71,6 +71,9 @@ The only thing that needs to be run from the console is the sampler. It can be c
     $ python vega_mpi.py path_to/main.ini
 
 We strongly suggest you run the sampler in parallel on many cores, as normal run-times are of the order :math:`10^2` - :math:`10^4` core hours.
+
+.. _examples: https://github.com/andreicuceu/Vega/tree/master/examples
+.. _tutorial: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
 
 Credits
 -------
