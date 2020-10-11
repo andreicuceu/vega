@@ -27,3 +27,5 @@ def test_vega():
 
         assert np.allclose(xi_vega_auto[name], xi_picca_auto)
         assert np.allclose(xi_vega_cross[name], xi_picca_cross)
+
+    hdul.close()
