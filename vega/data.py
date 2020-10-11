@@ -9,6 +9,13 @@ class Data:
 
     An instance of this is required for each cf component
     """
+    _data_vec = None
+    _masked_data_vec = None
+    _cov_mat = None
+    _distortion_mat = None
+    _inv_masked_cov = None
+    _log_cov_det = None
+
     def __init__(self, corr_item):
         """
 
@@ -43,6 +50,66 @@ class Data:
         self._cholesky = None
         self._scale = 1.
 
+    @property
+    def data_vec(self):
+        return self._data_vec
+
+    @property
+    def masked_data_vec(self):
+        if self._masked_data_vec is None:
+            self._masked_data_vec = np.zeros(self.mask.sum())
+            self._masked_data_vec[:] = self.data_vec[self.mask]
+        return self._masked_data_vec
+
+    @property
+    def cov_mat(self):
+        if self._cov_mat is None:
+            raise AttributeError(
+                'No covariance matrix found. Check for it in the data file: ',
+                self._corr_item.config['data'].get('filename'))
+        return self._cov_mat
+
+    @property
+    def distortion_mat(self):
+        if self._distortion_mat is None:
+            raise AttributeError(
+                'No covariance matrix found. Check for it in the data file: ',
+                self._corr_item.config['data'].get('filename'))
+        return self._distortion_mat
+
+    @property
+    def inv_masked_cov(self):
+        if self._inv_masked_cov is None:
+            # Compute inverse of the covariance matrix
+            masked_cov = self.cov_mat[:, self.mask]
+            masked_cov = masked_cov[self.mask, :]
+            try:
+                linalg.cholesky(self.cov_mat)
+                print('LOG: Full matrix is positive definite')
+            except linalg.LinAlgError:
+                print('WARNING: Full matrix is not positive definite')
+            try:
+                linalg.cholesky(masked_cov)
+                print('LOG: Reduced matrix is positive definite')
+            except linalg.LinAlgError:
+                print('WARNING: Reduced matrix is not positive definite')
+            self.inv_masked_cov = linalg.inv(masked_cov)
+
+        return self._inv_masked_cov
+
+    @property
+    def log_cov_det(self):
+        if self._log_cov_det is None:
+            # Compute the log determinant using and LDL^T decomposition
+            # |C| = Product of Diagonal components of D
+            masked_cov = self.cov_mat[:, self.mask]
+            masked_cov = masked_cov[self.mask, :]
+            _, d, __ = linalg.ldl(masked_cov)
+            self.log_cov_det = np.log(d.diagonal()).sum()
+            assert isinstance(self.log_cov_det, float)
+
+        return self._log_cov_det
+
     def _read_data(self, data_path, cuts_config):
         """Read the data, mask it and prepare the environment.
 
@@ -55,9 +122,12 @@ class Data:
         """
         hdul = fits.open(data_path)
 
-        self.data_vec = hdul[1].data['DA'][:]
-        self.cov_mat = hdul[1].data['CO'][:]
-        self.distortion_mat = csr_matrix(hdul[1].data['DM'][:])
+        self._data_vec = hdul[1].data['DA'][:]
+        if 'CO' in hdul[1].columns.names:
+            self._cov_mat = hdul[1].data['CO'][:]
+        if 'DM' in hdul[1].columns.names:
+            self._distortion_mat = csr_matrix(hdul[1].data['DM'][:])
+
         rp_grid = hdul[1].data['RP'][:]
         rt_grid = hdul[1].data['RT'][:]
         z_grid = hdul[1].data['Z'][:]
@@ -76,8 +146,8 @@ class Data:
         self.mask, self.bin_size_rp = self._build_mask(rp_grid, rt_grid,
                                                        cuts_config,
                                                        hdul[1].header)
-        self.masked_data_vec = np.zeros(self.mask.sum())
-        self.masked_data_vec[:] = self.data_vec[self.mask]
+        # self.masked_data_vec = np.zeros(self.mask.sum())
+        # self.masked_data_vec[:] = self.data_vec[self.mask]
 
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
@@ -87,25 +157,25 @@ class Data:
         # TODO This section can be massively optimized by only performing one
         # TODO Cholesky decomposition for the masked cov (instead of 3)
         # Compute inverse and determinant of the covariance matrix
-        masked_cov = self.cov_mat[:, self.mask]
-        masked_cov = masked_cov[self.mask, :]
-        try:
-            linalg.cholesky(self.cov_mat)
-            print('LOG: Full matrix is positive definite')
-        except linalg.LinAlgError:
-            print('WARNING: Full matrix is not positive definite')
-        try:
-            linalg.cholesky(masked_cov)
-            print('LOG: Reduced matrix is positive definite')
-        except linalg.LinAlgError:
-            print('WARNING: Reduced matrix is not positive definite')
-        self.inv_masked_cov = linalg.inv(masked_cov)
+        # masked_cov = self.cov_mat[:, self.mask]
+        # masked_cov = masked_cov[self.mask, :]
+        # try:
+        #     linalg.cholesky(self.cov_mat)
+        #     print('LOG: Full matrix is positive definite')
+        # except linalg.LinAlgError:
+        #     print('WARNING: Full matrix is not positive definite')
+        # try:
+        #     linalg.cholesky(masked_cov)
+        #     print('LOG: Reduced matrix is positive definite')
+        # except linalg.LinAlgError:
+        #     print('WARNING: Reduced matrix is not positive definite')
+        # self.inv_masked_cov = linalg.inv(masked_cov)
 
         # Compute the log determinant using and LDL^T decomposition
         # |C| = Product of Diagonal components of D
-        _, d, __ = linalg.ldl(masked_cov)
-        self.log_cov_det = np.log(d.diagonal()).sum()
-        assert isinstance(self.log_cov_det, float)
+        # _, d, __ = linalg.ldl(masked_cov)
+        # self.log_cov_det = np.log(d.diagonal()).sum()
+        # assert isinstance(self.log_cov_det, float)
 
         # ? Why are these named square? Is there a better name?
         self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)

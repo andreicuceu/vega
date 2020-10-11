@@ -1,53 +1,44 @@
 import pytest
 import numpy as np
 import configparser
-# import lyafit.parser as parser
-# from lyafit.new_data import Data
-# from lyafit.correlation_item import CorrelationItem
+import os.path
+from pathlib import Path
+from astropy.io import fits
 
-@pytest.mark.skip
+from vega.data import Data
+from vega import correlation_item
+
+
 def test_data():
-    filename = "D:\\work\\run\\DR16\\chi2.ini"
+    current_path = Path(os.path.dirname(os.path.abspath(__file__)))
+    test_config_path = current_path / 'configs' / 'main.ini'
 
-    # New init
-    config = configparser.ConfigParser()
-    config.read(filename)
-    ini_files = config.get('data sets', 'ini files').split()
-    data_config_path = ini_files[0]
-    data_config = configparser.ConfigParser()
-    data_config.read(data_config_path)
-    item = CorrelationItem(data_config)
-    data = Data(item)
+    # Read the main config file
+    main_config = configparser.ConfigParser()
+    main_config.optionxform = lambda option: option
+    main_config.read(test_config_path)
+    ini_files = main_config['data sets'].get('ini files').split()
 
-    # Old init
-    dic_init = parser.parse_chi2(filename)
-    old_data = dic_init['data sets']['data'][0]
+    # Initialize the individual components and test each dataset
+    for path in ini_files:
+        config = configparser.ConfigParser()
+        config.optionxform = lambda option: option
+        config.read(os.path.expandvars(current_path / 'configs' / path))
 
-    assert np.allclose(data.rp, old_data.rp)
-    assert np.allclose(data.rt, old_data.rt)
-    assert np.allclose(data.r, old_data.r)
-    assert np.allclose(data.mu, old_data.mu)
-    assert np.allclose(data.z, old_data.z)
-    assert np.allclose(data.r_square, old_data.rsquare)
-    assert np.allclose(data.mu_square, old_data.musquare)
+        # name = config['data'].get('name')
+        config['data']['filename'] = str(current_path / 'data' / config['data'].get('filename'))
+        corr_item = correlation_item.CorrelationItem(config)
 
-    assert np.allclose(data.mask, old_data.mask)
-    assert np.allclose(data.log_cov_det, old_data.log_co_det)
-    assert np.allclose(data.inv_masked_cov, old_data.ico)
-    assert np.allclose(data.cov_mat, old_data.co)
-    assert np.allclose(data.masked_data_vec, old_data.da_cut)
-    assert np.allclose(data.data_vec, old_data.da)
+        data = Data(corr_item)
+        hdul = fits.open(config['data']['filename'])
 
-    # assert data.tracer_catalog == old_data.tracerMet
-    for key, val in data.metal_rp.items():
-        assert np.allclose(val, old_data.rp_met[key])
-    for key, val in data.metal_rt.items():
-        assert np.allclose(val, old_data.rt_met[key])
-    for key, val in data.metal_z.items():
-        assert np.allclose(val, old_data.z_met[key])
-    # for key, val in data.metal_dm.items():
-        # assert (val != old_data.dm_met[key]).nnz == 0
+        assert np.allclose(data.data_vec, hdul[1].data['DA'])
 
+        rp_rt_grid = corr_item.rp_rt_grid
+        assert np.allclose(rp_rt_grid[0], hdul[1].data['RP'])
+        assert np.allclose(rp_rt_grid[1], hdul[1].data['RT'])
+        assert np.allclose(corr_item.z_grid, hdul[1].data['Z'])
 
-# if __name__ == "__main__":
-    # test_data()
+        hdul.close()
+
+        assert data.masked_data_vec is not None

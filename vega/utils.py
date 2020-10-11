@@ -5,7 +5,10 @@ from scipy import special
 from scipy.integrate import quad
 from numba import jit, float64
 import scipy.interpolate
+import os.path
+from pathlib import Path
 
+import vega
 from . import myGamma
 
 @jit(nopython=True)
@@ -293,3 +296,7 @@ def growth_function(z, Omega_m, Omega_de):
     growth_int = quad(growth_integrand, 0, a, args=args)[0]
     hubble_par = hubble(z, Omega_m, Omega_de)
     return 5./2. * Omega_m * hubble_par * growth_int
+
+
+def find_file(path):
+    print(os.path.dirname(vega.__file__))

@@ -10,7 +10,7 @@ class PowerSpectrum:
     # ! Slow operations should be kept in init as that is only called once
 
     # ! Compute is called many times and should be fast
-    
+
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
