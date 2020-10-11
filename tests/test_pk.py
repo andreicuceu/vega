@@ -11,7 +11,7 @@ from pathlib import Path
 # import vega.utils as utils
 # import sys
 
-def test_pk():
+# def test_pk():
     # current_path = Path(os.path.dirname(os.path.abspath(__file__)))
     # test_config_path = current_path / 'configs' / 'main.ini'
 
