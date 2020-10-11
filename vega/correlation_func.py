@@ -6,9 +6,9 @@ class CorrelationFunction:
     """Correlation function computation and handling.
 
     # ! Slow operations should be kept in init as that is only called once
-    
+
     # ! Compute is called many times and should be fast
-    
+
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
@@ -49,8 +49,8 @@ class CorrelationFunction:
 
         # Precompute growth
         self._z_fid = fiducial['z_fiducial']
-        self._Omega_m = fiducial['Omega_m']
-        self._Omega_de = fiducial['Omega_de']
+        self._Omega_m = fiducial.get('Omega_m', None)
+        self._Omega_de = fiducial.get('Omega_de', None)
         self.xi_growth = self.compute_growth(self._z, self._z_fid,
                                              self._Omega_m, self._Omega_de)
 
@@ -158,6 +158,7 @@ class CorrelationFunction:
 
         # Get rescaled Xi coordinates
         ap, at = utils.cosmo_fit_func(params)
+
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
                                                        ap, at, delta_rp)
 

@@ -33,7 +33,7 @@ class VegaInterface:
         # Read the main config file
         self.main_config = configparser.ConfigParser()
         self.main_config.optionxform = lambda option: option
-        self.main_config.read(main_path)
+        self.main_config.read(utils.find_file(main_path))
 
         # Read the fiducial pk file
         self.fiducial = self._read_fiducial(self.main_config['fiducial'])
@@ -47,7 +47,7 @@ class VegaInterface:
         for path in ini_files:
             config = configparser.ConfigParser()
             config.optionxform = lambda option: option
-            config.read(os.path.expandvars(path))
+            config.read(utils.find_file(os.path.expandvars(path)))
 
             name = config['data'].get('name')
             self.corr_items[name] = correlation_item.CorrelationItem(config)
@@ -294,9 +294,9 @@ class VegaInterface:
         """
         # First check the path and replace with the right model if necessary
         path = fiducial_config.get('filename')
-        path = os.path.expandvars(path)
-        if not os.path.isfile(path):
-            path = resource_filename('vega', 'models') + '/{}'.format(path)
+        path = utils.find_file(os.path.expandvars(path))
+        # if not os.path.isfile(path):
+            # path = resource_filename('vega', 'models') + '/{}'.format(path)
         print('INFO: reading input Pk {}'.format(path))
 
         fiducial = {}

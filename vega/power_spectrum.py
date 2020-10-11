@@ -434,7 +434,7 @@ class PowerSpectrum:
         sigma_trans_sq = params['per_sigma_smooth']**2
         gauss_smoothing = self.k_par_grid**2 * sigma_par_sq
         gauss_smoothing += self.k_trans_grid**2 * sigma_trans_sq
-        return np.exp(-gauss_smoothing / 2)
+        return np.exp(-gauss_smoothing / 2)**2
 
     def compute_fullshape_exp_smoothing(self, params):
         """ Compute a Gaussian and exp smoothing for the full

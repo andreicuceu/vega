@@ -36,7 +36,7 @@ class Model:
         self._smooth_scaling = fiducial.get('smooth-scaling', False)
         self._has_distortion_mat = False
         if self._data is not None:
-            self._has_distortion_mat = self._data.distortion_mat is not None
+            self._has_distortion_mat = self._data.has_distortion()
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:

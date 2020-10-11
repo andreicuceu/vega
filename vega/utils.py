@@ -91,6 +91,7 @@ def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max):
     # Check what multipoles we need and compute them
     dmuk = 1 / len(muk_grid)
     ell_vals = np.arange(0, ell_max + 1, 2)
+
     xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk)
 
     # Add the Legendre polynomials and sum over the multipoles
@@ -299,4 +300,41 @@ def growth_function(z, Omega_m, Omega_de):
 
 
 def find_file(path):
-    print(os.path.dirname(vega.__file__))
+    """ Find files on the system.
+
+    Checks if it's an absolute path or something inside vega,
+    and returns a proper path.
+
+    Relative paths are checked from the vega main path,
+    vega/models and tests
+
+    Parameters
+    ----------
+    path : string
+        Input path. Can be absolute or relative to vega
+    """
+    input_path = Path(path)
+
+    # First check if it's an absolute path
+    if input_path.is_file():
+        return input_path
+
+    # Get the vega path and check inside vega (this returns vega/vega)
+    vega_path = Path(os.path.dirname(vega.__file__))
+
+    # Check if it's a model
+    model = vega_path / 'models' / input_path
+    if model.is_file():
+        return model
+
+    # Check if it's something used for tests
+    test = vega_path.parents[0] / 'tests' / input_path
+    if test.is_file():
+        return test
+
+    # Check from the main vega folder
+    in_vega = vega_path.parents[0] / input_path
+    if in_vega.is_file():
+        return in_vega
+
+    raise RuntimeError('The path/file does not exists: ', input_path)

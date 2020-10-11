@@ -3,6 +3,8 @@ from astropy.io import fits
 from scipy import linalg
 from scipy.sparse import csr_matrix
 
+from vega.utils import find_file
+
 
 class Data:
     """Class for handling lya forest correlation function data.
@@ -110,6 +112,12 @@ class Data:
 
         return self._log_cov_det
 
+    def has_cov_mat(self):
+        return self._cov_mat is not None
+
+    def has_distortion(self):
+        return self._distortion_mat is not None
+
     def _read_data(self, data_path, cuts_config):
         """Read the data, mask it and prepare the environment.
 
@@ -120,7 +128,7 @@ class Data:
         cuts_config : ConfigParser
             cuts section from the config file
         """
-        hdul = fits.open(data_path)
+        hdul = fits.open(find_file(data_path))
 
         self._data_vec = hdul[1].data['DA'][:]
         if 'CO' in hdul[1].columns.names:
@@ -295,7 +303,7 @@ class Data:
                 tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
 
         # Read the metal file
-        metal_hdul = fits.open(metal_config.get('filename'))
+        metal_hdul = fits.open(find_file(metal_config.get('filename')))
 
         metal_correlations = []
         # First look for correlations between tracer1 and metals
