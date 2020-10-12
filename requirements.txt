@@ -4,4 +4,4 @@ astropy==4.0.2
 numba==0.51.2
 h5py==2.10.0
 setuptools==50.3.0
-iminuit
+iminuit==1.5.2
