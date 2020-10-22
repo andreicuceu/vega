@@ -2,9 +2,8 @@
 Vega
 ====
 
-
-.. image:: https://img.shields.io/travis/andreicuceu/Vega.svg
-        :target: https://travis-ci.com/andreicuceu/Vega
+.. image:: https://travis-ci.com/andreicuceu/vega.svg?branch=master
+    :target: https://travis-ci.com/andreicuceu/vega
 
 .. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
         :target: https://vega.readthedocs.io/en/latest/?badge=latest
