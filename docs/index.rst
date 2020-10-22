@@ -8,6 +8,7 @@ Vega is a tool for computing 3D correlation function models for tracers used by 
 
    Introduction <intro>
    Installation <install>
+   Config Tutorial <config>
 
 Vega modules have some documentation here:
 
