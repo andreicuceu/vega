@@ -95,7 +95,7 @@ class Data:
                 print('LOG: Reduced matrix is positive definite')
             except linalg.LinAlgError:
                 print('WARNING: Reduced matrix is not positive definite')
-            self.inv_masked_cov = linalg.inv(masked_cov)
+            self._inv_masked_cov = linalg.inv(masked_cov)
 
         return self._inv_masked_cov
 
