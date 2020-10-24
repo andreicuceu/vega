@@ -39,6 +39,7 @@ class CorrelationFunction:
         self._tracer1 = tracer1
         self._tracer2 = tracer2
         self._z_eff = fiducial['z_eff']
+        self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
 
         # Check if we need delta rp
         self._delta_rp_name = None
@@ -266,7 +267,7 @@ class CorrelationFunction:
             Bias evolution for tracer
         """
         p0 = params['alpha_{}'.format(tracer_name)]
-        bias_z = ((1. + self._z) / (1 + self._z_eff))**p0
+        bias_z = self._rel_z_evol**p0
         return bias_z
 
     def _bias_evol_croom(self, params, tracer_name):

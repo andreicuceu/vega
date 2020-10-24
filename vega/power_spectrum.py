@@ -1,6 +1,6 @@
 import numpy as np
 from pkg_resources import resource_filename
-from numba import jit, float64
+from numba import njit, float64
 from . import utils
 
 
@@ -76,6 +76,8 @@ class PowerSpectrum:
         self.k_trans_grid = self.k_grid * np.sqrt(1 - self.muk_grid**2)
         self._arinyo_pars = None
         self._peak_nl_pars = None
+        self._L0_hcd_cache = None
+        self._F_hcd_cache = None
 
     def compute(self, pk_lin, params):
         """Computes a power spectrum for the tracers using the input
@@ -242,17 +244,20 @@ class PowerSpectrum:
         # ! It's done like this to maintain backwards compatibility
         # TODO Maybe improve the names we search for
         # Check which model we need
-        if 'Rogers' in self._hcd_model:
-            F_hcd = self._hcd_Rogers2018(L0_hcd)
-        elif 'mask' in self._hcd_model:
-            assert self._Fvoigt_data is not None
-            F_hcd = self._hcd_no_mask(L0_hcd)
-        else:
-            F_hcd = self._hcd_sinc(L0_hcd)
+        if L0_hcd != self._L0_hcd_cache or self._F_hcd is None:
+            if 'Rogers' in self._hcd_model:
+                self._F_hcd = self._hcd_Rogers2018(L0_hcd, self.k_par_grid)
+            elif 'mask' in self._hcd_model:
+                assert self._Fvoigt_data is not None
+                self._F_hcd = self._hcd_no_mask(L0_hcd)
+            else:
+                self._F_hcd = self._hcd_sinc(L0_hcd)
 
-        bias_eff = bias + bias_hcd * F_hcd
-        beta_eff = (bias * beta + bias_hcd * beta_hcd * F_hcd)
-        beta_eff /= (bias + bias_hcd * F_hcd)
+            self._L0_hcd_cache = L0_hcd
+
+        bias_eff = bias + bias_hcd * self._F_hcd
+        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
+        beta_eff /= (bias + bias_hcd * self._F_hcd)
 
         return bias_eff, beta_eff
 
@@ -271,7 +276,9 @@ class PowerSpectrum:
         """
         return utils.sinc(self.k_par_grid * L0)
 
-    def _hcd_Rogers2018(self, L0):
+    @staticmethod
+    @njit(float64[:, :](float64, float64[:, :]))
+    def _hcd_Rogers2018(L0, k_par_grid):
         """Model the effect of HCD systems with the Fourier transform
         of a Lorentzian profile. Motivated by Rogers et al. (2018).
 
@@ -285,7 +292,8 @@ class PowerSpectrum:
         ND Array
             F_hcd
         """
-        return np.exp(-L0 * self.k_par_grid)
+        f_hcd = np.exp(-L0 * k_par_grid)
+        return f_hcd
 
     def _hcd_no_mask(self, L0):
         """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
@@ -391,9 +399,9 @@ class PowerSpectrum:
 
         return self._arinyo_dnl_cache
 
-    @staticmethod
-    @jit(nopython=True)
-    def _dnl_arinyo(k_grid, muk_grid, pk_fid, q1, kv, av, bv, kp):
+    # @staticmethod
+    # @jit(nopython=True)
+    # def _dnl_arinyo(k_grid, muk_grid, pk_fid, q1, kv, av, bv, kp):
 
         return dnl
 

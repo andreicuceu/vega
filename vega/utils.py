@@ -1,15 +1,14 @@
 import numpy as np
-import scipy as sp
+# import scipy as sp
 from numpy import fft
 from scipy import special
 from scipy.integrate import quad
 from numba import jit, float64
-import scipy.interpolate
+from scipy import interpolate
 import os.path
 from pathlib import Path
 
 import vega
-from . import myGamma
 
 @jit(nopython=True)
 def sinc(x):
@@ -23,44 +22,44 @@ def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
     """
 
     k0 = k[0]
-    l=np.log(k.max()/k0)
-    r0=1.
+    l = np.log(k.max()/k0)
+    r0 = 1.
 
-    N=len(k)
-    emm=N*fft.fftfreq(N)
-    r=r0*np.exp(-emm*l/N)
-    dr=abs(np.log(r[1]/r[0]))
-    s=np.argsort(r)
-    r=r[s]
+    N = len(k)
+    emm = N*fft.fftfreq(N)
+    r = r0*np.exp(-emm*l/N)
+    dr = abs(np.log(r[1]/r[0]))
+    s = np.argsort(r)
+    r = r[s]
 
-    xi=np.zeros([len(ell_vals),len(ar)])
+    xi = np.zeros([len(ell_vals),len(ar)])
 
     for ell in ell_vals:
-        if tform=="rel":
-            pk_ell=pk
-            n=1.
-        elif tform=="asy":
-            pk_ell=pk
-            n=2.
+        if tform == "rel":
+            pk_ell = pk
+            n = 1.
+        elif tform == "asy":
+            pk_ell = pk
+            n = 2.
         else:
-            pk_ell=np.sum(dmuk*L(muk,ell)*pk,axis=0)*(2*ell+1)*(-1)**(ell//2)/2/np.pi**2
-            n=2.
-        mu=ell+0.5
-        q=2-n-0.5
-        x=q+2*np.pi*1j*emm/l
-        lg1=myGamma.LogGammaLanczos((mu+1+x)/2)
-        lg2=myGamma.LogGammaLanczos((mu+1-x)/2)
+            pk_ell = np.sum(dmuk*L(muk,ell)*pk,axis=0)*(2*ell+1)*(-1)**(ell//2)/2/np.pi**2
+            n = 2.
+        mu = ell+0.5
+        q = 2-n-0.5
+        x = q+2*np.pi*1j*emm/l
+        lg1 = special.loggamma((mu+1+x)/2)
+        lg2 = special.loggamma((mu+1-x)/2)
 
-        um=(k0*r0)**(-2*np.pi*1j*emm/l)*2**x*np.exp(lg1-lg2)
-        um[0]=np.real(um[0])
-        an=fft.fft(pk_ell*k**n*np.sqrt(np.pi/2))
-        an*=um
-        xi_loc=fft.ifft(an)
-        xi_loc=xi_loc[s]
-        xi_loc/=r**(3-n)
-        xi_loc[-1]=0
-        spline=sp.interpolate.splrep(np.log(r)-dr/2,np.real(xi_loc),k=3,s=0)
-        xi[ell//2,:]=sp.interpolate.splev(np.log(ar),spline)
+        um = (k0*r0)**(-2*np.pi*1j*emm/l)*2**x*np.exp(lg1-lg2)
+        um[0] = np.real(um[0])
+        an = fft.fft(pk_ell*k**n*np.sqrt(np.pi/2))
+        an *= um
+        xi_loc = fft.ifft(an)
+        xi_loc = xi_loc[s]
+        xi_loc /= r**(3-n)
+        xi_loc[-1] = 0
+        spline = interpolate.splrep(np.log(r)-dr/2,np.real(xi_loc),k=3,s=0)
+        xi[ell//2,:] = interpolate.splev(np.log(ar),spline)
 
     return xi
 
