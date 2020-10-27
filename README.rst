@@ -67,7 +67,7 @@ The only thing that needs to be run from the console is the sampler. It can be c
 
 .. code-block:: console
 
-    $ python vega_mpi.py path_to/main.ini
+    $ python run_vega_mpi.py path_to/main.ini
 
 We strongly suggest you run the sampler in parallel on many cores, as normal run-times are of the order :math:`10^2` - :math:`10^4` core hours.
 
