@@ -93,7 +93,8 @@ class VegaInterface:
 
         # Initialize the minimizer and the analysis objects
         self.minimizer = Minimizer(self.chi2, self.sample_params)
-        self.analysis = Analysis(self.main_config, self.minimizer)
+        self.analysis = Analysis(self.main_config,
+                                 Minimizer(self.chi2, self.sample_params))
 
         # Check for sampler
         self.has_sampler = self.main_config['control'].getboolean(
@@ -103,7 +104,7 @@ class VegaInterface:
                 raise RuntimeError('run_sampler called, but \
                                     no sampler initialized')
 
-        self.output = Output(self.main_config['output'])
+        self.output = Output(self.main_config['output'], self.analysis)
 
         self.monte_carlo = False
 

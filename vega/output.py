@@ -9,16 +9,19 @@ class Output:
     """Class for handling the Vega output,
     and reading/writing output files.
     """
-    def __init__(self, config):
+    def __init__(self, config, analysis=None):
         """
 
         Parameters
         ----------
         config : ConfigParser
             Output section of main config file
+        analysis : Analysis, optional
+            Analysis object, by default None
         """
         self.type = config.get('type', 'fits')
         self.outfile = config['filename']
+        self.analysis = analysis
 
     def write_results(self, minimizer, scan_results=None):
         """Write results in the fits or hdf format
@@ -39,20 +42,36 @@ class Output:
                              or type = hdf')
 
     def write_results_fits(self, minimizer, scan_results=None):
+        # Get parameter names
+        names = np.array(list(minimizer.values.keys()))
+
+        # Check if any parameter name is too long
+        max_length = 20  # Increase this if you have names longer than 20 chars
+        lengths = np.array([len(name) for name in names])
+        if (lengths > max_length).any():
+            raise ValueError('The current maximum allowed number of chars in \
+                a parameter name is 20. Change the output module if you \
+                need more. [write_results_fits() method in the Output class]')
+        name_format = str(max_length) + 'A'
+
         primary_hdu = fits.PrimaryHDU()
+        bestfit_hdu = self._bestfit_hdu(minimizer, names, name_format)
+        hdu_list = [primary_hdu, bestfit_hdu]
 
-        bestfit_hdu = self._bestfit_hdu(minimizer)
+        if scan_results is not None:
+            scan_hdu = self._scan_hdu(scan_results, names, name_format)
+            hdu_list.append(scan_hdu)
 
-        hdul = fits.HDUList([primary_hdu, bestfit_hdu])
+        hdul = fits.HDUList(hdu_list)
 
         if self.outfile[-5:] != '.fits':
             self.outfile += '.fits'
 
         hdul.writeto(Path(self.outfile))
 
-    def _bestfit_hdu(self, minimizer):
-        # Get parameter names, values and errors
-        names = np.array(list(minimizer.values.keys()))
+    def _bestfit_hdu(self, minimizer, names, name_format):
+
+        # Get parameter values and errors
         values = np.array([minimizer.values[name] for name in names])
         errors = np.array([minimizer.errors[name] for name in names])
         num_pars = len(names)
@@ -63,16 +82,7 @@ class Output:
             for j, par2 in enumerate(names):
                 cov_mat[i, j] = minimizer.covariance[(par1, par2)]
 
-        # Check if any parameter name is too long
-        max_length = 20  # Increase this if you have names longer than 20 chars
-        lengths = np.array([len(name) for name in names])
-        if (lengths > max_length).any():
-            raise ValueError('The current maximum allowed number of chars in \
-                a parameter name is 10. Change the output module if you \
-                need more. [_bestfit_hdu function in the Output class]')
-        name_format = str(max_length) + 'A'
         cov_format = str(num_pars) + 'D'
-
         # Create the columns with the bestfit data
         col1 = fits.Column(name='names', format=name_format, array=names)
         col2 = fits.Column(name='values', format='D', array=values)
@@ -88,6 +98,33 @@ class Output:
             bestfit_hdu.header[item] = value
 
         return bestfit_hdu
+
+    def _scan_hdu(self, scan_results, names, name_format):
+        # Get list of parameters and results
+        results = []
+        for res in scan_results:
+            results.append([res[par] for par in names])
+        results = np.array(results)
+
+        # Create the columns
+        name_col = fits.Column(name='names', format=name_format, array=names)
+        columns = [name_col]
+        for col, name in zip(results.T, names):
+            columns.append(fits.Column(name=name, format='D', array=col))
+
+        # Create the Table HDU from the columns
+        scan_hdu = fits.BinTableHDU.from_columns(columns)
+
+        # Add extra info to the header if we have the analysis object
+        if self.analysis is not None:
+            params = self.analysis.grids.keys()
+            for par in params:
+                grid = self.analysis.grids[par]
+                scan_hdu.header[par + '_min'] = grid[0]
+                scan_hdu.header[par + '_max'] = grid[-1]
+                scan_hdu.header[par + '_num_bins'] = len(grid)
+
+        return scan_hdu
 
     def write_results_hdf(self, minimizer, scan_results=None):
         """Write Vega analysis results, including the bestfit
