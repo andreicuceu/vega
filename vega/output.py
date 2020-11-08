@@ -91,11 +91,21 @@ class Output:
 
         # Create the Table HDU from the columns
         bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+        bestfit_hdu.name = 'Bestfit'
 
         # Add all the attributes of the minimum to the header
         for item, value in minimizer.fmin.items():
             print(item)
             bestfit_hdu.header[item] = value
+
+        bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
+        comm = 'Bestfit values of sampled parameters'
+        bestfit_hdu.header.comments['TTYPE2'] = comm
+        comm = 'Errors around the bestfit of the sampled parameters'
+        bestfit_hdu.header.comments['TTYPE3'] = comm
+        comm = 'Covariance matrix around bestfit of the sampler parameters'
+        bestfit_hdu.header.comments['TTYPE4'] = comm
+        bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
 
         return bestfit_hdu
 
@@ -109,11 +119,14 @@ class Output:
         # Create the columns
         name_col = fits.Column(name='names', format=name_format, array=names)
         columns = [name_col]
+        comms = []
         for col, name in zip(results.T, names):
             columns.append(fits.Column(name=name, format='D', array=col))
+            comms.append('Bestfit grid values for ' + name)
 
         # Create the Table HDU from the columns
         scan_hdu = fits.BinTableHDU.from_columns(columns)
+        scan_hdu.name = 'SCAN'
 
         # Add extra info to the header if we have the analysis object
         if self.analysis is not None:
@@ -123,6 +136,14 @@ class Output:
                 scan_hdu.header[par + '_min'] = grid[0]
                 scan_hdu.header[par + '_max'] = grid[-1]
                 scan_hdu.header[par + '_num_bins'] = len(grid)
+                scan_hdu.header.comments[par + '_min'] = 'Grid start for '+par
+                scan_hdu.header.comments[par + '_max'] = 'Grid end for '+par
+                scan_hdu.header.comments[par + '_num_bins'] = 'Grid size for '\
+                                                              + par
+
+        scan_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
+        for i, comm in enumerate(comms):
+            scan_hdu.header.comments['TTYPE' + str(i+2)] = comm
 
         return scan_hdu
 
