@@ -201,19 +201,19 @@ def ap_at(pars):
 
     return 1., 1.
 
-def phi_am(pars):
+def phi_gamma(pars):
     if pars['peak'] or pars['full-shape']:
         phi = pars['phi']
-        am = pars['am']
+        gamma = pars['gamma']
     elif pars['smooth_scaling']:
-        phi = pars['phi_sb']
-        am = pars['am_sb']
+        phi = pars['phi_smooth']
+        gamma = pars['gamma_smooth']
     else:
         phi = 1.
-        am = 1.
+        gamma = 1.
 
-    ap = 2 * am / (1 + phi)
-    at = ap * phi
+    ap = np.sqrt(gamma / phi)
+    at = np.sqrt(gamma * phi)
     return ap, at
 
 def aiso_epsilon(pars):
