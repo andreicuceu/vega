@@ -51,6 +51,8 @@ class Data:
 
         self._cholesky = None
         self._scale = 1.
+        self.scaled_inv_masked_cov = self.inv_masked_cov
+        self.scaled_log_cov_det = self.log_cov_det
 
     @property
     def data_vec(self):
