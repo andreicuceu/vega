@@ -109,7 +109,7 @@ class Data:
             masked_cov = self.cov_mat[:, self.mask]
             masked_cov = masked_cov[self.mask, :]
             _, d, __ = linalg.ldl(masked_cov)
-            self.log_cov_det = np.log(d.diagonal()).sum()
+            self._log_cov_det = np.log(d.diagonal()).sum()
             assert isinstance(self.log_cov_det, float)
 
         return self._log_cov_det
