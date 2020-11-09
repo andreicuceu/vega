@@ -51,8 +51,8 @@ class Data:
 
         self._cholesky = None
         self._scale = 1.
-        self.scaled_inv_masked_cov = self.inv_masked_cov
-        self.scaled_log_cov_det = self.log_cov_det
+        self.scaled_inv_masked_cov = None
+        self.scaled_log_cov_det = None
 
     @property
     def data_vec(self):
@@ -400,6 +400,11 @@ class Data:
             self._recompute = True
             self.scaled_inv_masked_cov = self.inv_masked_cov / self._scale
             self.scaled_log_cov_det = np.log(self._scale) + self.log_cov_det
+
+        if self.scaled_inv_masked_cov is None:
+            self.scaled_inv_masked_cov = self.inv_masked_cov
+        if self.scaled_log_cov_det is None:
+            self.scaled_log_cov_det = self.log_cov_det
 
         # Compute cholesky decomposition
         if self._cholesky is None or self._recompute:
