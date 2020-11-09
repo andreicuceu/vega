@@ -91,10 +91,22 @@ class VegaInterface:
                     print('Warning: Prior specified for a parameter that is \
                             not sampled!')
 
+        # Read the monte carlo parameters
+        self.mc_config = None
+        if 'monte carlo' in self.main_config:
+            self.mc_config = {}
+            config = self.main_config['monte carlo']
+
+            self.mc_config['params'] = self.params.copy()
+            for par in self.params:
+                if par in config:
+                    self.mc_config['params'][par] = config.getfloat(par)
+            self.mc_config['sample'] = self._read_sample(config)
+
         # Initialize the minimizer and the analysis objects
         self.minimizer = Minimizer(self.chi2, self.sample_params)
-        self.analysis = Analysis(self.main_config,
-                                 Minimizer(self.chi2, self.sample_params))
+        self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
+                                 self.main_config, self.mc_config)
 
         # Check for sampler
         self.has_sampler = self.main_config['control'].getboolean(
@@ -224,7 +236,7 @@ class VegaInterface:
 
         return log_lik
 
-    def monte_carlo_sim(self, params=None, scale=1., seed=0):
+    def monte_carlo_sim(self, params=None, scale=1., seed=0, forecast=False):
         """Compute Monte Carlo simulations for each Correlation item.
 
         Parameters
@@ -235,6 +247,9 @@ class VegaInterface:
             Scaling for the covariance, by default 1.
         seed : int, optional
             Seed for the random number generator, by default 0
+        forecast : boolean, optional
+            Forecast option. If true, we don't add noise to the mock,
+            by default False
 
         Returns
         -------
@@ -258,7 +273,8 @@ class VegaInterface:
 
             # Create the mock
             mocks[name] = self.data[name].create_monte_carlo(fiducial_model,
-                                                             scale, seed)
+                                                             scale, seed,
+                                                             forecast)
 
         self.monte_carlo = True
         return mocks
@@ -388,6 +404,8 @@ class VegaInterface:
 
         for param, values in sample_config.items():
             values_list = values.split()
+            if len(values_list) < 2:
+                continue
             assert len(values_list) >= 2
 
             # First get the limits

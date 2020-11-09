@@ -369,7 +369,8 @@ class Data:
         else:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
 
-    def create_monte_carlo(self, fiducial_model, scale=1., seed=0):
+    def create_monte_carlo(self, fiducial_model, scale=1., seed=0,
+                           forecast=False):
         """Create monte carlo mock of data using a fiducial model.
 
         Parameters
@@ -380,6 +381,9 @@ class Data:
             Scaling for the covariance, by default 1.
         seed : int, optional
             Seed for the random number generator, by default 0
+        forecast : boolean, optional
+            Forecast option. If true, we don't add noise to the mock,
+            by default False
 
         Returns
         -------
@@ -401,8 +405,11 @@ class Data:
 
         # Create the mock
         np.random.seed(seed)
-        ran_vec = np.random.randn(self.full_data_size)
-        self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
+        if forecast:
+            self.mc_mock = fiducial_model
+        else:
+            ran_vec = np.random.randn(self.full_data_size)
+            self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
         self.masked_mc_mock = self.mc_mock[self.mask]
 
         return self.masked_mc_mock

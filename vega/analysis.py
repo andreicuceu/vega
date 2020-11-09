@@ -11,18 +11,22 @@ class Analysis:
     - Run FastMC analysis
     """
 
-    def __init__(self, main_config, minimizer):
+    def __init__(self, minimizer, main_config, mc_config=None):
         """
 
         Parameters
         ----------
-        main_config : ConfigParser
-            Main config file
         minimizer : Minimizer
             Minimizer object initialized from the same vega instance
+        main_config : ConfigParser
+            Main config file
+        mc_config : dict, optional
+            Monte Carlo config with the model and sample parameters,
+            by default None
         """
         self.config = main_config
         self.minimizer = minimizer
+        self.mc_config = mc_config
         pass
 
     def chi2_scan(self):
