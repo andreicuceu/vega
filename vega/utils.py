@@ -209,8 +209,8 @@ def ap_at_custom(pars):
     elif pars['smooth_scaling']:
         phi = pars['phi_smooth']
         gamma = pars['gamma_smooth']
-        ap = np.sqrt(gamma / phi)
-        at = np.sqrt(gamma * phi)
+        ap = 2. * gamma / (1. + phi)
+        at = phi * ap
     else:
         ap = 1.
         at = 1.
