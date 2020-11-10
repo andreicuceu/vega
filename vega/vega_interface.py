@@ -274,7 +274,7 @@ class VegaInterface:
                 self.fiducial['pk_smooth'])
 
             # Get scale
-            if isinstance(scale, float):
+            if type(scale) is float or type(scale) is int:
                 item_scale = scale
             elif name in scale:
                 item_scale = scale[name]
