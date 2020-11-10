@@ -142,11 +142,11 @@ class Data:
         rt_grid = hdul[1].data['RT'][:]
         z_grid = hdul[1].data['Z'][:]
 
-        if len(hdul) > 2:
+        try:
             dist_rp_grid = hdul[2].data['DMRP'][:]
             dist_rt_grid = hdul[2].data['DMRT'][:]
             dist_z_grid = hdul[2].data['DMZ'][:]
-        else:
+        except (IndexError, KeyError):
             dist_rp_grid = rp_grid.copy()
             dist_rt_grid = rt_grid.copy()
             dist_z_grid = z_grid.copy()
