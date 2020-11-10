@@ -201,6 +201,23 @@ def ap_at(pars):
 
     return 1., 1.
 
+
+def ap_at_custom(pars):
+    if pars['peak'] or pars['full-shape']:
+        ap = pars['ap']
+        at = pars['at']
+    elif pars['smooth_scaling']:
+        phi = pars['phi_smooth']
+        gamma = pars['gamma_smooth']
+        ap = np.sqrt(gamma / phi)
+        at = np.sqrt(gamma * phi)
+    else:
+        ap = 1.
+        at = 1.
+
+    return ap, at
+
+
 def phi_gamma(pars):
     if pars['peak'] or pars['full-shape']:
         phi = pars['phi']
