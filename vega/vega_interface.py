@@ -245,7 +245,7 @@ class VegaInterface:
         ----------
         params : dict, optional
             Computation parameters, by default None
-        scale : float, optional
+        scale : float/dict, optional
             Scaling for the covariance, by default 1.
         seed : int, optional
             Seed for the random number generator, by default 0
@@ -273,9 +273,17 @@ class VegaInterface:
                 local_params, self.fiducial['pk_full'],
                 self.fiducial['pk_smooth'])
 
+            # Get scale
+            if isinstance(scale, float):
+                item_scale = scale
+            elif name in scale:
+                item_scale = scale[name]
+            else:
+                item_scale = 1.
+
             # Create the mock
             mocks[name] = self.data[name].create_monte_carlo(fiducial_model,
-                                                             scale, seed,
+                                                             item_scale, seed,
                                                              forecast)
 
         self.monte_carlo = True
