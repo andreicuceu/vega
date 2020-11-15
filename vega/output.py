@@ -1,6 +1,7 @@
 from pathlib import Path
 # from vega.minimizer import Minimizer
 from astropy.io import fits
+from astropy.io.fits import column
 import numpy as np
 import h5py
 
@@ -22,8 +23,10 @@ class Output:
         self.type = config.get('type', 'fits')
         self.outfile = config['filename']
         self.analysis = analysis
+        self.output_cf = config.getboolean('write_cf', False)
+        self.output_pk = config.getboolean('write_pk', False)
 
-    def write_results(self, minimizer, scan_results=None):
+    def write_results(self, minimizer, scan_results=None, models=None):
         """Write results in the fits or hdf format
 
         Parameters
@@ -32,16 +35,29 @@ class Output:
             Minimizer object after minimization was done
         scan_results : list, optional
             List of scan results, by default None
+        models : dict, optional
+            Dictionary with the Vega Model objects, by default None
         """
         if self.type == 'fits':
-            self.write_results_fits(minimizer, scan_results)
+            self.write_results_fits(minimizer, scan_results, models)
         elif self.type == 'hdf' or self.type == 'h5':
             self.write_results_hdf(minimizer, scan_results)
         else:
             raise ValueError('Unknown output type. Set type = fits \
                              or type = hdf')
 
-    def write_results_fits(self, minimizer, scan_results=None):
+    def write_results_fits(self, minimizer, scan_results=None, models=None):
+        """Write output in the fits format
+
+        Parameters
+        ----------
+        minimizer : Minimizer
+            Minimizer object after minimization was done
+        scan_results : list, optional
+            List of scan results, by default None
+        models : dict, optional
+            Dictionary with the Vega Model objects, by default None
+        """
         # Get parameter names
         names = np.array(list(minimizer.values.keys()))
 
@@ -58,6 +74,18 @@ class Output:
         bestfit_hdu = self._bestfit_hdu(minimizer, names, name_format)
         hdu_list = [primary_hdu, bestfit_hdu]
 
+        if self.output_pk:
+            assert models is not None
+            for key, model in models.items():
+                pk_hdu = self._pk_hdu(key, model)
+                hdu_list.append(pk_hdu)
+
+        if self.output_cf:
+            assert models is not None
+            for key, model in models.items():
+                cf_hdu = self._cf_hdu(key, model)
+                hdu_list.append(cf_hdu)
+
         if scan_results is not None:
             scan_hdu = self._scan_hdu(scan_results, names, name_format)
             hdu_list.append(scan_hdu)
@@ -70,7 +98,22 @@ class Output:
         hdul.writeto(Path(self.outfile))
 
     def _bestfit_hdu(self, minimizer, names, name_format):
+        """Create HDU with the bestfit info
 
+        Parameters
+        ----------
+        minimizer : Minimizer
+            Minimizer object after minimization was done
+        names : list
+            Parameter names
+        name_format : string
+            Format for writing parameter names to a fits file
+
+        Returns
+        -------
+        astropy.io.fits.hdu.table.BinTableHDU
+            HDU with the bestfit data
+        """
         # Get parameter values and errors
         values = np.array([minimizer.values[name] for name in names])
         errors = np.array([minimizer.errors[name] for name in names])
@@ -95,7 +138,6 @@ class Output:
 
         # Add all the attributes of the minimum to the header
         for item, value in minimizer.fmin.items():
-            print(item)
             bestfit_hdu.header[item] = value
 
         bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
@@ -110,6 +152,22 @@ class Output:
         return bestfit_hdu
 
     def _scan_hdu(self, scan_results, names, name_format):
+        """Create HDU with the scan info
+
+        Parameters
+        ----------
+        scan_results : list, optional
+            List of scan results, by default None
+        names : list
+            Parameter names
+        name_format : string
+            Format for writing parameter names to a fits file
+
+        Returns
+        -------
+        astropy.io.fits.hdu.table.BinTableHDU
+            HDU with the scan data
+        """
         # Get list of parameters and results
         results = []
         for res in scan_results:
@@ -146,6 +204,95 @@ class Output:
             scan_hdu.header.comments['TTYPE' + str(i+2)] = comm
 
         return scan_hdu
+
+    def _pk_hdu(self, component, model):
+        """Create HDU with Pk data for a component
+
+        Parameters
+        ----------
+        component : string
+            Name of component
+        model : vega.Model
+            Model object for the component
+
+        Returns
+        -------
+        astropy.io.fits.hdu.table.BinTableHDU
+            HDU with the Pk data for the component
+        """
+        # Get the Pk components and create the columns
+        columns = self._get_components(model.pk)
+
+        # Create the Table HDU from the columns
+        pk_hdu = fits.BinTableHDU.from_columns(columns)
+        pk_hdu.name = 'PK_' + component
+
+        return pk_hdu
+
+    def _cf_hdu(self, component, model):
+        """Create HDU with correlation function data for a component
+
+        Parameters
+        ----------
+        component : string
+            Name of component
+        model : vega.Model
+            Model object for the component
+
+        Returns
+        -------
+        astropy.io.fits.hdu.table.BinTableHDU
+            HDU with the Xi data for the component
+        """
+        # Get the Xi components, before and after distortion
+        columns = self._get_components(model.xi, name_prefix='raw_')
+        columns += self._get_components(model.xi_distorted,
+                                        name_prefix='distorted_')
+
+        # Create the Table HDU from the columns
+        cf_hdu = fits.BinTableHDU.from_columns(columns)
+        cf_hdu.name = 'Xi_' + component
+
+        return cf_hdu
+
+    @staticmethod
+    def _get_components(model_components, name_prefix=''):
+        """Get the saved model components and create astropy Columns
+
+        Parameters
+        ----------
+        model_components : dict
+            Dictionary with saved Xi/Pk data
+        name_prefix : str, optional
+            Prefix for column names, by default ''
+
+        Returns
+        -------
+        list
+            List of astropy Columns for HDU creation
+        """
+        columns = []
+
+        # Parts are smooth and/or peak
+        for part, data in model_components.items():
+            shape = np.shape(data['core'])
+            if len(shape) == 1:
+                form = 'D'
+            else:
+                size = shape[1]
+                form = str(size) + 'D'
+
+            for key, item in data.items():
+                if key == 'core':
+                    name = name_prefix + part + '_core'
+                    columns.append(fits.Column(name=name, format=form,
+                                               array=item))
+                else:
+                    name = name_prefix + part + '_' + key[0] + '_' + key[1]
+                    columns.append(fits.Column(name=name, format=form,
+                                               array=item))
+
+        return columns
 
     def write_results_hdf(self, minimizer, scan_results=None):
         """Write Vega analysis results, including the bestfit

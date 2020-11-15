@@ -40,6 +40,9 @@ class VegaInterface:
 
         # Read the effective redshift and the data config paths
         self.fiducial['z_eff'] = self.main_config['data sets'].getfloat('zeff')
+        write_cf = self.main_config['output'].getboolean('write_cf', False)
+        write_pk = self.main_config['output'].getboolean('write_pk', False)
+        self.fiducial['save-components'] = write_cf or write_pk
         ini_files = self.main_config['data sets'].get('ini files').split()
 
         # Initialize the individual components
