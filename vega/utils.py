@@ -229,9 +229,10 @@ def phi_gamma(pars):
         phi = 1.
         gamma = 1.
 
-    ap = np.sqrt(gamma / phi)
-    at = np.sqrt(gamma * phi)
+    ap = gamma / np.sqrt(phi)
+    at = gamma * np.sqrt(phi)
     return ap, at
+
 
 def aiso_epsilon(pars):
     if pars['peak'] or pars['full-shape']:
