@@ -145,8 +145,8 @@ class PowerSpectrum:
             elif 'exp' in smoothing_type:
                 pk_full *= self.compute_fullshape_exp_smoothing(params)
             else:
-                raise ValueError('"fullshape smoothing" must be of type \
-                                  "gauss" or "exp".')
+                raise ValueError('"fullshape smoothing" must be of type'
+                                 ' "gauss" or "exp".')
 
         # add velocity dispersion
         if 'velocity dispersion' in self._config:
@@ -156,8 +156,8 @@ class PowerSpectrum:
             elif 'lorentz' in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_lorentz(params)
             else:
-                raise ValueError('"velocity dispersion" must be of type \
-                                  "gauss" or "lorentz".')
+                raise ValueError('"velocity dispersion" must be of type'
+                                 ' "gauss" or "lorentz".')
 
         return self.k_grid, self.muk_grid, pk_full
 

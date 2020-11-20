@@ -91,8 +91,8 @@ class VegaInterface:
             self.priors = self._init_priors(self.main_config['priors'])
             for param in self.priors.keys():
                 if param not in self.sample_params['limits'].keys():
-                    print('Warning: Prior specified for a parameter that is \
-                            not sampled!')
+                    print('Warning: Prior specified for a parameter that is'
+                          ' not sampled!')
 
         # Read the monte carlo parameters
         self.mc_config = None
@@ -118,8 +118,8 @@ class VegaInterface:
             'sampler', False)
         if self.has_sampler:
             if 'Polychord' not in self.main_config:
-                raise RuntimeError('run_sampler called, but \
-                                    no sampler initialized')
+                raise RuntimeError('run_sampler called, but'
+                                   ' no sampler initialized')
 
         self.output = Output(self.main_config['output'], self.analysis)
 
@@ -347,9 +347,9 @@ class VegaInterface:
         fiducial['smooth-scaling'] = fiducial_config.getboolean(
                                     'smooth-scaling', False)
         if fiducial['full-shape'] or fiducial['smooth-scaling']:
-            print('WARNING!!!: Using full-shape fit or scaling of the \
-            smooth cf component. Sailor you are reaching unexplored \
-            territories, precede at your own risk.')
+            print('WARNING!!!: Using full-shape fit or scaling of the'
+                  ' smooth cf component. Sailor you are reaching unexplored'
+                  ' territories, precede at your own risk.')
 
         return fiducial
 
@@ -468,8 +468,8 @@ class VegaInterface:
         for param, prior in prior_config.items():
             prior_list = prior.split()
             if len(prior_list) != 3:
-                raise ValueError('Prior configuration must have the format: \
-                                  "<param> = gaussian <mean> <sigma>"')
+                raise ValueError('Prior configuration must have the format:'
+                                 ' "<param> = gaussian <mean> <sigma>"')
             if prior_list[0] not in ['gaussian', 'Gaussian']:
                 raise ValueError('Only gaussian priors are supported.')
 

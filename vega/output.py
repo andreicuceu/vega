@@ -43,8 +43,8 @@ class Output:
         elif self.type == 'hdf' or self.type == 'h5':
             self.write_results_hdf(minimizer, scan_results)
         else:
-            raise ValueError('Unknown output type. Set type = fits \
-                             or type = hdf')
+            raise ValueError('Unknown output type. Set type = fits'
+                             ' or type = hdf')
 
     def write_results_fits(self, minimizer, scan_results=None, models=None):
         """Write output in the fits format
@@ -65,9 +65,10 @@ class Output:
         max_length = 20  # Increase this if you have names longer than 20 chars
         lengths = np.array([len(name) for name in names])
         if (lengths > max_length).any():
-            raise ValueError('The current maximum allowed number of chars in \
-                a parameter name is 20. Change the output module if you \
-                need more. [write_results_fits() method in the Output class]')
+            raise ValueError('The current maximum allowed number of chars in'
+                             ' a parameter name is 20. Change the output'
+                             ' module if you need more.'
+                             ' [write_results_fits() method in Output]')
         name_format = str(max_length) + 'A'
 
         primary_hdu = fits.PrimaryHDU()

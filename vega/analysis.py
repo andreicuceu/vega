@@ -39,8 +39,8 @@ class Analysis:
         """
         # Check if we have the scan section in config
         if 'chi2 scan' not in self.config:
-            raise ValueError('Called chi2_scan, but no config specified \
-                in main.ini. Add a "[chi2 scan]" section to main.')
+            raise ValueError('Called chi2_scan, but no config specified in'
+                             ' main.ini. Add a "[chi2 scan]" section to main.')
 
         # Read the config and initialize the grids
         self.grids = {}

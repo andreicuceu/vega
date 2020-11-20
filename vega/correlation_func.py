@@ -62,14 +62,16 @@ class CorrelationFunction:
             self.has_bb = True
 
         # Check for QSO radiation modeling and check if it is QSOxLYA
+        # Does this work for the QSO auto as well?
         self.radiation_flag = False
         if 'radiation effects' in self._config:
             self.radiation_flag = self._config.getboolean('radiation effects')
             if self.radiation_flag:
                 names = [self._tracer1['name'], self._tracer2['name']]
                 if not ('QSO' in names and 'LYA' in names):
-                    raise ValueError('You asked for QSO radiation effects, \
-                        but it can only be applied to the cross (QSOxLya)')
+                    raise ValueError('You asked for QSO radiation effects, but'
+                                     'it can only be applied to the cross'
+                                     ' (QSOxLya)')
 
         # Check for relativistic effects and standard asymmetry
         self.relativistic_flag = False
@@ -82,8 +84,9 @@ class CorrelationFunction:
         if self.relativistic_flag or self.asymmetry_flag:
             types = [self._tracer1['type'], self._tracer2['type']]
             if ('continuous' not in types) or (types[0] == types[1]):
-                raise ValueError('You asked for relativistic effects \
-                    or standard assymetry, but they only work for the cross')
+                raise ValueError('You asked for relativistic effects or'
+                                 ' standard assymetry, but they only work'
+                                 ' for the cross')
 
     def compute(self, k, muk, pk, pk_lin, params):
         """Compute correlation function for input P(k).
