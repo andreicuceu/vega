@@ -421,8 +421,11 @@ class PowerSpectrum:
         L_par = params["par binsize {}".format(self._name)]
         L_per = params["per binsize {}".format(self._name)]
 
-        Gk = utils.sinc(self.k_par_grid * L_par / 2)
-        Gk *= utils.sinc(self.k_trans_grid * L_per / 2)
+        Gk = 1.
+        if L_par != 0:
+            Gk = Gk * utils.sinc(self.k_par_grid * L_par / 2)
+        if L_per != 0:
+            Gk = Gk * utils.sinc(self.k_trans_grid * L_per / 2)
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):
