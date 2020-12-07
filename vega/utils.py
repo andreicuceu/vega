@@ -182,13 +182,22 @@ def bias_beta(kwargs, tracer1, tracer2):
 
     growth_rate = kwargs["growth_rate"]
 
+    name1 = tracer1['name']
+    name2 = tracer2['name']
+
     beta1 = kwargs["beta_{}".format(tracer1['name'])]
-    bias1 = kwargs["bias_eta_{}".format(tracer1['name'])]
-    bias1 *= growth_rate/beta1
+    if ('bias_eta_' + name1) in kwargs:
+        bias1 = kwargs["bias_eta_{}".format(tracer1['name'])]
+        bias1 *= growth_rate/beta1
+    else:
+        bias1 = kwargs["bias_{}".format(tracer1['name'])]
 
     beta2 = kwargs["beta_{}".format(tracer2['name'])]
-    bias2 = kwargs["bias_eta_{}".format(tracer2['name'])]
-    bias2 *= growth_rate/beta2
+    if ('bias_eta_' + name2) in kwargs:
+        bias2 = kwargs["bias_eta_{}".format(tracer2['name'])]
+        bias2 *= growth_rate/beta2
+    else:
+        bias2 = kwargs["bias_{}".format(tracer2['name'])]
 
     return bias1, beta1, bias2, beta2
 
