@@ -167,7 +167,7 @@ class PowerSpectrum:
                                                             self.k_trans_grid,
                                                             ap, at)
 
-            f = interp2d(np.log(k_grid), np.log(muk_grid.T[0]), pk_full, kind='cubic')
+            f = interp2d(np.log(self.k_grid), np.log(self.muk_grid.T[0]), pk_full, kind='cubic')
 
             new_pk = []
             for k, muk in zip(np.log(rescaled_k.flatten()), np.log(rescaled_muk.flatten())):
