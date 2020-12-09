@@ -39,6 +39,7 @@ class CorrelationFunction:
         self._tracer1 = tracer1
         self._tracer2 = tracer2
         self._z_eff = fiducial['z_eff']
+        self.rescale_pk = fiducial['rescale_pk']
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
 
         # Check if we need delta rp
@@ -160,11 +161,13 @@ class CorrelationFunction:
         if self._delta_rp_name is not None:
             delta_rp = params.get(self._delta_rp_name, 0.)
 
-        # Get rescaled Xi coordinates
-        ap, at = utils.cosmo_fit_func(params)
+        rescaled_r, rescaled_mu = self._r, self._mu
+        if not self.rescale_pk:
+            # Get rescaled Xi coordinates
+            ap, at = utils.cosmo_fit_func(params)
 
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
-                                                       ap, at, delta_rp)
+            rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
+                                                           ap, at, delta_rp)
 
         # Compute correlation function
         xi = utils.pk_to_xi(rescaled_r, rescaled_mu, k, muk, pk, self._ell_max)

@@ -35,6 +35,7 @@ class PowerSpectrum:
         self._tracer2 = tracer2
         self._name = dataset_name
         self.k_grid = fiducial['k']
+        self.rescale_pk = fiducial['rescale_pk']
 
         # Check for the old config
         pk_model = self._config.get('model-pk', None)
@@ -159,7 +160,23 @@ class PowerSpectrum:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
 
-        return self.k_grid, self.muk_grid, pk_full
+        k_grid = self.k_grid.copy()
+        muk_grid = self.muk_grid.copy()
+        if self.rescale_pk:
+            ap, at = utils.cosmo_fit_func(params)
+            k_grid, muk_grid = self._rescale_coords(self.k_par_grid,
+                                                    self.k_trans_grid, ap, at,)
+
+        return k_grid, muk_grid, pk_full
+
+    @staticmethod
+    def _rescale_coords(k_par_grid, k_trans_grid, ap, at):
+        rescaled_kp = ap * k_par_grid
+        rescaled_kt = at * k_trans_grid
+        rescaled_k = np.sqrt(rescaled_kp**2 + rescaled_kt**2)
+        rescaled_muk = rescaled_kp / rescaled_k
+
+        return rescaled_k, rescaled_muk
 
     def compute_kaiser(self, bias1, beta1, bias2, beta2):
         """Compute Kaiser model.

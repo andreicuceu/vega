@@ -43,6 +43,8 @@ class VegaInterface:
         write_cf = self.main_config['output'].getboolean('write_cf', False)
         write_pk = self.main_config['output'].getboolean('write_pk', False)
         self.fiducial['save-components'] = write_cf or write_pk
+        self.fiducial['rescale_pk'] = self.main_config['control'].getboolean(
+                'rescale_pk', False)
         ini_files = self.main_config['data sets'].get('ini files').split()
 
         # Initialize the individual components
