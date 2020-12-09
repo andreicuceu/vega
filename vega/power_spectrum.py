@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import interp2d
 from pkg_resources import resource_filename
 from numba import njit, float64
 from . import utils
@@ -160,14 +161,20 @@ class PowerSpectrum:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
 
-        k_grid = self.k_grid.copy()
-        muk_grid = self.muk_grid.copy()
         if self.rescale_pk:
             ap, at = utils.cosmo_fit_func(params)
-            k_grid, muk_grid = self._rescale_coords(self.k_par_grid,
-                                                    self.k_trans_grid, ap, at,)
+            rescaled_k, rescaled_muk = self._rescale_coords(self.k_par_grid,
+                                                            self.k_trans_grid,
+                                                            ap, at)
 
-        return k_grid, muk_grid, pk_full
+            f = interp2d(np.log(k_grid), np.log(muk_grid.T[0]), pk_full, kind='cubic')
+
+            new_pk = []
+            for k, muk in zip(np.log(rescaled_k.flatten()), np.log(rescaled_muk.flatten())):
+                new_pk.append(f(k, muk)[0])
+            pk_full = np.array(new_pk).reshape(1000, 814)
+
+        return self.k_grid, self.muk_grid, pk_full
 
     @staticmethod
     def _rescale_coords(k_par_grid, k_trans_grid, ap, at):
