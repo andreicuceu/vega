@@ -2,6 +2,8 @@ import numpy as np
 import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
+from pathlib import Path
+from vega.postprocess.param_names import build_names
 
 
 class Sampler:
@@ -24,10 +26,11 @@ class Sampler:
         self.num_params = len(limits)
         self.num_derived = 0
         self.log_lik = log_lik_func
+        self.getdist_latex = polychord_setup.getboolean('getdist_latex', True)
 
         # Initialize the Polychord settings
-        self.settings = self.get_polychord_settings(
-            polychord_setup, self.num_params, self.num_derived)
+        self.settings, self.parnames_path = self.get_polychord_settings(
+                polychord_setup, self.num_params, self.num_derived)
 
     @staticmethod
     def get_polychord_settings(polychord_setup, num_params, num_derived):
@@ -99,20 +102,39 @@ class Sampler:
                                      maximise=maximise,
                                      write_live=False, write_prior=False)
 
-        return settings
+        # Check the path and get the paramnames path
+        output_path = Path(path)
+        err_msg = ("The PolyChord 'path' does not correspond to an existing"
+                   " folder. Create the output folder before running.")
+        assert output_path.exists(), err_msg
+        parnames_path = output_path / (name + '.paramnames')
+
+        return settings, parnames_path
+
+    def write_parnames(self):
+        latex_names = build_names(list(self.names))
+        with open(self.parnames_path, 'w') as f:
+            for name, latex in latex_names.items():
+                if self.getdist_latex:
+                    f.write('%s    %s\n' % (name, latex))
+                else:
+                    f.write('%s    $%s$\n' % (name, latex))
 
     def run(self):
         """Run Polychord. We need to pass three functions:
 
         log_lik: takes a list of parameter values and
             returns tuple: (log_lik, list of derived)
-        
+
         prior: takes a unit hypercube and converts it to the
             physical parameters
-        
+
         dumper: Optional function if we want to get some output while
             the chain is running. For now it's empty
         """
+        # Write parameter names
+        self.write_parnames()
+
         def log_lik(theta):
             """ Wrapper for likelihood. No derived for now """
             params = {}

@@ -1,0 +1,10 @@
+# List of latex notations for Vega parameters. Primarily used by the sampler
+# Composite parameters
+# vega_name latex_name
+LYA Ly\alpha
+QSO QSO
+SiII(1190) SiII(1190)
+SiII(1193) SiII(1193)
+SiIII(1207) SiIII(1207)
+SiII(1260) SiII(1260)
+CIV(eff) CIV(eff)

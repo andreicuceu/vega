@@ -6,4 +6,4 @@ __version__ = '0.1.0'
 
 from vega.vega_interface import VegaInterface
 # from .sampler_interface import Sampler
-from vega.utils_gen.wedges import Wedge
+from vega.postprocess.wedges import Wedge
