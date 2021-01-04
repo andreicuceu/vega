@@ -9,5 +9,5 @@ Sphinx==3.4.2
 twine==3.3.0
 pytest-runner==5.2
 pytest==6.2.1
-codecov
+codecov==2.1.11
 pytest-cov
