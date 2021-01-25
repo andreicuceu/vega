@@ -1,6 +1,6 @@
 numpy==1.19.5
 scipy==1.6.0
-astropy==4.0.1.post1
+astropy==4.2
 numba==0.50.1
 h5py==2.10.0
 setuptools==49.2.0
