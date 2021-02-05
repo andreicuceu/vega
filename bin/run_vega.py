@@ -21,4 +21,5 @@ if __name__ == '__main__':
         scan_results = vega.analysis.chi2_scan()
 
     # Write output
-    vega.output.write_results(vega.minimizer, scan_results, vega.compute_model(vega.params))
+    vega.compute_model(vega.params)
+    vega.output.write_results(vega.minimizer, scan_results, vega.models)
