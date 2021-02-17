@@ -241,7 +241,7 @@ class VegaInterface:
 
         return log_lik
 
-    def monte_carlo_sim(self, params=None, scale=1., seed=0, forecast=False):
+    def monte_carlo_sim(self, params=None, scale=None, seed=0, forecast=False):
         """Compute Monte Carlo simulations for each Correlation item.
 
         Parameters
@@ -277,7 +277,9 @@ class VegaInterface:
                 self.fiducial['pk_smooth'])
 
             # Get scale
-            if type(scale) is float or type(scale) is int:
+            if scale is None:
+                item_scale = self.corr_items[name].cov_rescale
+            elif type(scale) is float or type(scale) is int:
                 item_scale = scale
             elif name in scale:
                 item_scale = scale[name]
