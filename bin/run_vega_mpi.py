@@ -24,11 +24,12 @@ if __name__ == '__main__':
     # Check if we need to run over a Monte Carlo mock
     run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
     if run_montecarlo and vega.mc_config is not None:
-        # Get the MC seed
+        # Get the MC seed and forecast flag
         seed = vega.main_config['control'].getfloat('mc_seed', 0)
+        forecast = vega.main_config['control'].getboolean('forecast', False)
 
         # Create the mocks
-        vega.monte_carlo_sim(vega.mc_config['params'], seed=seed, forecast=True)
+        vega.monte_carlo_sim(vega.mc_config['params'], seed=seed, forecast=forecast)
 
         # Set to sample the MC params
         sampling_params = vega.mc_config['sample']['limits']
