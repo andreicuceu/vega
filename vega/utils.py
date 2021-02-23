@@ -196,14 +196,9 @@ def _tracer_bias_beta(params, name):
     """
     growth_rate = params.get("growth_rate", 1.)
 
-    if ('bias_' + name) in params:
-        bias = params.get('bias_' + name, None)
-
-    if ('bias_eta_' + name) in params:
-        bias_eta = params.get('bias_eta_' + name, None)
-
-    if ('beta_' + name) in params:
-        beta = params.get('beta_' + name, None)
+    bias = params.get('bias_' + name, None)
+    bias_eta = params.get('bias_eta_' + name, None)
+    beta = params.get('beta_' + name, None)
 
     err_msg = ("For each tracer, you need to specify two of these three:"
                " (bias, bias_eta, beta)."
