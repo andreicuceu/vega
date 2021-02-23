@@ -41,11 +41,11 @@ class CorrelationFunction:
         self._z_eff = fiducial['z_eff']
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
 
-        # Check if we need delta rp
+        # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
-        if tracer1['type'] == 'discrete':
+        if tracer1['type'] == 'discrete' and tracer2['type'] != 'discrete':
             self._delta_rp_name = 'drp_'+tracer1['name']
-        elif tracer2['type'] == 'discrete':
+        elif tracer2['type'] == 'discrete' and tracer1['type'] != 'discrete':
             self._delta_rp_name = 'drp_'+tracer2['name']
 
         # Precompute growth

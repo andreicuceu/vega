@@ -174,32 +174,80 @@ def pk_to_xi_asymmetry(r_grid, mu_grid, k_grid, muk_grid, pk, params):
     return xi_asy
 
 
-### Legendre Polynomial
+# Legendre Polynomial
 def L(mu, ell):
     return special.legendre(ell)(mu)
 
-def bias_beta(kwargs, tracer1, tracer2):
 
-    growth_rate = kwargs["growth_rate"]
+def _tracer_bias_beta(params, name):
+    """Get the bias and beta values for a tracer
 
-    name1 = tracer1['name']
-    name2 = tracer2['name']
+    Parameters
+    ----------
+    params : dict
+        Computation parameters
+    name : string
+        Name of tracer
 
-    beta1 = kwargs["beta_{}".format(tracer1['name'])]
-    if ('bias_eta_' + name1) in kwargs:
-        bias1 = kwargs["bias_eta_{}".format(tracer1['name'])]
-        bias1 *= growth_rate/beta1
+    Returns
+    -------
+    float, float
+        bias, beta
+    """
+    growth_rate = params.get("growth_rate", 1.)
+
+    if ('bias_' + name) in params:
+        bias = params.get('bias_' + name, None)
+
+    if ('bias_eta_' + name) in params:
+        bias_eta = params.get('bias_eta_' + name, None)
+
+    if ('beta_' + name) in params:
+        beta = params.get('beta_' + name, None)
+
+    err_msg = ("For each tracer, you need to specify two of these three:"
+               " (bias, bias_eta, beta)."
+               " If all three are given, we use bias and beta.")
+
+    if bias is None:
+        assert bias_eta is not None and beta is not None, err_msg
+        bias = bias_eta * growth_rate / beta
+
+    if bias_eta is None:
+        assert bias is not None and beta is not None, err_msg
+
+    if beta is None:
+        assert bias is not None and bias_eta is not None, err_msg
+        beta = bias_eta * growth_rate / bias
+
+    return bias, beta
+
+
+def bias_beta(params, tracer1, tracer2):
+    """Get bias and beta values for the two tracers
+
+    Parameters
+    ----------
+    params : dict
+        Computation parameters
+    tracer1 : dict
+        Config of tracer 1
+    tracer2 : dict
+        Config of tracer 2
+
+    Returns
+    -------
+    float, float, float, float
+        bias_1, beta_1, bias_2, beta_2
+    """
+    bias1, beta1 = _tracer_bias_beta(params, tracer1['name'])
+    if tracer1['name'] == tracer2['name']:
+        bias2, beta2 = bias1, beta1
     else:
-        bias1 = kwargs["bias_{}".format(tracer1['name'])]
-
-    beta2 = kwargs["beta_{}".format(tracer2['name'])]
-    if ('bias_eta_' + name2) in kwargs:
-        bias2 = kwargs["bias_eta_{}".format(tracer2['name'])]
-        bias2 *= growth_rate/beta2
-    else:
-        bias2 = kwargs["bias_{}".format(tracer2['name'])]
+        bias2, beta2 = _tracer_bias_beta(params, tracer2['name'])
 
     return bias1, beta1, bias2, beta2
+
 
 def ap_at(pars):
     if pars['peak'] or pars['full-shape']:
