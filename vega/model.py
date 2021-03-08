@@ -34,11 +34,10 @@ class Model:
         self._data = data
         self._full_shape = fiducial.get('full-shape', False)
         self._smooth_scaling = fiducial.get('smooth-scaling', False)
-        self._has_distortion_mat = False
+        data_distortion = False
         if self._data is not None:
-            self._has_distortion_mat = self._data.has_distortion()
-        self._has_distortion_mat = fiducial.getboolean('no-distortion',
-                                                       self._has_distortion_mat)
+            data_distortion = self._data.has_distortion()
+        self._has_distortion_mat = corr_item.has_distortion and data_distortion
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
