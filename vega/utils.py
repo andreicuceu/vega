@@ -91,11 +91,11 @@ def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max, multipole=-1):
     """
     # Check what multipoles we need and compute them
     dmuk = 1 / len(muk_grid)
-    if multipole < 0:
-        ell_vals = np.arange(0, ell_max + 1, 2)
-    else:
+    if not multipole < 0:
         assert type(multipole) is int
-        ell_vals = np.array([multipole])
+        ell_max = multipole
+
+    ell_vals = np.arange(0, ell_max + 1, 2)
 
     xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk)
 
@@ -105,7 +105,7 @@ def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max, multipole=-1):
             xi[ell//2, :] *= L(mu_grid, ell)
         full_xi = np.sum(xi, axis=0)
     else:
-        full_xi = xi[0]
+        full_xi = xi[multipole//2]
 
     return full_xi
 
