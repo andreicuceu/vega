@@ -36,6 +36,7 @@ class CorrelationFunction:
         self._mu = coords_grid['mu']
         self._z = coords_grid['z']
         self._ell_max = config.getint('ell_max', 6)
+        self._multipole = config.getint('single_multipole', -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2
         self._z_eff = fiducial['z_eff']
@@ -167,7 +168,8 @@ class CorrelationFunction:
                                                        ap, at, delta_rp)
 
         # Compute correlation function
-        xi = utils.pk_to_xi(rescaled_r, rescaled_mu, k, muk, pk, self._ell_max)
+        xi = utils.pk_to_xi(rescaled_r, rescaled_mu, k, muk, pk,
+                            self._ell_max, self._multipole)
 
         return xi
 

@@ -64,7 +64,7 @@ def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
     return xi
 
 
-def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max):
+def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max, multipole=-1):
     """Compute the correlation function from an input power spectrum
 
     Parameters
@@ -81,6 +81,8 @@ def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max):
         Input power spectrum
     ell_max : int
         Maximum multipole to sum over
+    multipole : int
+        If set, returns the single multipole
 
     Returns
     -------
@@ -89,14 +91,23 @@ def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max):
     """
     # Check what multipoles we need and compute them
     dmuk = 1 / len(muk_grid)
-    ell_vals = np.arange(0, ell_max + 1, 2)
+    if multipole < 0:
+        assert type(multipole) is int
+        ell_vals = np.array([multipole])
+    else:
+        ell_vals = np.arange(0, ell_max + 1, 2)
 
     xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk)
 
     # Add the Legendre polynomials and sum over the multipoles
-    for ell in ell_vals:
-        xi[ell//2, :] *= L(mu_grid, ell)
-    return np.sum(xi, axis=0)
+    if multipole < 0:
+        full_xi = xi[0]
+    else:
+        for ell in ell_vals:
+            xi[ell//2, :] *= L(mu_grid, ell)
+        full_xi = np.sum(xi, axis=0)
+
+    return full_xi
 
 
 def pk_to_xi_relativistic(r_grid, mu_grid, k_grid, muk_grid, pk, params):
