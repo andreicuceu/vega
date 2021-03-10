@@ -1,4 +1,5 @@
 from pathlib import Path
+import os.path
 # from vega.minimizer import Minimizer
 from astropy.io import fits
 from astropy.io.fits import column
@@ -21,7 +22,7 @@ class Output:
             Analysis object, by default None
         """
         self.type = config.get('type', 'fits')
-        self.outfile = config['filename']
+        self.outfile = os.path.expandvars(config['filename'])
         self.analysis = analysis
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
