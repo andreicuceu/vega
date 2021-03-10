@@ -393,7 +393,7 @@ def find_file(path):
     path : string
         Input path. Can be absolute or relative to vega
     """
-    input_path = Path(path)
+    input_path = Path(os.path.expandvars(path))
 
     # First check if it's an absolute path
     if input_path.is_file():
