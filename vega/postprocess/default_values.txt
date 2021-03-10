@@ -1,0 +1,26 @@
+# List of default values for Vega parameters.
+# Used both by the sampler and the minimizer
+# vega_name                     prior_min   prior_max   iminuit_sigma
+ap                              0.0         2.0         0.1
+at                              0.0         2.0         0.1
+aiso                            0.0         2.0         0.1
+epsilon                         0.0         2.0         0.1
+phi                             0.0         2.0         0.1
+gamma                           0.0         2.0         0.1
+phi_smooth                      0.0         2.0         0.1
+gamma_smooth                    0.0         2.0         0.1
+growth_rate                     0.0         2.0         0.1
+bias_LYA                       -2.0         0.0         0.01
+bias_eta_LYA                   -2.0         0.0         0.01
+beta_LYA                        0.0         5.0         0.1
+bias_QSO                        0.0        10.0         0.1
+beta_QSO                        0.0         5.0         0.1
+bias_hcd                       -0.2         0.0         0.01
+beta_hcd                        0.0         5.0         0.1
+L0_hcd                          0.0        40.0         0.1
+sigmaNL_par                     0.0        20.0         0.1
+sigmaNL_per                     0.0        20.0         0.1
+sigma_velo_disp_gauss_QSO       0.0        15.0         0.1
+sigma_velo_disp_lorentz_QSO     0.0        15.0         0.1
+drp_QSO                        -3.0         3.0         0.1
+qso_rad_strength                0.0         2.0         0.1

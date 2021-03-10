@@ -10,6 +10,7 @@ from vega.model import Model
 from vega.minimizer import Minimizer
 from vega.analysis import Analysis
 from vega.output import Output
+from vega.postprocess.param_utils import get_default_values
 
 
 class VegaInterface:
@@ -388,8 +389,7 @@ class VegaInterface:
 
         return params
 
-    @staticmethod
-    def _read_sample(sample_config):
+    def _read_sample(self, sample_config):
         """Read sample parameters.
 
         These must be of the form:
@@ -417,27 +417,44 @@ class VegaInterface:
         sample_params['errors'] = {}
         sample_params['fix'] = {}
 
-        for param, values in sample_config.items():
-            values_list = values.split()
-            if len(values_list) < 2:
-                continue
-            assert len(values_list) >= 2
+        default_values = get_default_values()
 
-            # First get the limits
+        for param, values in sample_config.items():
+            if param not in self.params:
+                print('Warning: You tried sampling the parameter: %s.'
+                      ' As this parameter was not specified under'
+                      ' [parameters], it will be skipped.' % param)
+                continue
+
+            values_list = values.split()
+
+            # Get the prior limits
             # ! Sampler needs actual values (no None)
-            lower_limit = None
-            upper_limit = None
-            if values_list[0] != 'None':
-                lower_limit = float(values_list[0])
-            if values_list[1] != 'None':
-                upper_limit = float(values_list[1])
-            sample_params['limits'][param] = (lower_limit, upper_limit)
+            if len(values_list) > 1:
+                lower_limit = None
+                upper_limit = None
+                if values_list[0] != 'None':
+                    lower_limit = float(values_list[0])
+                if values_list[1] != 'None':
+                    upper_limit = float(values_list[1])
+                sample_params['limits'][param] = (lower_limit, upper_limit)
+            else:
+                if values_list[0] not in ['True', 'true', 't', 'y', 'yes']:
+                    print(param)
+                    continue
+                sample_params['limits'][param] = default_values[param]['limits']
 
             # Get the values and errors for the fitter
             if len(values_list) > 2:
-                assert len(values_list) == 4
                 sample_params['values'][param] = float(values_list[2])
+            else:
+                sample_params['values'][param] = self.params[param]
+
+            if len(values_list) > 3:
+                assert len(values_list) == 4
                 sample_params['errors'][param] = float(values_list[3])
+            else:
+                sample_params['errors'][param] = default_values[param]['error']
 
             # Populate the fix values
             sample_params['fix'][param] = False

@@ -66,3 +66,22 @@ def get_latex(path):
         latex_names[items[0]] = latex
 
     return latex_names
+
+
+def get_default_values():
+    values_path = 'vega/postprocess/default_values.txt'
+    with open(find_file(values_path)) as f:
+        content = f.readlines()
+
+    values = {}
+    for line in content:
+        line = line.strip()
+        if line[0] == '#':
+            continue
+
+        items = line.split()
+        values[items[0]] = {}
+        values[items[0]]['limits'] = (float(items[1]), float(items[2]))
+        values[items[0]]['error'] = float(items[3])
+
+    return values

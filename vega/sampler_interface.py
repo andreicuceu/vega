@@ -4,7 +4,7 @@ import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
 from pathlib import Path
-from vega.postprocess.param_names import build_names
+from vega.postprocess.param_utils import build_names
 
 
 class Sampler:
@@ -28,6 +28,13 @@ class Sampler:
         self.num_derived = 0
         self.log_lik = log_lik_func
         self.getdist_latex = polychord_setup.getboolean('getdist_latex', True)
+
+        # Check limits are well defined
+        for lims in self.limits.values():
+            if None in lims:
+                raise ValueError('Sampler needs well defined prior limits.'
+                                 ' You passed a None. Please give numbers, or'
+                                 ' just say par_name = True to use defaults.')
 
         # Initialize the Polychord settings
         self.settings, self.parnames_path = self.get_polychord_settings(
