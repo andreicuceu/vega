@@ -1,4 +1,5 @@
 import numpy as np
+import os.path
 import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
@@ -52,7 +53,7 @@ class Sampler:
         """
         # Seed and path/name
         seed = polychord_setup.getint('seed', int(0))
-        path = polychord_setup.get('path')
+        path = os.path.expandvars(polychord_setup.get('path'))
         name = polychord_setup.get('name')
 
         # The key config parameters
