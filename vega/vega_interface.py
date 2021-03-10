@@ -419,6 +419,12 @@ class VegaInterface:
 
         default_values = get_default_values()
 
+        def check_param(param):
+            if param not in default_values:
+                raise ValueError('Default values not found for: %s. Please add'
+                                 ' them to default_values.txt, or provide the'
+                                 ' full sampling specification.' % param)
+
         for param, values in sample_config.items():
             if param not in self.params:
                 print('Warning: You tried sampling the parameter: %s.'
@@ -440,20 +446,22 @@ class VegaInterface:
                 sample_params['limits'][param] = (lower_limit, upper_limit)
             else:
                 if values_list[0] not in ['True', 'true', 't', 'y', 'yes']:
-                    print(param)
                     continue
+                check_param(param)
                 sample_params['limits'][param] = default_values[param]['limits']
 
             # Get the values and errors for the fitter
             if len(values_list) > 2:
                 sample_params['values'][param] = float(values_list[2])
             else:
+                check_param(param)
                 sample_params['values'][param] = self.params[param]
 
             if len(values_list) > 3:
                 assert len(values_list) == 4
                 sample_params['errors'][param] = float(values_list[3])
             else:
+                check_param(param)
                 sample_params['errors'][param] = default_values[param]['error']
 
             # Populate the fix values
