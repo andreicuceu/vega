@@ -63,11 +63,11 @@ class Output:
         names = np.array(list(minimizer.values.keys()))
 
         # Check if any parameter name is too long
-        max_length = 20  # Increase this if you have names longer than 20 chars
+        max_length = 40  # Increase this if you have names longer than 20 chars
         lengths = np.array([len(name) for name in names])
         if (lengths > max_length).any():
             raise ValueError('The current maximum allowed number of chars in'
-                             ' a parameter name is 20. Change the output'
+                             ' a parameter name is 40. Change the output'
                              ' module if you need more.'
                              ' [write_results_fits() method in Output]')
         name_format = str(max_length) + 'A'
