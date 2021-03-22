@@ -3,5 +3,5 @@ scipy==1.6.1
 astropy==4.2
 numba==0.53.0
 h5py==3.2.1
-setuptools==49.2.0
+setuptools==54.1.2
 iminuit==1.4.8
