@@ -335,8 +335,18 @@ class PowerSpectrum:
         ND Array
             Smoothing factor for the peak
         """
-        sigma_par = params['sigmaNL_par']
-        sigma_trans = params['sigmaNL_per']
+        sigma_par = params.get('sigmaNL_par', None)
+        sigma_trans = params.get('sigmaNL_per', None)
+        growth_rate = params.get('growth_rate')
+
+        if sigma_par is None and sigma_trans is not None:
+            sigma_par = sigma_trans * (1 + growth_rate)
+        elif sigma_trans is None and sigma_par is not None:
+            sigma_trans = sigma_par / (1 + growth_rate)
+        elif sigma_par is None and sigma_trans is None:
+            raise ValueError('No parameters for peak NL found.'
+                             ' Add sigmaNL_par and/or sigmaNL_par.')
+
         if self._peak_nl_pars is None:
             self._peak_nl_pars = np.array([sigma_par, sigma_trans]) + 1
 
