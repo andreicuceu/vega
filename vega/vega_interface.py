@@ -110,7 +110,10 @@ class VegaInterface:
             self.mc_config['sample'] = self._read_sample(config)
 
         # Initialize the minimizer and the analysis objects
-        self.minimizer = Minimizer(self.chi2, self.sample_params)
+        if not self.sample_params['limits']:
+            self.minimizer = None
+        else:
+            self.minimizer = Minimizer(self.chi2, self.sample_params)
         self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
                                  self.main_config, self.mc_config)
 
@@ -296,8 +299,11 @@ class VegaInterface:
         return mocks
 
     def minimize(self):
-        """Minimize the chi2 over the sample parameters.
+        """Minimize the chi2 over the sampled parameters.
         """
+        if self.minimizer is None:
+            print("No sampled parameters. Skipping minimization.")
+            return
         self.minimizer.minimize()
 
     @property

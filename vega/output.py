@@ -1,8 +1,6 @@
 from pathlib import Path
 import os.path
-# from vega.minimizer import Minimizer
 from astropy.io import fits
-from astropy.io.fits import column
 import numpy as np
 import h5py
 
@@ -22,12 +20,13 @@ class Output:
             Analysis object, by default None
         """
         self.type = config.get('type', 'fits')
+        self.overwrite = config.get('overwrite', False)
         self.outfile = os.path.expandvars(config['filename'])
         self.analysis = analysis
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
 
-    def write_results(self, minimizer, scan_results=None, models=None):
+    def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
         """Write results in the fits or hdf format
 
         Parameters
@@ -40,14 +39,15 @@ class Output:
             Dictionary with the Vega Model objects, by default None
         """
         if self.type == 'fits':
-            self.write_results_fits(minimizer, scan_results, models)
+            self.write_results_fits(corr_funcs, params, minimizer, scan_results, models)
         elif self.type == 'hdf' or self.type == 'h5':
             self.write_results_hdf(minimizer, scan_results)
         else:
             raise ValueError('Unknown output type. Set type = fits'
                              ' or type = hdf')
 
-    def write_results_fits(self, minimizer, scan_results=None, models=None):
+    def write_results_fits(self, corr_funcs, params, minimizer=None, scan_results=None,
+                           models=None):
         """Write output in the fits format
 
         Parameters
@@ -59,22 +59,13 @@ class Output:
         models : dict, optional
             Dictionary with the Vega Model objects, by default None
         """
-        # Get parameter names
-        names = np.array(list(minimizer.values.keys()))
-
-        # Check if any parameter name is too long
-        max_length = 40  # Increase this if you have names longer than 20 chars
-        lengths = np.array([len(name) for name in names])
-        if (lengths > max_length).any():
-            raise ValueError('The current maximum allowed number of chars in'
-                             ' a parameter name is 40. Change the output'
-                             ' module if you need more.'
-                             ' [write_results_fits() method in Output]')
-        name_format = str(max_length) + 'A'
-
         primary_hdu = fits.PrimaryHDU()
-        bestfit_hdu = self._bestfit_hdu(minimizer, names, name_format)
-        hdu_list = [primary_hdu, bestfit_hdu]
+        model_hdu = self._model_hdu(corr_funcs, params)
+        hdu_list = [primary_hdu, model_hdu]
+
+        if minimizer is not None:
+            bestfit_hdu = self._bestfit_hdu(minimizer)
+            hdu_list.append(bestfit_hdu)
 
         if self.output_pk:
             assert models is not None
@@ -89,7 +80,8 @@ class Output:
                 hdu_list.append(cf_hdu)
 
         if scan_results is not None:
-            scan_hdu = self._scan_hdu(scan_results, names, name_format)
+            assert minimizer is not None
+            scan_hdu = self._scan_hdu(scan_results, minimizer)
             hdu_list.append(scan_hdu)
 
         hdul = fits.HDUList(hdu_list)
@@ -97,25 +89,57 @@ class Output:
         if self.outfile[-5:] != '.fits':
             self.outfile += '.fits'
 
-        hdul.writeto(Path(self.outfile))
+        hdul.writeto(Path(self.outfile), overwrite=self.overwrite)
 
-    def _bestfit_hdu(self, minimizer, names, name_format):
+    def _model_hdu(self, corr_funcs, params):
+        """Create HDU with the computed model correlations,
+        and the parameters used to compute them
+
+        Parameters
+        ----------
+        corr_funcs : dict
+            Output correlations given compute_model
+        params : dict
+            Computation parameters
+
+        Returns
+        -------
+        astropy.io.fits.hdu.table.BinTableHDU
+            HDU with the model correlation
+        """
+        columns = []
+        for name, cf in corr_funcs.items():
+            columns.append(fits.Column(name=name, format='D', array=cf))
+
+        model_hdu = fits.BinTableHDU.from_columns(columns)
+        model_hdu.name = 'Model'
+
+        for par, val in params.items():
+            name = 'hierarch ' + par
+            model_hdu.header[name] = val
+
+        return model_hdu
+
+    def _bestfit_hdu(self, minimizer):
         """Create HDU with the bestfit info
 
         Parameters
         ----------
         minimizer : Minimizer
             Minimizer object after minimization was done
-        names : list
-            Parameter names
-        name_format : string
-            Format for writing parameter names to a fits file
 
         Returns
         -------
         astropy.io.fits.hdu.table.BinTableHDU
             HDU with the bestfit data
         """
+        # Get parameter names
+        names = np.array(list(minimizer.values.keys()))
+
+        # Check if any parameter name is too long
+        max_length = np.max([len(name) for name in names])
+        name_format = str(max_length) + 'A'
+
         # Get parameter values and errors
         values = np.array([minimizer.values[name] for name in names])
         errors = np.array([minimizer.errors[name] for name in names])
@@ -140,20 +164,20 @@ class Output:
 
         # Add all the attributes of the minimum to the header
         for item, value in minimizer.fmin.items():
-            bestfit_hdu.header[item] = value
+            name = item
+            if len(item) > 8:
+                name = 'hierarch ' + item
+            bestfit_hdu.header[name] = value
 
         bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
-        comm = 'Bestfit values of sampled parameters'
-        bestfit_hdu.header.comments['TTYPE2'] = comm
-        comm = 'Errors around the bestfit of the sampled parameters'
-        bestfit_hdu.header.comments['TTYPE3'] = comm
-        comm = 'Covariance matrix around bestfit of the sampler parameters'
-        bestfit_hdu.header.comments['TTYPE4'] = comm
+        bestfit_hdu.header.comments['TTYPE2'] = 'Bestfit values of sampled parameters'
+        bestfit_hdu.header.comments['TTYPE3'] = 'Errors around the bestfit'
+        bestfit_hdu.header.comments['TTYPE4'] = 'Covariance matrix around the bestfit'
         bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
 
         return bestfit_hdu
 
-    def _scan_hdu(self, scan_results, names, name_format):
+    def _scan_hdu(self, scan_results, minimizer):
         """Create HDU with the scan info
 
         Parameters
@@ -170,6 +194,13 @@ class Output:
         astropy.io.fits.hdu.table.BinTableHDU
             HDU with the scan data
         """
+        # Get parameter names
+        names = np.array(list(minimizer.values.keys()))
+
+        # Check if any parameter name is too long
+        max_length = np.max([len(name) for name in names])
+        name_format = str(max_length) + 'A'
+
         # Get list of parameters and results
         results = []
         for res in scan_results:
@@ -307,6 +338,9 @@ class Output:
         scan_results : list, optional
             List of scan results, by default None
         """
+        if minimizer is None:
+            raise ValueError("The hdf output format is outdated and"
+                             " does not work without minimization")
         h5_file = h5py.File(Path(self.outfile), 'w')
 
         # Write bestfit
