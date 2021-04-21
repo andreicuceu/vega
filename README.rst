@@ -51,19 +51,21 @@ If you want to run the sampler you will need `Polychord`_. Instructions can be f
 Usage
 -----
 
-Vega can be used both interactively (e.g. from Jupyter Notebooks) or from the command line. It needs a config file to run: main.ini.
+Vega needs one "main.ini" file with the configuration, and at least one correlation config file. These correlation config files are generally of the form "lyaxlya.ini" for the Lyman alpha forest auto-correlation, or "qsoxlya.ini" for its cross-corelation with quasars. More complex cases also appear if we use the part of the Lyman alpha forest that appears left of the Lyman beta peak (i.e. in the Lyman beta part of the forest). These are generally called lyalyaxlyalyb.ini, which means we correlate Lya absorption in the Lya forest, denoted Lya(Lya), with Lya absorption in the Lyb part of the forest, denoted Lya(Lyb).
 
-This main.ini file must also contain the paths to extra configuration files. One of these extra files is needed for each correlation component. E.g. for a run with LyaxLya and QSOxLya, you would need 3 config files:
+In the `examples`_ folder you can find examples of these config files with a lot of comments explaining what each option does. If you don't understand something, or we missed something, please open an issue.
 
-- main.ini
-- lyaxlya.ini
-- qsoxlya.ini
+Using the terminal
+------------------
+You can call Vega from a terminal using the scripts in the bin folder, and pointing them to a "main.ini" file like this:
 
-Example config files can be found in the `examples`_ folder, and detailed descriptions of all the possible options can be found in the documentation. (Work in progress)
+.. code-block:: console
 
-Examples for the interactive use can be found in the `tutorial`_ . Most of Vega functionality can be accessed and used entirely from a Notebook, but compute times might be long if you try to minimize over too many parameters (especially if they are degenerate). 
+    $ python run_vega.py path_to/main.ini
 
-The only thing that needs to be run from the console is the sampler. It can be called using the 'vega_mpi.py' script in the bin folder like this:
+The "run_vega.py" script can be used for computing model correlations and for running the fitter. However, these can also be run interactively (see next section).
+
+On the other hand the sampler (PolyChord) cannot be run interactively and needs to be called using the second script like this:
 
 .. code-block:: console
 
@@ -71,6 +73,14 @@ The only thing that needs to be run from the console is the sampler. It can be c
 
 We strongly suggest you run the sampler in parallel on many cores, as normal run-times are of the order :math:`10^2` - :math:`10^4` core hours.
 
+Interactive use
+---------------
+
+You can run Vega interactively using Ipython or a Jupyter notebook. The `tutorial`_ notebook takes you through the steps of intializing Vega, computing a model and performing a fit.
+
+This process is much more powerful compared to running in terminal as you directly have access to all the output, model components and fit results. Additionally, Vega was built in a modular structure with the aim of the user being able to call each module independently. Therefore, you have access to much more functionality this way. The `documentation`_ is the best source on how to run these modules independently, but if you can't find something there, please open an issue and we will try to help you and also improve the documentation.
+
+.. _documentation: https://vega.readthedocs.io/en/latest/?badge=latest
 .. _examples: https://github.com/andreicuceu/Vega/tree/master/examples
 .. _tutorial: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
 
