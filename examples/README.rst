@@ -40,3 +40,7 @@ This process is much more powerful compared to running in terminal as you direct
 
 .. _documentation: https://vega.readthedocs.io/en/latest/?badge=latest
 
+Running on the eBOSS DR16 correlations
+--------------------------------------
+
+In the eBOSS_DR16 folder you can find example config files for reproducing the eBOSS DR16 BAO analysis. These have been adapted from the fitter2 config files. To run these you just need to put in the right paths to the measured correlations and metal matrices. You can download these from here: https://svn.sdss.org/public/data/eboss/DR16cosmo/tags/v1_0_1/dataveccov/lya_forest/
