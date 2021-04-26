@@ -22,6 +22,7 @@ if __name__ == '__main__':
 
     # Write output
     if vega.minimizer is not None:
-        vega.params = vega.bestfit.values
+        for par, val in vega.bestfit.values.items():
+            vega.params[par] = val
     corr_funcs = vega.compute_model(vega.params)
     vega.output.write_results(corr_funcs, vega.params, vega.minimizer, scan_results, vega.models)
