@@ -84,7 +84,7 @@ class Model:
                 # Compute the corresponding r/mu coords
                 r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
                 w = r_grid == 0
-                r_grid[w] = 1e-6
+                r_grid[w] = 1e-3
                 mu_grid = rp_grid / r_grid
 
                 # Initialize the coords grid dictionary
