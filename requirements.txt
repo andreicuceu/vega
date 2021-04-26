@@ -5,3 +5,4 @@ numba==0.50.1
 h5py==2.10.0
 setuptools==49.2.0
 iminuit==1.4.9
+mcfit==0.0.17

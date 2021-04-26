@@ -35,7 +35,6 @@ class CorrelationFunction:
         self._r = coords_grid['r']
         self._mu = coords_grid['mu']
         self._z = coords_grid['z']
-        self._ell_max = config.getint('ell_max', 6)
         self._multipole = config.getint('single_multipole', -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2
@@ -45,16 +44,15 @@ class CorrelationFunction:
         # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
         if tracer1['type'] == 'discrete' and tracer2['type'] != 'discrete':
-            self._delta_rp_name = 'drp_'+tracer1['name']
+            self._delta_rp_name = 'drp_' + tracer1['name']
         elif tracer2['type'] == 'discrete' and tracer1['type'] != 'discrete':
-            self._delta_rp_name = 'drp_'+tracer2['name']
+            self._delta_rp_name = 'drp_' + tracer2['name']
 
         # Precompute growth
         self._z_fid = fiducial['z_fiducial']
         self._Omega_m = fiducial.get('Omega_m', None)
         self._Omega_de = fiducial.get('Omega_de', None)
-        self.xi_growth = self.compute_growth(self._z, self._z_fid,
-                                             self._Omega_m, self._Omega_de)
+        self.xi_growth = self.compute_growth(self._z, self._z_fid, self._Omega_m, self._Omega_de)
 
         # Initialize the broadband
         self.has_bb = False
@@ -70,38 +68,34 @@ class CorrelationFunction:
             if self.radiation_flag:
                 names = [self._tracer1['name'], self._tracer2['name']]
                 if not ('QSO' in names and 'LYA' in names):
-                    raise ValueError('You asked for QSO radiation effects, but'
-                                     'it can only be applied to the cross'
-                                     ' (QSOxLya)')
+                    raise ValueError('You asked for QSO radiation effects, but it'
+                                     ' can only be applied to the cross (QSOxLya)')
 
         # Check for relativistic effects and standard asymmetry
         self.relativistic_flag = False
         if 'relativistic correction' in self._config:
-            self.relativistic_flag = self._config.getboolean(
-                                     'relativistic correction')
+            self.relativistic_flag = self._config.getboolean('relativistic correction')
+
         self.asymmetry_flag = False
         if 'standard asymmetry' in self._config:
             self.asymmetry_flag = self._config.getboolean('standard asymmetry')
         if self.relativistic_flag or self.asymmetry_flag:
             types = [self._tracer1['type'], self._tracer2['type']]
             if ('continuous' not in types) or (types[0] == types[1]):
-                raise ValueError('You asked for relativistic effects or'
-                                 ' standard assymetry, but they only work'
-                                 ' for the cross')
+                raise ValueError('You asked for relativistic effects or standard asymmetry,'
+                                 ' but they only work for the cross')
 
-    def compute(self, k, muk, pk, pk_lin, params):
+    def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
 
         Parameters
         ----------
-        k : 1D Array
-            Wavenumber grid of power spectrum
-        muk : ND Array
-            k_parallel / k grid for input power spectrum
         pk : ND Array
             Input power spectrum
         pk_lin : 1D Array
             Linear isotropic power spectrum
+        PktoXi_obj : vega.PktoXi
+            An instance of the transform object used to turn Pk into Xi
         params : dict
             Computation parameters
 
@@ -111,7 +105,7 @@ class CorrelationFunction:
             Output correlation function
         """
         # Compute the core
-        xi = self.compute_core(k, muk, pk, params)
+        xi = self.compute_core(pk, PktoXi_obj, params)
 
         # Add bias evolution
         xi *= self.compute_bias_evol(params)
@@ -125,15 +119,15 @@ class CorrelationFunction:
 
         # Add relativistic effects
         if self.relativistic_flag:
-            xi += self.compute_xi_relativistic(k, muk, pk_lin, params)
+            xi += self.compute_xi_relativistic(pk_lin, PktoXi_obj, params)
 
         # Add standard asymmetry
         if self.asymmetry_flag:
-            xi += self.compute_xi_asymmetry(k, muk, pk_lin, params)
+            xi += self.compute_xi_asymmetry(pk_lin, PktoXi_obj, params)
 
         return xi
 
-    def compute_core(self, k, muk, pk, params):
+    def compute_core(self, pk, PktoXi_obj, params):
         """Compute the core of the correlation function.
 
         This does the Hankel transform of the input P(k),
@@ -141,12 +135,10 @@ class CorrelationFunction:
 
         Parameters
         ----------
-        k : 1D Array
-            Wavenumber grid of power spectrum
-        muk : ND Array
-            k_parallel / k grid for input power spectrum
         pk : ND Array
             Input power spectrum
+        PktoXi_obj : vega.PktoXi
+            An instance of the transform object used to turn Pk into Xi
         params : dict
             Computation parameters
 
@@ -164,12 +156,10 @@ class CorrelationFunction:
         # Get rescaled Xi coordinates
         ap, at = utils.cosmo_fit_func(params)
 
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
-                                                       ap, at, delta_rp)
+        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
         # Compute correlation function
-        xi = utils.pk_to_xi(rescaled_r, rescaled_mu, k, muk, pk,
-                            self._ell_max, self._multipole)
+        xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)
 
         return xi
 
@@ -545,18 +535,16 @@ class CorrelationFunction:
         xi_rad *= np.exp(-r_shift * ((1 + mu_shift) / lifetime + 1 / decrease))
         return xi_rad
 
-    def compute_xi_relativistic(self, k_grid, muk_grid, pk, params):
+    def compute_xi_relativistic(self, pk, PktoXi_obj, params):
         """Calculate the cross-correlation contribution from
         relativistic effects (Bonvin et al. 2014).
 
         Parameters
         ----------
-        k_grid : 1D Array
-            Grid of k coordinates for the input power spectrum
-        muk_grid : ND Array
-            Grid of muk = kp/k coordinates for the input power spectrum
         pk : ND Array
             Input power spectrum
+        PktoXi_obj : vega.PktoXi
+            An instance of the transform object used to turn Pk into Xi
         params : dict
             Computation parameters
 
@@ -575,22 +563,20 @@ class CorrelationFunction:
                                                        ap, at, delta_rp)
 
         # Compute the correlation function
-        xi_rel = utils.pk_to_xi_relativistic(rescaled_r, rescaled_mu,
-                                             k_grid, muk_grid, pk, params)
+        xi_rel = PktoXi_obj.pk_to_xi_relativistic(rescaled_r, rescaled_mu, pk, params)
+
         return xi_rel
 
-    def compute_xi_asymmetry(self, k_grid, muk_grid, pk, params):
+    def compute_xi_asymmetry(self, pk, PktoXi_obj, params):
         """Calculate the cross-correlation contribution from
         standard asymmetry (Bonvin et al. 2014).
 
         Parameters
         ----------
-        k_grid : 1D Array
-            Grid of k coordinates for the input power spectrum
-        muk_grid : ND Array
-            Grid of muk = kp/k coordinates for the input power spectrum
         pk : ND Array
             Input power spectrum
+        PktoXi_obj : vega.PktoXi
+            An instance of the transform object used to turn Pk into Xi
         params : dict
             Computation parameters
 
@@ -609,6 +595,6 @@ class CorrelationFunction:
                                                        ap, at, delta_rp)
 
         # Compute the correlation function
-        xi_asy = utils.pk_to_xi_asymmetry(rescaled_r, rescaled_mu,
-                                          k_grid, muk_grid, pk, params)
+        xi_asy = PktoXi_obj.pk_to_xi_asymmetry(rescaled_r, rescaled_mu, pk, params)
+
         return xi_asy

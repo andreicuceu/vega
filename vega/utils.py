@@ -1,193 +1,15 @@
 import numpy as np
-# import scipy as sp
-from numpy import fft
-from scipy import special
 from scipy.integrate import quad
 from numba import jit, float64
-from scipy import interpolate
 import os.path
 from pathlib import Path
 
 import vega
 
+
 @jit(nopython=True)
 def sinc(x):
     return np.sin(x)/x
-
-
-def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
-    """
-    Implementation of FFTLog from A.J.S. Hamilton (2000)
-    assumes log(k) are equally spaced
-    """
-
-    k0 = k[0]
-    l = np.log(k.max()/k0)
-    r0 = 1.
-
-    N = len(k)
-    emm = N*fft.fftfreq(N)
-    r = r0*np.exp(-emm*l/N)
-    dr = abs(np.log(r[1]/r[0]))
-    s = np.argsort(r)
-    r = r[s]
-
-    xi = np.zeros([len(ell_vals),len(ar)])
-
-    for ell in ell_vals:
-        if tform == "rel":
-            pk_ell = pk
-            n = 1.
-        elif tform == "asy":
-            pk_ell = pk
-            n = 2.
-        else:
-            pk_ell = np.sum(dmuk*L(muk,ell)*pk,axis=0)*(2*ell+1)*(-1)**(ell//2)/2/np.pi**2
-            n = 2.
-        mu = ell+0.5
-        q = 2-n-0.5
-        x = q+2*np.pi*1j*emm/l
-        lg1 = special.loggamma((mu+1+x)/2)
-        lg2 = special.loggamma((mu+1-x)/2)
-
-        um = (k0*r0)**(-2*np.pi*1j*emm/l)*2**x*np.exp(lg1-lg2)
-        um[0] = np.real(um[0])
-        an = fft.fft(pk_ell*k**n*np.sqrt(np.pi/2))
-        an *= um
-        xi_loc = fft.ifft(an)
-        xi_loc = xi_loc[s]
-        xi_loc /= r**(3-n)
-        xi_loc[-1] = 0
-        spline = interpolate.splrep(np.log(r)-dr/2,np.real(xi_loc),k=3,s=0)
-        xi[ell//2,:] = interpolate.splev(np.log(ar),spline)
-
-    return xi
-
-
-def pk_to_xi(r_grid, mu_grid, k_grid, muk_grid, pk, ell_max, multipole=-1):
-    """Compute the correlation function from an input power spectrum
-
-    Parameters
-    ----------
-    r_grid : 1D Array
-        Grid of r coordinates for the output correlation
-    mu_grid : 1D Array
-        Grid of mu coordinates for the output correlation
-    k_grid : 1D Array
-        Grid of k coordinates for the input power spectrum
-    muk_grid : ND Array
-        Grid of muk = kp/k coordinates for the input power spectrum
-    pk : ND Array
-        Input power spectrum
-    ell_max : int
-        Maximum multipole to sum over
-    multipole : int
-        If set, returns the single multipole
-
-    Returns
-    -------
-    1D Array
-        Output correlation function
-    """
-    # Check what multipoles we need and compute them
-    dmuk = 1 / len(muk_grid)
-    if not multipole < 0:
-        assert type(multipole) is int
-        ell_max = multipole
-
-    ell_vals = np.arange(0, ell_max + 1, 2)
-
-    xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk)
-
-    # Add the Legendre polynomials and sum over the multipoles
-    if multipole < 0:
-        for ell in ell_vals:
-            xi[ell//2, :] *= L(mu_grid, ell)
-        full_xi = np.sum(xi, axis=0)
-    else:
-        full_xi = xi[multipole//2]
-
-    return full_xi
-
-
-def pk_to_xi_relativistic(r_grid, mu_grid, k_grid, muk_grid, pk, params):
-    """Calculate the cross-correlation contribution from
-    relativistic effects (Bonvin et al. 2014).
-
-    Parameters
-    ----------
-    r_grid : 1D Array
-        Grid of r coordinates for the output correlation
-    mu_grid : 1D Array
-        Grid of mu coordinates for the output correlation
-    k_grid : 1D Array
-        Grid of k coordinates for the input power spectrum
-    muk_grid : ND Array
-        Grid of muk = kp/k coordinates for the input power spectrum
-    pk : ND Array
-        Input power spectrum
-    params : dict
-        Computation parameters
-
-    Returns
-    -------
-    1D Array
-        Output xi relativistic
-    """
-    # Compute the dipole and octupole terms
-    ell_vals = [1, 3]
-    dmuk = 1 / len(muk_grid)
-    xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk, tform='rel')
-
-    # Get the relativistic parameters and sum over the monopoles
-    A_rel_1 = params['Arel1']
-    A_rel_3 = params['Arel3']
-    xi_rel = A_rel_1 * xi[1//2, :] * L(mu_grid, 1)
-    xi_rel += A_rel_3 * xi[3//2, :] * L(mu_grid, 3)
-    return xi_rel
-
-
-def pk_to_xi_asymmetry(r_grid, mu_grid, k_grid, muk_grid, pk, params):
-    """Calculate the cross-correlation contribution from
-    standard asymmetry (Bonvin et al. 2014).
-
-    Parameters
-    ----------
-    r_grid : 1D Array
-        Grid of r coordinates for the output correlation
-    mu_grid : 1D Array
-        Grid of mu coordinates for the output correlation
-    k_grid : 1D Array
-        Grid of k coordinates for the input power spectrum
-    muk_grid : ND Array
-        Grid of muk = kp/k coordinates for the input power spectrum
-    pk : ND Array
-        Input power spectrum
-    params : dict
-        Computation parameters
-
-    Returns
-    -------
-    1D Array
-        Output xi asymmetry
-    """
-    # Compute the monopole and quadrupole terms
-    ell_vals = [0, 2]
-    dmuk = 1 / len(muk_grid)
-    xi = Pk2Mp(r_grid, k_grid, pk, ell_vals, muk_grid, dmuk, tform='asy')
-
-    # Get the asymmetry parameters and sum over the monopoles
-    A_asy_0 = params['Aasy0']
-    A_asy_2 = params['Aasy2']
-    A_asy_3 = params['Aasy3']
-    xi_asy = (A_asy_0 * xi[0, :] - A_asy_2 * xi[1, :]) * r_grid * L(mu_grid, 1)
-    xi_asy += A_asy_3 * xi[1, :] * r_grid * L(mu_grid, 3)
-    return xi_asy
-
-
-# Legendre Polynomial
-def L(mu, ell):
-    return special.legendre(ell)(mu)
 
 
 def _tracer_bias_beta(params, name):
@@ -307,6 +129,7 @@ def aiso_epsilon(pars):
         ap = 1.
         at = 1.
     return ap, at
+
 
 def convert_instance_to_dictionary(inst):
     dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith('__'))

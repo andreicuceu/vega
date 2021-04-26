@@ -1,7 +1,7 @@
 import numpy as np
 
-# from . import new_pk, new_xi
 from . import power_spectrum
+from . import pktoxi
 from . import correlation_func as corr_func
 
 
@@ -58,6 +58,11 @@ class Model:
             self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
             self._corr_item.tracer2, self._corr_item.name)
 
+        # Initialize the Pk to Xi transform
+        ell_max = self._corr_item.config['model'].getint('ell_max', 6)
+        self.PktoXi = pktoxi.PktoXi(self.Pk_core.k_grid, self.Pk_core.muk_grid, ell_max,
+                                    self._corr_item.old_fftlog)
+
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
             self._corr_item.config['model'], fiducial, self._coords_grid,
@@ -93,6 +98,10 @@ class Model:
                                     self._corr_item.config['metals'], fiducial,
                                     tracer1, tracer2, self._corr_item.name)
 
+                assert len(self.Pk_metal[(name1, name2)].muk_grid) == len(self.Pk_core.muk_grid)
+                assert self._corr_item.config['metals'].getint('ell_max', 6) == ell_max, \
+                       "Core and metals must have the same ell_max"
+
                 # Initialize the metal correlation Xi
                 self.Xi_metal[(name1, name2)] = corr_func.CorrelationFunction(
                                     self._corr_item.config['metals'], fiducial,
@@ -125,8 +134,8 @@ class Model:
             Model correlation function for the specified component
         """
         # Compute core model correlation function
-        k, muk, pk_model = self.Pk_core.compute(pk_lin, pars)
-        xi_model = self.Xi_core.compute(k, muk, pk_model, pk_lin, pars)
+        pk_model = self.Pk_core.compute(pk_lin, pars)
+        xi_model = self.Xi_core.compute(pk_model, pk_lin, self.PktoXi, pars)
 
         # Save the components
         if self.save_components:
@@ -136,11 +145,9 @@ class Model:
         # Compute metal correlation function
         if self._corr_item.has_metals:
             for name1, name2, in self._corr_item.metal_correlations:
-                k, muk, pk_metal = self.Pk_metal[(name1, name2)].compute(
-                                                        pk_lin, pars)
-                xi_metal = self.Xi_metal[(name1, name2)].compute(
-                                                        k, muk, pk_metal,
-                                                        pk_lin, pars)
+                pk_metal = self.Pk_metal[(name1, name2)].compute(pk_lin, pars)
+                xi_metal = self.Xi_metal[(name1, name2)].compute(pk_metal, pk_lin,
+                                                                 self.PktoXi, pars)
 
                 # Save the components
                 if self.save_components:
@@ -149,11 +156,9 @@ class Model:
 
                 # Apply the metal matrix
                 if self._has_metal_mats:
-                    xi_metal = self._data.metal_mats[(name1, name2)].dot(
-                                                        xi_metal)
+                    xi_metal = self._data.metal_mats[(name1, name2)].dot(xi_metal)
                     if self.save_components:
-                        self.xi_distorted[component][(name1, name2)] = \
-                            xi_metal.copy()
+                        self.xi_distorted[component][(name1, name2)] = xi_metal.copy()
 
                 # Add the metal component to the full xi
                 xi_model += xi_metal

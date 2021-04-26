@@ -30,6 +30,7 @@ class CorrelationItem:
                                                   self.tracer1['type'])
         self.cov_rescale = config['data'].getfloat('cov_rescale', 1.)
         self.has_distortion = config['data'].getboolean('distortion', True)
+        self.old_fftlog = config['model'].getboolean('old_fftlog', False)
         self.has_metals = False
         self.has_bb = False
 

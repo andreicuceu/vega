@@ -159,7 +159,7 @@ class PowerSpectrum:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
 
-        return self.k_grid, self.muk_grid, pk_full
+        return pk_full
 
     def compute_kaiser(self, bias1, beta1, bias2, beta2):
         """Compute Kaiser model.
