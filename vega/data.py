@@ -77,7 +77,7 @@ class Data:
     def distortion_mat(self):
         if self._distortion_mat is None:
             raise AttributeError(
-                'No covariance matrix found. Check for it in the data file: ',
+                'No distortion matrix found. Check for it in the data file: ',
                 self._corr_item.config['data'].get('filename'))
         return self._distortion_mat
 
