@@ -2,10 +2,9 @@
 import os.path
 import numpy as np
 from astropy.io import fits
-from pkg_resources import resource_filename
 import configparser
 
-from . import correlation_item, data, utils, analysis
+from . import correlation_item, data, utils
 from vega.model import Model
 from vega.minimizer import Minimizer
 from vega.analysis import Analysis

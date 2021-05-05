@@ -38,13 +38,14 @@ class BuildConfig:
         self.options['uv_background'] = options.get('uv_background', False)
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
-        self.options['hcd'] = options.get('hcd', None)
+        self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
         self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
 
         metals = options.get('metals', None)
-        if metals == 'all':
-            metals = ['SiII(1190)', 'SiII(1193)', 'SiIII(1207)', 'SiII(1260)', 'CIV(eff)']
+        if metals is not None:
+            if 'all' in metals:
+                metals = ['SiII(1190)', 'SiII(1193)', 'SiIII(1207)', 'SiII(1260)', 'CIV(eff)']
         self.options['metals'] = metals
 
     def build(self, correlations, fit_type, fit_info, out_path, parameters={}):
@@ -139,10 +140,10 @@ class BuildConfig:
             if self.options['uv_background']:
                 config['model']['add uv'] = 'True'
 
-            if self.options['hcd'] is not None:
-                assert self.options['hcd'] in ['mask', 'Rogers2018', 'sinc']
-                config['model']['model-hcd'] = self.options['hcd']
-                if self.options['hcd'] == 'mask':
+            if self.options['hcd_model'] is not None:
+                assert self.options['hcd_model'] in ['mask', 'Rogers2018', 'sinc']
+                config['model']['model-hcd'] = self.options['hcd_model']
+                if self.options['hcd_model'] == 'mask':
                     config['model']['fvoigt_model'] = self.options['fvoigt_model']
 
             if self.options['metals'] is not None:
@@ -288,7 +289,7 @@ class BuildConfig:
 
         # bias beta model
         for name in self.corr_names:
-            if self.fit_info['use_bias_eta'].get(name, False):
+            if self.fit_info['use_bias_eta'].get(name, True):
                 new_params['growth_rate'] = get_par('growth_rate')
                 new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
             else:
@@ -305,7 +306,7 @@ class BuildConfig:
             new_params['dnl_arinyo_kp'] = get_par('dnl_arinyo_kp')
 
         # HCDs
-        if self.options['hcd'] is not None:
+        if self.options['hcd_model'] is not None:
             new_params['bias_hcd'] = get_par('bias_hcd')
             new_params['beta_hcd'] = get_par('beta_hcd')
             new_params['L0_hcd'] = get_par('L0_hcd')

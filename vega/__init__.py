@@ -5,5 +5,6 @@ __email__ = 'andreicuceu@gmail.com'
 __version__ = '0.1.0'
 
 from vega.vega_interface import VegaInterface
+from vega.build_config import BuildConfig
 # from .sampler_interface import Sampler
 from vega.postprocess.wedges import Wedge
