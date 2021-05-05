@@ -49,6 +49,31 @@ class BuildConfig:
         self.options['metals'] = metals
 
     def build(self, correlations, fit_type, fit_info, out_path, parameters={}):
+        """Build Vega config files and write them to an output directory
+
+        Parameters
+        ----------
+        correlations : dict
+            Information for each correlation. It must contain the path to the measure correlation,
+            and the path to metal files if metals were requested.
+        fit_type : string
+            Name of the fit. Includes the name of the correlations with the two
+            tracers separated by a single underscore (e.g. lyalya_qso),
+            and different correlations separated by a double underscore
+            (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
+            folder to see all possibilities.
+        fit_info : dict
+            Fit information. Must contain a list of sampled parameters and the effective redshift
+        out_path : string
+            Path to directory where to write the config files
+        parameters : dict, optional
+            Parameter values to write to the main config, by default {}
+
+        Returns
+        -------
+        string
+            Path to the main config file
+        """
         # Check if we know the fit combination
         if fit_type not in self.recognised_fits:
             raise ValueError('Unknown fit: {}'.format(fit_type))
@@ -107,8 +132,8 @@ class BuildConfig:
 
         Returns
         -------
-        [type]
-            [description]
+        string
+            Path to the config file for the correlation.
         """
         # Read template
         config = ConfigParser()
