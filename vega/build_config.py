@@ -1,5 +1,7 @@
+import numpy as np
 from configparser import ConfigParser
 from vega.utils import find_file
+from astropy.io import fits
 from pathlib import Path
 import os
 
@@ -101,6 +103,7 @@ class BuildConfig:
         components = fit_type.split('__')
         self.corr_paths = []
         self.corr_names = []
+        self.data_paths = []
         for name in components:
             # Check if we have info on the correlation
             if name not in correlations:
@@ -108,8 +111,10 @@ class BuildConfig:
                                  ' correlation: {}'.format(name))
 
             # Build the config file for the correlation and save the path
-            corr_path, tracer1, tracer2 = self._build_corr_config(name, correlations[name])
+            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
+                                                                             correlations[name])
             self.corr_paths.append(corr_path)
+            self.data_paths.append(data_path)
             if tracer1 not in self.corr_names:
                 self.corr_names.append(tracer1)
             if tracer2 not in self.corr_names:
@@ -203,16 +208,45 @@ class BuildConfig:
         with open(corr_path, 'w') as configfile:
             config.write(configfile)
 
-        return corr_path, tracer1, tracer2
+        return corr_path, config['data']['filename'], tracer1, tracer2
+
+    @staticmethod
+    def get_zeff(data_paths, rmin=80., rmax=120.):
+        zeff_list = []
+        weights = []
+        for path in data_paths:
+            hdul = fits.open(path)
+
+            r_arr = np.sqrt(hdul[1].data['RP']**2 + hdul[1].data['RT']**2)
+            cells = (r_arr > rmin) * (r_arr < rmax)
+
+            zeff = np.average(hdul[1].data['Z'][cells], weights=hdul[1].data['NB'][cells])
+            weight = np.sum(hdul[1].data['NB'][cells])
+
+            hdul.close()
+
+            zeff_list.append(zeff)
+            weights.append(weight)
+
+        zeff = np.average(zeff_list, weights=weights)
+        return zeff
 
     def _build_main_config(self, fit_type, fit_info):
         # Initialize the config
         config = ConfigParser()
         config.optionxform = lambda option: option
 
+        # Check the effective redshift
+        zeff_in = fit_info.get('zeff', None)
+        zeff_comp = self.get_zeff(self.data_paths)
+        if zeff_in is None:
+            zeff_in = zeff_comp
+        elif zeff_in != zeff_comp:
+            print('Warning: Input zeff and computed zeff are different. Will write input zeff.')
+
         # Write the paths to the correlation configs
         config['data sets'] = {}
-        config['data sets']['zeff'] = str(fit_info['zeff'])
+        config['data sets']['zeff'] = str(zeff_in)
         corr_paths = [str(path) for path in self.corr_paths]
         config['data sets']['ini files'] = ' '.join(corr_paths)
 
