@@ -5,10 +5,10 @@ ap                              0.0         2.0         0.1
 at                              0.0         2.0         0.1
 aiso                            0.0         2.0         0.1
 epsilon                         0.0         2.0         0.1
-phi                             0.0         2.0         0.1
-gamma                           0.0         2.0         0.1
-phi_smooth                      0.0         2.0         0.1
-gamma_smooth                    0.0         2.0         0.1
+phi                             0.5         1.5         0.1
+gamma                           0.5         1.5         0.1
+phi_smooth                      0.5         1.5         0.1
+gamma_smooth                    0.5         1.5         0.1
 growth_rate                     0.0         2.0         0.1
 bias_LYA                       -2.0         0.0         0.01
 bias_eta_LYA                   -2.0         0.0         0.01
@@ -24,3 +24,12 @@ sigma_velo_disp_gauss_QSO       0.0        15.0         0.1
 sigma_velo_disp_lorentz_QSO     0.0        15.0         0.1
 drp_QSO                        -3.0         3.0         0.1
 qso_rad_strength                0.0         2.0         0.1
+par_sigma_smooth                0.0         10.         0.1
+per_sigma_smooth                0.0         10.         0.1
+par_exp_smooth                  0.0         10.         0.1
+per_exp_smooth                  0.0         10.         0.1
+bias_eta_SiII(1190)             -0.02       0.0         0.001
+bias_eta_SiII(1193)             -0.02       0.0         0.001
+bias_eta_SiIII(1207)            -0.02       0.0         0.001
+bias_eta_SiII(1260)             -0.02       0.0         0.001
+bias_eta_CIV(eff)               -0.02       0.0         0.001
