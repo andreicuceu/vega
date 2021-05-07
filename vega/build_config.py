@@ -267,8 +267,11 @@ class BuildConfig:
         config['fiducial']['smooth-scaling'] = str(self.options['smooth_scaling'])
 
         # Write the output path
+        run_name = fit_type
+        if self.name_extension is not None:
+            run_name += '-{}'.format(self.name_extension)
         config['output'] = {}
-        config['output']['filename'] = str(self.fitter_out_path / fit_type)
+        config['output']['filename'] = str(self.fitter_out_path / run_name)
 
         sample_params = fit_info['sample_params']
         config['sample'] = {}
@@ -291,7 +294,8 @@ class BuildConfig:
 
             config['Polychord'] = {}
             config['Polychord']['path'] = str(self.sampler_out_path)
-            config['Polychord']['name'] = fit_type
+
+            config['Polychord']['name'] = run_name
             config['Polychord']['nlive'] = fit_info['Polychord'].get('nlive',
                                                                      str(25 * len(sample_params)))
             config['Polychord']['num_repeats'] = fit_info['Polychord'].get('num_repeats',
