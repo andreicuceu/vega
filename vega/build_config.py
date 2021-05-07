@@ -50,7 +50,7 @@ class BuildConfig:
                 metals = ['SiII(1190)', 'SiII(1193)', 'SiIII(1207)', 'SiII(1260)', 'CIV(eff)']
         self.options['metals'] = metals
 
-    def build(self, correlations, fit_type, fit_info, out_path, parameters={}):
+    def build(self, correlations, fit_type, fit_info, out_path, parameters={}, name_extension=None):
         """Build Vega config files and write them to an output directory
 
         Parameters
@@ -70,6 +70,8 @@ class BuildConfig:
             Path to directory where to write the config files
         parameters : dict, optional
             Parameter values to write to the main config, by default {}
+        name_extension : string, optional
+            Optional string to add to the config file names, by default None
 
         Returns
         -------
@@ -82,6 +84,7 @@ class BuildConfig:
 
         # Save some of the info
         self.fit_info = fit_info
+        self.name_extension = name_extension
 
         # Check if we need sampler or fitter or both
         self.fitter = fit_info.get('fitter', True)
@@ -204,7 +207,10 @@ class BuildConfig:
             assert self.options['fullshape_smoothing'] in ['gauss', 'exp']
             config['model']['fullshape smoothing'] = self.options['fullshape_smoothing']
 
-        corr_path = self.config_path / '{}.ini'.format(name)
+        if self.name_extension is None:
+            corr_path = self.config_path / '{}.ini'.format(name)
+        else:
+            corr_path = self.config_path / '{}-{}.ini'.format(name, self.name_extension)
         with open(corr_path, 'w') as configfile:
             config.write(configfile)
 
@@ -294,7 +300,10 @@ class BuildConfig:
             config['Polychord']['boost_posterior'] = str(3)
 
         # Write main config
-        main_path = self.config_path / 'main.ini'
+        if self.name_extension is None:
+            main_path = self.config_path / 'main.ini'
+        else:
+            main_path = self.config_path / 'main-{}.ini'.format(self.name_extension)
         with open(main_path, 'w') as configfile:
             config.write(configfile)
 
