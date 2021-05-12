@@ -407,7 +407,7 @@ class Data:
             self.scaled_log_cov_det = self.log_cov_det
 
         # Compute cholesky decomposition
-        if self._cholesky is None or self._recompute:
+        if (self._cholesky is None or self._recompute) and not forecast:
             self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
