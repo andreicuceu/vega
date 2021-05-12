@@ -20,11 +20,11 @@ if __name__ == '__main__':
     parser.add_argument('--out-path', type=str, default=None, required=True,
                         help='Directory to write the config files into')
 
-    parser.add_argument('--zeff', type=float, default=None, required=True,
-                        help='Effective redshift')
-
     parser.add_argument('--sample-params', type=str, nargs='*', default=None, required=True,
                         help='List of parameters to sample/fit.')
+
+    parser.add_argument('--zeff', type=float, default=None, required=False,
+                        help='Effective redshift')
 
     parser.add_argument('--sampler', type=bool, default=False, required=False,
                         help='Run the sampler.')
