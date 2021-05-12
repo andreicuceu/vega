@@ -123,8 +123,7 @@ class BuildConfig:
             if tracer2 not in self.corr_names:
                 self.corr_names.append(tracer2)
 
-        self.parameters = parameters
-        main_path = self._build_main_config(fit_type, fit_info)
+        main_path = self._build_main_config(fit_type, fit_info, parameters)
 
         return main_path
 
@@ -237,22 +236,22 @@ class BuildConfig:
         zeff = np.average(zeff_list, weights=weights)
         return zeff
 
-    def _build_main_config(self, fit_type, fit_info):
+    def _build_main_config(self, fit_type, fit_info, parameters):
         # Initialize the config
         config = ConfigParser()
         config.optionxform = lambda option: option
 
         # Check the effective redshift
-        zeff_in = fit_info.get('zeff', None)
+        self.zeff_in = fit_info.get('zeff', None)
         zeff_comp = self.get_zeff(self.data_paths)
-        if zeff_in is None:
-            zeff_in = zeff_comp
-        elif zeff_in != zeff_comp:
+        if self.zeff_in is None:
+            self.zeff_in = zeff_comp
+        elif self.zeff_in != zeff_comp:
             print('Warning: Input zeff and computed zeff are different. Will write input zeff.')
 
         # Write the paths to the correlation configs
         config['data sets'] = {}
-        config['data sets']['zeff'] = str(zeff_in)
+        config['data sets']['zeff'] = str(self.zeff_in)
         corr_paths = [str(path) for path in self.corr_paths]
         config['data sets']['ini files'] = ' '.join(corr_paths)
 
@@ -279,6 +278,7 @@ class BuildConfig:
             config['sample'][param] = 'True'
 
         # Write the parameters
+        self.parameters = parameters
         config['parameters'] = {}
         for name, value in self.parameters.items():
             config['parameters'][name] = str(value)
@@ -361,12 +361,41 @@ class BuildConfig:
 
         # bias beta model
         for name in self.corr_names:
-            if self.fit_info['use_bias_eta'].get(name, True):
-                new_params['growth_rate'] = get_par('growth_rate')
-                new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
+            use_bias_eta = self.fit_info['use_bias_eta'].get(name, True)
+            growth_rate = parameters.get('growth_rate', None)
+            if growth_rate is None:
+                growth_rate = self.get_growth_rate(self.zeff_in)
+
+            if name == 'LYA':
+                bias_lya = self.get_lya_bias(self.zeff_in)
+                bias_eta_lya = parameters.get('bias_eta_LYA', None)
+                beta_lya = float(get_par('beta_LYA'))
+
+                if bias_eta_lya is None:
+                    bias_eta_lya = bias_lya * beta_lya / growth_rate
+
+                if use_bias_eta:
+                    new_params['growth_rate'] = growth_rate
+                    new_params['bias_eta_LYA'] = bias_eta_lya
+                else:
+                    new_params['bias_LYA'] = bias_lya
+                new_params['beta_LYA'] = beta_lya
+            elif name == 'QSO':
+                bias_qso = self.get_qso_bias(self.zeff_in)
+                beta_qso = parameters.get('beta_QSO', None)
+
+                if beta_qso is None:
+                    beta_qso = growth_rate / bias_qso
+
+                if use_bias_eta:
+                    new_params['growth_rate'] = growth_rate
+                    new_params['bias_eta_QSO'] = 1.
+                else:
+                    new_params['bias_QSO'] = bias_qso
+                new_params['beta_QSO'] = beta_qso
             else:
-                new_params['bias_{}'.format(name)] = get_par('bias_{}'.format(name))
-            new_params['beta_{}'.format(name)] = get_par('beta_{}'.format(name))
+                raise ValueError('Tracer {} not supported yet.'.format(name))
+
             new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
 
         # Small scale non-linear model
@@ -423,3 +452,18 @@ class BuildConfig:
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
 
         self._parameters = new_params
+
+    @staticmethod
+    def get_lya_bias(z):
+        return -0.1167 * ((1 + z) / (1 + 2.334))**2.9
+
+    @staticmethod
+    def get_qso_bias(z):
+        return 3.91 * ((1 + z) / (1 + 2.39))**1.7133
+
+    @staticmethod
+    def get_growth_rate(z, Omega_m=0.31457):
+        Omega_m_z = Omega_m * ((1 + z)**3) / (Omega_m * ((1 + z)**3) + 1 - Omega_m)
+        Omega_lambda_z = 1 - Omega_m_z
+        growth_rate = (Omega_m_z**0.6) + (Omega_lambda_z / 70.) * (1 + Omega_m_z / 2.)
+        return growth_rate
