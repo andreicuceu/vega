@@ -47,6 +47,7 @@ setup(
     name='vega',
     packages=find_packages(include=['vega', 'vega.*']),
     setup_requires=setup_requirements,
+    scripts=scripts,
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/andreicuceu/Vega',
