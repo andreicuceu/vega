@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from vega import VegaInterface
 from vega.sampler_interface import Sampler
 import argparse
