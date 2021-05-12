@@ -101,11 +101,11 @@ class VegaInterface:
             config = self.main_config['monte carlo']
 
             self.mc_config['params'] = self.params.copy()
-            for par in self.params:
-                if par in config:
-                    values_list = config.get(par).split()
-                    if len(values_list) == 1:
-                        self.mc_config['params'][par] = config.getfloat(par)
+            # for par in self.params:
+            #     if par in config:
+            #         values_list = config.get(par).split()
+                    # if len(values_list) == 1:
+                        # self.mc_config['params'][par] = config.getfloat(par)
             self.mc_config['sample'] = self._read_sample(config)
 
         # Initialize the minimizer and the analysis objects
