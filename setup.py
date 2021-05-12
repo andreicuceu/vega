@@ -3,12 +3,15 @@
 """The setup script."""
 
 from setuptools import setup, find_packages
+import glob
 
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
+
+scripts = glob.glob('bin/*')
 
 requirements = ['numpy', 'scipy', 'astropy', 'numba', 'iminuit', 'h5py', 'mcfit',
                 'setuptools']
