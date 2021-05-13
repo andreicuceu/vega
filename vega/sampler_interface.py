@@ -5,6 +5,7 @@ from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
 from pathlib import Path
 from vega.postprocess.param_utils import build_names
+from mpi4py import MPI
 
 
 class Sampler:
@@ -120,13 +121,17 @@ class Sampler:
         return settings, parnames_path
 
     def write_parnames(self):
-        latex_names = build_names(list(self.names))
-        with open(self.parnames_path, 'w') as f:
-            for name, latex in latex_names.items():
-                if self.getdist_latex:
-                    f.write('%s    %s\n' % (name, latex))
-                else:
-                    f.write('%s    $%s$\n' % (name, latex))
+        mpi_comm = MPI.COMM_WORLD
+        cpu_rank = mpi_comm.Get_rank()
+
+        if cpu_rank == 0:
+            latex_names = build_names(list(self.names))
+            with open(self.parnames_path, 'w') as f:
+                for name, latex in latex_names.items():
+                    if self.getdist_latex:
+                        f.write('%s    %s\n' % (name, latex))
+                    else:
+                        f.write('%s    $%s$\n' % (name, latex))
 
     def run(self):
         """Run Polychord. We need to pass three functions:
