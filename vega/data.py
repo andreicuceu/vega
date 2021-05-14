@@ -313,6 +313,8 @@ class Data:
             for metal in metals_in_tracer2:
                 tracers = (self._tracer1['name'], metal)
                 name = self._tracer1['name'] + '_' + metal
+                if 'RP_' + name not in metal_hdul[2].columns.names:
+                    name = metal + '_' + self._tracer1['name']
                 self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
@@ -322,7 +324,7 @@ class Data:
             for metal in metals_in_tracer1:
                 tracers = (metal, self._tracer2['name'])
                 name = metal + '_' + self._tracer2['name']
-                if self._tracer1 == self._tracer2:
+                if 'RP_' + name not in metal_hdul[2].columns.names:
                     name = self._tracer2['name'] + '_' + metal
                 self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
