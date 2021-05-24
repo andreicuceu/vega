@@ -3,6 +3,7 @@ from vega import VegaInterface
 from vega.sampler_interface import Sampler
 from mpi4py import MPI
 import argparse
+import sys.stdout
 
 
 if __name__ == '__main__':
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     def print_func(message):
         if cpu_rank == 0:
             print(message)
+        sys.stdout.flush()
         mpi_comm.barrier()
 
     print_func('Initializing Vega')

@@ -1,12 +1,12 @@
 import numpy as np
 import os.path
+import sys.stdout
 import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
 from pathlib import Path
 from vega.postprocess.param_utils import build_names
 from mpi4py import MPI
-
 
 class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
@@ -126,6 +126,7 @@ class Sampler:
 
         if cpu_rank == 0:
             print('Writing parameter names')
+            sys.stdout.flush()
             latex_names = build_names(list(self.names))
             with open(self.parnames_path, 'w') as f:
                 for name, latex in latex_names.items():
@@ -134,6 +135,7 @@ class Sampler:
                     else:
                         f.write('%s    $%s$\n' % (name, latex))
             print('Finished writing parameter names')
+            sys.stdout.flush()
 
         mpi_comm.barrier()
 
