@@ -125,6 +125,7 @@ class Sampler:
         cpu_rank = mpi_comm.Get_rank()
 
         if cpu_rank == 0:
+            print('Writing parameter names')
             latex_names = build_names(list(self.names))
             with open(self.parnames_path, 'w') as f:
                 for name, latex in latex_names.items():
@@ -132,6 +133,7 @@ class Sampler:
                         f.write('%s    %s\n' % (name, latex))
                     else:
                         f.write('%s    $%s$\n' % (name, latex))
+            print('Finished writing parameter names')
 
         mpi_comm.barrier()
 

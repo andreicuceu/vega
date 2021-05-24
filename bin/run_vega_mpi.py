@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 from vega import VegaInterface
 from vega.sampler_interface import Sampler
+from mpi4py import MPI
 import argparse
+
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
@@ -11,9 +13,21 @@ if __name__ == '__main__':
     pars.add_argument('config', type=str, default=None, help='Config file')
     args = pars.parse_args()
 
+    mpi_comm = MPI.COMM_WORLD
+    cpu_rank = mpi_comm.Get_rank()
+
+    def print_func(message):
+        if cpu_rank == 0:
+            print(message)
+        mpi_comm.barrier()
+
+    print_func('Initializing Vega')
+
     # Initialize Vega and get the sampling parameters
     vega = VegaInterface(args.config)
     sampling_params = vega.sample_params['limits']
+
+    print_func('Finished initializing Vega')
 
     # Check if we need the distortion
     use_distortion = vega.main_config['control'].getboolean('use_distortion', True)
@@ -34,12 +48,14 @@ if __name__ == '__main__':
 
         # Set to sample the MC params
         sampling_params = vega.mc_config['sample']['limits']
+        print_func('Created Monte Carlo realization of the correlation')
     elif run_montecarlo:
         raise ValueError('You asked to run over a Monte Carlo simulation,'
                          ' but no "[monte carlo]" section provided.')
 
     # Run sampler
     if vega.has_sampler:
+        print_func('Running the sampler')
         sampler = Sampler(vega.main_config['Polychord'],
                           sampling_params, vega.log_lik)
 
