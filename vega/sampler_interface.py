@@ -1,6 +1,6 @@
 import numpy as np
 import os.path
-import sys.stdout
+import sys
 import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior

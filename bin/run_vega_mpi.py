@@ -3,7 +3,7 @@ from vega import VegaInterface
 from vega.sampler_interface import Sampler
 from mpi4py import MPI
 import argparse
-import sys.stdout
+import sys
 
 
 if __name__ == '__main__':
