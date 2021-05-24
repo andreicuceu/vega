@@ -133,6 +133,8 @@ class Sampler:
                     else:
                         f.write('%s    $%s$\n' % (name, latex))
 
+        mpi_comm.barrier()
+
     def run(self):
         """Run Polychord. We need to pass three functions:
 
