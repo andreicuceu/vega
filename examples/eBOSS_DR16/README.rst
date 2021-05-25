@@ -1,1 +1,1 @@
-Example config files for reproducing the eBOSS DR16 BAO analysis from https://arxiv.org/abs/2007.08995.
+Here are example config files for reproducing the eBOSS DR16 BAO analysis (table 6 of https://arxiv.org/abs/2007.08995). These have been adapted from the fitter2 config files. To run these you just need to put in the right paths to the measured correlations and metal matrices (see the main vega README and tutorials). You can download these from here: https://svn.sdss.org/public/data/eboss/DR16cosmo/tags/v1_0_1/dataveccov/lya_forest/.
