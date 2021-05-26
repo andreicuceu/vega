@@ -36,3 +36,7 @@ Aasy2 A_{asy,2}
 Aasy3 A_{asy,3}
 drp_QSO \Delta r_{||}
 qso_rad_strength \xi_0^{TP}
+BB-lyaxlya-0-broadband_sky-scale-sky A_{sky,lya}
+BB-lyaxlya-0-broadband_sky-sigma-sky \sigma_{sky,lya}
+BB-lyaxlyb-0-broadband_sky-scale-sky A_{sky,lyb}
+BB-lyaxlyb-0-broadband_sky-sigma-sky \sigma_{sky,lyb}

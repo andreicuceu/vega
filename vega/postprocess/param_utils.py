@@ -41,8 +41,9 @@ def build_names(params):
                 latex_names[name] = composites[comp_par] \
                     + name[len(comp_par) + 1:] + r'}'
             else:
-                raise ValueError('No latex name found for %s. Add the latex'
-                                 ' representation to latex_names.txt.' % name)
+                print('Warning! No latex name found for %s. Add the latex'
+                      ' representation to latex_names.txt.' % name)
+                latex_names[name] = name
 
     return latex_names
 
