@@ -9,20 +9,26 @@ class Output:
     """Class for handling the Vega output,
     and reading/writing output files.
     """
-    def __init__(self, config, analysis=None):
+    def __init__(self, config, data, corr_items, analysis=None):
         """
 
         Parameters
         ----------
         config : ConfigParser
             Output section of main config file
+        data : dict
+            Vega Data objects
+        corr_items : dict
+            Vega correlation_item objects
         analysis : Analysis, optional
             Analysis object, by default None
         """
+        self.data = data
+        self.analysis = analysis
+        self.corr_items = corr_items
         self.type = config.get('type', 'fits')
         self.overwrite = config.get('overwrite', False)
         self.outfile = os.path.expandvars(config['filename'])
-        self.analysis = analysis
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
 
@@ -31,8 +37,14 @@ class Output:
 
         Parameters
         ----------
-        minimizer : Minimizer
-            Minimizer object after minimization was done
+        corr_funcs : dict
+            Model correlation functions to write to file.
+            This should be the output of vega.compute_model()
+        params : dict
+            Parameters to write to file. These should be the
+            parameters vega.compute_model() was called with.
+        minimizer : Minimizer, optional
+            Minimizer object after minimization was done, by default None
         scan_results : list, optional
             List of scan results, by default None
         models : dict, optional
@@ -52,13 +64,23 @@ class Output:
 
         Parameters
         ----------
-        minimizer : Minimizer
-            Minimizer object after minimization was done
+        corr_funcs : dict
+            Model correlation functions to write to file.
+            This should be the output of vega.compute_model()
+        params : dict
+            Parameters to write to file. These should be the
+            parameters vega.compute_model() was called with.
+        minimizer : Minimizer, optional
+            Minimizer object after minimization was done, by default None
         scan_results : list, optional
             List of scan results, by default None
         models : dict, optional
             Dictionary with the Vega Model objects, by default None
         """
+        if self.data is None:
+            raise ValueError('Output object was initialized with an invalid data object.'
+                             ' Reinitialize with a valid vega.data object.')
+
         primary_hdu = fits.PrimaryHDU()
         model_hdu = self._model_hdu(corr_funcs, params)
         hdu_list = [primary_hdu, model_hdu]
@@ -107,16 +129,41 @@ class Output:
         astropy.io.fits.hdu.table.BinTableHDU
             HDU with the model correlation
         """
+        sizes = {name: len(cf) for name, cf in corr_funcs.items()}
+        num_rows = np.max(list(sizes.values()))
+        print(sizes)
+        print(num_rows)
         columns = []
         for name, cf in corr_funcs.items():
-            columns.append(fits.Column(name=name, format='D', array=cf))
+            pad = (0, num_rows - sizes[name])
+            padded_cf = np.pad(cf, pad, constant_values=0.)
+            padded_mask = np.pad(self.data[name].mask, pad, constant_values=False)
+            padded_data = np.pad(self.data[name].data_vec, pad, constant_values=0.)
+            padded_variance = np.pad(self.data[name].cov_mat.diagonal(), pad, constant_values=0.)
+            padded_rp = np.pad(self.corr_items[name].rp_rt_grid[0], pad, constant_values=0.)
+            padded_rt = np.pad(self.corr_items[name].rp_rt_grid[1], pad, constant_values=0.)
+
+            columns.append(fits.Column(name=name+'_MODEL', format='D', array=padded_cf))
+            columns.append(fits.Column(name=name+'_MASK', format='L', array=padded_mask))
+            columns.append(fits.Column(name=name+'_DATA', format='D', array=padded_data))
+            columns.append(fits.Column(name=name+'_VAR', format='D', array=padded_variance))
+            columns.append(fits.Column(name=name+'_RP', format='D', array=padded_rp))
+            columns.append(fits.Column(name=name+'_RT', format='D', array=padded_rt))
+
+            if self.data[name].nb is not None:
+                padded_nb = np.pad(self.data[name].nb, pad, constant_values=0)
+                columns.append(fits.Column(name=name+'_NB', format='K', array=padded_nb))
 
         model_hdu = fits.BinTableHDU.from_columns(columns)
         model_hdu.name = 'Model'
 
+        for name, size in sizes.items():
+            card_name = 'hierarch ' + name + '_size'
+            model_hdu.header[card_name] = size
+
         for par, val in params.items():
-            name = 'hierarch ' + par
-            model_hdu.header[name] = val
+            card_name = 'hierarch ' + par
+            model_hdu.header[card_name] = val
 
         return model_hdu
 

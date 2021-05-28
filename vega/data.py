@@ -132,20 +132,24 @@ class Data:
         """
         hdul = fits.open(find_file(data_path))
 
-        self._data_vec = hdul[1].data['DA'][:]
+        self._data_vec = hdul[1].data['DA']
         if 'CO' in hdul[1].columns.names:
-            self._cov_mat = hdul[1].data['CO'][:]
+            self._cov_mat = hdul[1].data['CO']
         if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'][:])
+            self._distortion_mat = csr_matrix(hdul[1].data['DM'])
 
-        rp_grid = hdul[1].data['RP'][:]
-        rt_grid = hdul[1].data['RT'][:]
-        z_grid = hdul[1].data['Z'][:]
+        rp_grid = hdul[1].data['RP']
+        rt_grid = hdul[1].data['RT']
+        z_grid = hdul[1].data['Z']
+        if 'NB' in hdul[1].columns.names:
+            self.nb = hdul[1].data['NB']
+        else:
+            self.nb = None
 
         try:
-            dist_rp_grid = hdul[2].data['DMRP'][:]
-            dist_rt_grid = hdul[2].data['DMRT'][:]
-            dist_z_grid = hdul[2].data['DMZ'][:]
+            dist_rp_grid = hdul[2].data['DMRP']
+            dist_rt_grid = hdul[2].data['DMRT']
+            dist_z_grid = hdul[2].data['DMZ']
         except (IndexError, KeyError):
             dist_rp_grid = rp_grid.copy()
             dist_rt_grid = rt_grid.copy()
@@ -363,9 +367,9 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name][:]
-        self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name][:]
-        self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name][:]
+        self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name]
+        self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
+        self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
 
         dm_name = 'DM_' + name
         if dm_name in metal_hdul[2].columns.names:

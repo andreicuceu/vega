@@ -79,7 +79,6 @@ class VegaInterface:
         utils.cosmo_fit_func = getattr(
             utils, self.main_config.get('cosmo-fit type', 'cosmo fit func'))
 
-        # TODO add option to read a setup config
         # Read parameters
         self.params = self._read_parameters(self.corr_items,
                                             self.main_config['parameters'])
@@ -101,11 +100,6 @@ class VegaInterface:
             config = self.main_config['monte carlo']
 
             self.mc_config['params'] = self.params.copy()
-            # for par in self.params:
-            #     if par in config:
-            #         values_list = config.get(par).split()
-                    # if len(values_list) == 1:
-                        # self.mc_config['params'][par] = config.getfloat(par)
             self.mc_config['sample'] = self._read_sample(config)
 
         # Initialize the minimizer and the analysis objects
@@ -124,7 +118,7 @@ class VegaInterface:
                 raise RuntimeError('run_sampler called, but'
                                    ' no sampler initialized')
 
-        self.output = Output(self.main_config['output'], self.analysis)
+        self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
         self.monte_carlo = False
 
