@@ -142,6 +142,7 @@ class Output:
             padded_variance = np.pad(self.data[name].cov_mat.diagonal(), pad, constant_values=0.)
             padded_rp = np.pad(self.corr_items[name].rp_rt_grid[0], pad, constant_values=0.)
             padded_rt = np.pad(self.corr_items[name].rp_rt_grid[1], pad, constant_values=0.)
+            padded_z = np.pad(self.corr_items[name].z_grid, pad, constant_values=0.)
 
             columns.append(fits.Column(name=name+'_MODEL', format='D', array=padded_cf))
             columns.append(fits.Column(name=name+'_MASK', format='L', array=padded_mask))
@@ -149,6 +150,7 @@ class Output:
             columns.append(fits.Column(name=name+'_VAR', format='D', array=padded_variance))
             columns.append(fits.Column(name=name+'_RP', format='D', array=padded_rp))
             columns.append(fits.Column(name=name+'_RT', format='D', array=padded_rt))
+            columns.append(fits.Column(name=name+'_Z', format='D', array=padded_z))
 
             if self.data[name].nb is not None:
                 padded_nb = np.pad(self.data[name].nb, pad, constant_values=0)
