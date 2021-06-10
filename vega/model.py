@@ -24,6 +24,14 @@ class Model:
         """
         self._corr_item = corr_item
 
+        use_obs_coords = fiducial.get('use-obs-coords', False)
+        self._original_coords_grid = None
+        if use_obs_coords:
+            assert corr_item.dz_dtheta_grid is not None
+            self._original_coords_grid = {}
+            self._original_coords_grid['r'] = corr_item.r_mu_original_grid[0]
+            self._original_coords_grid['mu'] = corr_item.r_mu_original_grid[1]
+
         assert corr_item.r_mu_grid is not None
         assert corr_item.z_grid is not None
         self._coords_grid = {}
@@ -66,7 +74,8 @@ class Model:
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
             self._corr_item.config['model'], fiducial, self._coords_grid,
-            self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config)
+            self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config,
+            self._original_coords_grid)
 
         # Initialize metals
         self.Pk_metal = {}

@@ -13,7 +13,7 @@ class CorrelationFunction:
     'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, coords_grid,
-                 tracer1, tracer2, bb_config=None):
+                 tracer1, tracer2, bb_config=None, original_coords_grid=None):
         """
 
         Parameters
@@ -40,6 +40,7 @@ class CorrelationFunction:
         self._tracer2 = tracer2
         self._z_eff = fiducial['z_eff']
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+        self._original_coords_grid = original_coords_grid
 
         # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
@@ -156,7 +157,12 @@ class CorrelationFunction:
         # Get rescaled Xi coordinates
         ap, at = utils.cosmo_fit_func(params)
 
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
+        if not params['peak'] and self._original_coords_grid is not None:
+            r = self._original_coords_grid['r']
+            mu = self._original_coords_grid['mu']
+            rescaled_r, rescaled_mu = self._rescale_coords(r, mu, ap, at, delta_rp)
+        else:
+            rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
         # Compute correlation function
         xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)

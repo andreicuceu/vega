@@ -33,10 +33,10 @@ class Data:
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
-        rp_rt_grid, z_grid = self._read_data(data_path,
-                                             corr_item.config['cuts'])
+        rp_rt_grid, z_grid, dz_dtheta_grid = self._read_data(data_path, corr_item.config['cuts'])
         self._corr_item.rp_rt_grid = rp_rt_grid
         self._corr_item.z_grid = z_grid
+        self._corr_item.dz_dtheta_grid = dz_dtheta_grid
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
@@ -146,6 +146,12 @@ class Data:
         else:
             self.nb = None
 
+        dz_dtheta_grid = None
+        if 'DELTA_Z' in hdul[1].columns.names and 'DELTA_THETA' in hdul[1].columns.names:
+            delta_z = hdul[1].data['DELTA_Z']
+            delta_theta = hdul[1].data['DELTA_THETA']
+            dz_dtheta_grid = np.array([delta_z, delta_theta])
+
         try:
             dist_rp_grid = hdul[2].data['DMRP']
             dist_rt_grid = hdul[2].data['DMRT']
@@ -160,38 +166,12 @@ class Data:
         self.mask, self.bin_size_rp = self._build_mask(rp_grid, rt_grid,
                                                        cuts_config,
                                                        hdul[1].header)
-        # self.masked_data_vec = np.zeros(self.mask.sum())
-        # self.masked_data_vec[:] = self.data_vec[self.mask]
 
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
         hdul.close()
 
-        # TODO This section can be massively optimized by only performing one
-        # TODO Cholesky decomposition for the masked cov (instead of 3)
-        # Compute inverse and determinant of the covariance matrix
-        # masked_cov = self.cov_mat[:, self.mask]
-        # masked_cov = masked_cov[self.mask, :]
-        # try:
-        #     linalg.cholesky(self.cov_mat)
-        #     print('LOG: Full matrix is positive definite')
-        # except linalg.LinAlgError:
-        #     print('WARNING: Full matrix is not positive definite')
-        # try:
-        #     linalg.cholesky(masked_cov)
-        #     print('LOG: Reduced matrix is positive definite')
-        # except linalg.LinAlgError:
-        #     print('WARNING: Reduced matrix is not positive definite')
-        # self.inv_masked_cov = linalg.inv(masked_cov)
-
-        # Compute the log determinant using and LDL^T decomposition
-        # |C| = Product of Diagonal components of D
-        # _, d, __ = linalg.ldl(masked_cov)
-        # self.log_cov_det = np.log(d.diagonal()).sum()
-        # assert isinstance(self.log_cov_det, float)
-
-        # ? Why are these named square? Is there a better name?
         self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
         self.mu_square_grid = np.zeros(self.r_square_grid.size)
         w = self.r_square_grid > 0.
@@ -199,7 +179,7 @@ class Data:
 
         # return the coordinate grids
         rp_rt_grid = np.array([dist_rp_grid, dist_rt_grid])
-        return rp_rt_grid, dist_z_grid
+        return rp_rt_grid, dist_z_grid, dz_dtheta_grid
 
     @staticmethod
     def _build_mask(rp_grid, rt_grid, cuts_config, data_header):

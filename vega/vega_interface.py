@@ -53,7 +53,8 @@ class VegaInterface:
             config.read(utils.find_file(os.path.expandvars(path)))
 
             name = config['data'].get('name')
-            self.corr_items[name] = correlation_item.CorrelationItem(config)
+            coordinate_cosmology = self.fiducial['coordinate_cosmo']
+            self.corr_items[name] = correlation_item.CorrelationItem(config, coordinate_cosmology)
 
         # TODO Can we make this completely optional?
         # initialize the data
@@ -344,15 +345,21 @@ class VegaInterface:
         hdul.close()
 
         # check full shape or smooth scaling
-        fiducial['full-shape'] = fiducial_config.getboolean(
-                                    'full-shape', False)
-        fiducial['smooth-scaling'] = fiducial_config.getboolean(
-                                    'smooth-scaling', False)
+        fiducial['full-shape'] = fiducial_config.getboolean('full-shape', False)
+        fiducial['smooth-scaling'] = fiducial_config.getboolean('smooth-scaling', False)
         if fiducial['full-shape'] or fiducial['smooth-scaling']:
             print('WARNING!!!: Using full-shape fit or scaling of the'
                   ' smooth cf component. Sailor you are reaching unexplored'
                   ' territories, precede at your own risk.')
 
+        fiducial['use-obs-coords'] = fiducial_config.getboolean('use-obs-coords', False)
+        fiducial['coordinate_cosmo'] = None
+        if fiducial['use-obs-coords']:
+            fiducial['coordinate_cosmo'] = {}
+            fiducial['coordinate_cosmo']['Omega_m'] = fiducial_config.getfloat('Omega_m')
+            fiducial['coordinate_cosmo']['H0'] = fiducial_config.getfloat('H0')
+            fiducial['coordinate_cosmo']['Omega_de'] = fiducial_config.getfloat('Omega_de', None)
+            fiducial['coordinate_cosmo']['w0'] = fiducial_config.getfloat('w0', None)
         return fiducial
 
     @staticmethod

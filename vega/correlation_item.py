@@ -1,4 +1,5 @@
 import numpy as np
+from vega.cosmology import Cosmology
 
 
 class CorrelationItem:
@@ -8,8 +9,9 @@ class CorrelationItem:
     _rp_rt_grid = None
     _r_mu_grid = None
     _z_grid = None
+    _dz_dtheta_grid = None
 
-    def __init__(self, config):
+    def __init__(self, config, coordinate_cosmology=None):
         """
 
         Parameters
@@ -28,9 +30,18 @@ class CorrelationItem:
                                                   self.tracer1['name'])
         self.tracer2['type'] = config['data'].get('tracer2-type',
                                                   self.tracer1['type'])
+
         self.cov_rescale = config['data'].getfloat('cov_rescale', 1.)
         self.has_distortion = config['data'].getboolean('distortion', True)
         self.old_fftlog = config['model'].getboolean('old_fftlog', False)
+
+        self._coord_cosmo = None
+        if coordinate_cosmology is not None:
+            self._coord_cosmo = Cosmology(coordinate_cosmology['Omega_m'],
+                                          coordinate_cosmology['H0'],
+                                          coordinate_cosmology['Omega_de'],
+                                          coordinate_cosmology['w0'])
+
         self.has_metals = False
         self.has_bb = False
 
@@ -109,3 +120,41 @@ class CorrelationItem:
             self._z_grid = np.array(z_grid)
         else:
             self._z_grid = z_grid
+
+    @property
+    def dz_dtheta_grid(self):
+        return self._dz_dtheta_grid
+
+    @dz_dtheta_grid.setter
+    def dz_dtheta_grid(self, dz_dtheta_grid):
+        self._dz_dtheta_grid = dz_dtheta_grid
+
+        if dz_dtheta_grid is not None and self._coord_cosmo is not None:
+            # Save original coordinates
+            self._r_mu_original_grid = self.r_mu_grid.copy()
+            self._rp_rt_original_grid = self.rp_rt_grid.copy()
+
+            # Compute the comoving coordinates using the new cosmology
+            delta_z = dz_dtheta_grid[0]
+            delta_theta = dz_dtheta_grid[1]
+            small_z = self.z_grid - delta_z / 2
+            large_z = self.z_grid + delta_z / 2
+
+            rp = self._coord_cosmo.comoving_distance_hinv_mpc(large_z)
+            rp -= self._coord_cosmo.comoving_distance_hinv_mpc(small_z)
+            rp *= np.cos(delta_theta / 2)
+
+            rt = self._coord_cosmo.comoving_transverse_distance_hinv_mpc(large_z)
+            rt += self._coord_cosmo.comoving_transverse_distance_hinv_mpc(small_z)
+            rt *= np.sin(delta_theta / 2)
+
+            # Save the new coordinate grids
+            self.rp_rt_grid = np.array([rp, rt])
+
+    @property
+    def r_mu_original_grid(self):
+        return self._r_mu_original_grid
+
+    @property
+    def rp_rt_original_grid(self):
+        return self._rp_rt_original_grid
