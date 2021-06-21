@@ -355,7 +355,8 @@ class CorrelationFunction:
 
         D1 = interp1d(z, D1)
 
-        return D1**2
+        growth = D1(z_grid) / D1(z_fid)
+        return growth**2
 
     def _init_broadband(self, bb_config):
         """Initialize the broadband terms.
