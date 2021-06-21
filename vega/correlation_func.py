@@ -1,4 +1,6 @@
 import numpy as np
+from scipy.integrate import quad
+from scipy.interpolate import interp1d
 from . import utils
 
 
@@ -52,7 +54,12 @@ class CorrelationFunction:
         self._z_fid = fiducial['z_fiducial']
         self._Omega_m = fiducial.get('Omega_m', None)
         self._Omega_de = fiducial.get('Omega_de', None)
-        self.xi_growth = self.compute_growth(self._z, self._z_fid, self._Omega_m, self._Omega_de)
+        if not config.getboolean('old_growth_func', False):
+            self.xi_growth = self.compute_growth(self._z, self._z_fid, self._Omega_m,
+                                                 self._Omega_de)
+        else:
+            self.xi_growth = self.compute_growth_old(self._z, self._z_fid, self._Omega_m,
+                                                     self._Omega_de)
 
         # Initialize the broadband
         self.has_bb = False
@@ -327,6 +334,28 @@ class CorrelationFunction:
         growth = growth / utils.growth_function(z_fid, Omega_m, Omega_de)
 
         return growth**2
+
+    def compute_growth_old(self, z_grid=None, z_fid=None, Omega_m=None, Omega_de=None):
+        def hubble(z, Omega_m, Omega_de):
+            return np.sqrt(Omega_m*(1+z)**3 + Omega_de + (1-Omega_m-Omega_de)*(1+z)**2)
+
+        def dD1(a, Om, OL):
+            z = 1/a-1
+            return 1./(a*hubble(z=z, Om=Om, OL=OL))**3
+
+        # Calculate D1 in 100 values of z between 0 and zmax, then interpolate
+        nbins = 100
+        zmax = 5.
+        z = zmax * np.arange(nbins, dtype=float) / (nbins-1)
+        D1 = np.zeros(nbins, dtype=float)
+        pars = (Omega_m, Omega_de)
+        for i in range(nbins):
+            a = 1/(1+z[i])
+            D1[i] = 5/2.*Omega_m*hubble(z[i], *pars)*quad(dD1, 0, a, args=pars)[0]
+
+        D1 = interp1d(z, D1)
+
+        return D1**2
 
     def _init_broadband(self, bb_config):
         """Initialize the broadband terms.
