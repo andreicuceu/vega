@@ -35,6 +35,8 @@ class PowerSpectrum:
         self._tracer2 = tracer2
         self._name = dataset_name
         self.k_grid = fiducial['k']
+        self._bin_size_rp = config.getfloat('bin_size_rp')
+        self._bin_size_rt = config.getfloat('bin_size_rt')
 
         # Check for the old config
         pk_model = self._config.get('model-pk', None)
@@ -428,14 +430,14 @@ class PowerSpectrum:
         ND Array
             G(k)
         """
-        L_par = params["par binsize {}".format(self._name)]
-        L_per = params["per binsize {}".format(self._name)]
+        bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
+        bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
 
         Gk = 1.
-        if L_par != 0:
-            Gk = Gk * utils.sinc(self.k_par_grid * L_par / 2)
-        if L_per != 0:
-            Gk = Gk * utils.sinc(self.k_trans_grid * L_per / 2)
+        if bin_size_rp != 0:
+            Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
+        if bin_size_rt != 0:
+            Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):

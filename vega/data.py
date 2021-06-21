@@ -157,41 +157,15 @@ class Data:
         self.coeff_binning_model = np.sqrt(dist_rp_grid.size / rp_grid.size)
 
         # Compute the mask and use it on the data
-        self.mask, self.bin_size_rp = self._build_mask(rp_grid, rt_grid,
-                                                       cuts_config,
-                                                       hdul[1].header)
-        # self.masked_data_vec = np.zeros(self.mask.sum())
-        # self.masked_data_vec[:] = self.data_vec[self.mask]
+        self.mask, self.bin_size_rp, self.bin_size_rt = self._build_mask(rp_grid, rt_grid,
+                                                                         cuts_config,
+                                                                         hdul[1].header)
 
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
         hdul.close()
 
-        # TODO This section can be massively optimized by only performing one
-        # TODO Cholesky decomposition for the masked cov (instead of 3)
-        # Compute inverse and determinant of the covariance matrix
-        # masked_cov = self.cov_mat[:, self.mask]
-        # masked_cov = masked_cov[self.mask, :]
-        # try:
-        #     linalg.cholesky(self.cov_mat)
-        #     print('LOG: Full matrix is positive definite')
-        # except linalg.LinAlgError:
-        #     print('WARNING: Full matrix is not positive definite')
-        # try:
-        #     linalg.cholesky(masked_cov)
-        #     print('LOG: Reduced matrix is positive definite')
-        # except linalg.LinAlgError:
-        #     print('WARNING: Reduced matrix is not positive definite')
-        # self.inv_masked_cov = linalg.inv(masked_cov)
-
-        # Compute the log determinant using and LDL^T decomposition
-        # |C| = Product of Diagonal components of D
-        # _, d, __ = linalg.ldl(masked_cov)
-        # self.log_cov_det = np.log(d.diagonal()).sum()
-        # assert isinstance(self.log_cov_det, float)
-
-        # ? Why are these named square? Is there a better name?
         self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
         self.mu_square_grid = np.zeros(self.r_square_grid.size)
         w = self.r_square_grid > 0.
@@ -263,7 +237,7 @@ class Data:
         mask &= (bin_center_r > r_min) & (bin_center_r < r_max)
         mask &= (bin_center_mu > mu_min) & (bin_center_mu < mu_max)
 
-        return mask, bin_size_rp
+        return mask, bin_size_rp, bin_size_rt
 
     def _init_metals(self, metal_config):
         """Read the metal file and initialize all the metal data.

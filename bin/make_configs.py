@@ -72,7 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--fullshape-smoothing', type=str, default=None, required=False,
                         help='Full-shape smoothing model. Choose from [gauss, exp]')
 
-    parser.add_argument('--binsizes', type=float, default=[4.], required=False,
+    parser.add_argument('--binsizes', type=float, nargs='*', default=None, required=False,
                         help='Binsizes for each correlation.')
 
     parser.add_argument('--full-shape', type=bool, default=False, required=False,
@@ -113,10 +113,11 @@ if __name__ == '__main__':
         else:
             correlations[name]['r-max'] = args.rmax_values[0]
 
-        if len(args.binsizes) > 1:
-            correlations[name]['binsize'] = args.binsizes[i]
-        else:
-            correlations[name]['binsize'] = args.binsizes[0]
+        if args.binsizes is not None:
+            if len(args.binsizes) > 1:
+                correlations[name]['binsize'] = args.binsizes[i]
+            else:
+                correlations[name]['binsize'] = args.binsizes[0]
 
         if args.metals is not None:
             correlations[name]['metal_path'] = args.metal_paths[i]

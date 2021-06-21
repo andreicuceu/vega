@@ -37,6 +37,8 @@ class Model:
         data_distortion = False
         if self._data is not None:
             data_distortion = self._data.has_distortion()
+            self._corr_item.config['model']['bin_size_rp'] = str(self._data.bin_size_rp)
+            self._corr_item.config['model']['bin_size_rt'] = str(self._data.bin_size_rt)
         self._has_distortion_mat = corr_item.has_distortion and data_distortion
 
         self.save_components = fiducial.get('save-components', False)
@@ -92,6 +94,11 @@ class Model:
                 coords_grid['r'] = r_grid
                 coords_grid['mu'] = mu_grid
                 coords_grid['z'] = data.metal_z_grids[(name1, name2)]
+
+                # Get bin sizes
+                if self._data is not None:
+                    self._corr_item.config['metals']['bin_size_rp'] = str(self._data.bin_size_rp)
+                    self._corr_item.config['metals']['bin_size_rt'] = str(self._data.bin_size_rt)
 
                 # Initialize the metal correlation P(k)
                 self.Pk_metal[(name1, name2)] = power_spectrum.PowerSpectrum(

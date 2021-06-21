@@ -158,8 +158,11 @@ class BuildConfig:
         config['data']['filename'] = corr_info.get('corr_path')
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
-        config['parameters']['par binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
-        config['parameters']['per binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
+
+        if 'binsize' in corr_info:
+            config['parameters'] = {}
+            config['parameters']['par binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
+            config['parameters']['per binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
 
         # Write the model options
         # Things that require both tracers to be LYA
