@@ -339,9 +339,9 @@ class CorrelationFunction:
         def hubble(z, Omega_m, Omega_de):
             return np.sqrt(Omega_m*(1+z)**3 + Omega_de + (1-Omega_m-Omega_de)*(1+z)**2)
 
-        def dD1(a, Om, OL):
+        def dD1(a, Omega_m, Omega_de):
             z = 1/a-1
-            return 1./(a*hubble(z=z, Om=Om, OL=OL))**3
+            return 1./(a*hubble(z, Omega_m, Omega_de))**3
 
         # Calculate D1 in 100 values of z between 0 and zmax, then interpolate
         nbins = 100
