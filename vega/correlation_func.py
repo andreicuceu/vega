@@ -195,12 +195,16 @@ class CorrelationFunction:
         ND Array
             Rescaled mu
         """
-        rp = r * mu + delta_rp
-        rt = r * np.sqrt(1 - mu**2)
+        mask = r != 0
+        rp = r[mask] * mu[mask] + delta_rp
+        rt = r[mask] * np.sqrt(1 - mu[mask]**2)
         rescaled_rp = ap * rp
         rescaled_rt = at * rt
-        rescaled_r = np.sqrt(rescaled_rp**2 + rescaled_rt**2)
-        rescaled_mu = rescaled_rp / rescaled_r
+
+        rescaled_r = np.zeros(len(r))
+        rescaled_mu = np.zeros(len(mu))
+        rescaled_r[mask] = np.sqrt(rescaled_rp**2 + rescaled_rt**2)
+        rescaled_mu[mask] = rescaled_rp / rescaled_r[mask]
 
         return rescaled_r, rescaled_mu
 

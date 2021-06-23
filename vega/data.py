@@ -289,6 +289,8 @@ class Data:
         # First look for correlations between tracer1 and metals
         if 'in tracer2' in metal_config:
             for metal in metals_in_tracer2:
+                if not self._use_correlation(self._tracer1['name'], metal):
+                    continue
                 tracers = (self._tracer1['name'], metal)
                 name = self._tracer1['name'] + '_' + metal
                 if 'RP_' + name not in metal_hdul[2].columns.names:
@@ -300,6 +302,8 @@ class Data:
         # If we have an auto-cf the files are saved in the format tracer-metal
         if 'in tracer1' in metal_config:
             for metal in metals_in_tracer1:
+                if not self._use_correlation(metal, self._tracer2['name']):
+                    continue
                 tracers = (metal, self._tracer2['name'])
                 name = metal + '_' + self._tracer2['name']
                 if 'RP_' + name not in metal_hdul[2].columns.names:
@@ -311,11 +315,11 @@ class Data:
         # Some files are reversed order, so reverse order if we don't find it
         if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
             for i, metal1 in enumerate(metals_in_tracer1):
-                j0 = 0
-                if self._tracer1 == self._tracer2:
-                    j0 = i
+                j0 = i if self._tracer1 == self._tracer2 else 0
 
                 for metal2 in metals_in_tracer2[j0:]:
+                    if not self._use_correlation(metal1, metal2):
+                        continue
                     tracers = (metal1, metal2)
                     name = metal1 + '_' + metal2
 
@@ -327,6 +331,28 @@ class Data:
         metal_hdul.close()
 
         return tracer_catalog, metal_correlations
+
+    @staticmethod
+    def _use_correlation(name1, name2):
+        """Check if a correlation should be used or not
+
+        Parameters
+        ----------
+        name1 : string
+            Name of tracer 1
+        name2 : string
+            Name of tracer 2
+
+        Returns
+        -------
+        Bool
+            Flag for using the correlation between tracer 1 and 2
+        """
+        # For CIV we only want it's autocorrelation
+        if name1 == 'CIV(eff)' or name2 == 'CIV(eff)':
+            return name1 == name2
+        else:
+            return True
 
     def _read_metal_correlation(self, metal_hdul, tracers, name):
         """Read a metal correlation from the metal file and add

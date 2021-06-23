@@ -35,7 +35,7 @@ class PktoXi:
         self.legendre_xi = {}
         for ell in self.ell_vals:
             if not self._old_fftlog:
-                self.fftlog_objects[ell] = P2xi(k_grid, l=ell)
+                self.fftlog_objects[ell] = P2xi(k_grid, l=ell, lowring=True)
             # Precompute the Legendre polynomials used to decompose Pk into Pk_ell
             self.legendre_pk[ell] = special.legendre(ell)(self.muk_grid)
             # We don't know the mu grid for Xi in advance, so just initialize
@@ -80,9 +80,13 @@ class PktoXi:
             # Compute the FFTLog to transform Pk_ell to Xi_ell
             r_fft, xi_fft = self.fftlog_objects[ell](pk_ell)
 
-            # Interpolate to the correct r grid
+            # Interpolate to r grid
             xi_interp = interpolate.interp1d(np.log(r_fft), xi_fft, kind='cubic')
-            xi_ell = xi_interp(np.log(r_grid))
+
+            # Check for nans and get the model correlation
+            mask = r_grid != 0
+            xi_ell = np.zeros(len(r_grid))
+            xi_ell[mask] = xi_interp(np.log(r_grid[mask]))
 
             # If only one multipole was required we are done
             if not single_ell < 0:
