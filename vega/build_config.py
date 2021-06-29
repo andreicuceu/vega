@@ -299,8 +299,8 @@ class BuildConfig:
             config['Polychord']['path'] = str(self.sampler_out_path)
 
             config['Polychord']['name'] = run_name
-            config['Polychord']['nlive'] = fit_info['Polychord'].get('nlive',
-                                                                     str(25 * len(sample_params)))
+            config['Polychord']['num_live'] = fit_info['Polychord'].get('num_live',
+                                                                        str(25*len(sample_params)))
             config['Polychord']['num_repeats'] = fit_info['Polychord'].get('num_repeats',
                                                                            str(len(sample_params)))
             config['Polychord']['do_clustering'] = 'True'
