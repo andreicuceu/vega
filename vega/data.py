@@ -17,6 +17,7 @@ class Data:
     _distortion_mat = None
     _inv_masked_cov = None
     _log_cov_det = None
+    _blind = None
 
     def __init__(self, corr_item):
         """
@@ -53,6 +54,10 @@ class Data:
         self._scale = 1.
         self.scaled_inv_masked_cov = None
         self.scaled_log_cov_det = None
+
+    @property
+    def blind(self):
+        return self._blind
 
     @property
     def data_vec(self):
@@ -130,13 +135,31 @@ class Data:
         cuts_config : ConfigParser
             cuts section from the config file
         """
+        print('Reading data file {}\n'.format(data_path))
         hdul = fits.open(find_file(data_path))
 
-        self._data_vec = hdul[1].data['DA']
+        blinding = 'none'
+        if 'BLINDING' in hdul[1].header:
+            blinding = hdul[1].header['BLINDING']
+
+        if blinding == 'minimal':
+            print('Warning! Running on blinded data {}'.format(data_path))
+            print('Scale parameters must be fixed to 1.')
+            self._blind = True
+            self._data_vec = hdul[1].data['DA_BLIND']
+            if 'DM' in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+        elif blinding == 'none':
+            self._blind = False
+            self._data_vec = hdul[1].data['DA']
+            if 'DM' in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+        else:
+            self._blind = True
+            raise ValueError("Unknown blinding strategy. Only 'minimal' implemented.")
+
         if 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
-        if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'])
 
         rp_grid = hdul[1].data['RP']
         rt_grid = hdul[1].data['RT']

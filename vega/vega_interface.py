@@ -21,6 +21,7 @@ class VegaInterface:
 
     Handle the parameter config and call the analysis class.
     """
+    _blind = None
 
     def __init__(self, main_path):
         """
@@ -83,6 +84,19 @@ class VegaInterface:
         self.params = self._read_parameters(self.corr_items,
                                             self.main_config['parameters'])
         self.sample_params = self._read_sample(self.main_config['sample'])
+
+        # Check blinding
+        self._scale_pars = ['ap', 'at', 'ap_sb', 'at_sb', 'phi', 'gamma', 'phi_smooth',
+                            'gamma_smooth', 'aiso', '1+epsilon']
+        if self._has_data:
+            self._blind = False
+            for data_obj in self.data.values():
+                if data_obj.blind:
+                    self._blind = True
+            if self._blind:
+                for par in self.sample_params['limits'].keys():
+                    if par in self._scale_pars:
+                        raise ValueError('Running on blind data, please fix scale parameters')
 
         # Get priors
         self.priors = {}
@@ -170,11 +184,24 @@ class VegaInterface:
         """
         assert self._has_data
 
+        # Check if blinding is initialized
+        if self._blind is None:
+            self._blind = False
+            for data_obj in self.data.values():
+                if data_obj.blind:
+                    self._blind = True
+
         # Overwrite computation parameters
         local_params = self.params.copy()
         if params is not None:
             for par, val in params.items():
                 local_params[par] = val
+
+        # Enforce blinding
+        if self._blind:
+            for par, val in local_params.items():
+                if par in self._scale_pars:
+                    local_params[par] = 1.
 
         # Go trough each component and compute the chi^2
         chi2 = 0
