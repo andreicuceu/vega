@@ -432,8 +432,8 @@ class PowerSpectrum:
         ND Array
             G(k)
         """
-        bin_size_rp = int(params.get("par binsize {}".format(self._name), self._bin_size_rp))
-        bin_size_rt = int(params.get("per binsize {}".format(self._name), self._bin_size_rt))
+        bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
+        bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
 
         Gk = 1.
         if bin_size_rp != 0:
