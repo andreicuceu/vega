@@ -37,6 +37,7 @@ class PowerSpectrum:
         self.k_grid = fiducial['k']
         self._bin_size_rp = config.getfloat('bin_size_rp')
         self._bin_size_rt = config.getfloat('bin_size_rt')
+        self._use_Gk = self._config.get('model binning', True)
 
         # Check for the old config
         pk_model = self._config.get('model-pk', None)
@@ -131,9 +132,10 @@ class PowerSpectrum:
                 raise ValueError('Incorrect \'small scale nl\' specified')
 
         # model the effect of binning
-        if self._pk_Gk is None:
-            self._pk_Gk = self.compute_Gk(params)
-        pk_full *= self._pk_Gk
+        if self._use_Gk:
+            if self._pk_Gk is None:
+                self._pk_Gk = self.compute_Gk(params)
+            pk_full *= self._pk_Gk
 
         # add non linear large scales
         if params['peak']:
@@ -430,8 +432,8 @@ class PowerSpectrum:
         ND Array
             G(k)
         """
-        bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
-        bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
+        bin_size_rp = int(params.get("par binsize {}".format(self._name), self._bin_size_rp))
+        bin_size_rt = int(params.get("per binsize {}".format(self._name), self._bin_size_rt))
 
         Gk = 1.
         if bin_size_rp != 0:
