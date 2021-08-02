@@ -4,5 +4,5 @@ astropy==4.3.post1
 numba==0.53.1
 h5py==3.3.0
 setuptools==57.4.0
-iminuit==1.4.9
+iminuit==2.8.0
 mcfit==0.0.17
