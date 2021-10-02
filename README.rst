@@ -2,8 +2,8 @@
 Vega
 ====
 
-.. image:: https://travis-ci.com/andreicuceu/vega.svg?branch=master
-    :target: https://travis-ci.com/andreicuceu/vega
+.. image:: https://github.com/andreicuceu/vega/actions/workflows/python_package.yml/badge.svg?branch=master
+    :target: https://github.com/andreicuceu/vega/actions/workflows/python_package.yml
 
 .. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
         :target: https://vega.readthedocs.io/en/latest/?badge=latest
