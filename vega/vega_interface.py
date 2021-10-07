@@ -3,6 +3,7 @@ import os.path
 import numpy as np
 from astropy.io import fits
 import configparser
+import copy
 
 from . import correlation_item, data, utils
 from vega.model import Model
@@ -113,7 +114,11 @@ class VegaInterface:
             self.mc_config = {}
             config = self.main_config['monte carlo']
 
-            self.mc_config['params'] = self.params.copy()
+            self.mc_config['params'] = copy.deepcopy(self.params)
+            mc_params = self.main_config['mc parameters']
+            for param, value in mc_params.items():
+                self.mc_config['params'][param] = float(value)
+
             self.mc_config['sample'] = self._read_sample(config)
 
         # Initialize the minimizer and the analysis objects
@@ -150,7 +155,7 @@ class VegaInterface:
             Dictionary of cf models for each component
         """
         # Overwrite computation parameters
-        local_params = self.params.copy()
+        local_params = copy.deepcopy(self.params)
         if params is not None:
             for par, val in params.items():
                 local_params[par] = val
@@ -192,7 +197,7 @@ class VegaInterface:
                     self._blind = True
 
         # Overwrite computation parameters
-        local_params = self.params.copy()
+        local_params = copy.deepcopy(self.params)
         if params is not None:
             for par, val in params.items():
                 local_params[par] = val
@@ -288,7 +293,7 @@ class VegaInterface:
         assert self._has_data
 
         # Overwrite computation parameters
-        local_params = self.params.copy()
+        local_params = copy.deepcopy(self.params)
         if params is not None:
             for par, val in params.items():
                 local_params[par] = val
