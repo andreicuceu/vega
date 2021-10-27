@@ -193,7 +193,7 @@ class BuildConfig:
         # Things that require at least one discrete tracer
         if type1 == 'discrete' or type2 == 'discrete':
             if self.options['velocity_dispersion'] is not None:
-                assert self.options['velocity_dispersion'] in ['lorentz', 'gaussian']
+                assert self.options['velocity_dispersion'] in ['lorentz', 'gauss']
                 config['model']['velocity dispersion'] = self.options['velocity_dispersion']
 
                 if self.options['metals'] is not None and type1 != type2:
