@@ -34,6 +34,7 @@ class Model:
         self._data = data
         self._full_shape = fiducial.get('full-shape', False)
         self._smooth_scaling = fiducial.get('smooth-scaling', False)
+        self._metal_scaling = fiducial.get('metal-scaling', False)
         data_distortion = False
         if self._data is not None:
             data_distortion = self._data.has_distortion()
@@ -151,6 +152,10 @@ class Model:
 
         # Compute metal correlation function
         if self._corr_item.has_metals:
+            if not self._metal_scaling:
+                pars['smooth_scaling'] = False
+                pars['full-shape'] = False
+
             for name1, name2, in self._corr_item.metal_correlations:
                 pk_metal = self.Pk_metal[(name1, name2)].compute(pk_lin, pars)
                 xi_metal = self.Xi_metal[(name1, name2)].compute(pk_metal, pk_lin,
@@ -169,6 +174,10 @@ class Model:
 
                 # Add the metal component to the full xi
                 xi_model += xi_metal
+
+            if not self._metal_scaling:
+                pars['smooth_scaling'] = self._smooth_scaling
+                pars['full-shape'] = self._full_shape
 
         # Apply pre distortion broadband
         if self.bb_config is not None:
