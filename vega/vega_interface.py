@@ -380,6 +380,8 @@ class VegaInterface:
                                     'full-shape', False)
         fiducial['smooth-scaling'] = fiducial_config.getboolean(
                                     'smooth-scaling', False)
+        fiducial['metal-scaling'] = fiducial_config.getboolean(
+                                    'metal-scaling', False)
         if fiducial['full-shape'] or fiducial['smooth-scaling']:
             print('WARNING!!!: Using full-shape fit or scaling of the'
                   ' smooth cf component. Sailor you are reaching unexplored'
