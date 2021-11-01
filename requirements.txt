@@ -3,6 +3,6 @@ scipy==1.7.1
 astropy==4.3.1
 numba==0.54.1
 h5py==3.5.0
-setuptools
+setuptools==58.4.0
 iminuit==1.4.9
 mcfit
