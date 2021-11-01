@@ -1,4 +1,4 @@
-numpy
+numpy==1.21.3
 scipy
 astropy
 numba
