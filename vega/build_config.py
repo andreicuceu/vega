@@ -343,15 +343,19 @@ class BuildConfig:
         if self.options['scale_params'] == 'ap_at':
             new_params['ap'] = get_par('ap')
             new_params['at'] = get_par('at')
-        elif self.options['scale_params'] == 'phi_gamma':
+        elif self.options['scale_params'] == 'phi_alpha':
             new_params['phi'] = get_par('phi')
-            new_params['gamma'] = get_par('gamma')
+            new_params['alpha'] = get_par('alpha')
+            if self.options['full_shape']:
+                new_params['phi_full'] = get_par('phi_full')
+                if self.options['full_shape_alpha']:
+                    new_params['alpha_full'] = get_par('alpha_full')
             if self.options['smooth_scaling']:
                 new_params['phi_smooth'] = get_par('phi_smooth')
-                new_params['gamma_smooth'] = get_par('gamma_smooth')
+                new_params['alpha_smooth'] = get_par('alpha_smooth')
         elif self.options['scale_params'] == 'aiso_epsilon':
             new_params['aiso'] = get_par('aiso')
-            new_params['1+epsilon'] = get_par('1+epsilon')
+            new_params['epsilon'] = get_par('epsilon')
         else:
             raise ValueError('Unknown scale parameters: {}'.format(self.options['scale_params']))
 
