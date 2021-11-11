@@ -10,7 +10,7 @@ class Model:
     Class for computing Lyman-alpha forest correlation function models.
     """
 
-    def __init__(self, corr_item, fiducial, data=None):
+    def __init__(self, corr_item, fiducial, scale_params, data=None):
         """
 
         Parameters
@@ -19,6 +19,8 @@ class Model:
             Item object with the component config
         fiducial : dict
             fiducial config
+        scale_params : ScaleParameters
+            ScaleParameters object
         data : Data, optional
             data object corresponding to the cf component, by default None
         """
@@ -32,9 +34,6 @@ class Model:
         self._coords_grid['z'] = corr_item.z_grid
 
         self._data = data
-        self._full_shape = fiducial.get('full-shape', False)
-        self._smooth_scaling = fiducial.get('smooth-scaling', False)
-        self._metal_scaling = fiducial.get('metal-scaling', False)
         data_distortion = False
         if self._data is not None:
             data_distortion = self._data.has_distortion()
@@ -51,15 +50,14 @@ class Model:
         # Initialize Broadband
         self.bb_config = None
         if 'broadband' in self._corr_item.config:
-            self.bb_config = self.init_broadband(
-                    self._corr_item.config['broadband'], self._corr_item.name,
-                    self._corr_item.bin_size_rp,
-                    self._corr_item.coeff_binning_model)
+            self.bb_config = self.init_broadband(self._corr_item.config['broadband'],
+                                                 self._corr_item.name, self._corr_item.bin_size_rp,
+                                                 self._corr_item.coeff_binning_model)
 
         # Initialize main Power Spectrum object
-        self.Pk_core = power_spectrum.PowerSpectrum(
-            self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
-            self._corr_item.tracer2, self._corr_item.name)
+        self.Pk_core = power_spectrum.PowerSpectrum(self._corr_item.config['model'],
+                                                    fiducial, self._corr_item.tracer1,
+                                                    self._corr_item.tracer2, self._corr_item.name)
 
         # Initialize the Pk to Xi transform
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
@@ -67,9 +65,10 @@ class Model:
                                     self._corr_item.old_fftlog)
 
         # Initialize main Correlation function object
-        self.Xi_core = corr_func.CorrelationFunction(
-            self._corr_item.config['model'], fiducial, self._coords_grid,
-            self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config)
+        self.Xi_core = corr_func.CorrelationFunction(self._corr_item.config['model'], fiducial,
+                                                     self._coords_grid, scale_params,
+                                                     self._corr_item.tracer1,
+                                                     self._corr_item.tracer2, self.bb_config)
 
         # Initialize metals
         self.Pk_metal = {}
@@ -112,8 +111,8 @@ class Model:
 
                 # Initialize the metal correlation Xi
                 self.Xi_metal[(name1, name2)] = corr_func.CorrelationFunction(
-                                    self._corr_item.config['metals'], fiducial,
-                                    coords_grid, tracer1, tracer2)
+                                    self._corr_item.config['metals'], fiducial, coords_grid,
+                                    scale_params, tracer1, tracer2, metal_corr=True)
 
             self._has_metal_mats = False
             if self._data is not None:
@@ -152,10 +151,6 @@ class Model:
 
         # Compute metal correlation function
         if self._corr_item.has_metals:
-            if not self._metal_scaling:
-                pars['smooth_scaling'] = False
-                pars['full-shape'] = False
-
             for name1, name2, in self._corr_item.metal_correlations:
                 pk_metal = self.Pk_metal[(name1, name2)].compute(pk_lin, pars)
                 xi_metal = self.Xi_metal[(name1, name2)].compute(pk_metal, pk_lin,
@@ -174,10 +169,6 @@ class Model:
 
                 # Add the metal component to the full xi
                 xi_model += xi_metal
-
-            if not self._metal_scaling:
-                pars['smooth_scaling'] = self._smooth_scaling
-                pars['full-shape'] = self._full_shape
 
         # Apply pre distortion broadband
         if self.bb_config is not None:
@@ -219,9 +210,6 @@ class Model:
         1D Array
             Full correlation function
         """
-        pars['smooth_scaling'] = self._smooth_scaling
-        pars['full-shape'] = self._full_shape
-
         pars['peak'] = True
         xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
 

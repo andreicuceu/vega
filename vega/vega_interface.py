@@ -6,6 +6,7 @@ import configparser
 import copy
 
 from . import correlation_item, data, utils
+from vega.scale_parameters import ScaleParameters
 from vega.model import Model
 from vega.minimizer import Minimizer
 from vega.analysis import Analysis
@@ -70,25 +71,23 @@ class VegaInterface:
                 self.data[name] = None
                 self._has_data = False
 
+        # TODO Get rid of this and replace with something better
+        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
+
         # initialize the models
         self.models = {}
         if self._has_data:
             for name, corr_item in self.corr_items.items():
-                self.models[name] = Model(corr_item, self.fiducial,
+                self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
 
-        # TODO Get rid of this and replace with something better
-        utils.cosmo_fit_func = getattr(
-            utils, self.main_config.get('cosmo-fit type', 'cosmo fit func'))
-
         # Read parameters
-        self.params = self._read_parameters(self.corr_items,
-                                            self.main_config['parameters'])
+        self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
         self.sample_params = self._read_sample(self.main_config['sample'])
 
         # Check blinding
-        self._scale_pars = ['ap', 'at', 'ap_sb', 'at_sb', 'phi', 'gamma', 'phi_smooth',
-                            'gamma_smooth', 'aiso', '1+epsilon']
+        self._scale_par_names = ['ap', 'at', 'ap_sb', 'at_sb', 'phi', 'gamma', 'alpha',
+                                 'phi_smooth', 'gamma_smooth', 'alpha_smooth', 'aiso', 'epsilon']
         if self._has_data:
             self._blind = False
             for data_obj in self.data.values():
@@ -96,7 +95,7 @@ class VegaInterface:
                     self._blind = True
             if self._blind:
                 for par in self.sample_params['limits'].keys():
-                    if par in self._scale_pars:
+                    if par in self._scale_par_names:
                         raise ValueError('Running on blind data, please fix scale parameters')
 
         # Get priors
@@ -166,11 +165,10 @@ class VegaInterface:
             self.models = {}
         for name, corr_item in self.corr_items.items():
             if run_init:
-                self.models[name] = Model(corr_item, self.fiducial,
+                self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
-            model_cf[name] = self.models[name].compute(
-                    local_params, self.fiducial['pk_full'],
-                    self.fiducial['pk_smooth'])
+            model_cf[name] = self.models[name].compute(local_params, self.fiducial['pk_full'],
+                                                       self.fiducial['pk_smooth'])
 
         return model_cf
 
@@ -211,24 +209,19 @@ class VegaInterface:
         # Go trough each component and compute the chi^2
         chi2 = 0
         for name in self.corr_items:
-            model_cf = self.models[name].compute(local_params,
-                                                 self.fiducial['pk_full'],
+            model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
                                                  self.fiducial['pk_smooth'])
 
             if self.monte_carlo:
-                diff = self.data[name].masked_mc_mock \
-                    - model_cf[self.data[name].mask]
-                chi2 += diff.T.dot(
-                    self.data[name].scaled_inv_masked_cov.dot(diff))
+                diff = self.data[name].masked_mc_mock - model_cf[self.data[name].mask]
+                chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
-                diff = self.data[name].masked_data_vec \
-                    - model_cf[self.data[name].mask]
+                diff = self.data[name].masked_data_vec - model_cf[self.data[name].mask]
                 chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         # Add priors
         for param, prior in self.priors.items():
-            chi2 += self._gaussian_chi2_prior(local_params[param],
-                                              prior[0], prior[1])
+            chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
 
         assert isinstance(chi2, float)
         return chi2
@@ -316,8 +309,7 @@ class VegaInterface:
                 item_scale = 1.
 
             # Create the mock
-            mocks[name] = self.data[name].create_monte_carlo(fiducial_model,
-                                                             item_scale, seed,
+            mocks[name] = self.data[name].create_monte_carlo(fiducial_model, item_scale, seed,
                                                              forecast)
 
         self.monte_carlo = True
@@ -374,18 +366,6 @@ class VegaInterface:
         fiducial['pk_full'] = hdul[1].data['PK']
         fiducial['pk_smooth'] = hdul[1].data['PKSB']
         hdul.close()
-
-        # check full shape or smooth scaling
-        fiducial['full-shape'] = fiducial_config.getboolean(
-                                    'full-shape', False)
-        fiducial['smooth-scaling'] = fiducial_config.getboolean(
-                                    'smooth-scaling', False)
-        fiducial['metal-scaling'] = fiducial_config.getboolean(
-                                    'metal-scaling', False)
-        if fiducial['full-shape'] or fiducial['smooth-scaling']:
-            print('WARNING!!!: Using full-shape fit or scaling of the'
-                  ' smooth cf component. Sailor you are reaching unexplored'
-                  ' territories, precede at your own risk.')
 
         return fiducial
 

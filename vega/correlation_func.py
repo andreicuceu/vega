@@ -14,8 +14,8 @@ class CorrelationFunction:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, coords_grid,
-                 tracer1, tracer2, bb_config=None):
+    def __init__(self, config, fiducial, coords_grid, scale_params,
+                 tracer1, tracer2, bb_config=None, metal_corr=False):
         """
 
         Parameters
@@ -26,12 +26,16 @@ class CorrelationFunction:
             fiducial config
         coords_grid : dict
             Dictionary with coordinate grid - r, mu, z
+        scale_params : ScaleParameters
+            ScaleParameters object
         tracer1 : dict
             Config of tracer 1
         tracer2 : dict
             Config of tracer 2
         bb_config : list, optional
             list with configs of broadband terms, by default None
+        metal_corr : bool, optional
+            Whether this is a metal correlation, by default False
         """
         self._config = config
         self._r = coords_grid['r']
@@ -42,6 +46,8 @@ class CorrelationFunction:
         self._tracer2 = tracer2
         self._z_eff = fiducial['z_eff']
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+        self._scale_params = scale_params
+        self._metal_corr = metal_corr
 
         # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
@@ -161,7 +167,7 @@ class CorrelationFunction:
             delta_rp = params.get(self._delta_rp_name, 0.)
 
         # Get rescaled Xi coordinates
-        ap, at = utils.cosmo_fit_func(params)
+        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
 
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
@@ -592,9 +598,8 @@ class CorrelationFunction:
 
         # Get rescaled Xi coordinates
         delta_rp = params.get(self._delta_rp_name, 0.)
-        ap, at = utils.cosmo_fit_func(params)
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
-                                                       ap, at, delta_rp)
+        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
+        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
         # Compute the correlation function
         xi_rel = PktoXi_obj.pk_to_xi_relativistic(rescaled_r, rescaled_mu, pk, params)
@@ -624,9 +629,8 @@ class CorrelationFunction:
 
         # Get rescaled Xi coordinates
         delta_rp = params.get(self._delta_rp_name, 0.)
-        ap, at = utils.cosmo_fit_func(params)
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu,
-                                                       ap, at, delta_rp)
+        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
+        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
         # Compute the correlation function
         xi_asy = PktoXi_obj.pk_to_xi_asymmetry(rescaled_r, rescaled_mu, pk, params)

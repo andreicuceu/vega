@@ -77,44 +77,6 @@ def bias_beta(params, tracer1, tracer2):
     return bias1, beta1, bias2, beta2
 
 
-def ap_at(pars):
-    if pars['peak'] or pars['full-shape']:
-        return pars['ap'], pars['at']
-
-    if pars['smooth_scaling']:
-        return pars['ap_sb'], pars['at_sb']
-
-    return 1., 1.
-
-
-def phi_gamma(pars):
-    if pars['peak'] or pars['full-shape']:
-        phi = pars['phi']
-        gamma = pars['gamma']
-    elif pars['smooth_scaling']:
-        phi = pars['phi_smooth']
-        gamma = pars['gamma_smooth']
-    else:
-        phi = 1.
-        gamma = 1.
-
-    ap = gamma / np.sqrt(phi)
-    at = gamma * np.sqrt(phi)
-    return ap, at
-
-
-def aiso_epsilon(pars):
-    if pars['peak'] or pars['full-shape']:
-        aiso = pars['aiso']
-        eps = pars['1+epsilon']
-        ap = aiso*eps*eps
-        at = aiso/eps
-    else:
-        ap = 1.
-        at = 1.
-    return ap, at
-
-
 def convert_instance_to_dictionary(inst):
     dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith('__'))
     return dic

@@ -6,9 +6,11 @@ at                              0.01        2.0         0.1
 aiso                            0.01        2.0         0.1
 epsilon                         0.01        2.0         0.1
 phi                             0.01        2.0         0.1
-gamma                           0.01        2.0         0.1
+alpha                           0.01        2.0         0.1
 phi_smooth                      0.01        2.0         0.1
-gamma_smooth                    0.01        2.0         0.1
+alpha_smooth                    0.01        2.0         0.1
+phi_full                        0.01        2.0         0.1
+alpha_full                      0.01        2.0         0.1
 growth_rate                     0.0         2.0         0.1
 bias_LYA                       -2.0         0.0         0.01
 bias_eta_LYA                   -2.0         0.0         0.01

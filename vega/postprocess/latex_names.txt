@@ -5,10 +5,12 @@ ap \alpha_{||}
 at \alpha_\bot
 aiso \alpha_{iso}
 epsilon \epsilon
-phi \phi_{BAO}
-gamma \alpha
-phi_smooth \phi_S
-gamma_smooth \gamma
+phi \phi_p
+alpha \alpha_p
+phi_smooth \phi_s
+alpha_smooth \alpha_s
+phi_full \phi_f
+alpha_full \alpha_f
 growth_rate f
 bias_gamma b_\gamma
 bias_prim b'

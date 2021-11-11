@@ -33,6 +33,7 @@ class BuildConfig:
         self.options['scale_params'] = options.get('scale_params', 'ap_at')
         self.options['template'] = options.get('template', 'PlanckDR16/PlanckDR16.fits')
         self.options['full_shape'] = options.get('full_shape', False)
+        self.options['full_shape_alpha'] = options.get('full_shape_alpha', False)
         self.options['smooth_scaling'] = options.get('smooth_scaling', False)
 
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
@@ -261,12 +262,13 @@ class BuildConfig:
         # Write the scale parameters functions
         config['cosmo-fit type'] = {}
         config['cosmo-fit type']['cosmo fit func'] = self.options['scale_params']
+        config['cosmo-fit type']['full-shape'] = str(self.options['full_shape'])
+        config['cosmo-fit type']['full-shape-alpha'] = str(self.options['full_shape_alpha'])
+        config['cosmo-fit type']['smooth-scaling'] = str(self.options['smooth_scaling'])
 
         # Write the template info
         config['fiducial'] = {}
         config['fiducial']['filename'] = self.options['template']
-        config['fiducial']['full-shape'] = str(self.options['full_shape'])
-        config['fiducial']['smooth-scaling'] = str(self.options['smooth_scaling'])
 
         # Write the output path
         run_name = fit_type
