@@ -28,7 +28,7 @@ class ScaleParameters:
             seed = config.getint('seed')
             size = config.getfloat('size')
             rng = np.random.default_rng(seed)
-            self._rnsps = np.sqrt(np.log(np.pi - rng.uniform(1 - size / 2, 1 + size / 2)))
+            self._rnsps = np.sqrt(np.log(np.pi - rng.uniform(-size/2, size/2)))
         elif self.full_shape or self.smooth_scaling:
             print('Warning! Running full-shape without blinding.')
 
