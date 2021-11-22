@@ -23,6 +23,7 @@ class ScaleParameters:
         self.metal_scaling = config.getboolean('metal-scaling', False)
 
         self.blind_phi_smooth = config.getboolean('blind-phi_smooth', False)
+        self._rnsps = None
         if self.blind_phi_smooth:
             seed = config.getint('seed')
             size = config.getfloat('size')
