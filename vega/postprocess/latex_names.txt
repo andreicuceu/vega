@@ -42,3 +42,7 @@ BB-lyaxlya-0-broadband_sky-scale-sky A_{sky,lya}
 BB-lyaxlya-0-broadband_sky-sigma-sky \sigma_{sky,lya}
 BB-lyaxlyb-0-broadband_sky-scale-sky A_{sky,lyb}
 BB-lyaxlyb-0-broadband_sky-sigma-sky \sigma_{sky,lyb}
+BB-lyalya_lyalya-0-broadband_sky-scale-sky A_{sky,lya}
+BB-lyalya_lyalya-0-broadband_sky-sigma-sky \sigma_{sky,lya}
+BB-lyalya_lyalyb-0-broadband_sky-scale-sky A_{sky,lyb}
+BB-lyalya_lyalyb-0-broadband_sky-sigma-sky \sigma_{sky,lyb}
