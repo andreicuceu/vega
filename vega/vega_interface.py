@@ -71,7 +71,7 @@ class VegaInterface:
                 self.data[name] = None
                 self._has_data = False
 
-        # TODO Get rid of this and replace with something better
+        # Initialize scale parameters
         self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
 
         # initialize the models

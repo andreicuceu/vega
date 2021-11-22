@@ -1,4 +1,3 @@
-from os import name
 import numpy as np
 
 
@@ -22,6 +21,14 @@ class ScaleParameters:
         self.full_shape_alpha = config.getboolean('full-shape-alpha', False)
         self.smooth_scaling = config.getboolean('smooth-scaling', False)
         self.metal_scaling = config.getboolean('metal-scaling', False)
+
+        self.blind_phi_smooth = config.getboolean('blind-phi_smooth', False)
+        if self.blind_phi_smooth:
+            seed = config.getint('seed')
+            start = config.getfloat('start')
+            end = config.getfloat('end')
+            rng = np.random.default_rng(seed)
+            self._rnsps = np.sqrt(np.log(np.pi - rng.uniform(start, end)))
 
         if self.full_shape or self.smooth_scaling:
             print('WARNING!!!: Using full-shape fit or scaling of the smooth cf component. '
@@ -104,19 +111,23 @@ class ScaleParameters:
                              'Set full-shape-alpha to True for other parametrisations.')
 
         if self.parametrisation == 'ap_at':
+            assert not self.blind_phi_smooth
             return params['ap_full'], params['at_full']
 
         elif self.parametrisation == 'aiso_epsilon':
+            assert not self.blind_phi_smooth
             return self.aiso_epsilon(params, name_addon='_full')
 
         elif self.parametrisation == 'phi_alpha':
             if self.full_shape:
+                assert not self.blind_phi_smooth
                 name_addon = '_full'
             else:
                 assert self.smooth_scaling
                 name_addon = '_smooth'
 
-            return self.phi_alpha(params, name_addon, self.full_shape_alpha)
+            return self.phi_alpha(params, name_addon, self.full_shape_alpha,
+                                  self.blind_phi_smooth, self._rnsps)
 
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
@@ -145,7 +156,7 @@ class ScaleParameters:
         return ap, at
 
     @staticmethod
-    def phi_alpha(params, name_addon='', fullshape_alpha=False):
+    def phi_alpha(params, name_addon='', fullshape_alpha=False, blind_phi_smooth=False, rnsps=None):
         """Compute phi / alpha parametrisation, and return ap/at.
         See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
 
@@ -164,6 +175,9 @@ class ScaleParameters:
             alpha parallel, alpha transverse
         """
         phi = params['phi' + name_addon]
+
+        if blind_phi_smooth:
+            phi += (np.pi - np.exp(rnsps**2))
 
         if name_addon == '_full' and not fullshape_alpha:
             alpha = params['alpha']
