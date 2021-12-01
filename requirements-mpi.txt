@@ -1,2 +1,2 @@
 mpi4py>=3.0.3
-pypolychord
+pypolychord==1.15.1
