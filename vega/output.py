@@ -195,10 +195,7 @@ class Output:
         num_pars = len(names)
 
         # Build the covariance matrix
-        cov_mat = np.zeros((num_pars, num_pars))
-        for i, par1 in enumerate(names):
-            for j, par2 in enumerate(names):
-                cov_mat[i, j] = minimizer.covariance[(par1, par2)]
+        cov_mat = np.array(minimizer.covariance)
 
         cov_format = str(num_pars) + 'D'
         # Create the columns with the bestfit data
@@ -212,11 +209,11 @@ class Output:
         bestfit_hdu.name = 'Bestfit'
 
         # Add all the attributes of the minimum to the header
-        for item, value in minimizer.fmin.items():
-            name = item
-            if len(item) > 8:
-                name = 'hierarch ' + item
-            bestfit_hdu.header[name] = value
+        # for item, value in minimizer.fmin.items():
+        #     name = item
+        #     if len(item) > 8:
+        #         name = 'hierarch ' + item
+        bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
 
         bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
         bestfit_hdu.header.comments['TTYPE2'] = 'Bestfit values of sampled parameters'
