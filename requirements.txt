@@ -4,5 +4,5 @@ astropy
 numba
 h5py
 setuptools
-iminuit==1.4.9
+iminuit>=2.0.0
 mcfit
