@@ -223,7 +223,7 @@ class VegaInterface:
                 model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
                                                      self.fiducial['pk_smooth'])
             else:
-                model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
+                model_cf = self.models[name].compute_direct(local_params, direct_pk)
 
             if self.monte_carlo:
                 diff = self.data[name].masked_mc_mock - model_cf[self.data[name].mask]
