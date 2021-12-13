@@ -43,9 +43,9 @@ class Model:
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
-            self.pk = {'peak': {}, 'smooth': {}}
-            self.xi = {'peak': {}, 'smooth': {}}
-            self.xi_distorted = {'peak': {}, 'smooth': {}}
+            self.pk = {'peak': {}, 'smooth': {}, 'full': {}}
+            self.xi = {'peak': {}, 'smooth': {}, 'full': {}}
+            self.xi_distorted = {'peak': {}, 'smooth': {}, 'full': {}}
 
         # Initialize Broadband
         self.bb_config = None
