@@ -140,13 +140,17 @@ class VegaInterface:
 
         self.monte_carlo = False
 
-    def compute_model(self, params=None, run_init=True):
+    def compute_model(self, params=None, run_init=True, direct_pk=None):
         """Compute correlation function model using input parameters.
 
         Parameters
         ----------
         params : dict, optional
             Computation parameters, by default None
+        run_init: boolean, optional
+            Whether to run model.init() before computing the model, by default True
+        direct_pk: 1D array or None, optional
+            If not None, the full Pk (e.g. from CLASS/CAMB) to be used directly, by default None
 
         Returns
         -------
@@ -167,18 +171,24 @@ class VegaInterface:
             if run_init:
                 self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
-            model_cf[name] = self.models[name].compute(local_params, self.fiducial['pk_full'],
-                                                       self.fiducial['pk_smooth'])
+
+            if direct_pk is None:
+                model_cf[name] = self.models[name].compute(local_params, self.fiducial['pk_full'],
+                                                           self.fiducial['pk_smooth'])
+            else:
+                model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
 
         return model_cf
 
-    def chi2(self, params=None):
+    def chi2(self, params=None, direct_pk=None):
         """Compute full chi2 for all components.
 
         Parameters
         ----------
         params : dict, optional
             Computation parameters, by default None
+        direct_pk: 1D array or None, optional
+            If not None, the full Pk (e.g. from CLASS/CAMB) to be used directly, by default None
 
         Returns
         -------
@@ -209,8 +219,11 @@ class VegaInterface:
         # Go trough each component and compute the chi^2
         chi2 = 0
         for name in self.corr_items:
-            model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
-                                                 self.fiducial['pk_smooth'])
+            if direct_pk is None:
+                model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
+                                                     self.fiducial['pk_smooth'])
+            else:
+                model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
 
             if self.monte_carlo:
                 diff = self.data[name].masked_mc_mock - model_cf[self.data[name].mask]
@@ -226,13 +239,15 @@ class VegaInterface:
         assert isinstance(chi2, float)
         return chi2
 
-    def log_lik(self, params=None):
+    def log_lik(self, params=None, direct_pk=None):
         """Compute full log likelihood for all components.
 
         Parameters
         ----------
         params : dict, optional
             Computation parameters, by default None
+        direct_pk: 1D array or None, optional
+            If not None, the full Pk (e.g. from CLASS/CAMB) to be used directly, by default None
 
         Returns
         -------
@@ -242,7 +257,7 @@ class VegaInterface:
         assert self._has_data
 
         # Get the full chi2
-        chi2 = self.chi2(params)
+        chi2 = self.chi2(params, direct_pk)
 
         # Compute the normalization for each component
         log_norm = 0
