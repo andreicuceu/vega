@@ -219,6 +219,27 @@ class Model:
         xi_full = pars['bao_amp'] * xi_peak + xi_smooth
         return xi_full
 
+    def compute_direct(self, pars, pk_full):
+        """Compute full correlation function model directly from the full
+        power spectrum.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_full : 1D Array
+            Full fiducial linear power spectrum
+
+        Returns
+        -------
+        1D Array
+            Full correlation function
+        """
+        pars['peak'] = False
+        xi_full = self._compute_model(pars, pk_full, 'full')
+
+        return xi_full
+
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp, coeff_binning_model):
         """Read the broadband config and initialize what we need.
