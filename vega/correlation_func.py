@@ -329,19 +329,10 @@ class CorrelationFunction:
             growth = (1 + z_fid) / (1. + z_grid)
             return growth**2
 
-        # Check if z_grid is a float - the cf is approximated at z eff
-        if isinstance(z_grid, float):
-            growth = utils.growth_function(z_grid, Omega_m, Omega_de)
-        else:
-            # If it's a grid it should be 1D
-            assert z_grid.ndim == 1
-            growth = np.zeros(len(z_grid))
-            # Compute the growth at each redshift on the grid
-            for i, z in enumerate(z_grid):
-                growth[i] = utils.growth_function(z, Omega_m, Omega_de)
-
+        # Compute the growth at each redshift on the grid
+        growth = utils.growth_function(z_grid, Omega_m, Omega_de)
         # Scale to the fiducial redshift
-        growth = growth / utils.growth_function(z_fid, Omega_m, Omega_de)
+        growth /= utils.growth_function(z_fid, Omega_m, Omega_de)
 
         return growth**2
 

@@ -413,12 +413,6 @@ class PowerSpectrum:
 
         return self._arinyo_dnl_cache
 
-    # @staticmethod
-    # @jit(nopython=True)
-    # def _dnl_arinyo(k_grid, muk_grid, pk_fid, q1, kv, av, bv, kp):
-
-        return dnl
-
     def compute_Gk(self, params):
         """Model the effect of binning of the cf.
 
