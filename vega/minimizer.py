@@ -74,9 +74,9 @@ class Minimizer:
         # Do the actual minimization
         self._minuit = iminuit.Minuit(self.chi2, name=self._names, **params_init)
         for name in self._names:
-            mig_init.errors[name] = self._sample_params['errors'][name]
-            mig_init.limits[name] = self._sample_params['limits'][name]
-            mig_init.fixed[name] = self._sample_params['fix'][name]
+            self._minuit.errors[name] = self._sample_params['errors'][name]
+            self._minuit.limits[name] = self._sample_params['limits'][name]
+            self._minuit.fixed[name] = self._sample_params['fix'][name]
 
         self._minuit.errordef = 1
         self._minuit.print_level = 1
