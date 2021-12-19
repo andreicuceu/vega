@@ -1,8 +1,10 @@
 import numpy as np
+from functools import lru_cache
 
 from . import power_spectrum
 from . import pktoxi
 from . import correlation_func as corr_func
+from . import utils
 
 
 class Model:
@@ -32,6 +34,9 @@ class Model:
         self._coords_grid['r'] = corr_item.r_mu_grid[0]
         self._coords_grid['mu'] = corr_item.r_mu_grid[1]
         self._coords_grid['z'] = corr_item.z_grid
+        self.size = len(corr_item.r_mu_grid[0])
+        self.fast_metals_safe = corr_item.config['model'].getboolean('fast_metals_safe', False)
+        self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
 
         self._data = data
         data_distortion = False
@@ -118,6 +123,90 @@ class Model:
             if self._data is not None:
                 self._has_metal_mats = self._data.metal_mats is not None
 
+    def _compute_metals_approx(self, tracer1, tracer2, pars, pk_lin):
+        bias_beta = utils.bias_beta(pars, tracer1, tracer2)
+        bias1, beta1, bias2, beta2 = bias_beta
+
+        self._temp_pk_lin = pk_lin
+        self._temp_pars = pars
+        pk, xi = self._approx_metals(tracer1['name'], tracer2['name'])
+
+        return bias1 * bias2 * pk, bias1 * bias2 * xi
+
+    @lru_cache
+    def _approx_metals(self, name1, name2):
+        pk = self.Pk_metal[(name1, name2)].compute(self._temp_pk_lin, self._temp_pars,
+                                                   fast_metals=True)
+        xi = self.Xi_metal[(name1, name2)].compute(pk, self._temp_pk_lin, self.PktoXi,
+                                                   self._temp_pars)
+
+        return pk, xi
+
+    def _compute_metals_fast(self, tracer1, tracer2, pars, pk_lin):
+        bias_beta = utils.bias_beta(pars, tracer1, tracer2)
+        bias1, beta1, bias2, beta2 = bias_beta
+
+        # If it's a QSO/DLA cross, we may have to model velocity dispersion
+        # In this case we do the slow compute
+        if tracer1['type'] == 'discrete' or tracer2['type'] == 'discrete':
+            if 'velocity dispersion' in self._corr_item.config['metals']:
+                return self._compute_metals_slow(tracer1, tracer2, pars, pk_lin)
+
+        self._temp_pk_lin = pk_lin
+        self._temp_pars = pars
+        pk, xi = self._fast_metals(tracer1['name'], tracer2['name'], beta1, beta2)
+
+        return bias1 * bias2 * pk, bias1 * bias2 * xi
+
+    @lru_cache
+    def _fast_metals(self, name1, name2, beta1, beta2):
+        pk = self.Pk_metal[(name1, name2)].compute(self._temp_pk_lin, self._temp_pars,
+                                                   fast_metals=True)
+        xi = self.Xi_metal[(name1, name2)].compute(pk, self._temp_pk_lin, self.PktoXi,
+                                                   self._temp_pars)
+
+        return pk, xi
+
+    def _compute_metals_slow(self, tracer1, tracer2, pars, pk_lin):
+        pk = self.Pk_metal[(tracer1['name'], tracer2['name'])].compute(pk_lin, pars)
+        xi = self.Xi_metal[(tracer1['name'], tracer2['name'])].compute(pk, pk_lin,
+                                                                       self.PktoXi, pars)
+
+        return pk, xi
+
+    def compute_metals(self, pars, pk_lin, component):
+        assert self._corr_item.has_metals
+
+        xi_metals = np.zeros(self.size)
+        for name1, name2, in self._corr_item.metal_correlations:
+            if self.fast_metals_unsafe:
+                pk, xi = self._compute_metals_approx(self._corr_item.tracer_catalog[name1],
+                                                     self._corr_item.tracer_catalog[name2],
+                                                     pars, pk_lin)
+            elif self.fast_metals_safe:
+                pk, xi = self._compute_metals_fast(self._corr_item.tracer_catalog[name1],
+                                                   self._corr_item.tracer_catalog[name2],
+                                                   pars, pk_lin)
+            else:
+                pk, xi = self._compute_metals_slow(self._corr_item.tracer_catalog[name1],
+                                                   self._corr_item.tracer_catalog[name2],
+                                                   pars, pk_lin)
+
+            # Save the components
+            if self.save_components:
+                self.pk[component][(name1, name2)] = pk.copy()
+                self.xi[component][(name1, name2)] = xi.copy()
+
+            # Apply the metal matrix
+            if self._has_metal_mats:
+                xi = self._data.metal_mats[(name1, name2)].dot(xi)
+                if self.save_components:
+                    self.xi_distorted[component][(name1, name2)] = xi.copy()
+
+            xi_metals += xi
+
+        return xi_metals
+
     def _compute_model(self, pars, pk_lin, component='smooth'):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
@@ -149,26 +238,9 @@ class Model:
             self.pk[component]['core'] = pk_model.copy()
             self.xi[component]['core'] = xi_model.copy()
 
-        # Compute metal correlation function
+        # Compute metal correlations
         if self._corr_item.has_metals:
-            for name1, name2, in self._corr_item.metal_correlations:
-                pk_metal = self.Pk_metal[(name1, name2)].compute(pk_lin, pars)
-                xi_metal = self.Xi_metal[(name1, name2)].compute(pk_metal, pk_lin,
-                                                                 self.PktoXi, pars)
-
-                # Save the components
-                if self.save_components:
-                    self.pk[component][(name1, name2)] = pk_metal.copy()
-                    self.xi[component][(name1, name2)] = xi_metal.copy()
-
-                # Apply the metal matrix
-                if self._has_metal_mats:
-                    xi_metal = self._data.metal_mats[(name1, name2)].dot(xi_metal)
-                    if self.save_components:
-                        self.xi_distorted[component][(name1, name2)] = xi_metal.copy()
-
-                # Add the metal component to the full xi
-                xi_model += xi_metal
+            xi_model += self.compute_metals(pars, pk_lin, component)
 
         # Apply pre distortion broadband
         if self.bb_config is not None:
