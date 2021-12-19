@@ -92,38 +92,33 @@ class Minimizer:
     def params(self):
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results'
-                               ' before minimization.')
+            raise RuntimeError('Tried to access minimization results before minimization.')
         return self._minuit.params
 
     @property
     def values(self):
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results'
-                               ' before minimization.')
+            raise RuntimeError('Tried to access minimization results before minimization.')
         return dict(self._minuit.values.to_dict())
 
     @property
     def errors(self):
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results'
-                               ' before minimization.')
+            raise RuntimeError('Tried to access minimization results before minimization.')
         return dict(self._minuit.errors.to_dict())
 
     @property
     def covariance(self):
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results'
-                               ' before minimization.')
+            raise RuntimeError('Tried to access minimization results before minimization.')
         return self._minuit.covariance
 
     @property
     def fmin(self):
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results'
-                               ' before minimization.')
+            raise RuntimeError('Tried to access minimization results before minimization.')
         return self._minuit.fmin
