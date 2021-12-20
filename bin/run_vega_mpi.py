@@ -55,6 +55,9 @@ if __name__ == '__main__':
         raise ValueError('You asked to run over a Monte Carlo simulation,'
                          ' but no "[monte carlo]" section provided.')
 
+    # run compute_model once to initialize all the caches
+    _ = vega.compute_model(run_init=False)
+
     # Run sampler
     if vega.has_sampler:
         print_func('Running the sampler')
