@@ -133,7 +133,7 @@ class Model:
 
         return bias1 * bias2 * pk, bias1 * bias2 * xi
 
-    @lru_cache
+    @lru_cache(maxsize=32)
     def _approx_metals(self, name1, name2):
         pk = self.Pk_metal[(name1, name2)].compute(self._temp_pk_lin, self._temp_pars,
                                                    fast_metals=True)
@@ -158,7 +158,7 @@ class Model:
 
         return bias1 * bias2 * pk, bias1 * bias2 * xi
 
-    @lru_cache
+    @lru_cache(maxsize=32)
     def _fast_metals(self, name1, name2, beta1, beta2):
         pk = self.Pk_metal[(name1, name2)].compute(self._temp_pk_lin, self._temp_pars,
                                                    fast_metals=True)

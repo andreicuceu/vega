@@ -131,7 +131,7 @@ def growth_integrand(a, Omega_m, Omega_de):
     return 1./inv_int
 
 
-@lru_cache
+@lru_cache(maxsize=32)
 def get_growth_interp(Omega_m, Omega_de):
     """Build growth function interpolation
     This function should be cached.
