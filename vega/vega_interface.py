@@ -356,7 +356,8 @@ class VegaInterface:
         """
         print('Warning! Activating fast metals for minimizing/sampling.')
         for name in self.corr_items:
-            self.models[name].metals.fast_metals = True
+            if self.models[name].metals is not None:
+                self.models[name].metals.fast_metals = True
 
     @staticmethod
     def _read_fiducial(fiducial_config):
