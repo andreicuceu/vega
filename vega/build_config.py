@@ -192,8 +192,9 @@ class BuildConfig:
                     config['metals']['in tracer2'] = ' '.join(self.options['metals'])
 
                 if 'fast_metals' in corr_info:
-                    config['model']['fast_metals'] = corr_info.get('fast_metals', False)
-                    config['model']['fast_metals_unsafe'] = corr_info.get('fast_metals_unsafe', False)
+                    config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
+                    config['model']['fast_metals_unsafe'] = corr_info.get('fast_metals_unsafe',
+                                                                          'False')
 
         # Things that require at least one discrete tracer
         if type1 == 'discrete' or type2 == 'discrete':
