@@ -56,11 +56,11 @@ if __name__ == '__main__':
                          ' but no "[monte carlo]" section provided.')
 
     # run compute_model once to initialize all the caches
+    vega.set_fast_metals()
     _ = vega.compute_model(run_init=False)
 
     # Run sampler
     if vega.has_sampler:
-        vega.set_fast_metals()
         print_func('Running the sampler')
         sampler = Sampler(vega.main_config['Polychord'],
                           sampling_params, vega.log_lik)
