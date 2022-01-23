@@ -60,6 +60,7 @@ if __name__ == '__main__':
 
     # Run sampler
     if vega.has_sampler:
+        vega.set_fast_metals()
         print_func('Running the sampler')
         sampler = Sampler(vega.main_config['Polychord'],
                           sampling_params, vega.log_lik)

@@ -33,6 +33,9 @@ class Metals:
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
+        if self.fast_metals_unsafe:
+            self.fast_metals = True
+
         self.save_components = fiducial.get('save-components', False)
 
         if self.save_components and self.fast_metals:

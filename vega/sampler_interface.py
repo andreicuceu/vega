@@ -8,6 +8,7 @@ from pathlib import Path
 from vega.postprocess.param_utils import build_names
 from mpi4py import MPI
 
+
 class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
