@@ -106,6 +106,8 @@ class CorrelationItem:
     @z_grid.setter
     def z_grid(self, z_grid):
         if not isinstance(z_grid, float):
+            assert (z_grid >= 0).all() and (z_grid <= 10).all()
             self._z_grid = np.array(z_grid)
         else:
+            assert z_grid >= 0 and z_grid <= 10
             self._z_grid = z_grid

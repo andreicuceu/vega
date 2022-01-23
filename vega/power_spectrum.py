@@ -82,7 +82,7 @@ class PowerSpectrum:
         self._L0_hcd_cache = None
         self._F_hcd_cache = None
 
-    def compute(self, pk_lin, params):
+    def compute(self, pk_lin, params, fast_metals=False):
         """Computes a power spectrum for the tracers using the input
         linear P(k) and parameters.
 
@@ -119,7 +119,7 @@ class PowerSpectrum:
                 bias2, beta2 = self.compute_bias_beta_hcd(bias2, beta2, params)
 
         # Compute kaiser model
-        pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2)
+        pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2, fast_metals)
 
         # add non linear small scales
         if 'small scale nl' in self._config.keys():
@@ -165,7 +165,7 @@ class PowerSpectrum:
 
         return pk_full
 
-    def compute_kaiser(self, bias1, beta1, bias2, beta2):
+    def compute_kaiser(self, bias1, beta1, bias2, beta2, fast_metals=False):
         """Compute Kaiser model.
 
         Parameters
@@ -184,9 +184,11 @@ class PowerSpectrum:
         ND Array
             Kaiser term
         """
-        pk = bias1 * bias2
-        pk = pk * (1 + beta1 * self.muk_grid**2)
+        pk = (1 + beta1 * self.muk_grid**2)
         pk = pk * (1 + beta2 * self.muk_grid**2)
+
+        if not fast_metals:
+            pk *= bias1 * bias2
         return pk
 
     def compute_bias_beta_uv(self, bias, beta, params):
@@ -412,12 +414,6 @@ class PowerSpectrum:
             self._arinyo_dnl_cache = dnl
 
         return self._arinyo_dnl_cache
-
-    # @staticmethod
-    # @jit(nopython=True)
-    # def _dnl_arinyo(k_grid, muk_grid, pk_fid, q1, kv, av, bv, kp):
-
-        return dnl
 
     def compute_Gk(self, params):
         """Model the effect of binning of the cf.

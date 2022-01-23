@@ -3,6 +3,8 @@ from scipy.integrate import quad
 from numba import jit, float64
 import os.path
 from pathlib import Path
+from functools import lru_cache
+from scipy.interpolate import interp1d
 
 import vega
 
@@ -129,23 +131,59 @@ def growth_integrand(a, Omega_m, Omega_de):
     return 1./inv_int
 
 
+@lru_cache(maxsize=32)
+def get_growth_interp(Omega_m, Omega_de):
+    """Build growth function interpolation
+    This function should be cached.
+
+    Parameters
+    ----------
+    Omega_m : float
+        Matter fraction at z = 0
+    Omega_de : float
+        Dark Energy fraction at z = 0
+
+    Returns
+    -------
+    scipy.interpolation.interp1d
+        Growth function interpolation
+    """
+    # Initialize redshift and growth arrays
+    z_grid = np.linspace(0, 10, 1000)
+    growth = np.zeros(1000)
+
+    # Compute growth at each redshift
+    for i, z in enumerate(z_grid):
+        a = 1 / (1 + z)
+        args = (Omega_m, Omega_de)
+        growth_int = quad(growth_integrand, 0, a, args=args)[0]
+        hubble_par = hubble(z, Omega_m, Omega_de)
+        growth[i] = 5./2. * Omega_m * hubble_par * growth_int
+
+    # Return growth interpolation
+    return interp1d(z_grid, growth, kind='cubic')
+
+
 def growth_function(z, Omega_m, Omega_de):
     """Compute growth factor at redshift z
 
     Parameters
     ----------
-    z : float
+    z : float or array
         redshift
     Omega_m : float
         Matter fraction at z = 0
     Omega_de : float
         Dark Energy fraction at z = 0
+
+    Returns
+    -------
+    float or array
+        Growth function
     """
-    a = 1 / (1 + z)
-    args = (Omega_m, Omega_de)
-    growth_int = quad(growth_integrand, 0, a, args=args)[0]
-    hubble_par = hubble(z, Omega_m, Omega_de)
-    return 5./2. * Omega_m * hubble_par * growth_int
+    # Get cached interpolation
+    growth_interp = get_growth_interp(Omega_m, Omega_de)
+    return growth_interp(z)
 
 
 def find_file(path):

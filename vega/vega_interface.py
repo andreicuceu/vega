@@ -336,6 +336,7 @@ class VegaInterface:
         if self.minimizer is None:
             print("No sampled parameters. Skipping minimization.")
             return
+        self.set_fast_metals()
         self.minimizer.minimize()
 
     @property
@@ -348,6 +349,14 @@ class VegaInterface:
             Returns the Minimizer class which stores the bestfit values
         """
         return self.minimizer
+
+    def set_fast_metals(self):
+        """Activate fast metals. This is automatically called when
+        running the minimizer or the sampler.
+        """
+        print('Warning! Activating fast metals for minimizing/sampling.')
+        for name in self.corr_items:
+            self.models[name].metals.fast_metals = True
 
     @staticmethod
     def _read_fiducial(fiducial_config):

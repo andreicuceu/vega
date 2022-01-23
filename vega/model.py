@@ -1,8 +1,7 @@
-import numpy as np
-
 from . import power_spectrum
 from . import pktoxi
 from . import correlation_func as corr_func
+from . import metals
 
 
 class Model:
@@ -70,175 +69,10 @@ class Model:
                                                      self._corr_item.tracer1,
                                                      self._corr_item.tracer2, self.bb_config)
 
-        # Initialize metals
-        self.Pk_metal = {}
-        self.Xi_metal = {}
+        # Initialize metals if needed
+        self.metals = None
         if self._corr_item.has_metals:
-            for name1, name2 in self._corr_item.metal_correlations:
-                # Get the tracer info
-                tracer1 = self._corr_item.tracer_catalog[name1]
-                tracer2 = self._corr_item.tracer_catalog[name2]
-
-                # Read rp and rt for the metal correlation
-                rp_grid = data.metal_rp_grids[(name1, name2)]
-                rt_grid = data.metal_rt_grids[(name1, name2)]
-
-                # Compute the corresponding r/mu coords
-                r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
-                mask = r_grid != 0
-                mu_grid = np.zeros(len(r_grid))
-                mu_grid[mask] = rp_grid[mask] / r_grid[mask]
-
-                # Initialize the coords grid dictionary
-                coords_grid = {}
-                coords_grid['r'] = r_grid
-                coords_grid['mu'] = mu_grid
-                coords_grid['z'] = data.metal_z_grids[(name1, name2)]
-
-                # Get bin sizes
-                if self._data is not None:
-                    self._corr_item.config['metals']['bin_size_rp'] = str(self._data.bin_size_rp)
-                    self._corr_item.config['metals']['bin_size_rt'] = str(self._data.bin_size_rt)
-
-                # Initialize the metal correlation P(k)
-                self.Pk_metal[(name1, name2)] = power_spectrum.PowerSpectrum(
-                                    self._corr_item.config['metals'], fiducial,
-                                    tracer1, tracer2, self._corr_item.name)
-
-                assert len(self.Pk_metal[(name1, name2)].muk_grid) == len(self.Pk_core.muk_grid)
-                assert self._corr_item.config['metals'].getint('ell_max', 6) == ell_max, \
-                       "Core and metals must have the same ell_max"
-
-                # Initialize the metal correlation Xi
-                self.Xi_metal[(name1, name2)] = corr_func.CorrelationFunction(
-                                    self._corr_item.config['metals'], fiducial, coords_grid,
-                                    scale_params, tracer1, tracer2, metal_corr=True)
-
-            self._has_metal_mats = False
-            if self._data is not None:
-                self._has_metal_mats = self._data.metal_mats is not None
-
-    def _compute_model(self, pars, pk_lin, component='smooth'):
-        """Compute a model correlation function given the input pars
-        and a fiducial linear power spectrum.
-
-        This is used internally for computing the peak and smooth
-        components separately.
-
-        Parameters
-        ----------
-        pars : dict
-            Computation parameters
-        pk_lin : 1D Array
-            Linear power spectrum
-        component : str, optional
-            Name of pk component, used as key for dictionary of saved
-            components ('peak' or 'smooth'), by default 'smooth'
-
-        Returns
-        -------
-        1D Array
-            Model correlation function for the specified component
-        """
-        # Compute core model correlation function
-        pk_model = self.Pk_core.compute(pk_lin, pars)
-        xi_model = self.Xi_core.compute(pk_model, pk_lin, self.PktoXi, pars)
-
-        # Save the components
-        if self.save_components:
-            self.pk[component]['core'] = pk_model.copy()
-            self.xi[component]['core'] = xi_model.copy()
-
-        # Compute metal correlation function
-        if self._corr_item.has_metals:
-            for name1, name2, in self._corr_item.metal_correlations:
-                pk_metal = self.Pk_metal[(name1, name2)].compute(pk_lin, pars)
-                xi_metal = self.Xi_metal[(name1, name2)].compute(pk_metal, pk_lin,
-                                                                 self.PktoXi, pars)
-
-                # Save the components
-                if self.save_components:
-                    self.pk[component][(name1, name2)] = pk_metal.copy()
-                    self.xi[component][(name1, name2)] = xi_metal.copy()
-
-                # Apply the metal matrix
-                if self._has_metal_mats:
-                    xi_metal = self._data.metal_mats[(name1, name2)].dot(xi_metal)
-                    if self.save_components:
-                        self.xi_distorted[component][(name1, name2)] = xi_metal.copy()
-
-                # Add the metal component to the full xi
-                xi_model += xi_metal
-
-        # Apply pre distortion broadband
-        if self.bb_config is not None:
-            assert self.Xi_core.has_bb
-            xi_model *= self.Xi_core.compute_broadband(pars, 'pre-mul')
-            xi_model += self.Xi_core.compute_broadband(pars, 'pre-add')
-
-        # Apply the distortion matrix
-        if self._has_distortion_mat:
-            xi_model = self._data.distortion_mat.dot(xi_model)
-
-        # Apply post distortion broadband
-        if self.bb_config is not None:
-            assert self.Xi_core.has_bb
-            xi_model *= self.Xi_core.compute_broadband(pars, 'post-mul')
-            xi_model += self.Xi_core.compute_broadband(pars, 'post-add')
-
-        # Save final xi
-        if self.save_components:
-            self.xi_distorted[component]['core'] = xi_model.copy()
-
-        return xi_model
-
-    def compute(self, pars, pk_full, pk_smooth):
-        """Compute full correlation function model using the input parameters,
-        a fiducial linear power spectrum and its smooth component.
-
-        Parameters
-        ----------
-        pars : dict
-            Computation parameters
-        pk_full : 1D Array
-            Full fiducial linear power spectrum
-        pk_smooth : 1D Array
-            Smooth component of the fiducial linear power spectrum
-
-        Returns
-        -------
-        1D Array
-            Full correlation function
-        """
-        pars['peak'] = True
-        xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
-
-        pars['peak'] = False
-        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
-
-        xi_full = pars['bao_amp'] * xi_peak + xi_smooth
-        return xi_full
-
-    def compute_direct(self, pars, pk_full):
-        """Compute full correlation function model directly from the full
-        power spectrum.
-
-        Parameters
-        ----------
-        pars : dict
-            Computation parameters
-        pk_full : 1D Array
-            Full fiducial linear power spectrum
-
-        Returns
-        -------
-        1D Array
-            Full correlation function
-        """
-        pars['peak'] = False
-        xi_full = self._compute_model(pars, pk_full, 'full')
-
-        return xi_full
+            self.metals = metals.Metals(corr_item, fiducial, scale_params, self.PktoXi, data)
 
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp, coeff_binning_model):
@@ -296,3 +130,115 @@ class Model:
             bb_config.append(config)
 
         return bb_config
+
+    def _compute_model(self, pars, pk_lin, component='smooth'):
+        """Compute a model correlation function given the input pars
+        and a fiducial linear power spectrum.
+
+        This is used internally for computing the peak and smooth
+        components separately.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_lin : 1D Array
+            Linear power spectrum
+        component : str, optional
+            Name of pk component, used as key for dictionary of saved
+            components ('peak' or 'smooth' or 'full'), by default 'smooth'
+
+        Returns
+        -------
+        1D Array
+            Model correlation function for the specified component
+        """
+        # Compute core model correlation function
+        pk_model = self.Pk_core.compute(pk_lin, pars)
+        xi_model = self.Xi_core.compute(pk_model, pk_lin, self.PktoXi, pars)
+
+        # Save the components
+        if self.save_components:
+            self.pk[component]['core'] = pk_model.copy()
+            self.xi[component]['core'] = xi_model.copy()
+
+        # Compute metal correlations
+        if self._corr_item.has_metals:
+            xi_model += self.metals.compute(pars, pk_lin, component)
+
+            # Merge saved metal components into the member dictionaries
+            if self.save_components:
+                self.pk[component] = {**self.pk[component], **self.metals.pk[component]}
+                self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
+                self.xi_distorted[component] = {**self.xi_distorted[component],
+                                                **self.metals.xi_distorted[component]}
+
+        # Apply pre distortion broadband
+        if self.bb_config is not None:
+            assert self.Xi_core.has_bb
+            xi_model *= self.Xi_core.compute_broadband(pars, 'pre-mul')
+            xi_model += self.Xi_core.compute_broadband(pars, 'pre-add')
+
+        # Apply the distortion matrix
+        if self._has_distortion_mat:
+            xi_model = self._data.distortion_mat.dot(xi_model)
+
+        # Apply post distortion broadband
+        if self.bb_config is not None:
+            assert self.Xi_core.has_bb
+            xi_model *= self.Xi_core.compute_broadband(pars, 'post-mul')
+            xi_model += self.Xi_core.compute_broadband(pars, 'post-add')
+
+        # Save final xi
+        if self.save_components:
+            self.xi_distorted[component]['core'] = xi_model.copy()
+
+        return xi_model
+
+    def compute(self, pars, pk_full, pk_smooth):
+        """Compute correlation function model using the peak/smooth
+        (wiggles/no-wiggles) decomposition.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_full : 1D Array
+            Full fiducial linear power spectrum
+        pk_smooth : 1D Array
+            Smooth component of the fiducial linear power spectrum
+
+        Returns
+        -------
+        1D Array
+            Full correlation function
+        """
+        pars['peak'] = True
+        xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
+
+        pars['peak'] = False
+        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
+
+        xi_full = pars['bao_amp'] * xi_peak + xi_smooth
+        return xi_full
+
+    def compute_direct(self, pars, pk_full):
+        """Compute full correlation function model directly from the full
+        power spectrum.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_full : 1D Array
+            Full fiducial linear power spectrum
+
+        Returns
+        -------
+        1D Array
+            Full correlation function
+        """
+        pars['peak'] = False
+        xi_full = self._compute_model(pars, pk_full, 'full')
+
+        return xi_full

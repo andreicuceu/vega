@@ -31,6 +31,9 @@ if __name__ == '__main__':
         raise ValueError('You asked to run over a Monte Carlo simulation,'
                          ' but no "[monte carlo]" section provided.')
 
+    # run compute_model once to initialize all the caches
+    _ = vega.compute_model(run_init=False)
+
     # Run minimizer
     vega.minimize()
 
@@ -43,5 +46,5 @@ if __name__ == '__main__':
     if vega.minimizer is not None:
         for par, val in vega.bestfit.values.items():
             vega.params[par] = val
-    corr_funcs = vega.compute_model(vega.params)
+    corr_funcs = vega.compute_model(vega.params, run_init=False)
     vega.output.write_results(corr_funcs, vega.params, vega.minimizer, scan_results, vega.models)
