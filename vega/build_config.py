@@ -57,7 +57,7 @@ class BuildConfig:
         Parameters
         ----------
         correlations : dict
-            Information for each correlation. It must contain the path to the measure correlation,
+            Information for each correlation. It must contain the path to the measured correlation,
             and the path to metal files if metals were requested.
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
@@ -191,6 +191,10 @@ class BuildConfig:
                 if type2 == 'continuous':
                     config['metals']['in tracer2'] = ' '.join(self.options['metals'])
 
+                if 'fast_metals' in corr_info:
+                    config['model']['fast_metals'] = corr_info.get('fast_metals', False)
+                    config['model']['fast_metals_unsafe'] = corr_info.get('fast_metals_unsafe', False)
+
         # Things that require at least one discrete tracer
         if type1 == 'discrete' or type2 == 'discrete':
             if self.options['velocity_dispersion'] is not None:
@@ -206,6 +210,11 @@ class BuildConfig:
                 config['model']['radiation effects'] = 'True'
 
         # General things
+        if 'broadband' in corr_info:
+            config['broadband'] = {}
+            for key, item in corr_info.items():
+                config['broadband'][key] = item
+
         if self.options['fullshape_smoothing'] is not None:
             assert self.options['fullshape_smoothing'] in ['gauss', 'exp']
             config['model']['fullshape smoothing'] = self.options['fullshape_smoothing']
@@ -277,10 +286,18 @@ class BuildConfig:
         config['output'] = {}
         config['output']['filename'] = str(self.fitter_out_path / run_name)
 
+        # Write the sampled parameters
         sample_params = fit_info['sample_params']
         config['sample'] = {}
         for param in sample_params:
             config['sample'][param] = 'True'
+
+        # Write the priors
+        if 'priors' in fit_info:
+            config['priors'] = {}
+            for par, prior in fit_info['priors']:
+                assert par in config['sample'], 'Cannot add prior for parameter that is not sampled'
+                config['priors'][par] = prior
 
         # Write the parameters
         self.parameters = parameters
