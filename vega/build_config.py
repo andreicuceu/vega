@@ -296,7 +296,7 @@ class BuildConfig:
         # Write the priors
         if 'priors' in fit_info:
             config['priors'] = {}
-            for par, prior in fit_info['priors']:
+            for par, prior in fit_info['priors'].items():
                 assert par in config['sample'], 'Cannot add prior for parameter that is not sampled'
                 config['priors'][par] = prior
 
