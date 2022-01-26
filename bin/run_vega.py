@@ -3,16 +3,10 @@ from vega import VegaInterface
 from vega.minimizer import Minimizer
 import argparse
 
-if __name__ == '__main__':
-    pars = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description='Run Vega.')
 
-    pars.add_argument('config', type=str, default=None, help='Config file')
-    args = pars.parse_args()
-
+def run_vega(config_path):
     # Initialize Vega
-    vega = VegaInterface(args.config)
+    vega = VegaInterface(config_path)
 
     # Check if we need to run over a Monte Carlo mock
     run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
@@ -48,3 +42,14 @@ if __name__ == '__main__':
             vega.params[par] = val
     corr_funcs = vega.compute_model(vega.params, run_init=False)
     vega.output.write_results(corr_funcs, vega.params, vega.minimizer, scan_results, vega.models)
+
+
+if __name__ == '__main__':
+    pars = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Run Vega.')
+
+    pars.add_argument('config', type=str, default=None, help='Config file')
+    args = pars.parse_args()
+
+    run_vega(args.config)
