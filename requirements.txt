@@ -1,6 +1,6 @@
 numpy==1.22.1
 scipy==1.7.3
-astropy
+astropy==5.0.1
 numba
 h5py
 setuptools
