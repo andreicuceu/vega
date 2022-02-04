@@ -401,7 +401,11 @@ class Data:
         self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
         self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
 
-        dm_name = 'DM_' + name
+        if self._blind:
+            dm_name = 'DM_BLIND_' + name
+        else:
+            dm_name = 'DM_' + name
+
         if dm_name in metal_hdul[2].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         else:
