@@ -183,7 +183,10 @@ class ScaleParameters:
             phi += (np.pi - np.exp(rnsps**2))
 
         if name_addon == '_full' and not fullshape_alpha:
-            alpha = params['alpha']
+            if params['peak']:
+                alpha = params['alpha']
+            else:
+                alpha = params['alpha_smooth']
         else:
             alpha = params['alpha' + name_addon]
 
