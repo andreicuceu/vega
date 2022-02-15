@@ -122,3 +122,10 @@ class Minimizer:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')
         return self._minuit.fmin
+
+    @property
+    def minuit(self):
+        if not self._run_flag:
+            print('Run Minimizer.minimize() before asking for results')
+            raise RuntimeError('Tried to access minimization results before minimization.')
+        return self._minuit

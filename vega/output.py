@@ -214,12 +214,16 @@ class Output:
         #     if len(item) > 8:
         #         name = 'hierarch ' + item
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
+        bestfit_hdu.header['VALID'] = minimizer.minuit.valid
+        bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate
 
         bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
         bestfit_hdu.header.comments['TTYPE2'] = 'Bestfit values of sampled parameters'
         bestfit_hdu.header.comments['TTYPE3'] = 'Errors around the bestfit'
         bestfit_hdu.header.comments['TTYPE4'] = 'Covariance matrix around the bestfit'
         bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
+        bestfit_hdu.header.comments['VALID'] = 'Flag for valid fit'
+        bestfit_hdu.header.comments['ACCURATE'] = 'Flag for accurate fit'
 
         return bestfit_hdu
 
