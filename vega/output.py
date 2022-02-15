@@ -131,8 +131,6 @@ class Output:
         """
         sizes = {name: len(cf) for name, cf in corr_funcs.items()}
         num_rows = np.max(list(sizes.values()))
-        print(sizes)
-        print(num_rows)
         columns = []
         for name, cf in corr_funcs.items():
             pad = (0, num_rows - sizes[name])
