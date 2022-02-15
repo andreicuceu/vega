@@ -290,8 +290,14 @@ class BuildConfig:
         # Write the sampled parameters
         sample_params = fit_info['sample_params']
         config['sample'] = {}
-        for param in sample_params:
-            config['sample'][param] = 'True'
+        if type(sample_params) is list:
+            for param in sample_params:
+                config['sample'][param] = 'True'
+        elif type(sample_params) is dict:
+            for param, setup in sample_params.items():
+                config['sample'][param] = setup
+        else:
+            raise TypeError('The sample_params object has to be either a list or a dict.')
 
         # Write the priors
         if 'priors' in fit_info:
