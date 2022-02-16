@@ -479,7 +479,8 @@ class BuildConfig:
         # Full-shape smoothing
         if self.options['fullshape_smoothing'] is not None:
             new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
-            new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
+            if self.options['fullshape_smoothing'] in ['gauss', 'exp']:
+                new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
             if self.options['fullshape_smoothing'] == 'exp':
                 new_params['par_exp_smooth'] = get_par('par_exp_smooth')
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
