@@ -217,7 +217,7 @@ class BuildConfig:
                 config['broadband'][key] = item
 
         if self.options['fullshape_smoothing'] is not None:
-            assert self.options['fullshape_smoothing'] in ['gauss', 'exp']
+            assert self.options['fullshape_smoothing'] in ['gauss', 'gauss_iso', 'exp']
             config['model']['fullshape smoothing'] = self.options['fullshape_smoothing']
 
         if self.name_extension is None:
