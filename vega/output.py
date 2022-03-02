@@ -356,6 +356,8 @@ class Output:
 
         # Parts are smooth and/or peak
         for part, data in model_components.items():
+            if not data:
+                continue
             shape = np.shape(data['core'])
             if len(shape) == 1:
                 form = 'D'
