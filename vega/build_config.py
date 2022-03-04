@@ -11,7 +11,8 @@ class BuildConfig:
     """
 
     _params_template = None
-    recognised_fits = ['lyalya_lyalya', 'lyalya_lyalyb', 'lyalya_qso', 'lyalyb_qso',
+    recognised_fits = ['lyalya_lyalya', 'lyalya_lyalyb', 'lya_lyb',
+                       'lyalya_qso', 'lyalyb_qso', 'lyb_qso',
                        'lyalya_dla', 'lyalyb_dla', 'qso_qso', 'qso_dla', 'dla_dla',
                        'lyalya_lyalya__lyalya_lyalyb', 'lyalya_lyalya__lyalya_qso',
                        'lyalya_lyalyb__lyalyb_qso', 'lyalya_qso__lyalyb_qso',
@@ -413,6 +414,20 @@ class BuildConfig:
                 else:
                     new_params['bias_LYA'] = bias_lya
                 new_params['beta_LYA'] = beta_lya
+            elif name == 'LYB':
+                bias_lyb = self.get_lya_bias(self.zeff_in)
+                bias_eta_lyb = parameters.get('bias_eta_LYB', None)
+                beta_lyb = float(get_par('beta_LYB'))
+
+                if bias_eta_lyb is None:
+                    bias_eta_lyb = bias_lyb * beta_lyb / growth_rate
+
+                if use_bias_eta:
+                    new_params['growth_rate'] = growth_rate
+                    new_params['bias_eta_LYB'] = bias_eta_lyb
+                else:
+                    new_params['bias_LYB'] = bias_lyb
+                new_params['beta_LYB'] = beta_lyb
             elif name == 'QSO':
                 bias_qso = self.get_qso_bias(self.zeff_in)
                 beta_qso = parameters.get('beta_QSO', None)
