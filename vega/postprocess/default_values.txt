@@ -15,6 +15,9 @@ growth_rate                     0.0         2.0         0.1
 bias_LYA                       -2.0         0.0         0.01
 bias_eta_LYA                   -2.0         0.0         0.01
 beta_LYA                        0.0         5.0         0.1
+bias_LYB                       -2.0         0.0         0.01
+bias_eta_LYB                   -2.0         0.0         0.01
+beta_LYB                        0.0         5.0         0.1
 bias_QSO                        0.0        10.0         0.1
 beta_QSO                        0.0         5.0         0.1
 bias_hcd                       -0.2         0.0         0.01

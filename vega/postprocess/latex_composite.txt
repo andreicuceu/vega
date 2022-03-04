@@ -2,6 +2,7 @@
 # Composite parameters
 # vega_name latex_name
 LYA Ly\alpha
+LYB Ly\beta
 QSO QSO
 SiII(1190) SiII(1190)
 SiII(1193) SiII(1193)
