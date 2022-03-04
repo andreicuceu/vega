@@ -20,7 +20,7 @@ class BuildConfig:
                        'lyalya_lyalya__lyalya_dla', 'lyalya_lyalyb__lyalyb_dla',
                        'lyalya_dla__lyalyb_dla',
                        'lyalya_lyalya__lyalya_lyalyb__lyalya_qso__lyalyb_qso',
-                       'lyalya_lyalya__lya_lyb__lyalya_qso__lya_qso',
+                       'lyalya_lyalya__lya_lyb__lyalya_qso__lyb_qso',
                        'lyalya_lyalya__lyalya_lyalyb__lyalya_dla__lyalyb_dla']
 
     def __init__(self, options={}):
