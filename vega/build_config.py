@@ -216,7 +216,7 @@ class BuildConfig:
         # General things
         if 'broadband' in corr_info:
             config['broadband'] = {}
-            for key, item in corr_info.items():
+            for key, item in corr_info['broadband'].items():
                 config['broadband'][key] = item
 
         if self.options['fullshape_smoothing'] is not None:
