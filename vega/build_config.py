@@ -502,6 +502,11 @@ class BuildConfig:
                 new_params['par_exp_smooth'] = get_par('par_exp_smooth')
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
 
+        # Check for broadband parameters
+        for name, value in parameters.items():
+            if 'BB' in name and name not in new_params:
+                new_params[name] = value
+
         self._parameters = new_params
 
     @staticmethod
