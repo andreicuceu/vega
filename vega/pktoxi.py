@@ -4,6 +4,8 @@ from scipy import special
 from scipy import interpolate
 from mcfit import P2xi
 
+from vega.utils import VegaBoundsError
+
 
 class PktoXi:
     """Transform a 2D power spectrum to a correlation function
@@ -86,7 +88,10 @@ class PktoXi:
             # Check for nans and get the model correlation
             mask = r_grid != 0
             xi_ell = np.zeros(len(r_grid))
-            xi_ell[mask] = xi_interp(np.log(r_grid[mask]))
+            try:
+                xi_ell[mask] = xi_interp(np.log(r_grid[mask]))
+            except ValueError:
+                raise VegaBoundsError
 
             # If only one multipole was required we are done
             if not single_ell < 0:

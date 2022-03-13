@@ -225,3 +225,7 @@ def find_file(path):
         return in_vega
 
     raise RuntimeError('The path/file does not exists: ', input_path)
+
+
+class VegaBoundsError(Exception):
+    pass

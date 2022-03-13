@@ -219,11 +219,14 @@ class VegaInterface:
         # Go trough each component and compute the chi^2
         chi2 = 0
         for name in self.corr_items:
-            if direct_pk is None:
-                model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
-                                                     self.fiducial['pk_smooth'])
-            else:
-                model_cf = self.models[name].compute_direct(local_params, direct_pk)
+            try:
+                if direct_pk is None:
+                    model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
+                                                         self.fiducial['pk_smooth'])
+                else:
+                    model_cf = self.models[name].compute_direct(local_params, direct_pk)
+            except utils.VegaBoundsError:
+                return 1e100
 
             if self.monte_carlo:
                 diff = self.data[name].masked_mc_mock - model_cf[self.data[name].mask]
