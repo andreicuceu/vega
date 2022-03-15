@@ -169,8 +169,8 @@ class BuildConfig:
             config['parameters']['per binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
 
         # Write the model options
-        # Things that require both tracers to be LYA
-        if tracer1 == 'LYA' and tracer2 == 'LYA':
+        # Things that require LYA
+        if tracer1 == 'LYA' or tracer2 == 'LYA':
             if self.options['small_scale_nl']:
                 config['model']['small scale nl'] = 'dnl_arinyo'
 

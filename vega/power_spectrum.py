@@ -394,8 +394,9 @@ class PowerSpectrum:
         ND Array
             D_NL factor
         """
-        assert self._tracer1['name'] == "LYA"
-        assert self._tracer2['name'] == "LYA"
+        two_lya_flag = "LY" in self._tracer1['name'] and "LY" in self._tracer2['name']
+        one_lya_flag = "LY" in self._tracer1['name'] or "LY" in self._tracer2['name']
+
         q1 = params["dnl_arinyo_q1"]
         kv = params["dnl_arinyo_kv"]
         av = params["dnl_arinyo_av"]
@@ -411,7 +412,12 @@ class PowerSpectrum:
             dnl = np.exp(growth * (1 - pec_velocity) - pressure)
 
             self._arinyo_pars = np.array([q1, kv, av, bv, kp])
-            self._arinyo_dnl_cache = dnl
+            if two_lya_flag:
+                self._arinyo_dnl_cache = dnl
+            elif one_lya_flag:
+                self._arinyo_dnl_cache = np.sqrt(dnl)
+            else:
+                raise ValueError("Arinyo NL term called for correlation with no Lyman-alpha")
 
         return self._arinyo_dnl_cache
 
