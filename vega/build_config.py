@@ -40,6 +40,7 @@ class BuildConfig:
         self.options['smooth_scaling'] = options.get('smooth_scaling', False)
 
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
+        self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
         self.options['bao_broadening'] = options.get('bao_broadening', False)
         self.options['uv_background'] = options.get('uv_background', False)
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
@@ -170,8 +171,11 @@ class BuildConfig:
 
         # Write the model options
         # Things that require LYA
-        if tracer1 == 'LYA' or tracer2 == 'LYA':
+        if tracer1 == 'LYA' and tracer2 == 'LYA':
             if self.options['small_scale_nl']:
+                config['model']['small scale nl'] = 'dnl_arinyo'
+        elif tracer1 == 'LYA' or tracer2 == 'LYA':
+            if self.options['small_scale_nl_cross']:
                 config['model']['small scale nl'] = 'dnl_arinyo'
 
         # Things that require at least one tracer to be continuous
