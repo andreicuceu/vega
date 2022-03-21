@@ -163,6 +163,9 @@ class PowerSpectrum:
                 pk_full *= self.compute_velocity_dispersion_gauss(params)
             elif 'lorentz' in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_lorentz(params)
+            elif 'lorentz_gauss' in smoothing_type:
+                pk_full *= self.compute_velocity_dispersion_lorentz(params)
+                pk_full *= self.compute_velocity_dispersion_gauss(params)
             else:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
