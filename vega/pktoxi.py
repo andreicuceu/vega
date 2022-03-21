@@ -3,6 +3,8 @@ from numpy import fft
 from scipy import special
 from scipy import interpolate
 from mcfit import P2xi
+from cachetools import cached, LRUCache
+from cachetools.keys import hashkey
 
 from vega.utils import VegaBoundsError
 
@@ -10,6 +12,8 @@ from vega.utils import VegaBoundsError
 class PktoXi:
     """Transform a 2D power spectrum to a correlation function
     """
+    cache = LRUCache(128)
+
     def __init__(self, k_grid, muk_grid, ell_max=6, old_fftlog=False):
         """Initialize the FFTLog and the Legendre polynomials
 
@@ -29,7 +33,7 @@ class PktoXi:
         self._old_fftlog = old_fftlog
 
         # Initialize the multipole values we will need (only even ells)
-        self.ell_vals = np.arange(0, ell_max + 1, 2)
+        self.ell_vals = tuple(np.arange(0, ell_max + 1, 2))
 
         # Initialize FFTLog objects and Legendre polynomials for each multipole
         self.fftlog_objects = {}
@@ -42,6 +46,8 @@ class PktoXi:
             self.legendre_pk[ell] = special.legendre(ell)(self.muk_grid)
             # We don't know the mu grid for Xi in advance, so just initialize
             self.legendre_xi[ell] = special.legendre(ell)
+
+        self.cache_pars = None
 
     def compute(self, r_grid, mu_grid, pk, single_ell=-1):
         """Compute the correlation function from an input Pk
@@ -73,6 +79,11 @@ class PktoXi:
             assert type(single_ell) is int, "You need to pass an integer"
             ell_vals = [single_ell]
 
+        # If we have caching, use the cached functions
+        if self.cache_pars is not None and single_ell < 0:
+            xi_ell_interp = self.compute_xi_ell(pk, ell_vals, *self.cache_pars)
+            return self.compute_xi(xi_ell_interp, r_grid, mu_grid)
+
         # Initialize the Xi_ell array
         xi_ell_arr = np.zeros([len(ell_vals), len(r_grid)])
         for ell in ell_vals:
@@ -96,6 +107,40 @@ class PktoXi:
             # If only one multipole was required we are done
             if not single_ell < 0:
                 return xi_ell
+
+            # Add the Legendre polynomials
+            xi_ell_arr[ell//2, :] = xi_ell * self.legendre_xi[ell](mu_grid)
+
+        # Sum over the multipoles
+        full_xi = np.sum(xi_ell_arr, axis=0)
+        return full_xi
+
+    @cached(cache=cache, key=lambda self, pk, ell_vals, *cache_pars: hashkey(ell_vals, *cache_pars))
+    def compute_xi_ell(self, pk, ell_vals, *cache_pars):
+        xi_ell_interp = {}
+        for ell in ell_vals:
+            # Compute the Pk_ell multipole
+            pk_ell = np.sum(self.dmuk * self.legendre_pk[ell] * pk, axis=0) * (2 * ell + 1)
+
+            # Compute the FFTLog to transform Pk_ell to Xi_ell
+            r_fft, xi_fft = self.fftlog_objects[ell](pk_ell)
+
+            # Interpolate to r grid
+            xi_ell_interp[ell] = interpolate.interp1d(np.log(r_fft), xi_fft, kind='cubic')
+
+        return xi_ell_interp
+
+    def compute_xi(self, xi_ell_interp, r_grid, mu_grid):
+        # Initialize the Xi_ell array
+        xi_ell_arr = np.zeros([len(self.ell_vals), len(r_grid)])
+        for ell in self.ell_vals:
+            # Check for nans and get the model correlation
+            mask = r_grid != 0
+            xi_ell = np.zeros(len(r_grid))
+            try:
+                xi_ell[mask] = xi_ell_interp[ell](np.log(r_grid[mask]))
+            except ValueError:
+                raise VegaBoundsError
 
             # Add the Legendre polynomials
             xi_ell_arr[ell//2, :] = xi_ell * self.legendre_xi[ell](mu_grid)

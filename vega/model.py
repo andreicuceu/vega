@@ -155,6 +155,9 @@ class Model:
         """
         # Compute core model correlation function
         pk_model = self.Pk_core.compute(pk_lin, pars)
+
+        # Protect against old caches that have not been cleaned
+        self.PktoXi.cache_pars = None
         xi_model = self.Xi_core.compute(pk_model, pk_lin, self.PktoXi, pars)
 
         # Save the components

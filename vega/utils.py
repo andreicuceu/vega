@@ -53,7 +53,7 @@ def _tracer_bias_beta(params, name):
     return bias, beta
 
 
-def bias_beta(params, tracer1, tracer2):
+def bias_beta(params, tracer1_name, tracer2_name):
     """Get bias and beta values for the two tracers
 
     Parameters
@@ -70,11 +70,11 @@ def bias_beta(params, tracer1, tracer2):
     float, float, float, float
         bias_1, beta_1, bias_2, beta_2
     """
-    bias1, beta1 = _tracer_bias_beta(params, tracer1['name'])
-    if tracer1['name'] == tracer2['name']:
+    bias1, beta1 = _tracer_bias_beta(params, tracer1_name)
+    if tracer1_name == tracer2_name:
         bias2, beta2 = bias1, beta1
     else:
-        bias2, beta2 = _tracer_bias_beta(params, tracer2['name'])
+        bias2, beta2 = _tracer_bias_beta(params, tracer2_name)
 
     return bias1, beta1, bias2, beta2
 

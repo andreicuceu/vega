@@ -56,8 +56,8 @@ if __name__ == '__main__':
                          ' but no "[monte carlo]" section provided.')
 
     # run compute_model once to initialize all the caches
-    vega.set_fast_metals()
-    _ = vega.compute_model(run_init=False)
+    # vega.set_fast_metals()
+    # _ = vega.compute_model(run_init=False)
 
     # Run sampler
     if vega.has_sampler:

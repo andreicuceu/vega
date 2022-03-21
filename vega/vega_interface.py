@@ -340,8 +340,8 @@ class VegaInterface:
             print("No sampled parameters. Skipping minimization.")
             return
 
-        if not self.fiducial['save-components']:
-            self.set_fast_metals()
+        # if not self.fiducial['save-components']:
+            # self.set_fast_metals()
 
         self.minimizer.minimize()
 

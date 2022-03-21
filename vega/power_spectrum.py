@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 from pkg_resources import resource_filename
 from numba import njit, float64
 from . import utils
@@ -31,8 +32,11 @@ class PowerSpectrum:
             Name of dataset, by default None
         """
         self._config = config
-        self._tracer1 = tracer1
-        self._tracer2 = tracer2
+        self.tracer1_name = copy.deepcopy(tracer1['name'])
+        self.tracer2_name = copy.deepcopy(tracer2['name'])
+        self.tracer1_type = copy.deepcopy(tracer1['type'])
+        self.tracer2_type = copy.deepcopy(tracer2['type'])
+
         self._name = dataset_name
         self.k_grid = fiducial['k']
         self._bin_size_rp = config.getfloat('bin_size_rp')
@@ -101,21 +105,21 @@ class PowerSpectrum:
         # params = params
 
         # Get the core biases and betas
-        bias_beta = utils.bias_beta(params, self._tracer1, self._tracer2)
+        bias_beta = utils.bias_beta(params, self.tracer1_name, self.tracer2_name)
         bias1, beta1, bias2, beta2 = bias_beta
 
         # Add UV model
         if self._add_uv:
-            if self._tracer1['name'] == 'LYA':
+            if self.tracer1_name == 'LYA':
                 bias1, beta1 = self.compute_bias_beta_uv(bias1, beta1, params)
-            if self._tracer2['name'] == 'LYA':
+            if self.tracer2_name == 'LYA':
                 bias2, beta2 = self.compute_bias_beta_uv(bias2, beta2, params)
 
         # Add HCD model
         if self._hcd_model is not None:
-            if self._tracer1['name'] == 'LYA':
+            if self.tracer1_name == 'LYA':
                 bias1, beta1 = self.compute_bias_beta_hcd(bias1, beta1, params)
-            if self._tracer2['name'] == 'LYA':
+            if self.tracer2_name == 'LYA':
                 bias2, beta2 = self.compute_bias_beta_hcd(bias2, beta2, params)
 
         # Compute kaiser model
@@ -320,7 +324,7 @@ class PowerSpectrum:
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
 
-        if self._tracer1['name'] == self._tracer2['name']:
+        if self.tracer1_name == self.tracer2_name:
             F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data,
                               left=0, right=0)
         else:
@@ -373,8 +377,8 @@ class PowerSpectrum:
         ND Array
             D_NL factor
         """
-        assert self._tracer1['name'] == "LYA"
-        assert self._tracer2['name'] == "LYA"
+        assert self.tracer1_name == "LYA"
+        assert self.tracer2_name == "LYA"
 
         kvel = 1.22 * (1 + self.k_grid / 0.923)**0.451
         dnl = (self.k_grid / 6.4)**0.569 - (self.k_grid / 15.3)**2.01
@@ -394,8 +398,8 @@ class PowerSpectrum:
         ND Array
             D_NL factor
         """
-        two_lya_flag = "LY" in self._tracer1['name'] and "LY" in self._tracer2['name']
-        one_lya_flag = "LY" in self._tracer1['name'] or "LY" in self._tracer2['name']
+        two_lya_flag = "LY" in self.tracer1_name and "LY" in self.tracer2_name
+        one_lya_flag = "LY" in self.tracer1_name or "LY" in self.tracer2_name
 
         q1 = params["dnl_arinyo_q1"]
         kv = params["dnl_arinyo_kv"]
@@ -513,14 +517,14 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        assert 'discrete' in [self._tracer1['type'], self._tracer2['type']]
+        assert 'discrete' in [self.tracer1_type, self.tracer2_type]
 
         smoothing = np.ones(self.k_par_grid.shape)
-        if self._tracer1['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_gauss_' + self._tracer1['name']]
+        if self.tracer1_type == 'discrete':
+            sigma = params['sigma_velo_disp_gauss_' + self.tracer1_name]
             smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
-        if self._tracer2['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_gauss_' + self._tracer2['name']]
+        if self.tracer2_type == 'discrete':
+            sigma = params['sigma_velo_disp_gauss_' + self.tracer2_name]
             smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
 
         return smoothing
@@ -538,14 +542,14 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        assert 'discrete' in [self._tracer1['type'], self._tracer2['type']]
+        assert 'discrete' in [self.tracer1_type, self.tracer2_type]
 
         smoothing = np.ones(self.k_par_grid.shape)
-        if self._tracer1['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_lorentz_' + self._tracer1['name']]
+        if self.tracer1_type == 'discrete':
+            sigma = params['sigma_velo_disp_lorentz_' + self.tracer1_name]
             smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
-        if self._tracer2['type'] == 'discrete':
-            sigma = params['sigma_velo_disp_lorentz_' + self._tracer2['name']]
+        if self.tracer2_type == 'discrete':
+            sigma = params['sigma_velo_disp_lorentz_' + self.tracer2_name]
             smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
 
         return smoothing
