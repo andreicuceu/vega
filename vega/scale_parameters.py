@@ -70,6 +70,13 @@ class ScaleParameters:
 
     @staticmethod
     def default():
+        """Default values for alpha_par and alpha_perp
+
+        Returns
+        -------
+        float, float
+            1., 1.
+        """
         return 1., 1.
 
     def standard_ap_at(self, params):

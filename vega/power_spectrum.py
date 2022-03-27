@@ -41,22 +41,22 @@ class PowerSpectrum:
         self.k_grid = fiducial['k']
         self._bin_size_rp = config.getfloat('bin_size_rp')
         self._bin_size_rt = config.getfloat('bin_size_rt')
-        self._use_Gk = self._config.get('model binning', True)
+        self.use_Gk = self._config.getboolean('model binning', True)
 
         # Check for the old config
         pk_model = self._config.get('model-pk', None)
 
         # Get the HCD model and check for UV
-        self._hcd_model = None
+        self.hcd_model = None
         self._add_uv = False
         if pk_model is None:
             # Get the new config
-            self._hcd_model = self._config.get('model-hcd', None)
+            self.hcd_model = self._config.get('model-hcd', None)
             self._add_uv = self._config.getboolean('add uv', False)
         else:
             # Get the old config
             if 'hcd' in pk_model:
-                self._hcd_model = pk_model
+                self.hcd_model = pk_model
             if 'uv' in pk_model:
                 self._add_uv = True
 
@@ -70,7 +70,7 @@ class PowerSpectrum:
             self._Fvoigt_data = np.loadtxt(path)
 
         # Initialize some stuff we need
-        self._pk_Gk = None
+        self.pk_Gk = None
         self._pk_fid = fiducial['pk_full'] * ((1 + fiducial['z_fiducial'])
                                               / (1. + fiducial['z_eff']))**2
 
@@ -116,7 +116,7 @@ class PowerSpectrum:
                 bias2, beta2 = self.compute_bias_beta_uv(bias2, beta2, params)
 
         # Add HCD model
-        if self._hcd_model is not None:
+        if self.hcd_model is not None:
             if self.tracer1_name == 'LYA':
                 bias1, beta1 = self.compute_bias_beta_hcd(bias1, beta1, params)
             if self.tracer2_name == 'LYA':
@@ -136,10 +136,10 @@ class PowerSpectrum:
                 raise ValueError('Incorrect \'small scale nl\' specified')
 
         # model the effect of binning
-        if self._use_Gk:
-            if self._pk_Gk is None:
-                self._pk_Gk = self.compute_Gk(params)
-            pk_full *= self._pk_Gk
+        if self.use_Gk:
+            if self.pk_Gk is None:
+                self.pk_Gk = self.compute_Gk(params)
+            pk_full *= self.pk_Gk
 
         # add non linear large scales
         if params['peak']:
@@ -252,18 +252,15 @@ class PowerSpectrum:
         beta_hcd = params["beta_hcd"]
         L0_hcd = params["L0_hcd"]
 
-        # ! The sinc model is default right now, but we could specifically
-        # ! ask for it and raise an error if we don't find it.
-        # ! It's done like this to maintain backwards compatibility
         # TODO Maybe improve the names we search for
         # Check which model we need
         if L0_hcd != self._L0_hcd_cache or self._F_hcd is None:
-            if 'Rogers' in self._hcd_model:
+            if 'Rogers' in self.hcd_model:
                 self._F_hcd = self._hcd_Rogers2018(L0_hcd, self.k_par_grid)
-            elif 'mask' in self._hcd_model:
+            elif 'mask' in self.hcd_model:
                 assert self._Fvoigt_data is not None
                 self._F_hcd = self._hcd_no_mask(L0_hcd)
-            else:
+            elif 'sinc' in self.hcd_model:
                 self._F_hcd = self._hcd_sinc(L0_hcd)
 
             self._L0_hcd_cache = L0_hcd
