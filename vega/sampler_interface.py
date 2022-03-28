@@ -5,7 +5,7 @@ import pypolychord
 from pypolychord.settings import PolyChordSettings
 from pypolychord.priors import UniformPrior
 from pathlib import Path
-from vega.postprocess.param_utils import build_names
+from vega.parameters.param_utils import build_names
 from mpi4py import MPI
 
 

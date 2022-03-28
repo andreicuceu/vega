@@ -20,6 +20,7 @@ Vega modules have some documentation here:
    Data
    Analysis
    Sampler
+   Plots
 
 Other stuff:
 

@@ -29,8 +29,8 @@ class Data:
         """
         # First save the tracer info
         self._corr_item = corr_item
-        self._tracer1 = corr_item.tracer1
-        self._tracer2 = corr_item.tracer2
+        self.tracer1 = corr_item.tracer1
+        self.tracer2 = corr_item.tracer2
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -301,8 +301,8 @@ class Data:
 
         # Build tracer Catalog
         tracer_catalog = {}
-        tracer_catalog[self._tracer1['name']] = self._tracer1
-        tracer_catalog[self._tracer2['name']] = self._tracer2
+        tracer_catalog[self.tracer1['name']] = self.tracer1
+        tracer_catalog[self.tracer2['name']] = self.tracer2
 
         if metals_in_tracer1 is not None:
             for metal in metals_in_tracer1:
@@ -319,12 +319,12 @@ class Data:
         # First look for correlations between tracer1 and metals
         if 'in tracer2' in metal_config:
             for metal in metals_in_tracer2:
-                if not self._use_correlation(self._tracer1['name'], metal):
+                if not self._use_correlation(self.tracer1['name'], metal):
                     continue
-                tracers = (self._tracer1['name'], metal)
-                name = self._tracer1['name'] + '_' + metal
+                tracers = (self.tracer1['name'], metal)
+                name = self.tracer1['name'] + '_' + metal
                 if 'RP_' + name not in metal_hdul[2].columns.names:
-                    name = metal + '_' + self._tracer1['name']
+                    name = metal + '_' + self.tracer1['name']
                 self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
@@ -332,12 +332,12 @@ class Data:
         # If we have an auto-cf the files are saved in the format tracer-metal
         if 'in tracer1' in metal_config:
             for metal in metals_in_tracer1:
-                if not self._use_correlation(metal, self._tracer2['name']):
+                if not self._use_correlation(metal, self.tracer2['name']):
                     continue
-                tracers = (metal, self._tracer2['name'])
-                name = metal + '_' + self._tracer2['name']
+                tracers = (metal, self.tracer2['name'])
+                name = metal + '_' + self.tracer2['name']
                 if 'RP_' + name not in metal_hdul[2].columns.names:
-                    name = self._tracer2['name'] + '_' + metal
+                    name = self.tracer2['name'] + '_' + metal
                 self._read_metal_correlation(metal_hdul, tracers, name)
                 metal_correlations.append(tracers)
 
@@ -345,7 +345,7 @@ class Data:
         # Some files are reversed order, so reverse order if we don't find it
         if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
             for i, metal1 in enumerate(metals_in_tracer1):
-                j0 = i if self._tracer1 == self._tracer2 else 0
+                j0 = i if self.tracer1 == self.tracer2 else 0
 
                 for metal2 in metals_in_tracer2[j0:]:
                     if not self._use_correlation(metal1, metal2):

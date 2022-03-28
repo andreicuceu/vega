@@ -7,11 +7,11 @@ composites = {'bias': r'b_{\delta,',
 
 
 def build_names(params):
-    latex_names_path = 'vega/postprocess/latex_names.txt'
+    latex_names_path = 'vega/parameters/latex_names.txt'
     latex_names_path = find_file(latex_names_path)
     latex_full = get_latex(latex_names_path)
 
-    latex_comp_path = 'vega/postprocess/latex_composite.txt'
+    latex_comp_path = 'vega/parameters/latex_composite.txt'
     latex_comp_path = find_file(latex_comp_path)
     latex_comp = get_latex(latex_comp_path)
 
@@ -70,7 +70,7 @@ def get_latex(path):
 
 
 def get_default_values():
-    values_path = 'vega/postprocess/default_values.txt'
+    values_path = 'vega/parameters/default_values.txt'
     with open(find_file(values_path)) as f:
         content = f.readlines()
 
