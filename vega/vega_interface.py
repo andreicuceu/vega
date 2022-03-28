@@ -139,7 +139,9 @@ class VegaInterface:
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
         self.monte_carlo = False
-        self.plots = VegaPlots(vega_data=self.data)
+        self.plots = None
+        if self._has_data:
+            self.plots = VegaPlots(vega_data=self.data)
 
     def compute_model(self, params=None, run_init=True, direct_pk=None):
         """Compute correlation function model using input parameters.

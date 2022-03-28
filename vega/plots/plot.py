@@ -24,7 +24,8 @@ class VegaPlots:
                 cross_flag = vega_data[name].tracer1['type'] != vega_data[name].tracer2['type']
                 self.cross_flag[name] = cross_flag
                 self.data[name] = vega_data[name].data_vec
-                self.cov_mat[name] = vega_data[name].cov_mat
+                if vega_data[name].has_cov_mat():
+                    self.cov_mat[name] = vega_data[name].cov_mat
 
         self.models = None
         if models is not None:
