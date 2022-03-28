@@ -1,6 +1,6 @@
-=================
-Sampler Interface
-=================
+=========
+VegaPlots
+=========
 
 .. autoclass:: vega.plots.plot.VegaPlots
    :members:
