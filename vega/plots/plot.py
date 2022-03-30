@@ -150,7 +150,10 @@ class VegaPlots:
         """
         ax.set_ylabel(r"$r^2\xi(r)$")
         ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
-        ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]), fontsize=16)
+        if 'title' in kwargs:
+            ax.set_title(kwargs['title'], fontsize=16)
+        else:
+            ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]), fontsize=16)
         ax.set_xlim(xlim[0], xlim[1])
         ax.legend()
         ax.grid()
