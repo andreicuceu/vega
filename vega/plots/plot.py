@@ -136,7 +136,7 @@ class VegaPlots:
             r, d, _ = wedge_obj(model_vec, covariance=covariance)
             ax.plot(r, d * r**2, ls=model_ls, color=model_color, label=label)
 
-    def postprocess_plot(self, ax, mu_bin, xlim=(0, 180), **kwargs):
+    def postprocess_plot(self, ax, mu_bin, xlim=(0, 180), ylim=None, **kwargs):
         """Add postprocessing to the plot on input axes
 
         Parameters
@@ -155,6 +155,8 @@ class VegaPlots:
         else:
             ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]), fontsize=16)
         ax.set_xlim(xlim[0], xlim[1])
+        if ylim is not None:
+            ax.set_ylim(ylim[0], ylim[1])
         ax.legend()
         ax.grid()
 
