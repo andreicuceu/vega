@@ -123,8 +123,6 @@ class VegaPlots:
         if cov_mat is None:
             if corr_name in self.cov_mat:
                 cov_mat = self.cov_mat[corr_name]
-                if label is None:
-                    label = corr_name
 
         model_vec = array_or_dict(model, corr_name)
 
