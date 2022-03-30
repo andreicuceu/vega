@@ -150,9 +150,9 @@ class VegaPlots:
         ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
 
         if 'title' in kwargs:
-            ax.set_title(kwargs['title'], fontsize=16)
+            ax.set_title(kwargs['title'])
         else:
-            ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]), fontsize=16)
+            ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]))
         ax.set_xlim(xlim[0], xlim[1])
 
         if ylim is not None:
