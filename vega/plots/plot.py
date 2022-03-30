@@ -84,14 +84,14 @@ class VegaPlots:
 
             data = self.data[corr_name]
 
-        data_vec = array_or_dict(data)
+        data_vec = array_or_dict(data, corr_name)
 
         if cov_mat is None:
             if corr_name not in self.cov_mat:
                 raise ValueError('Correlation {} not found in input data'.format(corr_name))
             cov_mat = self.cov_mat[corr_name]
 
-        covariance = array_or_dict(cov_mat)
+        covariance = array_or_dict(cov_mat, corr_name)
 
         rd, dd, cd = wedge_obj(data_vec, covariance=covariance)
         ax.errorbar(rd, dd * rd**2, yerr=np.sqrt(cd.diagonal()) * rd**2, fmt=data_fmt,
@@ -126,13 +126,13 @@ class VegaPlots:
                 if label is None:
                     label = corr_name
 
-        model_vec = array_or_dict(model)
+        model_vec = array_or_dict(model, corr_name)
 
         if cov_mat is None:
             r, d = wedge_obj(model_vec)
             ax.plot(r, d * r**2, ls=model_ls, color=model_color, label=label)
         else:
-            covariance = array_or_dict(cov_mat)
+            covariance = array_or_dict(cov_mat, corr_name)
             r, d, _ = wedge_obj(model_vec, covariance=covariance)
             ax.plot(r, d * r**2, ls=model_ls, color=model_color, label=label)
 
