@@ -46,20 +46,21 @@ class Minimizer:
         """
         t0 = time.time()
 
+        params_init = copy.deepcopy(self._sample_params['values'])
         errors = copy.deepcopy(self._sample_params['errors'])
         limits = copy.deepcopy(self._sample_params['limits'])
         fixed = copy.deepcopy(self._sample_params['fix'])
 
-        params_init = copy.deepcopy(self._sample_params['values'])
+        def write_settings(params, name, out_container):
+            if name in params:
+                for par, val in params[name].items():
+                    out_container[par] = val
+
         if params is not None:
-            for param, val in params['values'].items():
-                params_init[param] = val
-            for param, val in params['errors'].items():
-                errors[param] = val
-            for param, val in params['limits'].items():
-                limits[param] = val
-            for param, val in params['fix'].items():
-                fixed[param] = val
+            write_settings(params, 'values', params_init)
+            write_settings(params, 'errors', errors)
+            write_settings(params, 'limits', limits)
+            write_settings(params, 'fix', fixed)
 
         # Do an initial "fast" minimization over biases
         bias_flag = bool(len([par for par in self._names if 'bias' in par]))
