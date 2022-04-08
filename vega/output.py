@@ -243,7 +243,7 @@ class Output:
             HDU with the scan data
         """
         # Get parameter names
-        names = np.array(list(minimizer.values.keys()))
+        names = np.array(list(scan_results[0].keys()))
 
         # Check if any parameter name is too long
         max_length = np.max([len(name) for name in names])

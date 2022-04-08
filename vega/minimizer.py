@@ -1,5 +1,6 @@
 import iminuit
 import time
+import copy
 from sys import stdout
 
 
@@ -44,19 +45,30 @@ class Minimizer:
             and/or fix parameters, by default None
         """
         t0 = time.time()
-        params_init = self._sample_params['values'].copy()
+
+        errors = copy.deepcopy(self._sample_params['errors'])
+        limits = copy.deepcopy(self._sample_params['limits'])
+        fixed = copy.deepcopy(self._sample_params['fixed'])
+
+        params_init = copy.deepcopy(self._sample_params['values'])
         if params is not None:
             for param, val in params['values'].items():
                 params_init[param] = val
+            for param, val in params['errors'].items():
+                errors[param] = val
+            for param, val in params['limits'].items():
+                limits[param] = val
+            for param, val in params['fixed'].items():
+                fixed[param] = val
 
         # Do an initial "fast" minimization over biases
         bias_flag = bool(len([par for par in self._names if 'bias' in par]))
         if bias_flag:
             mig_init = iminuit.Minuit(self.chi2, name=self._names, **params_init)
             for name in self._names:
-                mig_init.errors[name] = self._sample_params['errors'][name]
-                mig_init.limits[name] = self._sample_params['limits'][name]
-                mig_init.fixed[name] = self._sample_params['fix'][name]
+                mig_init.errors[name] = errors[name]
+                mig_init.limits[name] = limits[name]
+                mig_init.fixed[name] = fixed[name]
 
             for name in self._names:
                 if 'bias' not in name:
@@ -74,9 +86,9 @@ class Minimizer:
         # Do the actual minimization
         self._minuit = iminuit.Minuit(self.chi2, name=self._names, **params_init)
         for name in self._names:
-            self._minuit.errors[name] = self._sample_params['errors'][name]
-            self._minuit.limits[name] = self._sample_params['limits'][name]
-            self._minuit.fixed[name] = self._sample_params['fix'][name]
+            self._minuit.errors[name] = errors[name]
+            self._minuit.limits[name] = limits[name]
+            self._minuit.fixed[name] = fixed[name]
 
         self._minuit.errordef = 1
         self._minuit.print_level = 1

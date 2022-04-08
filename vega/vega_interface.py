@@ -14,6 +14,7 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 
+
 class VegaInterface:
     """Main Vega class.
 
@@ -386,7 +387,7 @@ class VegaInterface:
         path = fiducial_config.get('filename')
         path = utils.find_file(os.path.expandvars(path))
         # if not os.path.isfile(path):
-            # path = resource_filename('vega', 'models') + '/{}'.format(path)
+        # path = resource_filename('vega', 'models') + '/{}'.format(path)
         print('INFO: reading input Pk {}'.format(path))
 
         fiducial = {}
