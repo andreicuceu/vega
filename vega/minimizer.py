@@ -48,7 +48,7 @@ class Minimizer:
 
         errors = copy.deepcopy(self._sample_params['errors'])
         limits = copy.deepcopy(self._sample_params['limits'])
-        fixed = copy.deepcopy(self._sample_params['fixed'])
+        fixed = copy.deepcopy(self._sample_params['fix'])
 
         params_init = copy.deepcopy(self._sample_params['values'])
         if params is not None:
@@ -58,7 +58,7 @@ class Minimizer:
                 errors[param] = val
             for param, val in params['limits'].items():
                 limits[param] = val
-            for param, val in params['fixed'].items():
+            for param, val in params['fix'].items():
                 fixed[param] = val
 
         # Do an initial "fast" minimization over biases
