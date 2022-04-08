@@ -97,6 +97,8 @@ class VegaPlots:
         ax.errorbar(rd, dd * rd**2, yerr=np.sqrt(cd.diagonal()) * rd**2, fmt=data_fmt,
                     color=data_color, label=label)
 
+        return rd, dd, cd
+
     def plot_model(self, ax, wedge_obj, model=None, cov_mat=None, label=None,
                    corr_name='lyalya_lyalya', model_ls='-', model_color=None, **kwargs):
         """Plot the model in the input ax object using the input wedge object
@@ -133,6 +135,8 @@ class VegaPlots:
             covariance = array_or_dict(cov_mat, corr_name)
             r, d, _ = wedge_obj(model_vec, covariance=covariance)
             ax.plot(r, d * r**2, ls=model_ls, color=model_color, label=label)
+
+        return r, d
 
     def postprocess_plot(self, ax, mu_bin, xlim=(0, 180), ylim=None, no_legend=False, **kwargs):
         """Add postprocessing to the plot on input axes
@@ -195,7 +199,8 @@ class VegaPlots:
         wedge_obj = self.initialize_wedge(mu_bin, cross_flag)
 
         if not models_only:
-            self.plot_data(ax, wedge_obj, data, cov_mat, data_label, corr_name, **kwargs)
+            data_wedge = self.plot_data(ax, wedge_obj, data, cov_mat, data_label,
+                                        corr_name, **kwargs)
 
         if not data_only:
             models_colors = None
@@ -219,10 +224,12 @@ class VegaPlots:
                 if models_ls is not None:
                     model_ls = models_ls[i]
 
-                self.plot_model(ax, wedge_obj, model, cov_mat, label, corr_name,
-                                model_ls=model_ls, model_color=model_color, **kwargs)
+                model_wedge = self.plot_model(ax, wedge_obj, model, cov_mat, label, corr_name,
+                                              model_ls=model_ls, model_color=model_color, **kwargs)
 
         self.postprocess_plot(ax, mu_bin, **kwargs)
+
+        return data_wedge, model_wedge
 
     def plot_1wedge(self, models=None, cov_mat=None, labels=None, data=None, cross_flag=False,
                     corr_name='lyalya_lyalya', models_only=False, data_only=False, data_label=None,
@@ -253,9 +260,11 @@ class VegaPlots:
         plt.rcParams['font.size'] = 14
         fig, axs = plt.subplots(1, figsize=(10, 6))
 
-        self.plot_wedge(axs, (0, 1), models=models, cov_mat=cov_mat, labels=labels, data=data,
-                        cross_flag=cross_flag, corr_name=corr_name, models_only=models_only,
-                        data_only=data_only, data_label=data_label, **kwargs)
+        _ = self.plot_wedge(axs, (0, 1), models=models, cov_mat=cov_mat, labels=labels, data=data,
+                            cross_flag=cross_flag, corr_name=corr_name, models_only=models_only,
+                            data_only=data_only, data_label=data_label, **kwargs)
+
+        return fig
 
     def plot_2wedges(self, mu_bins=(0, 0.5, 1), models=None, cov_mat=None, labels=None,
                      data=None, cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
@@ -299,10 +308,12 @@ class VegaPlots:
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
 
         for ax, mu_bin in zip(axs, mu_limits):
-            self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
-                            data=data, cross_flag=cross_flag, corr_name=corr_name,
-                            models_only=models_only, data_only=data_only, data_label=data_label,
-                            **kwargs)
+            _ = self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
+                                data=data, cross_flag=cross_flag, corr_name=corr_name,
+                                models_only=models_only, data_only=data_only,
+                                data_label=data_label, **kwargs)
+
+        return fig
 
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
                      labels=None, data=None, cross_flag=False, corr_name='lyalya_lyalya',
@@ -341,7 +352,9 @@ class VegaPlots:
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
 
         for ax, mu_bin in zip(axs, mu_limits):
-            self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
-                            data=data, cross_flag=cross_flag, corr_name=corr_name,
-                            models_only=models_only, data_only=data_only, data_label=data_label,
-                            **kwargs)
+            _ = self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
+                                data=data, cross_flag=cross_flag, corr_name=corr_name,
+                                models_only=models_only, data_only=data_only,
+                                data_label=data_label, **kwargs)
+
+        return fig
