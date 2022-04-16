@@ -349,11 +349,11 @@ class VegaPlots:
         plt.rcParams['font.size'] = 14
         if fig is None:
             fig, axs = plt.subplots(2, 2, figsize=(20, 14))
+            axs = axs.flatten()
         else:
             axs = fig.axes
             assert len(axs) == 4
 
-        axs = axs.flatten()
         mu_bins = np.flip(np.array(mu_bins))
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
 
