@@ -319,7 +319,7 @@ class VegaPlots:
 
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
                      labels=None, data=None, cross_flag=False, corr_name='lyalya_lyalya',
-                     models_only=False, data_only=False, data_label=None, **kwargs):
+                     models_only=False, data_only=False, data_label=None, fig=None, **kwargs):
         """Plot the correlations into four wedges defined by the limits in mu_bins
 
         Parameters
@@ -347,7 +347,11 @@ class VegaPlots:
         """
         assert len(mu_bins) == 5
         plt.rcParams['font.size'] = 14
-        fig, axs = plt.subplots(2, 2, figsize=(20, 14))
+        if fig is None:
+            fig, axs = plt.subplots(2, 2, figsize=(20, 14))
+        else:
+            axs = fig.axes
+            assert len(axs) == 4
 
         axs = axs.flatten()
         mu_bins = np.flip(np.array(mu_bins))
