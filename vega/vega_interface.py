@@ -230,6 +230,7 @@ class VegaInterface:
                 else:
                     model_cf = self.models[name].compute_direct(local_params, direct_pk)
             except utils.VegaBoundsError:
+                self.models[name].PktoXi.cache_pars = None
                 return 1e100
 
             if self.monte_carlo:

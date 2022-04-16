@@ -198,10 +198,12 @@ class VegaPlots:
         """
         wedge_obj = self.initialize_wedge(mu_bin, cross_flag)
 
+        data_wedge = None
         if not models_only:
             data_wedge = self.plot_data(ax, wedge_obj, data, cov_mat, data_label,
                                         corr_name, **kwargs)
 
+        model_wedge = None
         if not data_only:
             models_colors = None
             if 'model_colors' in kwargs:
