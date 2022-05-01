@@ -1,5 +1,5 @@
 numpy==1.22.3
-scipy
+scipy==1.8.0
 astropy
 numba
 h5py
