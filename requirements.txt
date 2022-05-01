@@ -7,4 +7,4 @@ setuptools==62.1.0
 iminuit>=2.0.0
 mcfit==0.0.17
 cachetools==5.0.0
-matplotlib
+matplotlib==3.5.1
