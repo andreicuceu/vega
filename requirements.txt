@@ -5,6 +5,6 @@ numba==0.55.1
 h5py==3.6.0
 setuptools==62.1.0
 iminuit>=2.0.0
-mcfit
+mcfit==0.0.17
 cachetools
 matplotlib
