@@ -1,7 +1,7 @@
 numpy==1.22.3
 scipy==1.8.0
 astropy==5.0.4
-numba
+numba==0.55.1
 h5py
 setuptools
 iminuit>=2.0.0
