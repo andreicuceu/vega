@@ -6,7 +6,7 @@ flake8==4.0.1
 tox==3.25.0
 coverage==6.3.2
 Sphinx==4.5.0
-twine==3.2.0
+twine==4.0.0
 pytest-runner==5.2
 pytest==5.4.3
 codecov
