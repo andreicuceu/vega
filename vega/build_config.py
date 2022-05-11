@@ -264,7 +264,10 @@ class BuildConfig:
 
         # Check the effective redshift
         self.zeff_in = fit_info.get('zeff', None)
-        zeff_comp = self.get_zeff(self.data_paths)
+        zeff_rmin = fit_info.get('zeff_rmin', 80.)
+        zeff_rmax = fit_info.get('zeff_rmax', 120.)
+
+        zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
         if self.zeff_in is None:
             self.zeff_in = zeff_comp
         elif self.zeff_in != zeff_comp:
