@@ -40,7 +40,7 @@ Once you have a copy of the source, you can install it with:
 
     $ cd Vega
     $ pip install -r requirements.txt
-    $ pip install .
+    $ pip install -e .
 
 If you want to run the sampler you will need `Polychord`_. Instructions can be found `here`_, and will be added to this repo soon.
 
