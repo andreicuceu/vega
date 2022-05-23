@@ -59,18 +59,19 @@ class VegaInterface:
             name = config['data'].get('name')
             self.corr_items[name] = correlation_item.CorrelationItem(config)
 
-        # TODO Can we make this completely optional?
-        # initialize the data
+        # Check if all correlations have data files
         self.data = {}
         self._has_data = True
         for name, corr_item in self.corr_items.items():
-            has_datafile = corr_item.config['data'].getboolean('has_datafile',
-                                                               True)
-            if has_datafile:
+            if not corr_item.has_data:
+                self._has_data = False
+
+        # Initialize the data
+        for name, corr_item in self.corr_items.items():
+            if self._has_data:
                 self.data[name] = data.Data(corr_item)
             else:
                 self.data[name] = None
-                self._has_data = False
 
         # Initialize scale parameters
         self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])

@@ -33,12 +33,12 @@ class Model:
         self._coords_grid['z'] = corr_item.z_grid
 
         self._data = data
-        data_distortion = False
+        data_has_distortion = False
         if self._data is not None:
-            data_distortion = self._data.has_distortion()
+            data_has_distortion = self._data.has_distortion()
             self._corr_item.config['model']['bin_size_rp'] = str(self._data.bin_size_rp)
             self._corr_item.config['model']['bin_size_rt'] = str(self._data.bin_size_rt)
-        self._has_distortion_mat = corr_item.has_distortion and data_distortion
+        self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:

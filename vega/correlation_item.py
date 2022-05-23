@@ -24,13 +24,17 @@ class CorrelationItem:
         self.tracer2 = {}
         self.tracer1['name'] = config['data'].get('tracer1')
         self.tracer1['type'] = config['data'].get('tracer1-type')
-        self.tracer2['name'] = config['data'].get('tracer2',
-                                                  self.tracer1['name'])
-        self.tracer2['type'] = config['data'].get('tracer2-type',
-                                                  self.tracer1['type'])
+        self.tracer2['name'] = config['data'].get('tracer2', self.tracer1['name'])
+        self.tracer2['type'] = config['data'].get('tracer2-type', self.tracer1['type'])
+
         self.cov_rescale = config['data'].getfloat('cov_rescale', 1.)
         self.has_distortion = config['data'].getboolean('distortion', True)
         self.old_fftlog = config['model'].getboolean('old_fftlog', False)
+
+        self.has_data = config['data'].getboolean('has_datafile', True)
+        if 'filename' not in config['data']:
+            self.has_data = False
+
         self.has_metals = False
         self.has_bb = False
 
