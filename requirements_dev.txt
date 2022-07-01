@@ -8,6 +8,6 @@ coverage==6.4.1
 Sphinx==5.0.2
 twine==4.0.1
 pytest-runner==6.0.0
-pytest==5.4.3
+pytest==7.1.2
 codecov
 pytest-cov
