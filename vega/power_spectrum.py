@@ -421,7 +421,8 @@ class PowerSpectrum:
             elif one_lya_flag:
                 self._arinyo_dnl_cache = np.sqrt(dnl)
             else:
-                raise ValueError("Arinyo NL term called for correlation with no Lyman-alpha")
+                return np.ones(dnl.shape)
+                # raise ValueError("Arinyo NL term called for correlation with no Lyman-alpha")
 
         return self._arinyo_dnl_cache
 
