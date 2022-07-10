@@ -29,7 +29,7 @@ def _tracer_bias_beta(params, name):
     float, float
         bias, beta
     """
-    growth_rate = params.get("growth_rate", 1.)
+    growth_rate = params.get("growth_rate", 0.970386)
 
     bias = params.get('bias_' + name, None)
     bias_eta = params.get('bias_eta_' + name, None)
