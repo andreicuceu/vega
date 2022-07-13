@@ -218,7 +218,7 @@ class VegaInterface:
         # Enforce blinding
         if self._blind:
             for par, val in local_params.items():
-                if par in self._scale_pars:
+                if par in self._scale_par_names:
                     local_params[par] = 1.
 
         # Go trough each component and compute the chi^2
