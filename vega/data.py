@@ -138,25 +138,25 @@ class Data:
         print('Reading data file {}\n'.format(data_path))
         hdul = fits.open(find_file(data_path))
 
-        blinding = 'none'
+        self._blinding_strat = 'none'
         if 'BLINDING' in hdul[1].header:
-            blinding = hdul[1].header['BLINDING']
+            self._blinding_strat = hdul[1].header['BLINDING']
 
-        if blinding == 'corr_yshift':
+        if self._blinding_strat == 'corr_yshift':
             print('Warning! Running on blinded data {}'.format(data_path))
             print('Strategy: corr_yshift. BAO can be sampled')
             self._blind = False
             self._data_vec = hdul[1].data['DA_BLIND']
             if 'DM' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif blinding == 'minimal':
+        elif self._blinding_strat == 'minimal':
             print('Warning! Running on blinded data {}'.format(data_path))
             print('Strategy: minimal. Scale parameters must be fixed to 1.')
             self._blind = True
             self._data_vec = hdul[1].data['DA_BLIND']
             if 'DM' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif blinding == 'none':
+        elif self._blinding_strat == 'none':
             self._blind = False
             self._data_vec = hdul[1].data['DA']
             if 'DM' in hdul[1].columns.names:
@@ -401,15 +401,18 @@ class Data:
         self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
         self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
 
-        if self._blind:
-            dm_name = 'DM_BLIND_' + name
-        else:
+        if self._blinding_strat == 'none':
             dm_name = 'DM_' + name
+        else:
+            dm_name = 'DM_BLIND_' + name
 
         if dm_name in metal_hdul[2].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
-        else:
+        elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
+        else:
+            raise ValueError("Cannot find correct metal matrices."
+                             " Check that blinding is consistent between cf and metal files.")
 
     def create_monte_carlo(self, fiducial_model, scale=1., seed=0,
                            forecast=False):
