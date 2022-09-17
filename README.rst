@@ -34,7 +34,7 @@ You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone https://github.com/andreicuceu/Vega
+    $ git clone https://github.com/andreicuceu/vega.git
 
 Or download the `tarball`_:
 
