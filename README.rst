@@ -22,11 +22,19 @@ Vega is a tool for computing 3D correlation function models for tracers used by 
 Installation
 ------------
 
+We recommend to start by creating a fresh conda environment. The following code will create this and also install all the dependencies:
+
+.. code-block:: console
+
+    $ conda create --name vega pip ipython jupyter jupyterlab ipykernel numpy scipy astropy numba h5py setuptools "iminuit>=2.0.0" cachetools matplotlib
+    $ conda activate vega
+    $ pip install mcfit
+
 You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/andreicuceu/Vega
+    $ git clone https://github.com/andreicuceu/Vega
 
 Or download the `tarball`_:
 
@@ -38,11 +46,10 @@ Once you have a copy of the source, you can install it with:
 
 .. code-block:: console
 
-    $ cd Vega
-    $ pip install -r requirements.txt
+    $ cd vega
     $ pip install -e .
 
-If you want to run the sampler you will need `Polychord`_. Instructions can be found `here`_, and will be added to this repo soon.
+If you want to run the sampler you will need `Polychord`_. Older instructions for Cori at NERSC can be found `here`_. Instructions for Perlmutter will be added soon. If you have any problems or questions about the sampler please raise an issue.
 
 .. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
