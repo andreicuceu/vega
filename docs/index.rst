@@ -21,6 +21,7 @@ Vega modules have some documentation here:
    Analysis
    Sampler
    Plots
+   BuildConfig
 
 Other stuff:
 

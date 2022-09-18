@@ -30,6 +30,25 @@ class BuildConfig:
         ----------
         options : dict, optional
             Dictionary with model options, by default {}
+            Here is a list of options:
+                scale_params: string from ['ap_at', 'phi_alpha', 'aiso_epsilon'], default 'ap_at'
+                template: string with custom_link, default 'PlanckDR16/PlanckDR16.fits'
+                full_shape: Bool, default False
+                full_shape_alpha: Bool, default False
+                smooth_scaling: Bool, default False
+
+                small_scale_nl: Bool, default False
+                small_scale_nl_cross: Bool, default False
+                bao_broadening: Bool, default False
+                uv_background: Bool, default False
+                velocity_dispersion: string from [None, 'lorentz', 'gauss'], default None
+                radiation_effects: Bool, default False
+
+                hcd_model: string from [None, 'Rogers', 'nomask', 'sinc'], default None
+                fvoigt_model: string, default exp
+                fullshape_smoothing: string from [None, 'gauss', 'gauss_iso', 'exp'], default None
+                metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
+                    'SiII(1260)', 'CIV(eff)'], default None
         """
         self.options = {}
 
@@ -45,6 +64,7 @@ class BuildConfig:
         self.options['uv_background'] = options.get('uv_background', False)
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
+
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
         self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
@@ -62,7 +82,16 @@ class BuildConfig:
         ----------
         correlations : dict
             Information for each correlation. It must contain the path to the measured correlation,
-            and the path to metal files if metals were requested.
+            and the path to metal files if metals were requested. Optionally specify scale cuts.
+            List of options:
+                corr_path: string
+                metal_path: string
+                r-min: float, default 10
+                r-max: float, default 180
+                rt-min: float, default 0
+                fast_metals: bool, default False
+                binsize: int, default 4 (deprecated)
+                broadband: broadband string configuration
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
             tracers separated by a single underscore (e.g. lyalya_qso),
@@ -70,7 +99,17 @@ class BuildConfig:
             (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
             folder to see all possibilities.
         fit_info : dict
-            Fit information. Must contain a list of sampled parameters and the effective redshift
+            Fit information. Must contain a list of sampled parameters and the effective redshift.
+            List of options:
+                fitter: bool, default True
+                sampler: bool, default False
+                use_bias_eta: dict with 'corr_name': Bool
+                zeff: float, default None
+                zeff_rmin: float, default 0
+                zeff_rmax: float, default 300
+                sample_params: list or dict with vega setup (par_name: min max start step)
+                priors: dict with vega setup (par_name: 'gaussian mean sigma')
+                Polychord: dict with Polychord setup
         out_path : string
             Path to directory where to write the config files
         parameters : dict, optional
@@ -238,7 +277,23 @@ class BuildConfig:
         return corr_path, config['data']['filename'], tracer1, tracer2
 
     @staticmethod
-    def get_zeff(data_paths, rmin=80., rmax=120.):
+    def get_zeff(data_paths, rmin=0., rmax=300.):
+        """Compute effective redshift of all correlations
+
+        Parameters
+        ----------
+        data_paths : List[string]
+            List of paths to exported picca correlations
+        rmin : float, optional
+            Minimum separation, by default 0.
+        rmax : float, optional
+            Maximum separation, by default 300.
+
+        Returns
+        -------
+        float
+            Effective redshift
+        """
         zeff_list = []
         weights = []
         for path in data_paths:
@@ -259,14 +314,34 @@ class BuildConfig:
         return zeff
 
     def _build_main_config(self, fit_type, fit_info, parameters):
+        """Build the main vega configuration file
+
+        Parameters
+        ----------
+        fit_type : string
+            Name of the fit. Includes the name of the correlations with the two
+            tracers separated by a single underscore (e.g. lyalya_qso),
+            and different correlations separated by a double underscore
+            (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
+            folder to see all possibilities.
+        fit_info : dict
+            Fit information. Must contain a list of sampled parameters and the effective redshift.
+        parameters : dict, optional
+            Parameter values to write to the main config
+
+        Returns
+        -------
+        Path
+            Path to written 'main.ini' file to be used with vega
+        """
         # Initialize the config
         config = ConfigParser()
         config.optionxform = lambda option: option
 
         # Check the effective redshift
         self.zeff_in = fit_info.get('zeff', None)
-        zeff_rmin = fit_info.get('zeff_rmin', 80.)
-        zeff_rmax = fit_info.get('zeff_rmax', 120.)
+        zeff_rmin = fit_info.get('zeff_rmin', 0.)
+        zeff_rmax = fit_info.get('zeff_rmax', 300.)
 
         zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
         if self.zeff_in is None:
@@ -355,10 +430,24 @@ class BuildConfig:
 
     @property
     def parameters(self):
+        """Parameters property
+
+        Returns
+        -------
+        dict
+            Parameters
+        """
         return self._parameters
 
     @parameters.setter
     def parameters(self, parameters):
+        """Setter for parameters property
+
+        Parameters
+        ----------
+        parameters : dict
+            Parameters dictionary
+        """
         if self._params_template is None:
             # Read template
             config = ConfigParser()
@@ -519,14 +608,52 @@ class BuildConfig:
 
     @staticmethod
     def get_lya_bias(z):
+        """Compute default Lya bias at redshift z
+
+        Parameters
+        ----------
+        z : float
+            Redshift
+
+        Returns
+        -------
+        float
+            Default Lya bias
+        """
         return -0.1167 * ((1 + z) / (1 + 2.334))**2.9
 
     @staticmethod
     def get_qso_bias(z):
+        """Compute default QSO bias at redshift z
+
+        Parameters
+        ----------
+        z : float
+            Redshift
+
+        Returns
+        -------
+        float
+            Default QSO bias
+        """
         return 3.91 * ((1 + z) / (1 + 2.39))**1.7133
 
     @staticmethod
     def get_growth_rate(z, Omega_m=0.31457):
+        """Compute default growth rate at redshift z
+
+        Parameters
+        ----------
+        z : float
+            Redshift
+        Omega_m : float, optional
+            Matter fraction, by default 0.31457
+
+        Returns
+        -------
+        float
+            Default growth rate
+        """
         Omega_m_z = Omega_m * ((1 + z)**3) / (Omega_m * ((1 + z)**3) + 1 - Omega_m)
         Omega_lambda_z = 1 - Omega_m_z
         growth_rate = (Omega_m_z**0.6) + (Omega_lambda_z / 70.) * (1 + Omega_m_z / 2.)
