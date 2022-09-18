@@ -24,7 +24,7 @@ class Data:
 
         Parameters
         ----------
-        data_config : CorrelationItem
+        corr_item : CorrelationItem
             Item object with the component config
         """
         # First save the tracer info
@@ -57,14 +57,35 @@ class Data:
 
     @property
     def blind(self):
+        """Blinding flag property
+
+        Returns
+        -------
+        bool
+            Blinding flag
+        """
         return self._blind
 
     @property
     def data_vec(self):
+        """Full data vector property
+
+        Returns
+        -------
+        1D array
+            Full data vector (xi)
+        """
         return self._data_vec
 
     @property
     def masked_data_vec(self):
+        """Masked data vector property
+
+        Returns
+        -------
+        1D array
+            Masked data vector (xi[mask])
+        """
         if self._masked_data_vec is None:
             self._masked_data_vec = np.zeros(self.mask.sum())
             self._masked_data_vec[:] = self.data_vec[self.mask]
@@ -72,6 +93,13 @@ class Data:
 
     @property
     def cov_mat(self):
+        """Covariance matrix property
+
+        Returns
+        -------
+        2D array
+            Covariance matrix
+        """
         if self._cov_mat is None:
             raise AttributeError(
                 'No covariance matrix found. Check for it in the data file: ',
@@ -80,6 +108,13 @@ class Data:
 
     @property
     def distortion_mat(self):
+        """Distortion matrix property
+
+        Returns
+        -------
+        2D array
+            Distortion matrix
+        """
         if self._distortion_mat is None:
             raise AttributeError(
                 'No distortion matrix found. Check for it in the data file: ',
@@ -88,6 +123,13 @@ class Data:
 
     @property
     def inv_masked_cov(self):
+        """Inverse masked covariance matrix property
+
+        Returns
+        -------
+        2D array
+            Inverse masked covariance matrix
+        """
         if self._inv_masked_cov is None:
             # Compute inverse of the covariance matrix
             masked_cov = self.cov_mat[:, self.mask]
@@ -108,6 +150,13 @@ class Data:
 
     @property
     def log_cov_det(self):
+        """Logarithm of the determinant of the covariance matrix property
+
+        Returns
+        -------
+        float
+            Logarithm of the determinant of the covariance matrix
+        """
         if self._log_cov_det is None:
             # Compute the log determinant using and LDL^T decomposition
             # |C| = Product of Diagonal components of D
@@ -120,9 +169,23 @@ class Data:
         return self._log_cov_det
 
     def has_cov_mat(self):
+        """Covariance matrix flag
+
+        Returns
+        -------
+        bool
+            Covariance matrix flag
+        """
         return self._cov_mat is not None
 
     def has_distortion(self):
+        """Distortion matrix flag
+
+        Returns
+        -------
+        bool
+            Distortion matrix flag
+        """
         return self._distortion_mat is not None
 
     def _read_data(self, data_path, cuts_config):
@@ -223,8 +286,8 @@ class Data:
 
         Returns
         -------
-        ND Array
-            Mask
+        (ND Array, float, float)
+            Mask, Bin size in rp, Bin size in rt
         """
         # Read the cuts
         rp_min = cuts_config.getfloat('rp-min', 0.)
