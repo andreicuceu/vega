@@ -1,6 +1,6 @@
 import numpy as np
 
-from wedge import Wedge
+from .wedges import Wedge
 
 
 class RtWedge(Wedge):
