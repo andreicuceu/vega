@@ -8,4 +8,5 @@ from vega.vega_interface import VegaInterface
 from vega.build_config import BuildConfig
 # from .sampler_interface import Sampler
 from vega.plots.wedges import Wedge
+from vega.plots.rt_wedges import RtWedge
 from vega.plots.plot import VegaPlots
