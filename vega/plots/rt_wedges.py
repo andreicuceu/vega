@@ -22,8 +22,6 @@ class RtWedge(Wedge):
             (Min, Max, Size) for radius, by default (0., 200., 50)
         rt_cut: tuple, optional
             (Min, Max) for r_transverse cuts, by default (0., 4.0)
-        scaling : int, optional
-            Scaling for grid computation, by default 10
         """
         # Init bin limits on the fine scaled grid and get centers
         rp_scaled_bins = np.linspace(rp[0], rp[1], rp[2] + 1)
