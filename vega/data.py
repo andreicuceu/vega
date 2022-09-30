@@ -1,6 +1,7 @@
 import numpy as np
 from astropy.io import fits
 from scipy import linalg
+from scipy import sparse
 from scipy.sparse import csr_matrix
 
 from vega.utils import find_file
@@ -49,6 +50,11 @@ class Data:
         if 'broadband' in corr_item.config:
             self._corr_item.init_broadband(self.bin_size_rp,
                                            self.coeff_binning_model)
+
+        if not self.has_distortion():
+            self._distortion_mat = np.eye(self.full_data_size)
+        if not self.has_cov_mat():
+            self._cov_mat = np.eye(self.full_data_size)
 
         self._cholesky = None
         self._scale = 1.
@@ -464,6 +470,8 @@ class Data:
         self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
         self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
 
+        metal_mat_size = len(self.metal_rp_grids[tracers])
+
         if self._blinding_strat == 'none':
             dm_name = 'DM_' + name
         else:
@@ -473,6 +481,8 @@ class Data:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
+        elif self._corr_item.test_flag:
+            self.metal_mats[tracers] = sparse.eye(metal_mat_size)
         else:
             raise ValueError("Cannot find correct metal matrices."
                              " Check that blinding is consistent between cf and metal files.")

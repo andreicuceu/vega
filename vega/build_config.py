@@ -68,6 +68,7 @@ class BuildConfig:
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
         self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
+        self.options['test'] = options.get('test', False)
 
         metals = options.get('metals', None)
         if metals is not None:
@@ -203,6 +204,8 @@ class BuildConfig:
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
+        if self.options['test']:
+            config['data']['test'] = 'True'
 
         if 'binsize' in corr_info:
             config['parameters'] = {}
