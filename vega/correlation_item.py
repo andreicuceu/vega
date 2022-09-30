@@ -35,6 +35,8 @@ class CorrelationItem:
         if 'filename' not in config['data']:
             self.has_data = False
 
+        self.test_flag = config['data'].getboolean('test', False)
+
         self.has_metals = False
         self.has_bb = False
 

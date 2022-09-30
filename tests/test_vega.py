@@ -1,12 +1,24 @@
 import pytest
 import numpy as np
+from math import isclose
 from astropy.io import fits
 
 from vega import VegaInterface
 from vega.utils import find_file
 
 
-def test_vega():
+def test_vega_new():
+    vega = VegaInterface('full_configs/main.ini')
+
+    loglik = vega.log_lik()
+    assert isclose(loglik, -58967.38295296009)
+
+    vega.minimize()
+
+    assert isclose(vega.bestfit.fmin.fval, 100380.65140993778)
+
+
+def test_vega_old():
     hdul = fits.open(find_file('data/picca_bench_data.fits'))
     names = ['test_' + str(i) for i in range(8)]
 
@@ -29,3 +41,8 @@ def test_vega():
         assert np.allclose(xi_vega_cross[name], xi_picca_cross)
 
     hdul.close()
+
+
+def test_vega():
+    test_vega_new()
+    test_vega_old()
