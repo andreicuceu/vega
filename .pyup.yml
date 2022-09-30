@@ -1,9 +1,0 @@
-# configure updates globally
-# default: all
-# allowed: all, insecure, False
-update: all
-
-# update schedule
-# default: empty
-# allowed: "every day", "every week", ..
-schedule: "every month"
