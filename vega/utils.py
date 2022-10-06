@@ -37,7 +37,8 @@ def _tracer_bias_beta(params, name):
 
     err_msg = ("For each tracer, you need to specify two of these three:"
                " (bias, bias_eta, beta)."
-               " If all three are given, we use bias and beta.")
+               " If all three are given, we use bias and beta. "
+               f"Offending tracer: {name}")
 
     if bias is None:
         assert bias_eta is not None and beta is not None, err_msg
