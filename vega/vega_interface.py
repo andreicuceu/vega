@@ -243,6 +243,10 @@ class VegaInterface:
 
         # Add priors
         for param, prior in self.priors.items():
+            if param not in local_params:
+                err_msg = ("You have specified a prior for a parameter not in "
+                           f"the model. Offending parameter: {param}")
+                assert param in local_params, err_msg
             chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
 
         assert isinstance(chi2, float)
