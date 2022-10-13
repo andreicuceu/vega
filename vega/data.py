@@ -216,14 +216,14 @@ class Data:
             print('Strategy: corr_yshift. BAO can be sampled')
             self._blind = False
             self._data_vec = hdul[1].data['DA_BLIND']
-            if 'DM' in hdul[1].columns.names:
+            if 'DM_BLIND' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
         elif self._blinding_strat == 'minimal':
             print('Warning! Running on blinded data {}'.format(data_path))
             print('Strategy: minimal. Scale parameters must be fixed to 1.')
             self._blind = True
             self._data_vec = hdul[1].data['DA_BLIND']
-            if 'DM' in hdul[1].columns.names:
+            if 'DM_BLIND' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
         elif self._blinding_strat == 'none':
             self._blind = False
