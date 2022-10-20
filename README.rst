@@ -49,7 +49,43 @@ Once you have a copy of the source, you can install it with:
     $ cd vega
     $ pip install -e .
 
-If you want to run the sampler you will need `Polychord`_. Older instructions for Cori at NERSC can be found `here`_. Instructions for Perlmutter will be added soon. If you have any problems or questions about the sampler please raise an issue.
+Installing the sampler
+----------------------
+
+If you want to run the sampler, you will need `Polychord`_. Older instructions for Cori at NERSC can be found `here`_. Here are instructions for installing it on Perlmutter. Note that this requires the default Perlmutter envrinoment with no changes (except module load python). Start by following the steps above to install vega and its dendencies. After that clone `Polychord`_ and revert to an older stable commit:
+
+.. code-block:: console
+
+    $ git clone https://github.com/PolyChord/PolyChordLite.git
+    $ cd PolyChordLite
+    $ git checkout 3bad756
+    
+In the PolyChordLite folder you will find a make file named "Makefile_gnu". You need to open and edit this file by changing lines 2-4 from:
+
+.. code-block:: make
+
+    FC = mpifort
+    CC = mpicc
+    CXX = mpicxx
+    
+to
+
+.. code-block:: make
+
+    FC = ftn
+    CC = CC
+    CXX = CC
+    
+After that, you can install PolyChord:
+
+.. code-block:: console
+
+    $ make veryclean
+    $ make COMPILER_TYPE=gnu
+    $ pip install -e .
+
+If you have any problems or questions about the sampler please raise an issue or email Andrei.
+
 
 .. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
