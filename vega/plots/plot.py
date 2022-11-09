@@ -56,7 +56,8 @@ class VegaPlots:
         return wedge_obj
 
     def plot_data(self, ax, wedge_obj, data=None, cov_mat=None, label=None,
-                  corr_name='lyalya_lyalya', data_fmt='o', data_color=None, **kwargs):
+                  corr_name='lyalya_lyalya', data_fmt='o', data_color=None,
+                  scaling_power=2, **kwargs):
         """Plot the data in the input ax object using the input wedge object
 
         Parameters
@@ -94,13 +95,14 @@ class VegaPlots:
         covariance = array_or_dict(cov_mat, corr_name)
 
         rd, dd, cd = wedge_obj(data_vec, covariance=covariance)
-        ax.errorbar(rd, dd * rd**2, yerr=np.sqrt(cd.diagonal()) * rd**2, fmt=data_fmt,
+        ax.errorbar(rd, dd * rd**scaling_power, yerr=np.sqrt(cd.diagonal()) * rd**scaling_power, fmt=data_fmt,
                     color=data_color, label=label)
 
         return rd, dd, cd
 
     def plot_model(self, ax, wedge_obj, model=None, cov_mat=None, label=None,
-                   corr_name='lyalya_lyalya', model_ls='-', model_color=None, **kwargs):
+                   corr_name='lyalya_lyalya', model_ls='-', model_color=None,
+                   scaling_power=2, **kwargs):
         """Plot the model in the input ax object using the input wedge object
 
         Parameters
@@ -130,11 +132,11 @@ class VegaPlots:
 
         if cov_mat is None:
             r, d = wedge_obj(model_vec)
-            ax.plot(r, d * r**2, ls=model_ls, color=model_color, label=label)
+            ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
         else:
             covariance = array_or_dict(cov_mat, corr_name)
             r, d, _ = wedge_obj(model_vec, covariance=covariance)
-            ax.plot(r, d * r**2, ls=model_ls, color=model_color, label=label)
+            ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
 
         return r, d
 
