@@ -60,8 +60,10 @@ class Model:
 
         # Initialize the Pk to Xi transform
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
+        fht_lowring = self._corr_item.config['model'].getboolean('fht_lowring', True)
+        fht_extrap = self._corr_item.config['model'].getboolean('fht_extrap', False)
         self.PktoXi = pktoxi.PktoXi(self.Pk_core.k_grid, self.Pk_core.muk_grid, ell_max,
-                                    self._corr_item.old_fftlog)
+                                    self._corr_item.old_fftlog, fht_lowring, fht_extrap)
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(self._corr_item.config['model'], fiducial,

@@ -14,23 +14,31 @@ class PktoXi:
     """
     cache = LRUCache(128)
 
-    def __init__(self, k_grid, muk_grid, ell_max=6, old_fftlog=False):
+    def __init__(self, k_grid, muk_grid, ell_max=6, old_fftlog=False,
+                 fht_lowring=True, fht_extrap=False):
         """Initialize the FFTLog and the Legendre polynomials
 
         Parameters
         ----------
-        k : 1D Array
+        k_grid : 1D Array
             Wavenumber grid of power spectrum
-        muk : ND Array
+        muk_grid : ND Array
             k_parallel / k grid for input power spectrum
         ell_max : int, optional
             Maximum multipole to sum over, by default 6
+        old_fftlog : bool, optional
+            Maximum multipole to sum over, by default False
+        fht_lowring : bool, optional
+            Lowring option for mcfit, by default True
+        fht_extrap : bool, optional
+            Extrap option for mcfit, by default False
         """
         self.k_grid = k_grid
         self.muk_grid = muk_grid
         self.dmuk = 1 / len(muk_grid)
         self.ell_max = ell_max
         self._old_fftlog = old_fftlog
+        self._extrap = fht_extrap
 
         # Initialize the multipole values we will need (only even ells)
         self.ell_vals = tuple(np.arange(0, ell_max + 1, 2))
@@ -41,7 +49,7 @@ class PktoXi:
         self.legendre_xi = {}
         for ell in self.ell_vals:
             if not self._old_fftlog:
-                self.fftlog_objects[ell] = P2xi(k_grid, l=ell, lowring=True)
+                self.fftlog_objects[ell] = P2xi(k_grid, l=ell, lowring=fht_lowring)
             # Precompute the Legendre polynomials used to decompose Pk into Pk_ell
             self.legendre_pk[ell] = special.legendre(ell)(self.muk_grid)
             # We don't know the mu grid for Xi in advance, so just initialize
@@ -91,7 +99,7 @@ class PktoXi:
             pk_ell = np.sum(self.dmuk * self.legendre_pk[ell] * pk, axis=0) * (2 * ell + 1)
 
             # Compute the FFTLog to transform Pk_ell to Xi_ell
-            r_fft, xi_fft = self.fftlog_objects[ell](pk_ell)
+            r_fft, xi_fft = self.fftlog_objects[ell](pk_ell, extrap=self._extrap)
 
             # Interpolate to r grid
             xi_interp = interpolate.interp1d(np.log(r_fft), xi_fft, kind='cubic')
