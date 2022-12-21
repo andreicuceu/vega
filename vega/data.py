@@ -211,13 +211,17 @@ class Data:
         if 'BLINDING' in hdul[1].header:
             self._blinding_strat = hdul[1].header['BLINDING']
 
-        if self._blinding_strat == 'corr_yshift':
+        blinding_strategies = ['desi_m2', 'desi_y1']
+        if self._blinding_strat in blinding_strategies:
             print('Warning! Running on blinded data {}'.format(data_path))
-            print('Strategy: corr_yshift. BAO can be sampled')
+            print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
             self._blind = False
             self._data_vec = hdul[1].data['DA_BLIND']
             if 'DM_BLIND' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+        elif self._blinding_strat == 'desi_y3':
+            raise ValueError('Fits are forbidden on Y3 data as we do not have'
+                             ' a coherent blinding strategy yet.')
         elif self._blinding_strat == 'minimal':
             print('Warning! Running on blinded data {}'.format(data_path))
             print('Strategy: minimal. Scale parameters must be fixed to 1.')
