@@ -98,6 +98,13 @@ Vega needs one "main.ini" file with the configuration, and at least one correlat
 
 In the `examples`_ folder you can find examples of these config files with a lot of comments explaining what each option does. If you don't understand something, or we missed something, please open an issue.
 
+Vega now has a Config `Builder`_ that is designed to create full Vega config files with minimal input. This is now the preffered way of interacting with Vega, as it automates fits and reduces the chance of mistakes. You can use the BuildConfig class interactively (e.g. in a notebook) as shown in this `tutorial`_.
+
+.. _documentation: https://vega.readthedocs.io/en/latest/?badge=latest
+.. _examples: https://github.com/andreicuceu/Vega/tree/master/examples
+.. _Builder: https://github.com/andreicuceu/vega/blob/master/vega/build_config.py
+.. _tutorial: https://github.com/andreicuceu/vega/blob/master/examples/config_creation.ipynb
+
 Using the terminal
 ------------------
 You can call Vega from a terminal using the scripts in the bin folder, and pointing them to a "main.ini" file like this:
@@ -119,13 +126,11 @@ We strongly suggest you run the sampler in parallel on many cores, as normal run
 Interactive use
 ---------------
 
-You can run Vega interactively using Ipython or a Jupyter notebook. The `tutorial`_ notebook takes you through the steps of intializing Vega, computing a model and performing a fit.
+You can run Vega interactively using Ipython or a Jupyter notebook. This `example`_ notebook takes you through the steps of intializing Vega, computing a model and performing a fit.
 
 This process is much more powerful compared to running in terminal as you directly have access to all the output, model components and fit results. Additionally, Vega was built in a modular structure with the aim of the user being able to call each module independently. Therefore, you have access to much more functionality this way. The `documentation`_ is the best source on how to run these modules independently, but if you can't find something there, please open an issue and we will try to help you and also improve the documentation.
 
-.. _documentation: https://vega.readthedocs.io/en/latest/?badge=latest
-.. _examples: https://github.com/andreicuceu/Vega/tree/master/examples
-.. _tutorial: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
+.. _example: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
 
 Credits
 -------
