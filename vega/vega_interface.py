@@ -14,6 +14,8 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 
+from scipy.misc import derivative
+
 
 class VegaInterface:
     """Main Vega class.
@@ -122,14 +124,40 @@ class VegaInterface:
 
             self.mc_config['sample'] = self._read_sample(config)
 
+        # Read the compression parameters and initializing compression quantities
+        if 'compression' in self.main_config:
+            self.compression_config = {}
+            for item, value in self.main_config['compression'].items():
+                self.compression_config[item] = value
+            self.data_compression = {}
+            self.fisher_compression = {}
+            self.model_derivative = {}
+            for name in self.corr_items:
+                self.model_derivative[name] = {}
+                for key in self.main_config['sample']:
+                    value = float(self.compression_config[key])
+                    def _model(y):
+                        return self.compute_model(params={key: y})[name][self.data[name].mask]
+                    self.model_derivative[name][key] = derivative(_model, self.params[key], dx = value)
+                self.data_compression[name] = self.compute_compression(name)
+                inv_cov = self.data[name].inv_masked_cov
+                model_derivative = np.array([value for value in self.model_derivative[name].values()]).squeeze()
+                self.fisher_compression[name] = np.matmul(model_derivative,np.matmul(inv_cov, model_derivative.T))
+                
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
             self.minimizer = None
         else:
-            self.minimizer = Minimizer(self.chi2, self.sample_params)
-        self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
+            if self.compression_config['type'] is not None:
+                self.minimizer = Minimizer(self.chi2_compression, self.sample_params)
+                self.analysis = Analysis(Minimizer(self.chi2_compression, self.sample_params),
+                                    self.main_config, self.mc_config)
+            else:
+                self.minimizer = Minimizer(self.chi2, self.sample_params)
+                self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
                                  self.main_config, self.mc_config)
-
+            
+            
         # Check for sampler
         self.has_sampler = False
         if 'control' in self.main_config:
@@ -185,6 +213,23 @@ class VegaInterface:
 
         return model_cf
 
+    def compute_compression(self, corr_item, local_params=None, direct_pk=None):
+
+        if self.compression_config['type'] == 'score':
+            
+            if local_params is None:
+                # then we are computing the score compression of the data
+                d = self.data[corr_item].masked_data_vec
+            else:
+                d =  self.compute_model(local_params, direct_pk)[corr_item][self.data[corr_item].mask]
+            fiducial_model = self.compute_model(self.params, direct_pk)[corr_item][self.data[corr_item].mask]
+            inv_cov = self.data[corr_item].inv_masked_cov
+                
+            diff = d - fiducial_model
+            model_derivative = np.array([value for value in self.model_derivative[corr_item].values()])
+            
+            return np.matmul(model_derivative, np.matmul(inv_cov,diff))
+    
     def chi2(self, params=None, direct_pk=None):
         """Compute full chi2 for all components.
 
@@ -251,6 +296,69 @@ class VegaInterface:
 
         assert isinstance(chi2, float)
         return chi2
+
+    
+    def chi2_compression(self, params=None, direct_pk=None):
+        """Compute full chi2 for all components if score compression is required as a method.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Computation parameters, by default None
+        direct_pk: 1D array or None, optional
+            If not None, the full Pk (e.g. from CLASS/CAMB) to be used directly, by default None
+
+        Returns
+        -------
+        float
+            chi^2
+        """
+        assert self._has_data
+
+        # Check if blinding is initialized
+        if self._blind is None:
+            self._blind = False
+            for data_obj in self.data.values():
+                if data_obj.blind:
+                    self._blind = True
+
+        # Overwrite computation parameters
+        local_params = copy.deepcopy(self.params)
+        if params is not None:
+            for par, val in params.items():
+                local_params[par] = val
+
+        # Enforce blinding
+        if self._blind:
+            for par, val in local_params.items():
+                if par in self._scale_par_names:
+                    local_params[par] = 1.
+            
+
+        # Go trough each component and compute the chi^2
+        chi2 = 0
+        for name in self.corr_items:
+            try:
+                assert not self.monte_carlo
+                diff = self.data_compression[name] - self.compute_compression(name, local_params)
+            except utils.VegaBoundsError:
+                self.models[name].PktoXi.cache_pars = None
+                return 1e100
+            
+            chi2 += np.matmul(diff.T, np.matmul(np.linalg.inv(self.fisher_compression[name]),diff))
+            
+
+        # Add priors
+        for param, prior in self.priors.items():
+            if param not in local_params:
+                err_msg = ("You have specified a prior for a parameter not in "
+                           f"the model. Offending parameter: {param}")
+                assert param in local_params, err_msg
+            chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
+
+        assert isinstance(chi2, float)
+        return chi2
+
 
     def log_lik(self, params=None, direct_pk=None):
         """Compute full log likelihood for all components.
