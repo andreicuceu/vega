@@ -52,6 +52,12 @@ Once you have a copy of the source, you can install it with:
 Installing the sampler
 ----------------------
 
+First install mpi4py using the NERSC specific commmand:
+
+.. code-block:: console
+
+    $ MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
+
 If you want to run the sampler, you will need `Polychord`_. Older instructions for Cori at NERSC can be found `here`_. Here are instructions for installing it on Perlmutter. Note that this requires the default Perlmutter envrinoment with no changes (except module load python). Start by following the steps above to install vega and its dendencies. After that clone `Polychord`_ and revert to an older stable commit:
 
 .. code-block:: console
