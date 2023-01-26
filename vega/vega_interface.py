@@ -140,9 +140,8 @@ class VegaInterface:
                         return self.compute_model(params={key: y})[name][self.data[name].mask]
                     self.model_derivative[name][key] = derivative(_model, self.params[key], dx = value)
                 self.data_compression[name] = self.compute_compression(name)
-                inv_cov = self.data[name].inv_masked_cov
-                model_derivative = np.array([value for value in self.model_derivative[name].values()]).squeeze()
-                self.fisher_compression[name] = np.matmul(model_derivative,np.matmul(inv_cov, model_derivative.T))
+                model_derivative = np.array([value for value in self.model_derivative[name].values()])
+                self.fisher_compression[name] = np.matmul(model_derivative,np.matmul(self.data[name].inv_masked_cov, model_derivative.T))
                 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
@@ -222,7 +221,7 @@ class VegaInterface:
                 d = self.data[corr_item].masked_data_vec
             else:
                 d =  self.compute_model(local_params, direct_pk)[corr_item][self.data[corr_item].mask]
-            fiducial_model = self.compute_model(self.params, direct_pk)[corr_item][self.data[corr_item].mask]
+            fiducial_model = self.compute_model(direct_pk = direct_pk)[corr_item][self.data[corr_item].mask]
             inv_cov = self.data[corr_item].inv_masked_cov
                 
             diff = d - fiducial_model
@@ -378,17 +377,25 @@ class VegaInterface:
         assert self._has_data
 
         # Get the full chi2
-        chi2 = self.chi2(params, direct_pk)
+        if self.compression_config['type'] != 'None':
+            chi2 = self.chi2_compression(params, direct_pk)
+        else:
+            chi2 = self.chi2(params, direct_pk)
 
         # Compute the normalization for each component
         log_norm = 0
         for name in self.corr_items:
-            log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
 
-            if self.monte_carlo:
-                log_norm -= 0.5 * self.data[name].scaled_log_cov_det
+            if self.compression_config['type'] != 'None':
+                assert not self.monte_carlo
+                log_norm -= 0.5 * self.data_compression[name].shape[0] * np.log(2 * np.pi)
+                log_norm -= 0.5 * np.log(np.linalg.det(self.fisher_compression[name]))
             else:
-                log_norm -= 0.5 * self.data[name].log_cov_det
+                log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
+                if self.monte_carlo:
+                    log_norm -= 0.5 * self.data[name].scaled_log_cov_det
+                else:
+                    log_norm -= 0.5 * self.data[name].log_cov_det
 
         # Compute log lik
         log_lik = log_norm - 0.5 * chi2
