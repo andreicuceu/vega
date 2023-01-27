@@ -147,7 +147,7 @@ class VegaInterface:
         if not self.sample_params['limits']:
             self.minimizer = None
         else:
-            if self.compression_config['type'] is not None:
+            if self.compression_config['type'] != 'None':
                 self.minimizer = Minimizer(self.chi2_compression, self.sample_params)
                 self.analysis = Analysis(Minimizer(self.chi2_compression, self.sample_params),
                                     self.main_config, self.mc_config)
