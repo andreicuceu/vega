@@ -429,7 +429,7 @@ class VegaPlots:
             data_label = label if data_only else None
 
             _ = self.plot_wedge(ax, mu_bin, models=[model], cov_mat=cov_mat, labels=[label],
-                                model_colors=color, data_color=color, data=data,
+                                model_colors=[color], data_color=color, data=data,
                                 cross_flag=cross_flag, corr_name=corr_name, models_only=False,
                                 data_only=data_only, data_label=data_label,
                                 no_postprocess=True, **kwargs)
