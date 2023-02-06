@@ -159,7 +159,7 @@ class VegaPlots:
         return r, d
 
     def postprocess_plot(self, ax, mu_bin=None, xlim=(0, 180), ylim=None, no_legend=False,
-                         title=None, **kwargs):
+                         title=None, legend_loc=None, legend_ncol=None, **kwargs):
         """Add postprocessing to the plot on input axes
 
         Parameters
@@ -184,7 +184,7 @@ class VegaPlots:
             ax.set_ylim(ylim[0], ylim[1])
 
         if not no_legend:
-            ax.legend()
+            ax.legend(loc=legend_loc, ncol=legend_ncol)
         ax.grid()
 
     def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
@@ -389,7 +389,7 @@ class VegaPlots:
 
     def plot_4wedge_panel(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), model=None, cov_mat=None,
                           data=None, cross_flag=False, corr_name='lyalya_lyalya', colors=None,
-                          data_only=False, title=None, figsize=(10, 6), **kwargs):
+                          data_only=False, title=None, figsize=(8, 6), **kwargs):
         """Plot the correlations into four wedges on one panel
 
         Parameters
@@ -428,7 +428,7 @@ class VegaPlots:
             colors = cmap((0.03, 0.25, 0.75, 1))
 
         for mu_bin, color in zip(mu_limits, colors):
-            label = f'{mu_bin[0]} < ' + r'$|\mu|$' + f' < {mu_bin[1]}'
+            label = f'{mu_bin[0]:.2f} < ' + r'$|\mu|$' + f' < {mu_bin[1]:.2f}'
             data_label = label if data_only else None
 
             _ = self.plot_wedge(ax, mu_bin, models=[model], cov_mat=cov_mat, labels=[label],
