@@ -22,18 +22,22 @@ class VegaPlots:
         self.rp_setup = {}
         self.rt_setup = {}
         self.r_setup = {}
+        self.has_data = False
+
         if vega_data is not None:
             for name in vega_data.keys():
                 cross_flag = vega_data[name].tracer1['type'] != vega_data[name].tracer2['type']
                 self.cross_flag[name] = cross_flag
                 self.data[name] = vega_data[name].data_vec
-                if vega_data[name].has_cov_mat():
+                if vega_data[name].has_cov_mat:
                     self.cov_mat[name] = vega_data[name].cov_mat
 
                 self.rp_setup[name] = (vega_data[name].rp_min, vega_data[name].rp_max,
                                        vega_data[name].num_bins_rp)
                 self.rt_setup[name] = (0., vega_data[name].rt_max, vega_data[name].num_bins_rt)
                 self.r_setup[name] = self.rp_setup[name]
+
+            self.has_data = True
 
     def initialize_wedge(self, mu_bin, corr_name=None, cross_flag=False, rp_setup=None,
                          rt_setup=None, r_setup=None, abs_mu=True, **kwargs):
@@ -203,7 +207,8 @@ class VegaPlots:
 
     def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
                    cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
-                   data_only=False, data_label=None, no_postprocess=False, **kwargs):
+                   data_only=False, data_label=None, no_postprocess=False,
+                   use_local_coordinates=True, **kwargs):
         """Plot a wedge into the input axes using the input mu_bin
 
         Parameters
@@ -230,8 +235,13 @@ class VegaPlots:
             Whether to only plot data and ignore the models, by default False
         data_label : str, optional
             Label for the data, by default None
+        use_local_coordinates : bool, optional
+            Whether to use the stored coordinate settings or defaul/input values, by default True
         """
-        wedge_obj = self.initialize_wedge(mu_bin, cross_flag, **kwargs)
+        if use_local_coordinates and self.has_data:
+            wedge_obj = self.initialize_wedge(mu_bin, corr_name, cross_flag, **kwargs)
+        else:
+            wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
 
         data_wedge = None
         if not models_only:
