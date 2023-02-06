@@ -6,7 +6,7 @@ from .utils import array_or_dict
 
 
 class VegaPlots:
-    def __init__(self, vega_data=None, models=None):
+    def __init__(self, vega_data=None):
         """Initialize plotting module with the vega internal info
 
         Parameters
@@ -19,6 +19,9 @@ class VegaPlots:
         self.cross_flag = {}
         self.data = {}
         self.cov_mat = {}
+        self.rp_setup = {}
+        self.rt_setup = {}
+        self.r_setup = {}
         if vega_data is not None:
             for name in vega_data.keys():
                 cross_flag = vega_data[name].tracer1['type'] != vega_data[name].tracer2['type']
@@ -27,18 +30,21 @@ class VegaPlots:
                 if vega_data[name].has_cov_mat():
                     self.cov_mat[name] = vega_data[name].cov_mat
 
-        self.models = None
-        if models is not None:
-            self.models = models
+                self.rp_setup[name] = (vega_data[name].rp_min, vega_data[name].rp_max,
+                                       vega_data[name].num_bins_rp)
+                self.rt_setup[name] = (0., vega_data[name].rt_max, vega_data[name].num_bins_rt)
+                self.r_setup[name] = self.rp_setup[name]
 
-    def initialize_wedge(self, mu_bin, cross_flag=False, rp_setup=None, rt_setup=None,
-                         r_setup=None, abs_mu=True, **kwargs):
+    def initialize_wedge(self, mu_bin, corr_name=None, cross_flag=False, rp_setup=None,
+                         rt_setup=None, r_setup=None, abs_mu=True, **kwargs):
         """Initialize wedge object
 
         Parameters
         ----------
         mu_bin : (float, float)
             Min and max mu value defining the wedge
+        corr_name : str, optional
+            Name of the correlation component, by default None
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         rp_setup : (float, float, int), optional
@@ -55,15 +61,23 @@ class VegaPlots:
         vega.Wedge
             Vega wedge object
         """
-        if rp_setup is not None:
-            rp = rp_setup
-        elif cross_flag:
-            rp = (-200., 200., 100)
-        else:
-            rp = (0., 200., 50)
+        if corr_name is not None:
+            rp = self.rp_setup[corr_name]
+            rt = self.rp_setup[corr_name]
+            r = self.rp_setup[corr_name]
 
-        rt = rt_setup if rt_setup is not None else (0., 200., 50)
-        r = r_setup if r_setup is not None else (0., 200., 50)
+            if cross_flag and abs_mu:
+                r = (0, rp[1], rp[2])
+        else:
+            if rp_setup is not None:
+                rp = rp_setup
+            elif cross_flag:
+                rp = (-200., 200., 100)
+            else:
+                rp = (0., 200., 50)
+
+            rt = rt_setup if rt_setup is not None else (0., 200., 50)
+            r = r_setup if r_setup is not None else (0., 200., 50)
 
         return Wedge(mu=mu_bin, rp=rp, rt=rt, r=r, abs_mu=abs_mu)
 

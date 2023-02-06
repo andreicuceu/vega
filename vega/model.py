@@ -35,7 +35,7 @@ class Model:
         self._data = data
         data_has_distortion = False
         if self._data is not None:
-            data_has_distortion = self._data.has_distortion()
+            data_has_distortion = self._data.has_distortion
             self._corr_item.config['model']['bin_size_rp'] = str(self._data.bin_size_rp)
             self._corr_item.config['model']['bin_size_rt'] = str(self._data.bin_size_rt)
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion

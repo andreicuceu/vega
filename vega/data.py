@@ -51,9 +51,9 @@ class Data:
             self._corr_item.init_broadband(self.bin_size_rp,
                                            self.coeff_binning_model)
 
-        if not self.has_distortion():
+        if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
-        if not self.has_cov_mat():
+        if not self.has_cov_mat:
             self._cov_mat = np.eye(self.full_data_size)
 
         self._cholesky = None
@@ -174,6 +174,7 @@ class Data:
 
         return self._log_cov_det
 
+    @property
     def has_cov_mat(self):
         """Covariance matrix flag
 
@@ -184,6 +185,7 @@ class Data:
         """
         return self._cov_mat is not None
 
+    @property
     def has_distortion(self):
         """Distortion matrix flag
 
@@ -266,6 +268,12 @@ class Data:
 
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
+
+        self.rp_min = hdul[1].header['RPMIN']
+        self.rp_max = hdul[1].header['RPMAX']
+        self.rt_max = hdul[1].header['RTMAX']
+        self.num_bins_rp = hdul[1].header['NP']
+        self.num_bins_rt = hdul[1].header['NT']
 
         hdul.close()
 
