@@ -159,7 +159,7 @@ class VegaPlots:
         return r, d
 
     def postprocess_plot(self, ax, mu_bin=None, xlim=(0, 180), ylim=None, no_legend=False,
-                         title=None, legend_loc=None, legend_ncol=None, **kwargs):
+                         title=None, legend_loc='upper right', legend_ncol=1, **kwargs):
         """Add postprocessing to the plot on input axes
 
         Parameters
