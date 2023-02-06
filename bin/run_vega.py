@@ -44,12 +44,12 @@ def run_vega(config_path):
     corr_funcs = vega.compute_model(vega.params, run_init=False)
     vega.output.write_results(corr_funcs, vega.params, vega.minimizer, scan_results, vega.models)
 
-    # for name in vega.plots.data:
-    #     vega.plots.plot_4wedge_panel(model=[corr_funcs[name]], corr_name=name, figsize=(8, 6),
-    #                                  legend_loc=(0.07, 1.01), legend_ncol=2)
-    #     vega.plots.fig.suptitle(name, x=0.7, y=0.85)
-    #     vega.plots.fig.savefig(f'{vega.output.outfile}_{name}.png', dpi='figure',
-    #                            bbox_inches='tight', facecolor='white')
+    for name in vega.plots.data:
+        vega.plots.plot_4wedge_panel(model=corr_funcs[name], corr_name=name, figsize=(8, 6),
+                                     legend_loc=(0.07, 1.01), legend_ncol=2)
+        vega.plots.fig.suptitle(name, x=0.7, y=0.85)
+        vega.plots.fig.savefig(f'{vega.output.outfile}_{name}.png', dpi='figure',
+                               bbox_inches='tight', facecolor='white')
 
 
 if __name__ == '__main__':
