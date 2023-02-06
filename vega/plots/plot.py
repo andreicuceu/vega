@@ -71,7 +71,7 @@ class VegaPlots:
             r = self.rp_setup[corr_name]
 
             if cross_flag and abs_mu:
-                r = (0, rp[1], rp[2])
+                r = (0, rp[1], rp[2]//2)
         else:
             if rp_setup is not None:
                 rp = rp_setup
