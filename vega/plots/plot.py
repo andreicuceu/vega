@@ -174,8 +174,8 @@ class VegaPlots:
         ax.set_ylabel(r"$r^2\xi(r)$")
         ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
 
-        if 'title' is not None:
-            ax.set_title(kwargs['title'])
+        if title is not None:
+            ax.set_title(title)
         elif mu_bin is not None:
             ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]))
         ax.set_xlim(xlim[0], xlim[1])
@@ -389,7 +389,7 @@ class VegaPlots:
 
     def plot_4wedge_panel(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), model=None, cov_mat=None,
                           data=None, cross_flag=False, corr_name='lyalya_lyalya', colors=None,
-                          data_only=False, title=None, **kwargs):
+                          data_only=False, title=None, figsize=(10, 6), **kwargs):
         """Plot the correlations into four wedges on one panel
 
         Parameters
@@ -412,10 +412,13 @@ class VegaPlots:
             Whether to only plot data and ignore the models, by default False
         title : string, optional
             Title for plot, by default None
+        figsize : (float, float), optional
+            figsize object passed to plt.subplots, by default (10, 6)
         """
         assert len(mu_bins) == 5
-        plt.rcParams['font.size'] = 14
-        fig, ax = plt.subplots(1, figsize=(10, 6))
+        if 'no_font' not in kwargs:
+            plt.rcParams['font.size'] = 14
+        fig, ax = plt.subplots(1, figsize=figsize)
 
         mu_bins = np.flip(np.array(mu_bins))
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
