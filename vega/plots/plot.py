@@ -58,9 +58,9 @@ class VegaPlots:
         if rp_setup is not None:
             rp = rp_setup
         elif cross_flag:
-            rp = (0., 200., 50)
-        else:
             rp = (-200., 200., 100)
+        else:
+            rp = (0., 200., 50)
 
         rt = rt_setup if rt_setup is not None else (0., 200., 50)
         r = r_setup if r_setup is not None else (0., 200., 50)
