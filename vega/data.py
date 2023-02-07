@@ -262,18 +262,10 @@ class Data:
         self.coeff_binning_model = np.sqrt(dist_rp_grid.size / rp_grid.size)
 
         # Compute the mask and use it on the data
-        self.mask, self.bin_size_rp, self.bin_size_rt = self._build_mask(rp_grid, rt_grid,
-                                                                         cuts_config,
-                                                                         hdul[1].header)
+        self._build_mask(rp_grid, rt_grid, cuts_config, hdul[1].header)
 
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
-
-        self.rp_min = hdul[1].header['RPMIN']
-        self.rp_max = hdul[1].header['RPMAX']
-        self.rt_max = hdul[1].header['RTMAX']
-        self.num_bins_rp = hdul[1].header['NP']
-        self.num_bins_rt = hdul[1].header['NT']
 
         hdul.close()
 
@@ -286,8 +278,7 @@ class Data:
         rp_rt_grid = np.array([dist_rp_grid, dist_rt_grid])
         return rp_rt_grid, dist_z_grid
 
-    @staticmethod
-    def _build_mask(rp_grid, rt_grid, cuts_config, data_header):
+    def _build_mask(self, rp_grid, rt_grid, cuts_config, data_header):
         """Build the mask for the data by comparing
         the cuts from config with the data limits.
 
@@ -308,47 +299,42 @@ class Data:
             Mask, Bin size in rp, Bin size in rt
         """
         # Read the cuts
-        rp_min = cuts_config.getfloat('rp-min', 0.)
-        rp_max = cuts_config.getfloat('rp-max', 200.)
+        rp_min_cut = cuts_config.getfloat('rp-min', 0.)
+        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
 
-        rt_min = cuts_config.getfloat('rt-min', 0.)
-        rt_max = cuts_config.getfloat('rt-max', 200.)
+        rt_min_cut = cuts_config.getfloat('rt-min', 0.)
+        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
 
-        r_min = cuts_config.getfloat('r-min', 10.)
-        r_max = cuts_config.getfloat('r-max', 180.)
+        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
+        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
 
-        mu_min = cuts_config.getfloat('mu-min', -1.)
-        mu_max = cuts_config.getfloat('mu-max', +1.)
+        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
+        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
-        # TODO If RTMIN is ever added to the cf data files this needs modifying
+        self.rp_min = data_header['RPMIN']
+        self.rp_max = data_header['RPMAX']
+        self.rt_max = data_header['RTMAX']
+        self.num_bins_rp = data_header['NP']
+        self.num_bins_rt = data_header['NT']
+
         # Get the data bin size
-        bin_size_rp = (data_header['RPMAX'] - data_header['RPMIN'])
-        bin_size_rp /= data_header['NP']
-        bin_size_rt = data_header['RTMAX'] / data_header['NT']
+        # TODO If RTMIN is ever added to the cf data files this needs modifying
+        self.bin_size_rp = (self.rp_max - self.rp_min) / self.num_bins_rp
+        self.bin_size_rt = self.rt_max / self.num_bins_rt
 
         # Compute bin centers
-        bin_center_rp = np.zeros(rp_grid.size)
-        for i, rp_value in enumerate(rp_grid):
-            bin_index = np.floor((rp_value - data_header['RPMIN'])
-                                 / bin_size_rp)
-            bin_center_rp[i] = data_header['RPMIN'] \
-                + (bin_index + 0.5) * bin_size_rp
-
-        bin_center_rt = np.zeros(rt_grid.size)
-        for i, rt_value in enumerate(rt_grid):
-            bin_index = np.floor(rt_value / bin_size_rt)
-            bin_center_rt[i] = (bin_index + 0.5) * bin_size_rt
+        bin_index = np.floor((rp_grid - self.rp_min) / self.bin_size_rp)
+        bin_center_rp = self.rp_min + (bin_index + 0.5) * self.bin_size_rp
+        bin_center_rt = (np.floor(rt_grid / self.bin_size_rt) + 0.5) * self.bin_size_rt
 
         bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
         bin_center_mu = bin_center_rp / bin_center_r
 
         # Build the mask by comparing the data bins to the cuts
-        mask = (bin_center_rp > rp_min) & (bin_center_rp < rp_max)
-        mask &= (bin_center_rt > rt_min) & (bin_center_rt < rt_max)
-        mask &= (bin_center_r > r_min) & (bin_center_r < r_max)
-        mask &= (bin_center_mu > mu_min) & (bin_center_mu < mu_max)
-
-        return mask, bin_size_rp, bin_size_rt
+        self.mask = (bin_center_rp > rp_min_cut) & (bin_center_rp < rp_max_cut)
+        self.mask &= (bin_center_rt > rt_min_cut) & (bin_center_rt < rt_max_cut)
+        self.mask &= (bin_center_r > self.r_min_cut) & (bin_center_r < self.r_max_cut)
+        self.mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
 
     def _init_metals(self, metal_config):
         """Read the metal file and initialize all the metal data.

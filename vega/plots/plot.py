@@ -23,6 +23,7 @@ class VegaPlots:
         self.rt_setup = {}
         self.r_setup = {}
         self.has_data = False
+        self.cuts = {}
 
         if vega_data is not None:
             for name in vega_data.keys():
@@ -36,6 +37,8 @@ class VegaPlots:
                                        vega_data[name].num_bins_rp)
                 self.rt_setup[name] = (0., vega_data[name].rt_max, vega_data[name].num_bins_rt)
                 self.r_setup[name] = self.rp_setup[name]
+                self.cuts[name] = {'r_min': vega_data[name].r_min_cut,
+                                   'r_max': vega_data[name].r_max_cut}
 
             self.has_data = True
 
@@ -462,5 +465,9 @@ class VegaPlots:
                                 no_postprocess=True, **kwargs)
 
         self.postprocess_plot(ax, title=title, **kwargs)
+        if self.has_data:
+            xmin, xmax = ax.get_xlim()
+            ax.fill_betweenx(ax.get_ylim(), xmin, self.cuts['rmin'], color='gray', alpha=0.7)
+            ax.fill_betweenx(ax.get_ylim(), self.cuts['rmax'], xmax, color='gray', alpha=0.7)
 
         self.fig = fig
