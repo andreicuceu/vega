@@ -192,8 +192,10 @@ class VegaPlots:
         xlim : tuple, optional
             Limits of the x axis, by default (0, 180)
         """
-        ax.set_ylabel(r"$r^2\xi(r)$")
-        ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
+        if kwargs.get('no_ylabel', False):
+            ax.set_ylabel(r"$r^2\xi(r)$")
+        if kwargs.get('no_xlabel', False):
+            ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
 
         if title is not None:
             ax.set_title(title)
@@ -308,7 +310,7 @@ class VegaPlots:
         data_label : str, optional
             Label for the data, by default None
         """
-        if 'no_font' not in kwargs:
+        if kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         fig, axs = plt.subplots(1, figsize=(10, 6))
 
@@ -349,7 +351,7 @@ class VegaPlots:
             Whether to plot the two wedges vertically, by default False
         """
         assert len(mu_bins) == 3
-        if 'no_font' not in kwargs:
+        if kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         if not vertical_plots:
             fig, axs = plt.subplots(1, 2, figsize=(18, 6))
@@ -398,7 +400,7 @@ class VegaPlots:
             Label for the data, by default None
         """
         assert len(mu_bins) == 5
-        if 'no_font' not in kwargs:
+        if kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         fig, axs = plt.subplots(2, 2, figsize=figsize)
         axs = axs.flatten()
@@ -406,11 +408,14 @@ class VegaPlots:
         mu_bins = np.flip(np.array(mu_bins))
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
 
-        for ax, mu_bin in zip(axs, mu_limits):
+        no_xlabel = [True, True, False, False]
+        no_ylabel = [False, True, False, True]
+
+        for ax, mu_bin, no_xl, no_yl in zip(axs, mu_limits, no_xlabel, no_ylabel):
             _ = self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
                                 data=data, cross_flag=cross_flag, corr_name=corr_name,
                                 models_only=models_only, data_only=data_only,
-                                data_label=data_label, **kwargs)
+                                data_label=data_label, no_xlabel=no_xl, no_ylabel=no_yl, **kwargs)
 
         self.fig = fig
 
@@ -443,7 +448,7 @@ class VegaPlots:
             figsize object passed to plt.subplots, by default (10, 6)
         """
         assert len(mu_bins) == 5
-        if 'no_font' not in kwargs:
+        if kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         fig, ax = plt.subplots(1, figsize=figsize)
 
