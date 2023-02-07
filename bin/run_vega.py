@@ -54,7 +54,7 @@ def run_vega(config_path):
     num_pars = len(vega.sample_params['limits'])
     for name in vega.plots.data:
         bestfit_legend = f'Correlation: {name}, Total '
-        bestfit_legend += r'$\chi^2/(N_\mathrm{data}-N_\mathrm{pars})$'
+        bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'
         bestfit_legend += f': {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) '
         bestfit_legend += f'= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}'
 
