@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from vega import VegaInterface
 from vega.minimizer import Minimizer
+import matplotlib.pyplot as plt
 import argparse
 
 
@@ -44,11 +45,23 @@ def run_vega(config_path):
     corr_funcs = vega.compute_model(vega.params, run_init=False)
     vega.output.write_results(corr_funcs, vega.params, vega.minimizer, scan_results, vega.models)
 
+    plt.rc('axes', labelsize=16)
+    plt.rc('axes', titlesize=16)
+    plt.rc('legend', fontsize=16)
+    plt.rc('xtick', labelsize=14)
+    plt.rc('ytick', labelsize=14)
+
+    num_pars = len(vega.sample_params['limits'])
     for name in vega.plots.data:
-        vega.plots.plot_4wedge_panel(model=corr_funcs[name], corr_name=name, figsize=(8, 6),
-                                     legend_loc=(0.07, 1.01), legend_ncol=2)
-        vega.plots.fig.suptitle(name, x=0.7, y=0.85)
-        vega.plots.fig.savefig(f'{vega.output.outfile}_{name}.png', dpi='figure',
+        bestfit_legend = f'Correlation: {name}, Total '
+        bestfit_legend += r'$\chi^2/(N_\mathrm{data}-N_\mathrm{pars})$'
+        bestfit_legend += f': {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) '
+        bestfit_legend += f'= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}'
+
+        vega.plots.plot_4wedges(models=[vega.bestfit_model[name]], corr_name=name, title=None,
+                                mu_bin_labels=True, no_font=True, model_colors=['r'], xlim=None)
+        vega.plots.fig.suptitle(bestfit_legend, fontsize=18, y=1.03)
+        vega.plots.fig.savefig(f'{vega.output.outfile[:-5]}_{name}.png', dpi='figure',
                                bbox_inches='tight', facecolor='white')
 
 
