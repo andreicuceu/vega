@@ -392,6 +392,9 @@ class VegaInterface:
               f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
         print('----------------------------------------------------\n')
 
+        if not self.minimizer.fmin.is_valid:
+            print('Invalid fit!!! Check data, covariance, model and priors.')
+
     @property
     def bestfit(self):
         """Access the bestfit results from iminuit.

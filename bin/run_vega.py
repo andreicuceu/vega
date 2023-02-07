@@ -57,6 +57,8 @@ def run_vega(config_path):
         bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'
         bestfit_legend += f': {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) '
         bestfit_legend += f'= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}'
+        if not vega.bestfit.fmin.is_valid:
+            bestfit_legend = 'Invalid fit! Disregard these results.'
 
         vega.plots.plot_4wedges(models=[vega.bestfit_model[name]], corr_name=name, title=None,
                                 mu_bin_labels=True, no_font=True, model_colors=['r'], xlim=None)
