@@ -1,6 +1,7 @@
 """Main module."""
 import os.path
 import numpy as np
+import scipy.stats
 from astropy.io import fits
 import configparser
 import copy
@@ -354,6 +355,42 @@ class VegaInterface:
             # self.set_fast_metals()
 
         self.minimizer.minimize()
+
+        self.bestfit_model = self.compute_model(self.minimizer.values, run_init=False)
+        self.total_data_size = 0
+        self.bestfit_corr_stats = {}
+
+        num_pars = len(self.sample_params['limits'])
+        print('\n----------------------------------------------------')
+        for name in self.corr_items:
+            data_size = self.data[name].data_size
+            self.total_data_size += data_size
+
+            if self.monte_carlo:
+                diff = self.data[name].masked_mc_mock \
+                    - self.bestfit_model[name][self.data[name].mask]
+                chisq = diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+            else:
+                diff = self.data[name].masked_data_vec \
+                    - self.bestfit_model[name][self.data[name].mask]
+                chisq = diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+
+            reduced_chisq = chisq / (data_size - num_pars)
+            p_value = 1 - scipy.stats.chi2.cdf(chisq, data_size - num_pars)
+
+            print(f'{name} chi^2/(ndata-nparam): {chisq:.1f}/({data_size}-{num_pars}) '
+                  f'= {reduced_chisq:.3f}, PTE={p_value:.2f}')
+            print('----------------------------------------------------')
+
+            self.bestfit_corr_stats[name] = {'size': data_size, 'chisq': chisq,
+                                             'reduced_chisq': reduced_chisq, 'p_value': p_value}
+
+        self.chisq = self.minimizer.fmin.fval
+        self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
+        self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
+        print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
+              f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
+        print('----------------------------------------------------\n')
 
     @property
     def bestfit(self):

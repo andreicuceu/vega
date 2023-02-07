@@ -192,9 +192,9 @@ class VegaPlots:
         xlim : tuple, optional
             Limits of the x axis, by default (0, 180)
         """
-        if kwargs.get('no_ylabel', False):
+        if not kwargs.get('no_ylabel', False):
             ax.set_ylabel(r"$r^2\xi(r)$")
-        if kwargs.get('no_xlabel', False):
+        if not kwargs.get('no_xlabel', False):
             ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
 
         if title is not None:
@@ -310,7 +310,7 @@ class VegaPlots:
         data_label : str, optional
             Label for the data, by default None
         """
-        if kwargs.get('no_font', False):
+        if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         fig, axs = plt.subplots(1, figsize=(10, 6))
 
@@ -351,7 +351,7 @@ class VegaPlots:
             Whether to plot the two wedges vertically, by default False
         """
         assert len(mu_bins) == 3
-        if kwargs.get('no_font', False):
+        if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         if not vertical_plots:
             fig, axs = plt.subplots(1, 2, figsize=(18, 6))
@@ -400,7 +400,7 @@ class VegaPlots:
             Label for the data, by default None
         """
         assert len(mu_bins) == 5
-        if kwargs.get('no_font', False):
+        if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         fig, axs = plt.subplots(2, 2, figsize=figsize)
         axs = axs.flatten()
@@ -448,7 +448,7 @@ class VegaPlots:
             figsize object passed to plt.subplots, by default (10, 6)
         """
         assert len(mu_bins) == 5
-        if kwargs.get('no_font', False):
+        if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
         fig, ax = plt.subplots(1, figsize=figsize)
 
