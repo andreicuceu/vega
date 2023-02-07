@@ -308,7 +308,8 @@ class VegaPlots:
         data_label : str, optional
             Label for the data, by default None
         """
-        plt.rcParams['font.size'] = 14
+        if 'no_font' not in kwargs:
+            plt.rcParams['font.size'] = 14
         fig, axs = plt.subplots(1, figsize=(10, 6))
 
         _ = self.plot_wedge(axs, (0, 1), models=models, cov_mat=cov_mat, labels=labels, data=data,
@@ -348,7 +349,8 @@ class VegaPlots:
             Whether to plot the two wedges vertically, by default False
         """
         assert len(mu_bins) == 3
-        plt.rcParams['font.size'] = 14
+        if 'no_font' not in kwargs:
+            plt.rcParams['font.size'] = 14
         if not vertical_plots:
             fig, axs = plt.subplots(1, 2, figsize=(18, 6))
         else:
@@ -368,7 +370,8 @@ class VegaPlots:
 
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
                      labels=None, data=None, cross_flag=False, corr_name='lyalya_lyalya',
-                     models_only=False, data_only=False, data_label=None, fig=None, **kwargs):
+                     models_only=False, data_only=False, data_label=None, figsize=(20, 14),
+                     **kwargs):
         """Plot the correlations into four wedges defined by the limits in mu_bins
 
         Parameters
@@ -395,13 +398,10 @@ class VegaPlots:
             Label for the data, by default None
         """
         assert len(mu_bins) == 5
-        plt.rcParams['font.size'] = 14
-        if fig is None:
-            fig, axs = plt.subplots(2, 2, figsize=(20, 14))
-            axs = axs.flatten()
-        else:
-            axs = fig.axes
-            assert len(axs) == 4
+        if 'no_font' not in kwargs:
+            plt.rcParams['font.size'] = 14
+        fig, axs = plt.subplots(2, 2, figsize=figsize)
+        axs = axs.flatten()
 
         mu_bins = np.flip(np.array(mu_bins))
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
