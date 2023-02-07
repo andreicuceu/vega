@@ -201,7 +201,9 @@ class VegaPlots:
             ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]))
         elif title is not None:
             ax.set_title(title)
-        ax.set_xlim(xlim[0], xlim[1])
+
+        if xlim is not None:
+            ax.set_xlim(xlim[0], xlim[1])
 
         if ylim is not None:
             ax.set_ylim(ylim[0], ylim[1])
@@ -413,11 +415,21 @@ class VegaPlots:
 
         for ax, mu_bin, no_xl, no_yl in zip(axs, mu_limits, no_xlabel, no_ylabel):
             if mu_bin_labels:
-                data_label = r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1])
+                data_label = r"${}<|\mu|<{}$".format(mu_bin[0], mu_bin[1])
             _ = self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
                                 data=data, cross_flag=cross_flag, corr_name=corr_name,
                                 models_only=models_only, data_only=data_only,
                                 data_label=data_label, no_xlabel=no_xl, no_ylabel=no_yl, **kwargs)
+
+            if self.has_data:
+                xmin, xmax = ax.get_xlim()
+                ymin, ymax = ax.get_ylim()
+                ax.fill_betweenx((ymin, ymax), xmin, self.cuts[corr_name]['r_min'],
+                                 color='gray', alpha=0.7)
+                ax.fill_betweenx((ymin, ymax), self.cuts[corr_name]['r_max'], xmax,
+                                 color='gray', alpha=0.7)
+                ax.set_ylim(ymin, ymax)
+                ax.set_xlim(xmin, xmax)
 
         self.fig = fig
 
