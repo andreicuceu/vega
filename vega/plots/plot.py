@@ -180,7 +180,7 @@ class VegaPlots:
         return r, d
 
     def postprocess_plot(self, ax, mu_bin=None, xlim=(0, 180), ylim=None, no_legend=False,
-                         title=None, legend_loc='upper right', legend_ncol=1, **kwargs):
+                         title='mu_bin', legend_loc='upper right', legend_ncol=1, **kwargs):
         """Add postprocessing to the plot on input axes
 
         Parameters
@@ -197,10 +197,10 @@ class VegaPlots:
         if not kwargs.get('no_xlabel', False):
             ax.set_xlabel(r"$r~[\mathrm{Mpc/h}]$")
 
-        if title is not None:
-            ax.set_title(title)
-        elif mu_bin is not None:
+        if title == 'mu_bin' and mu_bin is not None:
             ax.set_title(r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1]))
+        elif title is not None:
+            ax.set_title(title)
         ax.set_xlim(xlim[0], xlim[1])
 
         if ylim is not None:
@@ -373,7 +373,7 @@ class VegaPlots:
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
                      labels=None, data=None, cross_flag=False, corr_name='lyalya_lyalya',
                      models_only=False, data_only=False, data_label=None, figsize=(20, 14),
-                     **kwargs):
+                     mu_bin_labels=False, **kwargs):
         """Plot the correlations into four wedges defined by the limits in mu_bins
 
         Parameters
@@ -412,6 +412,8 @@ class VegaPlots:
         no_ylabel = [False, True, False, True]
 
         for ax, mu_bin, no_xl, no_yl in zip(axs, mu_limits, no_xlabel, no_ylabel):
+            if mu_bin_labels:
+                data_label = r"${}<\mu<{}$".format(mu_bin[0], mu_bin[1])
             _ = self.plot_wedge(ax, mu_bin, models=models, cov_mat=cov_mat, labels=labels,
                                 data=data, cross_flag=cross_flag, corr_name=corr_name,
                                 models_only=models_only, data_only=data_only,
