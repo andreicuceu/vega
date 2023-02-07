@@ -467,9 +467,11 @@ class VegaPlots:
         self.postprocess_plot(ax, title=title, **kwargs)
         if self.has_data:
             xmin, xmax = ax.get_xlim()
-            ax.fill_betweenx(ax.get_ylim(), xmin, self.cuts[corr_name]['r_min'],
+            ymin, ymax = ax.get_ylim()
+            ax.fill_betweenx((ymin, ymax), xmin, self.cuts[corr_name]['r_min'],
                              color='gray', alpha=0.7)
-            ax.fill_betweenx(ax.get_ylim(), self.cuts[corr_name]['r_max'], xmax,
+            ax.fill_betweenx((ymin, ymax), self.cuts[corr_name]['r_max'], xmax,
                              color='gray', alpha=0.7)
+            ax.set_ylim(ymin, ymax)
 
         self.fig = fig
