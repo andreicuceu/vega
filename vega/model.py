@@ -76,6 +76,9 @@ class Model:
         if self._corr_item.has_metals:
             self.metals = metals.Metals(corr_item, fiducial, scale_params, self.PktoXi, data)
 
+        self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
+            'desi-instrumental-systematics', False)
+
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp, coeff_binning_model):
         """Read the broadband config and initialize what we need.
@@ -177,6 +180,11 @@ class Model:
                 self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
                 self.xi_distorted[component] = {**self.xi_distorted[component],
                                                 **self.metals.xi_distorted[component]}
+
+        # Add DESI instrumental systematics model
+        if self._instrumental_systematics_flag:
+            xi_model += self.Xi_core.compute_desi_instrumental_systematics(
+                pars, self._corr_item.bin_size_rp)
 
         # Apply pre distortion broadband
         if self.bb_config is not None:

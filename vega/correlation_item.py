@@ -8,6 +8,8 @@ class CorrelationItem:
     _rp_rt_grid = None
     _r_mu_grid = None
     _z_grid = None
+    _bin_size_rp = None
+    _bin_size_rt = None
 
     def __init__(self, config):
         """
@@ -56,7 +58,7 @@ class CorrelationItem:
         self.metal_correlations = metal_correlations
         self.has_metals = True
 
-    def init_broadband(self, bin_size_rp, coeff_binning_model):
+    def init_broadband(self, coeff_binning_model):
         """Initialize the parameters we need to compute
         the broadband functions
 
@@ -67,7 +69,6 @@ class CorrelationItem:
         coeff_binning_model : float
             Ratio of distorted coordinate grid bin size to undistorted bin size
         """
-        self.bin_size_rp = bin_size_rp
         self.coeff_binning_model = coeff_binning_model
         self.has_bb = True
 
@@ -117,3 +118,19 @@ class CorrelationItem:
         else:
             assert z_grid >= 0 and z_grid <= 10
             self._z_grid = z_grid
+
+    @property
+    def bin_size_rp(self):
+        return self._bin_size_rp
+
+    @bin_size_rp.setter
+    def bin_size_rp(self, bin_size_rp):
+        self._bin_size_rp = bin_size_rp
+
+    @property
+    def bin_size_rt(self):
+        return self._bin_size_rt
+
+    @bin_size_rt.setter
+    def bin_size_rt(self, bin_size_rt):
+        self._bin_size_rt = bin_size_rt

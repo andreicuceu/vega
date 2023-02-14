@@ -627,3 +627,35 @@ class CorrelationFunction:
         xi_asy = PktoXi_obj.pk_to_xi_asymmetry(rescaled_r, rescaled_mu, pk, params)
 
         return xi_asy
+
+    def compute_desi_instrumental_systematics(self, params, bin_size_rp):
+        """Compute DESI instrumental systematics model
+        TODO add link to Satya's paper describing this
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+        bin_size_rp : float
+            Bin size along the line-of-sight
+
+        Returns
+        -------
+        1D Array
+            Output correction
+        """
+        if self._tracer1['type'] != self._tracer2['type']:
+            raise ValueError('DESI instrumental systematics model only applies '
+                             'to auto-correlation functions.')
+
+        rp = self._r * self._mu
+        rt = self._r * np.sqrt(1 - self._mu**2)
+
+        # b = 0.0003189935987295203
+        b = params.get('desi_inst_sys_amp', 0.0003189935987295203)
+
+        w = (rp > 0) & (rp < bin_size_rp) & (rt < 80)
+        correction = np.zeros(rt.shape)
+        correction[w] = b * (rt[w] / 80 - 1)**2
+
+        return correction

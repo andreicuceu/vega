@@ -39,6 +39,8 @@ class Data:
                                              corr_item.config['cuts'])
         self._corr_item.rp_rt_grid = rp_rt_grid
         self._corr_item.z_grid = z_grid
+        self._corr_item.bin_size_rp = self.bin_size_rp
+        self._corr_item.bin_size_rt = self.bin_size_rt
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
@@ -48,8 +50,7 @@ class Data:
 
         # Check if we have broadband
         if 'broadband' in corr_item.config:
-            self._corr_item.init_broadband(self.bin_size_rp,
-                                           self.coeff_binning_model)
+            self._corr_item.init_broadband(self.coeff_binning_model)
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
