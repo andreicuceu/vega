@@ -18,6 +18,7 @@ Vega is a tool for computing 3D correlation function models for tracers used by 
 
 * Free software: GPL-3.0 License
 * Documentation: https://vega.readthedocs.io.
+* Referencing: If you use Vega in a publication please give the link to this repository (https://github.com/andreicuceu/vega). Right now there is no Vega paper. The best descriptions of what the code does are found in Cuceu et al. 2022 (https://arxiv.org/abs/2209.12931) and du Mas des Bourboux et al. 2020 (https://arxiv.org/abs/2007.08995).
 
 Installation
 ------------
