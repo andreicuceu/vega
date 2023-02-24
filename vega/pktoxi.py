@@ -59,9 +59,9 @@ class PktoXi:
 
     def compute_pk_ells(self, pk):
         pk_ell_arr = np.zeros([len(self.ell_vals), len(self.k_grid)])
-        for ell in self.ell_vals:
+        for i, ell in enumerate(self.ell_vals):
             # Compute the Pk_ell multipole
-            pk_ell_arr[ell] = np.sum(self.dmuk * self.legendre_pk[ell] * pk, axis=0) * (2 * ell + 1)
+            pk_ell_arr[i] = np.sum(self.dmuk * self.legendre_pk[ell] * pk, axis=0) * (2 * ell + 1)
 
         return pk_ell_arr
 
@@ -102,7 +102,7 @@ class PktoXi:
 
         # Initialize the Xi_ell array
         xi_ell_arr = np.zeros([len(ell_vals), len(r_grid)])
-        for ell in ell_vals:
+        for i, ell in enumerate(ell_vals):
             # Compute the Pk_ell multipole
             pk_ell = np.sum(self.dmuk * self.legendre_pk[ell] * pk, axis=0) * (2 * ell + 1)
 
@@ -125,7 +125,7 @@ class PktoXi:
                 return xi_ell
 
             # Add the Legendre polynomials
-            xi_ell_arr[ell//2, :] = xi_ell * self.legendre_xi[ell](mu_grid)
+            xi_ell_arr[i, :] = xi_ell * self.legendre_xi[ell](mu_grid)
 
         # Sum over the multipoles
         full_xi = np.sum(xi_ell_arr, axis=0)
