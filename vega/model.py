@@ -163,7 +163,7 @@ class Model:
         pk_model = self.Pk_core.compute(pk_lin, pars)
 
         if self._model_pk:
-            return self.PktoXi.compute_pk_ells(pk_lin)
+            return self.PktoXi.compute_pk_ells(pk_model)
 
         # Protect against old caches that have not been cleaned
         self.PktoXi.cache_pars = None
