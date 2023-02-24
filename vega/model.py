@@ -24,6 +24,7 @@ class Model:
             data object corresponding to the cf component, by default None
         """
         self._corr_item = corr_item
+        self._model_pk = corr_item.model_pk
 
         assert corr_item.r_mu_grid is not None
         assert corr_item.z_grid is not None
@@ -160,6 +161,9 @@ class Model:
         """
         # Compute core model correlation function
         pk_model = self.Pk_core.compute(pk_lin, pars)
+
+        if self._model_pk:
+            return self.PktoXi.compute_pk_ells(pk_lin)
 
         # Protect against old caches that have not been cleaned
         self.PktoXi.cache_pars = None

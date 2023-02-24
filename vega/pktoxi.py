@@ -57,6 +57,14 @@ class PktoXi:
 
         self.cache_pars = None
 
+    def compute_pk_ells(self, pk):
+        pk_ell_arr = np.zeros([len(self.ell_vals), len(self.k_grid)])
+        for ell in self.ell_vals:
+            # Compute the Pk_ell multipole
+            pk_ell_arr[ell] = np.sum(self.dmuk * self.legendre_pk[ell] * pk, axis=0) * (2 * ell + 1)
+
+        return pk_ell_arr
+
     def compute(self, r_grid, mu_grid, pk, single_ell=-1):
         """Compute the correlation function from an input Pk
         over the r/mu coordinate grid.

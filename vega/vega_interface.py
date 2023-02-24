@@ -50,6 +50,8 @@ class VegaInterface:
         self.fiducial['save-components'] = write_cf or write_pk
         ini_files = self.main_config['data sets'].get('ini files').split()
 
+        self.model_pk = self.main_config['control'].getboolean('model_pk', False)
+
         # Initialize the individual components
         self.corr_items = {}
         for path in ini_files:
@@ -58,7 +60,7 @@ class VegaInterface:
             config.read(utils.find_file(os.path.expandvars(path)))
 
             name = config['data'].get('name')
-            self.corr_items[name] = correlation_item.CorrelationItem(config)
+            self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
 
         # Check if all correlations have data files
         self.data = {}

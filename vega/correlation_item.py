@@ -11,7 +11,7 @@ class CorrelationItem:
     _bin_size_rp = None
     _bin_size_rt = None
 
-    def __init__(self, config):
+    def __init__(self, config, model_pk=False):
         """
 
         Parameters
@@ -21,6 +21,7 @@ class CorrelationItem:
         """
         # Save the config and read the tracer info
         self.config = config
+        self.model_pk = model_pk
         self.name = config['data'].get('name')
         self.tracer1 = {}
         self.tracer2 = {}
