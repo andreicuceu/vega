@@ -11,17 +11,8 @@ class BuildConfig:
     """
 
     _params_template = None
-    recognised_fits = ['lyalya_lyalya', 'lyalya_lyalyb', 'lya_lyb',
-                       'lyalya_qso', 'lyalyb_qso', 'lyb_qso',
-                       'lyalya_dla', 'lyalyb_dla', 'qso_qso', 'qso_dla', 'dla_dla',
-                       'lyalya_lyalya__lyalya_lyalyb', 'lyalya_lyalya__lya_lyb',
-                       'lyalya_lyalya__lyalya_qso', 'lyalya_lyalyb__lyalyb_qso',
-                       'lya_lyb__lyb_qso', 'lyalya_qso__lyalyb_qso', 'lyalya_qso__lyb_qso',
-                       'lyalya_lyalya__lyalya_dla', 'lyalya_lyalyb__lyalyb_dla',
-                       'lyalya_dla__lyalyb_dla',
-                       'lyalya_lyalya__lyalya_lyalyb__lyalya_qso__lyalyb_qso',
-                       'lyalya_lyalya__lya_lyb__lyalya_qso__lyb_qso',
-                       'lyalya_lyalya__lyalya_lyalyb__lyalya_dla__lyalyb_dla']
+    recognised_correlations = ['lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
+                               'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla']
 
     def __init__(self, options={}):
         """Initialize the model options that are not tracer or correlation specific.
@@ -68,6 +59,8 @@ class BuildConfig:
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
         self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
+        self.options['desi-instrumental-systematics'] = options.get('desi-instrumental-systematics',
+                                                                    False)
         self.options['test'] = options.get('test', False)
 
         metals = options.get('metals', None)
@@ -95,10 +88,9 @@ class BuildConfig:
                 broadband: broadband string configuration
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
-            tracers separated by a single underscore (e.g. lyalya_qso),
-            and different correlations separated by a double underscore
-            (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
-            folder to see all possibilities.
+            tracers separated by an "x" (e.g. lyaxqso), and different correlations
+            separated by an underscore (e.g. lyaxlya_lyaxqso). If unsure check
+            the templates folder to see all possibilities.
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
             List of options:
@@ -123,10 +115,6 @@ class BuildConfig:
         string
             Path to the main config file
         """
-        # Check if we know the fit combination
-        if fit_type not in self.recognised_fits:
-            raise ValueError('Unknown fit: {}'.format(fit_type))
-
         # Save some of the info
         self.fit_info = fit_info
         self.name_extension = name_extension
@@ -147,16 +135,24 @@ class BuildConfig:
             if not self.sampler_out_path.exists():
                 os.mkdir(self.sampler_out_path)
 
+        # Check if we know the correlation types
+        components = fit_type.split('_')
+        for corr in components:
+            if corr not in self.recognised_correlations:
+                raise ValueError(f'Unknown correlation {corr}, part of fit type {fit_type}.')
+
+        if len(components) != len(set(components)):
+            print(f'Warning! fit type {fit_type} has duplicates')
+
         # Build config files for each correlation
-        components = fit_type.split('__')
         self.corr_paths = []
         self.corr_names = []
         self.data_paths = []
         for name in components:
             # Check if we have info on the correlation
             if name not in correlations:
-                raise ValueError('You asked for a fit combination with an unknown'
-                                 ' correlation: {}'.format(name))
+                raise ValueError(f'You asked for correlation {name} but did not provide'
+                                 ' its configuration in the "correlations" dictionary.')
 
             # Build the config file for the correlation and save the path
             corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
@@ -190,7 +186,7 @@ class BuildConfig:
         # Read template
         config = ConfigParser()
         config.optionxform = lambda option: option
-        template_path = find_file('vega/templates/{}.ini'.format(name))
+        template_path = find_file(f'vega/templates/{name}.ini')
         config.read(template_path)
 
         # get tracer info
@@ -220,6 +216,11 @@ class BuildConfig:
         elif tracer1 == 'LYA' or tracer2 == 'LYA':
             if self.options['small_scale_nl_cross']:
                 config['model']['small scale nl'] = 'dnl_arinyo'
+
+        # Things that require both tracers to be continuous
+        if type1 == 'continuous' and type2 == 'continuous':
+            if self.options['desi-instrumental-systematics']:
+                config['model']['desi-instrumental-systematics'] = 'True'
 
         # Things that require at least one tracer to be continuous
         if type1 == 'continuous' or type2 == 'continuous':
@@ -601,6 +602,10 @@ class BuildConfig:
             if self.options['fullshape_smoothing'] == 'exp':
                 new_params['par_exp_smooth'] = get_par('par_exp_smooth')
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
+
+        # DESI instrumental systematics amplitude
+        if self.options['desi-instrumental-systematics']:
+            new_params['desi_inst_sys_amp'] = get_par('desi_inst_sys_amp')
 
         # Check for broadband parameters
         for name, value in parameters.items():
