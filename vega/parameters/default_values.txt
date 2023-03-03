@@ -38,3 +38,4 @@ bias_eta_SiII(1193)             -0.02       0.0         0.001
 bias_eta_SiIII(1207)            -0.02       0.0         0.001
 bias_eta_SiII(1260)             -0.02       0.0         0.001
 bias_eta_CIV(eff)               -0.02       0.0         0.001
+desi_inst_sys_amp               0.0         1e-2         5e-5
