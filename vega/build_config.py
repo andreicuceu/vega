@@ -18,7 +18,7 @@ class BuildConfig:
     recognised_correlations = ['lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
                                'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla']
 
-    def __init__(self, options={}):
+    def __init__(self, options={}, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
 
         Parameters
@@ -45,6 +45,7 @@ class BuildConfig:
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
                     'SiII(1260)', 'CIV(eff)'], default None
         """
+        self.overwrite = overwrite
         self.options = {}
 
         self.options['scale_params'] = options.get('scale_params', 'ap_at')
@@ -282,6 +283,10 @@ class BuildConfig:
             corr_path = self.config_path / '{}.ini'.format(name)
         else:
             corr_path = self.config_path / '{}-{}.ini'.format(name, self.name_extension)
+
+        if corr_path.is_file() and not self.overwrite:
+            raise ValueError(f'File {corr_path} already exists. Please change the name extension.')
+
         with open(corr_path, 'w') as configfile:
             configfile.write(f'# File written on {datetime.now()} \n')
             configfile.write(f'# Vega git hash: {git_hash} \n\n')
@@ -436,6 +441,10 @@ class BuildConfig:
             main_path = self.config_path / 'main.ini'
         else:
             main_path = self.config_path / 'main-{}.ini'.format(self.name_extension)
+
+        if main_path.is_file() and not self.overwrite:
+            raise ValueError(f'File {main_path} already exists. Please change the name extension.')
+
         with open(main_path, 'w') as configfile:
             configfile.write(f'# File written on {datetime.now()} \n')
             configfile.write(f'# Vega git hash: {git_hash} \n\n')
