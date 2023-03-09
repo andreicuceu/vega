@@ -101,7 +101,7 @@ class BuildConfig:
             List of options:
                 fitter: bool, default True
                 sampler: bool, default False
-                use_bias_eta: dict with 'corr_name': Bool
+                bias_beta_config: dict with 'tracer': 'bias_beta', 'bias_eta_beta', 'bias_bias_eta'
                 zeff: float, default None
                 zeff_rmin: float, default 0
                 zeff_rmax: float, default 300
@@ -516,56 +516,48 @@ class BuildConfig:
             new_params['sigmaNL_par'] = 0.
         new_params['bao_amp'] = get_par('bao_amp')
 
+        def add_bias_beta(new_params, tracer, bias_beta_config, bias, bias_eta, beta, growth_rate):
+            if bias_beta_config == 'bias_beta':
+                new_params[f'bias_{tracer}'] = bias
+                new_params[f'beta_{tracer}'] = beta
+            elif bias_beta_config == 'bias_bias_eta':
+                new_params[f'bias_{tracer}'] = bias
+                new_params[f'bias_eta_{tracer}'] = bias_eta
+                new_params['growth_rate'] = growth_rate
+            elif bias_beta_config == 'bias_eta_beta':
+                new_params[f'beta_{tracer}'] = beta
+                new_params[f'bias_eta_{tracer}'] = bias_eta
+                new_params['growth_rate'] = growth_rate
+            else:
+                raise ValueError(f'Option {bias_beta_config} not a valid bias_beta_config. '
+                                 'Choose from ["bias_beta", "bias_eta_beta", "bias_bias_eta"].')
+
         # bias beta model
         for name in self.corr_names:
-            use_bias_eta = self.fit_info['use_bias_eta'].get(name, True)
+            bias_beta_config = self.fit_info['bias_beta_config'].get(name, 'bias_beta')
+
             growth_rate = parameters.get('growth_rate', None)
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if name == 'LYA':
-                bias_lya = self.get_lya_bias(self.zeff_in)
-                bias_eta_lya = parameters.get('bias_eta_LYA', None)
-                beta_lya = float(get_par('beta_LYA'))
+            if (name == 'LYA') or (name == 'LYB'):
+                bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
+                bias_eta = parameters.get(f'bias_eta_{name}', None)
+                beta = float(get_par(f'beta_{name}'))
 
-                if bias_eta_lya is None:
-                    bias_eta_lya = bias_lya * beta_lya / growth_rate
-
-                if use_bias_eta:
-                    new_params['growth_rate'] = growth_rate
-                    new_params['bias_eta_LYA'] = bias_eta_lya
-                else:
-                    new_params['bias_LYA'] = bias_lya
-                new_params['beta_LYA'] = beta_lya
-            elif name == 'LYB':
-                bias_lyb = self.get_lya_bias(self.zeff_in)
-                bias_eta_lyb = parameters.get('bias_eta_LYB', None)
-                beta_lyb = float(get_par('beta_LYB'))
-
-                if bias_eta_lyb is None:
-                    bias_eta_lyb = bias_lyb * beta_lyb / growth_rate
-
-                if use_bias_eta:
-                    new_params['growth_rate'] = growth_rate
-                    new_params['bias_eta_LYB'] = bias_eta_lyb
-                else:
-                    new_params['bias_LYB'] = bias_lyb
-                new_params['beta_LYB'] = beta_lyb
+                if bias_eta is None:
+                    bias_eta = bias * beta / growth_rate
             elif name == 'QSO':
-                bias_qso = self.get_qso_bias(self.zeff_in)
-                beta_qso = parameters.get('beta_QSO', None)
+                bias = parameters.get('bias_QSO', self.get_qso_bias(self.zeff_in))
+                beta = parameters.get('beta_QSO', None)
+                bias_eta = 1
 
-                if beta_qso is None:
-                    beta_qso = growth_rate / bias_qso
-
-                if use_bias_eta:
-                    new_params['growth_rate'] = growth_rate
-                    new_params['bias_eta_QSO'] = 1.
-                else:
-                    new_params['bias_QSO'] = bias_qso
-                new_params['beta_QSO'] = beta_qso
+                if beta is None:
+                    beta = growth_rate / bias
             else:
-                raise ValueError('Tracer {} not supported yet.'.format(name))
+                raise ValueError(f'Tracer {name} not supported yet. Please open an issue')
+
+            add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
             new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
 
@@ -667,7 +659,7 @@ class BuildConfig:
         return 3.91 * ((1 + z) / (1 + 2.39))**1.7133
 
     @staticmethod
-    def get_growth_rate(z, Omega_m=0.31457):
+    def get_growth_rate(z, Omega_m=0.3153):
         """Compute default growth rate at redshift z
 
         Parameters
@@ -675,7 +667,7 @@ class BuildConfig:
         z : float
             Redshift
         Omega_m : float, optional
-            Matter fraction, by default 0.31457
+            Matter fraction, by default 0.3153
 
         Returns
         -------
