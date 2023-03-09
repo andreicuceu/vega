@@ -283,8 +283,8 @@ class BuildConfig:
         else:
             corr_path = self.config_path / '{}-{}.ini'.format(name, self.name_extension)
         with open(corr_path, 'w') as configfile:
-            configfile.write(f'File written on {datetime.now()} \n')
-            configfile.write(f'Vega git hash: {git_hash} \n\n')
+            configfile.write(f'# File written on {datetime.now()} \n')
+            configfile.write(f'# Vega git hash: {git_hash} \n\n')
             config.write(configfile)
 
         return corr_path, config['data']['filename'], tracer1, tracer2
@@ -437,8 +437,8 @@ class BuildConfig:
         else:
             main_path = self.config_path / 'main-{}.ini'.format(self.name_extension)
         with open(main_path, 'w') as configfile:
-            configfile.write(f'File written on {datetime.now()} \n')
-            configfile.write(f'Vega git hash: {git_hash} \n\n')
+            configfile.write(f'# File written on {datetime.now()} \n')
+            configfile.write(f'# Vega git hash: {git_hash} \n\n')
             config.write(configfile)
 
         return main_path
