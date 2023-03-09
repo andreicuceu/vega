@@ -1,9 +1,13 @@
-import numpy as np
-from configparser import ConfigParser
-from vega.utils import find_file
-from astropy.io import fits
-from pathlib import Path
 import os
+import git
+import numpy as np
+from pathlib import Path
+from astropy.io import fits
+from datetime import datetime
+from configparser import ConfigParser
+
+import vega
+from vega.utils import find_file
 
 
 class BuildConfig:
@@ -144,6 +148,10 @@ class BuildConfig:
         if len(components) != len(set(components)):
             print(f'Warning! fit type {fit_type} has duplicates')
 
+        # Get git hash
+        vega_path = Path(os.path.dirname(vega.__file__))
+        git_hash = git.Repo(vega_path.parents[0]).head.object.hexsha
+
         # Build config files for each correlation
         self.corr_paths = []
         self.corr_names = []
@@ -156,7 +164,8 @@ class BuildConfig:
 
             # Build the config file for the correlation and save the path
             corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
-                                                                             correlations[name])
+                                                                             correlations[name],
+                                                                             git_hash)
             self.corr_paths.append(corr_path)
             self.data_paths.append(data_path)
             if tracer1 not in self.corr_names:
@@ -164,11 +173,11 @@ class BuildConfig:
             if tracer2 not in self.corr_names:
                 self.corr_names.append(tracer2)
 
-        main_path = self._build_main_config(fit_type, fit_info, parameters)
+        main_path = self._build_main_config(fit_type, fit_info, parameters, git_hash)
 
         return main_path
 
-    def _build_corr_config(self, name, corr_info):
+    def _build_corr_config(self, name, corr_info, git_hash):
         """Build config file for a correlation based on a template
 
         Parameters
@@ -274,6 +283,8 @@ class BuildConfig:
         else:
             corr_path = self.config_path / '{}-{}.ini'.format(name, self.name_extension)
         with open(corr_path, 'w') as configfile:
+            configfile.write(f'File written on {datetime.now()} \n')
+            configfile.write(f'Vega git hash: {git_hash} \n\n')
             config.write(configfile)
 
         return corr_path, config['data']['filename'], tracer1, tracer2
@@ -315,7 +326,7 @@ class BuildConfig:
         zeff = np.average(zeff_list, weights=weights)
         return zeff
 
-    def _build_main_config(self, fit_type, fit_info, parameters):
+    def _build_main_config(self, fit_type, fit_info, parameters, git_hash):
         """Build the main vega configuration file
 
         Parameters
@@ -426,6 +437,8 @@ class BuildConfig:
         else:
             main_path = self.config_path / 'main-{}.ini'.format(self.name_extension)
         with open(main_path, 'w') as configfile:
+            configfile.write(f'File written on {datetime.now()} \n')
+            configfile.write(f'Vega git hash: {git_hash} \n\n')
             config.write(configfile)
 
         return main_path
