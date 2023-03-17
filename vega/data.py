@@ -6,6 +6,8 @@ from scipy.sparse import csr_matrix
 
 from vega.utils import find_file
 
+BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
+
 
 class Data:
     """Class for handling lya forest correlation function data.
@@ -210,36 +212,32 @@ class Data:
         print('Reading data file {}\n'.format(data_path))
         hdul = fits.open(find_file(data_path))
 
-        self._blinding_strat = 'none'
+        self._blinding_strat = None
         if 'BLINDING' in hdul[1].header:
             self._blinding_strat = hdul[1].header['BLINDING']
 
-        blinding_strategies = ['desi_m2', 'desi_y1']
-        if self._blinding_strat in blinding_strategies:
+        if self._blinding_strat in BLINDING_STRATEGIES:
             print('Warning! Running on blinded data {}'.format(data_path))
             print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
-            self._blind = False
-            self._data_vec = hdul[1].data['DA_BLIND']
-            if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif self._blinding_strat == 'desi_y3':
-            raise ValueError('Fits are forbidden on Y3 data as we do not have'
-                             ' a coherent blinding strategy yet.')
-        elif self._blinding_strat == 'minimal':
-            print('Warning! Running on blinded data {}'.format(data_path))
-            print('Strategy: minimal. Scale parameters must be fixed to 1.')
+
             self._blind = True
             self._data_vec = hdul[1].data['DA_BLIND']
             if 'DM_BLIND' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif self._blinding_strat == 'none':
+
+        elif self._blinding_strat == 'desi_y3':
+            raise ValueError('Fits are forbidden on Y3 data as we do not have'
+                             ' a coherent blinding strategy yet.')
+
+        elif self._blinding_strat is None:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
             if 'DM' in hdul[1].columns.names:
                 self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+
         else:
             self._blind = True
-            raise ValueError("Unknown blinding strategy. Only 'minimal' implemented.")
+            raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
         if 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
@@ -471,7 +469,7 @@ class Data:
 
         metal_mat_size = len(self.metal_rp_grids[tracers])
 
-        if self._blinding_strat == 'none':
+        if self._blinding_strat is None:
             dm_name = 'DM_' + name
         else:
             dm_name = 'DM_BLIND_' + name

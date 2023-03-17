@@ -15,6 +15,10 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 
+BLIND_FIXED_PARS = ['ap_full', 'at_full', 'aiso_full', 'epsilon_full',
+                    'phi_smooth', 'alpha_smooth', 'phi_full', 'alpha_full',
+                    'growth_rate']
+
 
 class VegaInterface:
     """Main Vega class.
@@ -91,17 +95,21 @@ class VegaInterface:
         self.sample_params = self._read_sample(self.main_config['sample'])
 
         # Check blinding
-        self._scale_par_names = ['ap', 'at', 'ap_sb', 'at_sb', 'phi', 'gamma', 'alpha',
-                                 'phi_smooth', 'gamma_smooth', 'alpha_smooth', 'aiso', 'epsilon']
+        self._blind = False
         if self._has_data:
-            self._blind = False
             for data_obj in self.data.values():
                 if data_obj.blind:
                     self._blind = True
-            if self._blind:
-                for par in self.sample_params['limits'].keys():
-                    if par in self._scale_par_names:
-                        raise ValueError('Running on blind data, please fix scale parameters')
+
+        # Apply blinding
+        if self._blind:
+            for par in self.sample_params['limits'].keys():
+                if par in BLIND_FIXED_PARS:
+                    raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
+
+            if ('bias_QSO' in self.sample_params['limits']) and (
+                    'beta_QSO' in self.sample_params['limits']):
+                print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
 
         # Get priors
         self.priors = {}
