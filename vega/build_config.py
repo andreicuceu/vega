@@ -418,7 +418,12 @@ class BuildConfig:
 
         # Check all sampled parameters are defined
         for param in sample_params:
-            assert param in config['parameters']
+            if param not in config['parameters']:
+                raise ValueError(f'Asked for unknown parameter "{param}". This does not exist in '
+                                 'the current configuration. Please check the vega configuration '
+                                 'you requested is correct. If this is a new parameter that does '
+                                 'not have a default value yet, please add it to the parameters '
+                                 'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
         if self.sampler:
