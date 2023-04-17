@@ -229,7 +229,7 @@ class Data:
             raise ValueError('Fits are forbidden on Y3 data as we do not have'
                              ' a coherent blinding strategy yet.')
 
-        elif self._blinding_strat is None:
+        elif self._blinding_strat is None or self._blinding_strat == 'none':
             self._blind = False
             self._data_vec = hdul[1].data['DA']
             if 'DM' in hdul[1].columns.names:
