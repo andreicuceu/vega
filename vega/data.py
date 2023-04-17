@@ -216,6 +216,9 @@ class Data:
         if 'BLINDING' in hdul[1].header:
             self._blinding_strat = hdul[1].header['BLINDING']
 
+            if self._blinding_strat == 'none' or self._blinding_strat == 'None':
+                self._blinding_strat = None
+
         if self._blinding_strat in BLINDING_STRATEGIES:
             print('Warning! Running on blinded data {}'.format(data_path))
             print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
@@ -229,7 +232,7 @@ class Data:
             raise ValueError('Fits are forbidden on Y3 data as we do not have'
                              ' a coherent blinding strategy yet.')
 
-        elif self._blinding_strat is None or self._blinding_strat == 'none':
+        elif self._blinding_strat is None:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
             if 'DM' in hdul[1].columns.names:
