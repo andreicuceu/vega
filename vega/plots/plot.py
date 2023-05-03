@@ -85,13 +85,13 @@ class VegaPlots:
         """
         if corr_name is not None:
             if is_data:
-                rp = self.rp_setup_model[corr_name]
-                rt = self.rt_setup_model[corr_name]
-                r = self.rp_setup_model[corr_name]
-            else:
                 rp = self.rp_setup_data[corr_name]
                 rt = self.rt_setup_data[corr_name]
                 r = self.rp_setup_data[corr_name]
+            else:
+                rp = self.rp_setup_model[corr_name]
+                rt = self.rt_setup_model[corr_name]
+                r = self.rp_setup_model[corr_name]
             if self.cross_flag[corr_name] and abs_mu:
                 r = (0, rp[1], rp[2]//2)
         else:
