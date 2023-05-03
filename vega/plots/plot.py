@@ -190,7 +190,7 @@ class VegaPlots:
             Whether to use the stored coordinate settings or defaul/input values, by default True
         """
         if use_local_coordinates and self.has_data:
-            wedge_obj = self.initialize_wedge(mu_bin, corr_name, cross_flag, **kwargs)
+            wedge_obj = self.initialize_wedge(mu_bin, corr_name, False, cross_flag, **kwargs)
         else:
             wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
 
