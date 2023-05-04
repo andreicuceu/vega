@@ -94,8 +94,6 @@ class VegaPlots:
                 r = self.r_setup_model[corr_name]
             if self.cross_flag[corr_name] and abs_mu:
                 r = (0, rp[1], rp[2]//2)
-
-            print(rp, rt)
         else:
             if rp_setup is not None:
                 rp = rp_setup
@@ -201,9 +199,8 @@ class VegaPlots:
                 cov_mat = self.cov_mat[corr_name]
 
         model_vec = array_or_dict(model, corr_name)
-        print(model_vec.shape)
 
-        if cov_mat is None:
+        if cov_mat is None or wedge_obj.weights.shape[1] != len(model_vec):
             r, d = wedge_obj(model_vec)
             ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
         else:
