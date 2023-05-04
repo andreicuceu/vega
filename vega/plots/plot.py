@@ -201,6 +201,7 @@ class VegaPlots:
                 cov_mat = self.cov_mat[corr_name]
 
         model_vec = array_or_dict(model, corr_name)
+        print(model_vec.shape)
 
         if cov_mat is None:
             r, d = wedge_obj(model_vec)
