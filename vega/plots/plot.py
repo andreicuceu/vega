@@ -200,7 +200,7 @@ class VegaPlots:
 
         model_vec = array_or_dict(model, corr_name)
 
-        if cov_mat is None or wedge_obj.weights.shape[1] != len(model_vec):
+        if cov_mat is None or wedge_obj.weights.shape[1] != cov_mat.shape[0]:
             r, d = wedge_obj(model_vec)
             ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
         else:
