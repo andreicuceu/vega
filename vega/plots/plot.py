@@ -38,11 +38,9 @@ class VegaPlots:
                     self.cov_mat[name] = data.cov_mat
 
                 # Initialize data coordinates
-                self.rp_setup_data[name] = (data.rp_min_data,
-                                            data.rp_max_data,
+                self.rp_setup_data[name] = (data.rp_min_data, data.rp_max_data,
                                             data.num_bins_rp_data)
-                self.rt_setup_data[name] = (0., data.rt_max_data,
-                                            data.num_bins_rt_data)
+                self.rt_setup_data[name] = (0., data.rt_max_data, data.num_bins_rt_data)
                 self.r_setup_data[name] = self.rp_setup_data[name]
 
                 self.cuts[name] = {'r_min': data.r_min_cut,
@@ -63,12 +61,12 @@ class VegaPlots:
                     self.mask &= (bin_center_rp < data.rp_max_data)
                     self.mask &= (bin_center_rt < data.rt_max_data)
 
+                    print(self.mask.shape)
+
                 # Initialize model coordinates
-                self.rp_setup_model[name] = (data.rp_min_model,
-                                             data.rp_max_model,
+                self.rp_setup_model[name] = (data.rp_min_model, data.rp_max_model,
                                              data.num_bins_rp_model)
-                self.rt_setup_model[name] = (0., data.rt_max_model,
-                                             data.num_bins_rt_model)
+                self.rt_setup_model[name] = (0., data.rt_max_model, data.num_bins_rt_model)
                 self.r_setup_model[name] = self.rp_setup_model[name]
 
             self.has_data = True
@@ -216,6 +214,7 @@ class VegaPlots:
             covariance = array_or_dict(cov_mat, corr_name)
 
             if len(self.mask.shape) == len(model_vec):
+                print('here')
                 masked_model = model_vec[self.mask]
                 if masked_model.shape != self.data[corr_name]:
                     raise ValueError('Masked model array does not match data array.')
