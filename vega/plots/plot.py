@@ -216,7 +216,7 @@ class VegaPlots:
             if len(self.mask) == len(model_vec):
                 print('here')
                 masked_model = model_vec[self.mask]
-                if masked_model.shape != self.data[corr_name]:
+                if len(masked_model) != len(self.data[corr_name]):
                     raise ValueError('Masked model array does not match data array.')
 
         if masked_model is not None:
