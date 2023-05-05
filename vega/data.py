@@ -31,7 +31,7 @@ class Data:
             Item object with the component config
         """
         # First save the tracer info
-        self._corr_item = corr_item
+        self.corr_item = corr_item
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
 
@@ -39,22 +39,22 @@ class Data:
         data_path = corr_item.config['data'].get('filename')
         dmat_path = corr_item.config['data'].get('distortion-file', None)
         rp_rt_grid, z_grid = self._read_data(data_path, corr_item.config['cuts'], dmat_path)
-        self._corr_item.rp_rt_grid = rp_rt_grid
-        self._corr_item.z_grid = z_grid
-        self._corr_item.bin_size_rp_model = self.bin_size_rp_model
-        self._corr_item.bin_size_rt_model = self.bin_size_rt_model
-        self._corr_item.bin_size_rp_data = self.bin_size_rp_data
-        self._corr_item.bin_size_rt_data = self.bin_size_rt_data
+        self.corr_item.rp_rt_grid = rp_rt_grid
+        self.corr_item.z_grid = z_grid
+        self.corr_item.bin_size_rp_model = self.bin_size_rp_model
+        self.corr_item.bin_size_rt_model = self.bin_size_rt_model
+        self.corr_item.bin_size_rp_data = self.bin_size_rp_data
+        self.corr_item.bin_size_rt_data = self.bin_size_rt_data
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
             tracer_catalog, metal_correlations = self._init_metals(
                                                  corr_item.config['metals'])
-            self._corr_item.init_metals(tracer_catalog, metal_correlations)
+            self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
         # Check if we have broadband
         if 'broadband' in corr_item.config:
-            self._corr_item.init_broadband(self.coeff_binning_model)
+            self.corr_item.init_broadband(self.coeff_binning_model)
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
@@ -114,7 +114,7 @@ class Data:
         if self._cov_mat is None:
             raise AttributeError(
                 'No covariance matrix found. Check for it in the data file: ',
-                self._corr_item.config['data'].get('filename'))
+                self.corr_item.config['data'].get('filename'))
         return self._cov_mat
 
     @property
@@ -129,7 +129,7 @@ class Data:
         if self._distortion_mat is None:
             raise AttributeError(
                 'No distortion matrix found. Check for it in the data file: ',
-                self._corr_item.config['data'].get('filename'))
+                self.corr_item.config['data'].get('filename'))
         return self._distortion_mat
 
     @property
@@ -546,7 +546,7 @@ class Data:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
-        elif self._corr_item.test_flag:
+        elif self.corr_item.test_flag:
             self.metal_mats[tracers] = sparse.eye(metal_mat_size)
         else:
             raise ValueError("Cannot find correct metal matrices."
