@@ -51,11 +51,11 @@ class VegaPlots:
                 if (data.bin_size_rp_data == data.bin_size_rp_model and
                         data.bin_size_rt_data == data.bin_size_rt_model):
                     # Compute bin centers
-                    bin_index_rp = np.floor((data.rp_grid_model - data.rp_min_model)
+                    bin_index_rp = np.floor((data.corr_item.rp_rt_grid[0] - data.rp_min_model)
                                             / data.bin_size_rp_model)
                     bin_center_rp = data.rp_min_model
                     bin_center_rp += (bin_index_rp + 0.5) * data.bin_size_rp_model
-                    bin_index_rt = np.floor(data.rt_grid_model / data.bin_size_rt_model)
+                    bin_index_rt = np.floor(data.corr_item.rp_rt_grid[1] / data.bin_size_rt_model)
                     bin_center_rt = (bin_index_rt + 0.5) * data.bin_size_rt_model
 
                     # Build the model to data mask
