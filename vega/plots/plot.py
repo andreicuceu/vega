@@ -61,8 +61,6 @@ class VegaPlots:
                     self.mask &= (bin_center_rp < data.rp_max_data)
                     self.mask &= (bin_center_rt < data.rt_max_data)
 
-                    print(self.mask.shape)
-
                 # Initialize model coordinates
                 self.rp_setup_model[name] = (data.rp_min_model, data.rp_max_model,
                                              data.num_bins_rp_model)
@@ -214,7 +212,6 @@ class VegaPlots:
             covariance = array_or_dict(cov_mat, corr_name)
 
             if len(self.mask) == len(model_vec):
-                print('here')
                 masked_model = model_vec[self.mask]
                 if len(masked_model) != len(self.data[corr_name]):
                     raise ValueError('Masked model array does not match data array.')
