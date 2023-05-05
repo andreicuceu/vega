@@ -46,8 +46,8 @@ class VegaPlots:
                 self.cuts[name] = {'r_min': data.r_min_cut,
                                    'r_max': data.r_max_cut}
 
-                if (data.bin_size_rp_data == data.bin_size_rp_model and
-                        data.bin_size_rt_data == data.bin_size_rt_model):
+                if np.allclose([data.bin_size_rp_data, data.bin_size_rt_data],
+                               [data.bin_size_rp_model, data.bin_size_rt_model]):
                     # Compute bin centers
                     bin_index_rp = np.floor((data.corr_item.rp_rt_grid[0] - data.rp_min_model)
                                             / data.bin_size_rp_model)
@@ -213,7 +213,7 @@ class VegaPlots:
         if cov_mat is not None and self.mask is not None:
             covariance = array_or_dict(cov_mat, corr_name)
 
-            if len(self.mask.shape) == len(model_vec):
+            if len(self.mask) == len(model_vec):
                 print('here')
                 masked_model = model_vec[self.mask]
                 if masked_model.shape != self.data[corr_name]:
