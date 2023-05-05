@@ -30,45 +30,45 @@ class VegaPlots:
         self.mask = None
 
         if vega_data is not None:
-            for name in vega_data.keys():
-                cross_flag = vega_data[name].tracer1['type'] != vega_data[name].tracer2['type']
+            for name, data in vega_data.items():
+                cross_flag = data.tracer1['type'] != data.tracer2['type']
                 self.cross_flag[name] = cross_flag
-                self.data[name] = vega_data[name].data_vec
-                if vega_data[name].has_cov_mat:
-                    self.cov_mat[name] = vega_data[name].cov_mat
+                self.data[name] = data.data_vec
+                if data.has_cov_mat:
+                    self.cov_mat[name] = data.cov_mat
 
                 # Initialize data coordinates
-                self.rp_setup_data[name] = (vega_data[name].rp_min_data,
-                                            vega_data[name].rp_max_data,
-                                            vega_data[name].num_bins_rp_data)
-                self.rt_setup_data[name] = (0., vega_data[name].rt_max_data,
-                                            vega_data[name].num_bins_rt_data)
+                self.rp_setup_data[name] = (data.rp_min_data,
+                                            data.rp_max_data,
+                                            data.num_bins_rp_data)
+                self.rt_setup_data[name] = (0., data.rt_max_data,
+                                            data.num_bins_rt_data)
                 self.r_setup_data[name] = self.rp_setup_data[name]
 
-                self.cuts[name] = {'r_min': vega_data[name].r_min_cut,
-                                   'r_max': vega_data[name].r_max_cut}
+                self.cuts[name] = {'r_min': data.r_min_cut,
+                                   'r_max': data.r_max_cut}
 
-                if (vega_data.bin_size_rp_data == vega_data.bin_size_rp_model and
-                        vega_data.bin_size_rt_data == vega_data.bin_size_rt_model):
+                if (data.bin_size_rp_data == data.bin_size_rp_model and
+                        data.bin_size_rt_data == data.bin_size_rt_model):
                     # Compute bin centers
-                    bin_index_rp = np.floor((vega_data.rp_grid_model - vega_data.rp_min_model)
-                                            / vega_data.bin_size_rp_model)
-                    bin_center_rp = vega_data.rp_min_model
-                    bin_center_rp += (bin_index_rp + 0.5) * vega_data.bin_size_rp_model
-                    bin_index_rt = np.floor(vega_data.rt_grid_model / vega_data.bin_size_rt_model)
-                    bin_center_rt = (bin_index_rt + 0.5) * vega_data.bin_size_rt_model
+                    bin_index_rp = np.floor((data.rp_grid_model - data.rp_min_model)
+                                            / data.bin_size_rp_model)
+                    bin_center_rp = data.rp_min_model
+                    bin_center_rp += (bin_index_rp + 0.5) * data.bin_size_rp_model
+                    bin_index_rt = np.floor(data.rt_grid_model / data.bin_size_rt_model)
+                    bin_center_rt = (bin_index_rt + 0.5) * data.bin_size_rt_model
 
                     # Build the model to data mask
-                    self.mask = (bin_center_rp > vega_data[name].rp_min_data) 
-                    self.mask &= (bin_center_rp < vega_data[name].rp_max_data)
-                    self.mask &= (bin_center_rt < vega_data[name].rt_max_data)
+                    self.mask = (bin_center_rp > data.rp_min_data) 
+                    self.mask &= (bin_center_rp < data.rp_max_data)
+                    self.mask &= (bin_center_rt < data.rt_max_data)
 
                 # Initialize model coordinates
-                self.rp_setup_model[name] = (vega_data[name].rp_min_model,
-                                             vega_data[name].rp_max_model,
-                                             vega_data[name].num_bins_rp_model)
-                self.rt_setup_model[name] = (0., vega_data[name].rt_max_model,
-                                             vega_data[name].num_bins_rt_model)
+                self.rp_setup_model[name] = (data.rp_min_model,
+                                             data.rp_max_model,
+                                             data.num_bins_rp_model)
+                self.rt_setup_model[name] = (0., data.rt_max_model,
+                                             data.num_bins_rt_model)
                 self.r_setup_model[name] = self.rp_setup_model[name]
 
             self.has_data = True
