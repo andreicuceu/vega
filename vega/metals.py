@@ -85,8 +85,10 @@ class Metals:
 
                 # Get bin sizes
                 if self._data is not None:
-                    self._corr_item.config['metals']['bin_size_rp'] = str(self._data.bin_size_rp)
-                    self._corr_item.config['metals']['bin_size_rt'] = str(self._data.bin_size_rt)
+                    self._corr_item.config['metals']['bin_size_rp'] = \
+                        str(self._corr_item.bin_size_rp_data)
+                    self._corr_item.config['metals']['bin_size_rt'] = \
+                        str(self._corr_item.bin_size_rt_data)
 
                 # Initialize the metal correlation P(k)
                 if self.Pk_metal is None:

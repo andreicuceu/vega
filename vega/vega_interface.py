@@ -246,10 +246,10 @@ class VegaInterface:
                 return 1e100
 
             if self.monte_carlo:
-                diff = self.data[name].masked_mc_mock - model_cf[self.data[name].mask]
+                diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
                 chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
-                diff = self.data[name].masked_data_vec - model_cf[self.data[name].mask]
+                diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
                 chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         # Add priors
@@ -378,11 +378,11 @@ class VegaInterface:
 
             if self.monte_carlo:
                 diff = self.data[name].masked_mc_mock \
-                    - self.bestfit_model[name][self.data[name].mask]
+                    - self.bestfit_model[name][self.data[name].model_mask]
                 chisq = diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
                 diff = self.data[name].masked_data_vec \
-                    - self.bestfit_model[name][self.data[name].mask]
+                    - self.bestfit_model[name][self.data[name].model_mask]
                 chisq = diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
             reduced_chisq = chisq / (data_size - num_pars)

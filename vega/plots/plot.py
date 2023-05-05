@@ -19,31 +19,58 @@ class VegaPlots:
         self.cross_flag = {}
         self.data = {}
         self.cov_mat = {}
-        self.rp_setup = {}
-        self.rt_setup = {}
-        self.r_setup = {}
+        self.rp_setup_model = {}
+        self.rt_setup_model = {}
+        self.r_setup_model = {}
+        self.rp_setup_data = {}
+        self.rt_setup_data = {}
+        self.r_setup_data = {}
         self.has_data = False
         self.cuts = {}
+        self.mask = None
 
         if vega_data is not None:
-            for name in vega_data.keys():
-                cross_flag = vega_data[name].tracer1['type'] != vega_data[name].tracer2['type']
+            for name, data in vega_data.items():
+                cross_flag = data.tracer1['type'] != data.tracer2['type']
                 self.cross_flag[name] = cross_flag
-                self.data[name] = vega_data[name].data_vec
-                if vega_data[name].has_cov_mat:
-                    self.cov_mat[name] = vega_data[name].cov_mat
+                self.data[name] = data.data_vec
+                if data.has_cov_mat:
+                    self.cov_mat[name] = data.cov_mat
 
-                self.rp_setup[name] = (vega_data[name].rp_min, vega_data[name].rp_max,
-                                       vega_data[name].num_bins_rp)
-                self.rt_setup[name] = (0., vega_data[name].rt_max, vega_data[name].num_bins_rt)
-                self.r_setup[name] = self.rp_setup[name]
-                self.cuts[name] = {'r_min': vega_data[name].r_min_cut,
-                                   'r_max': vega_data[name].r_max_cut}
+                # Initialize data coordinates
+                self.rp_setup_data[name] = (data.rp_min_data, data.rp_max_data,
+                                            data.num_bins_rp_data)
+                self.rt_setup_data[name] = (0., data.rt_max_data, data.num_bins_rt_data)
+                self.r_setup_data[name] = self.rp_setup_data[name]
+
+                self.cuts[name] = {'r_min': data.r_min_cut,
+                                   'r_max': data.r_max_cut}
+
+                if np.allclose([data.bin_size_rp_data, data.bin_size_rt_data],
+                               [data.bin_size_rp_model, data.bin_size_rt_model]):
+                    # Compute bin centers
+                    bin_index_rp = np.floor((data.corr_item.rp_rt_grid[0] - data.rp_min_model)
+                                            / data.bin_size_rp_model)
+                    bin_center_rp = data.rp_min_model
+                    bin_center_rp += (bin_index_rp + 0.5) * data.bin_size_rp_model
+                    bin_index_rt = np.floor(data.corr_item.rp_rt_grid[1] / data.bin_size_rt_model)
+                    bin_center_rt = (bin_index_rt + 0.5) * data.bin_size_rt_model
+
+                    # Build the model to data mask
+                    self.mask = (bin_center_rp > data.rp_min_data) 
+                    self.mask &= (bin_center_rp < data.rp_max_data)
+                    self.mask &= (bin_center_rt < data.rt_max_data)
+
+                # Initialize model coordinates
+                self.rp_setup_model[name] = (data.rp_min_model, data.rp_max_model,
+                                             data.num_bins_rp_model)
+                self.rt_setup_model[name] = (0., data.rt_max_model, data.num_bins_rt_model)
+                self.r_setup_model[name] = self.rp_setup_model[name]
 
             self.has_data = True
 
-    def initialize_wedge(self, mu_bin, corr_name=None, cross_flag=False, rp_setup=None,
-                         rt_setup=None, r_setup=None, abs_mu=True, **kwargs):
+    def initialize_wedge(self, mu_bin, corr_name=None, is_data=False, cross_flag=False,
+                         rp_setup=None, rt_setup=None, r_setup=None, abs_mu=True, **kwargs):
         """Initialize wedge object
 
         Parameters
@@ -69,10 +96,14 @@ class VegaPlots:
             Vega wedge object
         """
         if corr_name is not None:
-            rp = self.rp_setup[corr_name]
-            rt = self.rt_setup[corr_name]
-            r = self.rp_setup[corr_name]
-
+            if is_data:
+                rp = self.rp_setup_data[corr_name]
+                rt = self.rt_setup_data[corr_name]
+                r = self.r_setup_data[corr_name]
+            else:
+                rp = self.rp_setup_model[corr_name]
+                rt = self.rt_setup_model[corr_name]
+                r = self.r_setup_model[corr_name]
             if self.cross_flag[corr_name] and abs_mu:
                 r = (0, rp[1], rp[2]//2)
         else:
@@ -88,17 +119,15 @@ class VegaPlots:
 
         return Wedge(mu=mu_bin, rp=rp, rt=rt, r=r, abs_mu=abs_mu)
 
-    def plot_data(self, ax, wedge_obj, data=None, cov_mat=None, label=None,
+    def plot_data(self, ax, mu_bin, data=None, cov_mat=None, cross_flag=False, label=None,
                   corr_name='lyalya_lyalya', data_fmt='o', data_color=None,
-                  scaling_power=2, **kwargs):
+                  scaling_power=2, use_local_coordinates=True, **kwargs):
         """Plot the data in the input ax object using the input wedge object
 
         Parameters
         ----------
         ax : plt.axes
             Axes object to plot the data in
-        wedge_obj : vega.Wedge
-            Vega wedge object for computing the wedge
         data : array or dict, optional
             Data vector as an array or a dictionary of components, by default None
         cov_mat : array or dict, optional
@@ -114,7 +143,14 @@ class VegaPlots:
         scaling_power : float, optional
             The power of r that multiples the plotted correlation (xi * r^scaling_power),
             by default None
+        use_local_coordinates : bool, optional
+            Whether to use the stored coordinate settings or defaul/input values, by default True
         """
+        if use_local_coordinates and self.has_data:
+            wedge_obj = self.initialize_wedge(mu_bin, corr_name, True, cross_flag, **kwargs)
+        else:
+            wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
+
         if data is None:
             if corr_name not in self.data:
                 raise ValueError('Correlation {} not found in input data'.format(corr_name))
@@ -136,9 +172,9 @@ class VegaPlots:
 
         return rd, dd, cd
 
-    def plot_model(self, ax, wedge_obj, model=None, cov_mat=None, label=None,
-                   corr_name='lyalya_lyalya', model_ls='-', model_color=None,
-                   scaling_power=2, **kwargs):
+    def plot_model(self, ax, mu_bin, model=None, cov_mat=None, cross_flag=False,
+                   label=None, corr_name='lyalya_lyalya', model_ls='-', model_color=None,
+                   scaling_power=2, use_local_coordinates=True, **kwargs):
         """Plot the model in the input ax object using the input wedge object
 
         Parameters
@@ -162,19 +198,40 @@ class VegaPlots:
         scaling_power : float, optional
             The power of r that multiples the plotted correlation (xi * r^scaling_power),
             by default None
+        use_local_coordinates : bool, optional
+            Whether to use the stored coordinate settings or defaul/input values, by default True
         """
         if cov_mat is None:
             if corr_name in self.cov_mat:
                 cov_mat = self.cov_mat[corr_name]
 
-        model_vec = array_or_dict(model, corr_name)
+        covariance = None
+        masked_model = None
+        model_vec = np.array(array_or_dict(model, corr_name))
+        if cov_mat is not None and self.mask is not None:
+            covariance = array_or_dict(cov_mat, corr_name)
 
-        if cov_mat is None:
+            if len(self.mask) == len(model_vec):
+                masked_model = model_vec[self.mask]
+                if len(masked_model) != len(self.data[corr_name]):
+                    raise ValueError('Masked model array does not match data array.')
+
+        if masked_model is not None:
+            wedge_obj = self.initialize_wedge(mu_bin, corr_name, True, cross_flag, **kwargs)
+        elif use_local_coordinates and self.has_data:
+            wedge_obj = self.initialize_wedge(mu_bin, corr_name, False, cross_flag, **kwargs)
+        else:
+            wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
+
+        if cov_mat is None or wedge_obj.weights.shape[1] != cov_mat.shape[0]:
             r, d = wedge_obj(model_vec)
             ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
         else:
             covariance = array_or_dict(cov_mat, corr_name)
-            r, d, _ = wedge_obj(model_vec, covariance=covariance)
+            if masked_model is None:
+                r, d, _ = wedge_obj(model_vec, covariance=covariance)
+            else:
+                r, d, _ = wedge_obj(masked_model, covariance=covariance)
             ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
 
         return r, d
@@ -214,8 +271,7 @@ class VegaPlots:
 
     def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
                    cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
-                   data_only=False, data_label=None, no_postprocess=False,
-                   use_local_coordinates=True, **kwargs):
+                   data_only=False, data_label=None, no_postprocess=False, **kwargs):
         """Plot a wedge into the input axes using the input mu_bin
 
         Parameters
@@ -242,17 +298,15 @@ class VegaPlots:
             Whether to only plot data and ignore the models, by default False
         data_label : str, optional
             Label for the data, by default None
-        use_local_coordinates : bool, optional
-            Whether to use the stored coordinate settings or defaul/input values, by default True
         """
-        if use_local_coordinates and self.has_data:
-            wedge_obj = self.initialize_wedge(mu_bin, corr_name, cross_flag, **kwargs)
-        else:
-            wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
+        # if use_local_coordinates and self.has_data:
+        #     wedge_obj = self.initialize_wedge(mu_bin, corr_name, cross_flag, **kwargs)
+        # else:
+        #     wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
 
         data_wedge = None
         if not models_only:
-            data_wedge = self.plot_data(ax, wedge_obj, data, cov_mat, data_label,
+            data_wedge = self.plot_data(ax, mu_bin, data, cov_mat, cross_flag, data_label,
                                         corr_name, **kwargs)
 
         model_wedge = None
@@ -274,12 +328,13 @@ class VegaPlots:
                 if models_colors is not None:
                     model_color = models_colors[i]
 
-                model_ls = None
+                model_ls = '-'
                 if models_ls is not None:
                     model_ls = models_ls[i]
 
-                model_wedge = self.plot_model(ax, wedge_obj, model, cov_mat, label, corr_name,
-                                              model_ls=model_ls, model_color=model_color, **kwargs)
+                model_wedge = self.plot_model(ax, mu_bin, model, cov_mat, cross_flag, label,
+                                              corr_name, model_ls=model_ls,
+                                              model_color=model_color, **kwargs)
 
         if not no_postprocess:
             self.postprocess_plot(ax, mu_bin, **kwargs)
