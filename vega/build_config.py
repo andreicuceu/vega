@@ -207,6 +207,9 @@ class BuildConfig:
 
         # Write the basic info
         config['data']['filename'] = corr_info.get('corr_path')
+        if 'distortion-file' in corr_info:
+            config['data']['distortion-file'] = corr_info.get('distortion-file')
+
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
