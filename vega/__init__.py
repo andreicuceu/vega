@@ -11,3 +11,4 @@ from vega.plots.wedges import Wedge
 from vega.plots.shell import Shell
 from vega.plots.rt_wedges import RtWedge
 from vega.plots.plot import VegaPlots
+from postprocess.fit_results import FitResults
