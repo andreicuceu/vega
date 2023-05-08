@@ -27,7 +27,7 @@ class VegaPlots:
         self.r_setup_data = {}
         self.has_data = False
         self.cuts = {}
-        self.mask = None
+        self.mask = {}
 
         if vega_data is not None:
             for name, data in vega_data.items():
@@ -57,9 +57,9 @@ class VegaPlots:
                     bin_center_rt = (bin_index_rt + 0.5) * data.bin_size_rt_model
 
                     # Build the model to data mask
-                    self.mask = (bin_center_rp > data.rp_min_data) 
-                    self.mask &= (bin_center_rp < data.rp_max_data)
-                    self.mask &= (bin_center_rt < data.rt_max_data)
+                    self.mask[name] = (bin_center_rp > data.rp_min_data) 
+                    self.mask[name] &= (bin_center_rp < data.rp_max_data)
+                    self.mask[name] &= (bin_center_rt < data.rt_max_data)
 
                 # Initialize model coordinates
                 self.rp_setup_model[name] = (data.rp_min_model, data.rp_max_model,
@@ -208,11 +208,11 @@ class VegaPlots:
         covariance = None
         masked_model = None
         model_vec = np.array(array_or_dict(model, corr_name))
-        if cov_mat is not None and self.mask is not None:
+        if cov_mat is not None and corr_name in self.mask:
             covariance = array_or_dict(cov_mat, corr_name)
 
-            if len(self.mask) == len(model_vec):
-                masked_model = model_vec[self.mask]
+            if len(self.mask[corr_name]) == len(model_vec):
+                masked_model = model_vec[self.mask[corr_name]]
                 if len(masked_model) != len(self.data[corr_name]):
                     raise ValueError('Masked model array does not match data array.')
 
