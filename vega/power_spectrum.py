@@ -150,9 +150,7 @@ class PowerSpectrum:
         # add full shape smoothing
         if 'fullshape smoothing' in self._config:
             smoothing_type = self._config.get('fullshape smoothing')
-            if 'gauss' in smoothing_type and self._config.getboolean('cross smoothing', False):
-                pk_full *= np.sqrt(self.compute_fullshape_gauss_smoothing(params))
-            elif 'gauss' in smoothing_type:
+            if 'gauss' in smoothing_type:
                 pk_full *= self.compute_fullshape_gauss_smoothing(params)
             elif 'exp' in smoothing_type:
                 pk_full *= self.compute_fullshape_exp_smoothing(params)
