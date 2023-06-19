@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import quad
-from numba import jit, float64
+from numba import njit, float64
 import os.path
 from pathlib import Path
 from functools import lru_cache
@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 import vega
 
 
-@jit(nopython=True)
+@njit
 def sinc(x):
     return np.sin(x)/x
 
@@ -85,7 +85,7 @@ def convert_instance_to_dictionary(inst):
     return dic
 
 
-@jit(float64(float64, float64, float64))
+@njit(float64(float64, float64, float64))
 def hubble(z, Omega_m, Omega_de):
     """Hubble parameter in LCDM + curvature
     No H0/radiation/neutrinos
@@ -109,7 +109,7 @@ def hubble(z, Omega_m, Omega_de):
     return e_z
 
 
-@jit(float64(float64, float64, float64))
+@njit(float64(float64, float64, float64))
 def growth_integrand(a, Omega_m, Omega_de):
     """Integrand for the growth factor
 
