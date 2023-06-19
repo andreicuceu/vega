@@ -9,3 +9,4 @@ mcfit
 cachetools
 matplotlib
 gitpython
+getdist
