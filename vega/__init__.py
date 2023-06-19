@@ -2,7 +2,7 @@
 
 __author__ = """Andrei Cuceu"""
 __email__ = 'andreicuceu@gmail.com'
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 from vega.vega_interface import VegaInterface
 from vega.build_config import BuildConfig
