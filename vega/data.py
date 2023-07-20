@@ -6,6 +6,8 @@ from scipy.sparse import csr_matrix
 
 from vega.utils import find_file
 
+BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
+
 
 class Data:
     """Class for handling lya forest correlation function data.
@@ -29,31 +31,34 @@ class Data:
             Item object with the component config
         """
         # First save the tracer info
-        self._corr_item = corr_item
+        self.corr_item = corr_item
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
-        rp_rt_grid, z_grid = self._read_data(data_path,
-                                             corr_item.config['cuts'])
-        self._corr_item.rp_rt_grid = rp_rt_grid
-        self._corr_item.z_grid = z_grid
+        dmat_path = corr_item.config['data'].get('distortion-file', None)
+        rp_rt_grid, z_grid = self._read_data(data_path, corr_item.config['cuts'], dmat_path)
+        self.corr_item.rp_rt_grid = rp_rt_grid
+        self.corr_item.z_grid = z_grid
+        self.corr_item.bin_size_rp_model = self.bin_size_rp_model
+        self.corr_item.bin_size_rt_model = self.bin_size_rt_model
+        self.corr_item.bin_size_rp_data = self.bin_size_rp_data
+        self.corr_item.bin_size_rt_data = self.bin_size_rt_data
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
             tracer_catalog, metal_correlations = self._init_metals(
                                                  corr_item.config['metals'])
-            self._corr_item.init_metals(tracer_catalog, metal_correlations)
+            self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
         # Check if we have broadband
         if 'broadband' in corr_item.config:
-            self._corr_item.init_broadband(self.bin_size_rp,
-                                           self.coeff_binning_model)
+            self.corr_item.init_broadband(self.coeff_binning_model)
 
-        if not self.has_distortion():
+        if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
-        if not self.has_cov_mat():
+        if not self.has_cov_mat:
             self._cov_mat = np.eye(self.full_data_size)
 
         self._cholesky = None
@@ -93,8 +98,8 @@ class Data:
             Masked data vector (xi[mask])
         """
         if self._masked_data_vec is None:
-            self._masked_data_vec = np.zeros(self.mask.sum())
-            self._masked_data_vec[:] = self.data_vec[self.mask]
+            self._masked_data_vec = np.zeros(self.data_mask.sum())
+            self._masked_data_vec[:] = self.data_vec[self.data_mask]
         return self._masked_data_vec
 
     @property
@@ -109,7 +114,7 @@ class Data:
         if self._cov_mat is None:
             raise AttributeError(
                 'No covariance matrix found. Check for it in the data file: ',
-                self._corr_item.config['data'].get('filename'))
+                self.corr_item.config['data'].get('filename'))
         return self._cov_mat
 
     @property
@@ -124,7 +129,7 @@ class Data:
         if self._distortion_mat is None:
             raise AttributeError(
                 'No distortion matrix found. Check for it in the data file: ',
-                self._corr_item.config['data'].get('filename'))
+                self.corr_item.config['data'].get('filename'))
         return self._distortion_mat
 
     @property
@@ -138,8 +143,8 @@ class Data:
         """
         if self._inv_masked_cov is None:
             # Compute inverse of the covariance matrix
-            masked_cov = self.cov_mat[:, self.mask]
-            masked_cov = masked_cov[self.mask, :]
+            masked_cov = self.cov_mat[:, self.data_mask]
+            masked_cov = masked_cov[self.data_mask, :]
             try:
                 linalg.cholesky(self.cov_mat)
                 print('LOG: Full matrix is positive definite')
@@ -166,14 +171,15 @@ class Data:
         if self._log_cov_det is None:
             # Compute the log determinant using and LDL^T decomposition
             # |C| = Product of Diagonal components of D
-            masked_cov = self.cov_mat[:, self.mask]
-            masked_cov = masked_cov[self.mask, :]
+            masked_cov = self.cov_mat[:, self.data_mask]
+            masked_cov = masked_cov[self.data_mask, :]
             _, d, __ = linalg.ldl(masked_cov)
             self._log_cov_det = np.log(d.diagonal()).sum()
             assert isinstance(self.log_cov_det, float)
 
         return self._log_cov_det
 
+    @property
     def has_cov_mat(self):
         """Covariance matrix flag
 
@@ -184,6 +190,7 @@ class Data:
         """
         return self._cov_mat is not None
 
+    @property
     def has_distortion(self):
         """Distortion matrix flag
 
@@ -194,7 +201,7 @@ class Data:
         """
         return self._distortion_mat is not None
 
-    def _read_data(self, data_path, cuts_config):
+    def _read_data(self, data_path, cuts_config, dmat_path=None):
         """Read the data, mask it and prepare the environment.
 
         Parameters
@@ -204,35 +211,41 @@ class Data:
         cuts_config : ConfigParser
             cuts section from the config file
         """
-        print('Reading data file {}\n'.format(data_path))
+        print(f'Reading data file {data_path}\n')
         hdul = fits.open(find_file(data_path))
+        header = hdul[1].header
 
-        self._blinding_strat = 'none'
-        if 'BLINDING' in hdul[1].header:
-            self._blinding_strat = hdul[1].header['BLINDING']
+        self._blinding_strat = None
+        if 'BLINDING' in header:
+            self._blinding_strat = header['BLINDING']
 
-        if self._blinding_strat == 'corr_yshift':
-            print('Warning! Running on blinded data {}'.format(data_path))
-            print('Strategy: corr_yshift. BAO can be sampled')
-            self._blind = False
-            self._data_vec = hdul[1].data['DA_BLIND']
-            if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif self._blinding_strat == 'minimal':
-            print('Warning! Running on blinded data {}'.format(data_path))
-            print('Strategy: minimal. Scale parameters must be fixed to 1.')
+            if self._blinding_strat == 'none' or self._blinding_strat == 'None':
+                self._blinding_strat = None
+
+        dmat_column_name = 'DM'
+        if self._blinding_strat in BLINDING_STRATEGIES:
+            print(f'Warning! Running on blinded data {data_path}')
+            print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
+
             self._blind = True
             self._data_vec = hdul[1].data['DA_BLIND']
-            if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif self._blinding_strat == 'none':
+            dmat_column_name += '_BLIND'
+            if dmat_column_name in hdul[1].columns.names and dmat_path is None:
+                self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
+
+        elif self._blinding_strat == 'desi_y3':
+            raise ValueError('Fits are forbidden on Y3 data as we do not have'
+                             ' a coherent blinding strategy yet.')
+
+        elif self._blinding_strat is None:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
-            if 'DM' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+            if dmat_column_name in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
+
         else:
             self._blind = True
-            raise ValueError("Unknown blinding strategy. Only 'minimal' implemented.")
+            raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
         if 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
@@ -240,42 +253,108 @@ class Data:
         rp_grid = hdul[1].data['RP']
         rt_grid = hdul[1].data['RT']
         z_grid = hdul[1].data['Z']
+
+        self.rp_min_data = header['RPMIN']
+        self.rp_max_data = header['RPMAX']
+        self.rt_max_data = header['RTMAX']
+        self.num_bins_rp_data = header['NP']
+        self.num_bins_rt_data = header['NT']
+
+        # Get the data bin size
+        # TODO If RTMIN is ever added to the cf data files this needs modifying
+        self.bin_size_rp_data = (self.rp_max_data - self.rp_min_data) / self.num_bins_rp_data
+        self.bin_size_rt_data = self.rt_max_data / self.num_bins_rt_data
+
         if 'NB' in hdul[1].columns.names:
             self.nb = hdul[1].data['NB']
         else:
             self.nb = None
 
-        try:
-            dist_rp_grid = hdul[2].data['DMRP']
-            dist_rt_grid = hdul[2].data['DMRT']
-            dist_z_grid = hdul[2].data['DMZ']
-        except (IndexError, KeyError):
-            dist_rp_grid = rp_grid.copy()
-            dist_rt_grid = rt_grid.copy()
-            dist_z_grid = z_grid.copy()
-        self.coeff_binning_model = np.sqrt(dist_rp_grid.size / rp_grid.size)
+        if len(hdul) > 2:
+            rp_grid_model = hdul[2].data['DMRP']
+            rt_grid_model = hdul[2].data['DMRT']
+            z_grid_model = hdul[2].data['DMZ']
+        else:
+            rp_grid_model = rp_grid
+            rt_grid_model = rt_grid
+            z_grid_model = z_grid
+        hdul.close()
 
-        # Compute the mask and use it on the data
-        self.mask, self.bin_size_rp, self.bin_size_rt = self._build_mask(rp_grid, rt_grid,
-                                                                         cuts_config,
-                                                                         hdul[1].header)
+        # Compute the data mask
+        self.data_mask = self._build_mask(rp_grid, rt_grid, cuts_config, self.rp_min_data,
+                                          self.bin_size_rp_data, self.bin_size_rt_data)
+
+        # Read distortion matrix and initialize coordinate grids for the model
+        if dmat_path is not None:
+            rp_grid_model, rt_grid_model, z_grid_model = self._read_dmat(dmat_path, cuts_config,
+                                                                         dmat_column_name)
+        else:
+            self.rp_min_model = self.rp_min_data
+            self.rp_max_model = self.rp_max_data
+            self.rt_max_model = self.rt_max_data
+            self.num_bins_rp_model = self.num_bins_rp_data
+            self.num_bins_rt_model = self.num_bins_rt_data
+            self.bin_size_rp_model = self.bin_size_rp_data
+            self.bin_size_rt_model = self.bin_size_rt_data
+            self.coeff_binning_model = 1
+            self.model_mask = self.data_mask
 
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
+        # TODO this was needed for post distortion BB polynomials. Fix at some point!
+        # self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
+        # self.mu_square_grid = np.zeros(self.r_square_grid.size)
+        # w = self.r_square_grid > 0.
+        # self.mu_square_grid[w] = rp_grid[w] / self.r_square_grid[w]
+
+        # return the model coordinate grids
+        rp_rt_grid = np.array([rp_grid_model, rt_grid_model])
+        return rp_rt_grid, z_grid_model
+
+    def _check_if_blinding_matches(self, blinding_flag, dmat_path):
+        if self._blinding_strat is None:
+            if not (blinding_flag == 'none' or blinding_flag == 'None'):
+                raise ValueError(f'Data has no blinding, but distortion matrix at {dmat_path} '
+                                 f'has a blinding flag {blinding_flag}')
+        else:
+            if self._blinding_strat != blinding_flag:
+                raise ValueError(f'Data has a blinding flag {blinding_flag} that does not match '
+                                 f'the flag of the distortion matrix at {dmat_path}')
+
+    def _read_dmat(self, dmat_path, cuts_config, dmat_column_name):
+        print(f'Reading distortion matrix file {dmat_path}\n')
+        hdul = fits.open(find_file(dmat_path))
+        header = hdul[1].header
+
+        if 'BLINDING' in header:
+            self._check_if_blinding_matches(header['BLINDING'], dmat_path)
+
+        self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
+
+        rp_grid = hdul[2].data['RP']
+        rt_grid = hdul[2].data['RT']
+        z_grid = hdul[2].data['Z']
         hdul.close()
 
-        self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
-        self.mu_square_grid = np.zeros(self.r_square_grid.size)
-        w = self.r_square_grid > 0.
-        self.mu_square_grid[w] = rp_grid[w] / self.r_square_grid[w]
+        self.rp_min_model = header['RPMIN']
+        self.rp_max_model = header['RPMAX']
+        self.rt_max_model = header['RTMAX']
+        self.num_bins_rp_model = header['NP']
+        self.num_bins_rt_model = header['NT']
+        self.coeff_binning_model = header['COEFMOD']
 
-        # return the coordinate grids
-        rp_rt_grid = np.array([dist_rp_grid, dist_rt_grid])
-        return rp_rt_grid, dist_z_grid
+        # Get the model bin size
+        # TODO If RTMIN is ever added to the cf data files this needs modifying
+        self.bin_size_rp_model = (self.rp_max_model - self.rp_min_model) / self.num_bins_rp_model
+        self.bin_size_rt_model = self.rt_max_model / self.num_bins_rt_model
 
-    @staticmethod
-    def _build_mask(rp_grid, rt_grid, cuts_config, data_header):
+        self.model_mask = self._build_mask(rp_grid, rt_grid, cuts_config, self.rp_min_model,
+                                           self.bin_size_rp_model, self.bin_size_rt_model)
+
+        return rp_grid, rt_grid, z_grid
+
+    def _build_mask(self, rp_grid, rt_grid, cuts_config, rp_min, bin_size_rp, bin_size_rt):
         """Build the mask for the data by comparing
         the cuts from config with the data limits.
 
@@ -287,7 +366,7 @@ class Data:
             Vector of data rt coordinates
         cuts_config : ConfigParser
             cuts section from config
-        data_header : fits header
+        header : fits header
             Data file header
 
         Returns
@@ -296,47 +375,33 @@ class Data:
             Mask, Bin size in rp, Bin size in rt
         """
         # Read the cuts
-        rp_min = cuts_config.getfloat('rp-min', 0.)
-        rp_max = cuts_config.getfloat('rp-max', 200.)
+        rp_min_cut = cuts_config.getfloat('rp-min', 0.)
+        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
 
-        rt_min = cuts_config.getfloat('rt-min', 0.)
-        rt_max = cuts_config.getfloat('rt-max', 200.)
+        rt_min_cut = cuts_config.getfloat('rt-min', 0.)
+        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
 
-        r_min = cuts_config.getfloat('r-min', 10.)
-        r_max = cuts_config.getfloat('r-max', 180.)
+        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
+        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
 
-        mu_min = cuts_config.getfloat('mu-min', -1.)
-        mu_max = cuts_config.getfloat('mu-max', +1.)
-
-        # TODO If RTMIN is ever added to the cf data files this needs modifying
-        # Get the data bin size
-        bin_size_rp = (data_header['RPMAX'] - data_header['RPMIN'])
-        bin_size_rp /= data_header['NP']
-        bin_size_rt = data_header['RTMAX'] / data_header['NT']
+        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
+        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
         # Compute bin centers
-        bin_center_rp = np.zeros(rp_grid.size)
-        for i, rp_value in enumerate(rp_grid):
-            bin_index = np.floor((rp_value - data_header['RPMIN'])
-                                 / bin_size_rp)
-            bin_center_rp[i] = data_header['RPMIN'] \
-                + (bin_index + 0.5) * bin_size_rp
-
-        bin_center_rt = np.zeros(rt_grid.size)
-        for i, rt_value in enumerate(rt_grid):
-            bin_index = np.floor(rt_value / bin_size_rt)
-            bin_center_rt[i] = (bin_index + 0.5) * bin_size_rt
+        bin_index_rp = np.floor((rp_grid - rp_min) / bin_size_rp)
+        bin_center_rp = rp_min + (bin_index_rp + 0.5) * bin_size_rp
+        bin_center_rt = (np.floor(rt_grid / bin_size_rt) + 0.5) * bin_size_rt
 
         bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
         bin_center_mu = bin_center_rp / bin_center_r
 
         # Build the mask by comparing the data bins to the cuts
-        mask = (bin_center_rp > rp_min) & (bin_center_rp < rp_max)
-        mask &= (bin_center_rt > rt_min) & (bin_center_rt < rt_max)
-        mask &= (bin_center_r > r_min) & (bin_center_r < r_max)
-        mask &= (bin_center_mu > mu_min) & (bin_center_mu < mu_max)
+        mask = (bin_center_rp > rp_min_cut) & (bin_center_rp < rp_max_cut)
+        mask &= (bin_center_rt > rt_min_cut) & (bin_center_rt < rt_max_cut)
+        mask &= (bin_center_r > self.r_min_cut) & (bin_center_r < self.r_max_cut)
+        mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
 
-        return mask, bin_size_rp, bin_size_rt
+        return mask
 
     def _init_metals(self, metal_config):
         """Read the metal file and initialize all the metal data.
@@ -472,7 +537,7 @@ class Data:
 
         metal_mat_size = len(self.metal_rp_grids[tracers])
 
-        if self._blinding_strat == 'none':
+        if self._blinding_strat is None:
             dm_name = 'DM_' + name
         else:
             dm_name = 'DM_BLIND_' + name
@@ -481,7 +546,7 @@ class Data:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
-        elif self._corr_item.test_flag:
+        elif self.corr_item.test_flag:
             self.metal_mats[tracers] = sparse.eye(metal_mat_size)
         else:
             raise ValueError("Cannot find correct metal matrices."

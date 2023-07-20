@@ -32,7 +32,6 @@ class ScaleParameters:
         elif self.full_shape or self.smooth_scaling:
             print('Warning! Running full-shape without blinding.')
 
-
         if self.full_shape or self.smooth_scaling:
             print('WARNING!!!: Using full-shape fit or scaling of the smooth cf component. '
                   'Sailor you are reaching unexplored territories, precede at your own risk.')

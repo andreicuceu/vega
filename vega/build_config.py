@@ -1,9 +1,13 @@
-import numpy as np
-from configparser import ConfigParser
-from vega.utils import find_file
-from astropy.io import fits
-from pathlib import Path
 import os
+import git
+import numpy as np
+from pathlib import Path
+from astropy.io import fits
+from datetime import datetime
+from configparser import ConfigParser
+
+import vega
+from vega.utils import find_file
 
 
 class BuildConfig:
@@ -11,19 +15,10 @@ class BuildConfig:
     """
 
     _params_template = None
-    recognised_fits = ['lyalya_lyalya', 'lyalya_lyalyb', 'lya_lyb',
-                       'lyalya_qso', 'lyalyb_qso', 'lyb_qso',
-                       'lyalya_dla', 'lyalyb_dla', 'qso_qso', 'qso_dla', 'dla_dla',
-                       'lyalya_lyalya__lyalya_lyalyb', 'lyalya_lyalya__lya_lyb',
-                       'lyalya_lyalya__lyalya_qso', 'lyalya_lyalyb__lyalyb_qso',
-                       'lya_lyb__lyb_qso', 'lyalya_qso__lyalyb_qso', 'lyalya_qso__lyb_qso',
-                       'lyalya_lyalya__lyalya_dla', 'lyalya_lyalyb__lyalyb_dla',
-                       'lyalya_dla__lyalyb_dla',
-                       'lyalya_lyalya__lyalya_lyalyb__lyalya_qso__lyalyb_qso',
-                       'lyalya_lyalya__lya_lyb__lyalya_qso__lyb_qso',
-                       'lyalya_lyalya__lyalya_lyalyb__lyalya_dla__lyalyb_dla']
+    recognised_correlations = ['lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
+                               'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla']
 
-    def __init__(self, options={}):
+    def __init__(self, options={}, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
 
         Parameters
@@ -50,6 +45,7 @@ class BuildConfig:
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
                     'SiII(1260)', 'CIV(eff)'], default None
         """
+        self.overwrite = overwrite
         self.options = {}
 
         self.options['scale_params'] = options.get('scale_params', 'ap_at')
@@ -68,6 +64,8 @@ class BuildConfig:
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
         self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
+        self.options['desi-instrumental-systematics'] = options.get('desi-instrumental-systematics',
+                                                                    False)
         self.options['test'] = options.get('test', False)
 
         metals = options.get('metals', None)
@@ -95,16 +93,15 @@ class BuildConfig:
                 broadband: broadband string configuration
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
-            tracers separated by a single underscore (e.g. lyalya_qso),
-            and different correlations separated by a double underscore
-            (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
-            folder to see all possibilities.
+            tracers separated by an "x" (e.g. lyaxqso), and different correlations
+            separated by an underscore (e.g. lyaxlya_lyaxqso). If unsure check
+            the templates folder to see all possibilities.
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
             List of options:
                 fitter: bool, default True
                 sampler: bool, default False
-                use_bias_eta: dict with 'corr_name': Bool
+                bias_beta_config: dict with 'tracer': 'bias_beta', 'bias_eta_beta', 'bias_bias_eta'
                 zeff: float, default None
                 zeff_rmin: float, default 0
                 zeff_rmax: float, default 300
@@ -123,10 +120,6 @@ class BuildConfig:
         string
             Path to the main config file
         """
-        # Check if we know the fit combination
-        if fit_type not in self.recognised_fits:
-            raise ValueError('Unknown fit: {}'.format(fit_type))
-
         # Save some of the info
         self.fit_info = fit_info
         self.name_extension = name_extension
@@ -147,20 +140,33 @@ class BuildConfig:
             if not self.sampler_out_path.exists():
                 os.mkdir(self.sampler_out_path)
 
+        # Check if we know the correlation types
+        components = fit_type.split('_')
+        for corr in components:
+            if corr not in self.recognised_correlations:
+                raise ValueError(f'Unknown correlation {corr}, part of fit type {fit_type}.')
+
+        if len(components) != len(set(components)):
+            print(f'Warning! fit type {fit_type} has duplicates')
+
+        # Get git hash
+        vega_path = Path(os.path.dirname(vega.__file__))
+        git_hash = git.Repo(vega_path.parents[0]).head.object.hexsha
+
         # Build config files for each correlation
-        components = fit_type.split('__')
         self.corr_paths = []
         self.corr_names = []
         self.data_paths = []
         for name in components:
             # Check if we have info on the correlation
             if name not in correlations:
-                raise ValueError('You asked for a fit combination with an unknown'
-                                 ' correlation: {}'.format(name))
+                raise ValueError(f'You asked for correlation {name} but did not provide'
+                                 ' its configuration in the "correlations" dictionary.')
 
             # Build the config file for the correlation and save the path
             corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
-                                                                             correlations[name])
+                                                                             correlations[name],
+                                                                             git_hash)
             self.corr_paths.append(corr_path)
             self.data_paths.append(data_path)
             if tracer1 not in self.corr_names:
@@ -168,11 +174,11 @@ class BuildConfig:
             if tracer2 not in self.corr_names:
                 self.corr_names.append(tracer2)
 
-        main_path = self._build_main_config(fit_type, fit_info, parameters)
+        main_path = self._build_main_config(fit_type, fit_info, parameters, git_hash)
 
         return main_path
 
-    def _build_corr_config(self, name, corr_info):
+    def _build_corr_config(self, name, corr_info, git_hash):
         """Build config file for a correlation based on a template
 
         Parameters
@@ -190,7 +196,7 @@ class BuildConfig:
         # Read template
         config = ConfigParser()
         config.optionxform = lambda option: option
-        template_path = find_file('vega/templates/{}.ini'.format(name))
+        template_path = find_file(f'vega/templates/{name}.ini')
         config.read(template_path)
 
         # get tracer info
@@ -201,6 +207,9 @@ class BuildConfig:
 
         # Write the basic info
         config['data']['filename'] = corr_info.get('corr_path')
+        if 'distortion-file' in corr_info:
+            config['data']['distortion-file'] = corr_info.get('distortion-file')
+
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
@@ -220,6 +229,11 @@ class BuildConfig:
         elif tracer1 == 'LYA' or tracer2 == 'LYA':
             if self.options['small_scale_nl_cross']:
                 config['model']['small scale nl'] = 'dnl_arinyo'
+
+        # Things that require both tracers to be continuous
+        if type1 == 'continuous' and type2 == 'continuous':
+            if self.options['desi-instrumental-systematics']:
+                config['model']['desi-instrumental-systematics'] = 'True'
 
         # Things that require at least one tracer to be continuous
         if type1 == 'continuous' or type2 == 'continuous':
@@ -243,8 +257,6 @@ class BuildConfig:
 
                 if 'fast_metals' in corr_info:
                     config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
-                    config['model']['fast_metals_unsafe'] = corr_info.get('fast_metals_unsafe',
-                                                                          'False')
 
         # Things that require at least one discrete tracer
         if type1 == 'discrete' or type2 == 'discrete':
@@ -274,7 +286,13 @@ class BuildConfig:
             corr_path = self.config_path / '{}.ini'.format(name)
         else:
             corr_path = self.config_path / '{}-{}.ini'.format(name, self.name_extension)
+
+        if corr_path.is_file() and not self.overwrite:
+            raise ValueError(f'File {corr_path} already exists. Please change the name extension.')
+
         with open(corr_path, 'w') as configfile:
+            configfile.write(f'# File written on {datetime.now()} \n')
+            configfile.write(f'# Vega git hash: {git_hash} \n\n')
             config.write(configfile)
 
         return corr_path, config['data']['filename'], tracer1, tracer2
@@ -316,7 +334,7 @@ class BuildConfig:
         zeff = np.average(zeff_list, weights=weights)
         return zeff
 
-    def _build_main_config(self, fit_type, fit_info, parameters):
+    def _build_main_config(self, fit_type, fit_info, parameters, git_hash):
         """Build the main vega configuration file
 
         Parameters
@@ -403,7 +421,12 @@ class BuildConfig:
 
         # Check all sampled parameters are defined
         for param in sample_params:
-            assert param in config['parameters']
+            if param not in config['parameters']:
+                raise ValueError(f'Asked for unknown parameter "{param}". This does not exist in '
+                                 'the current configuration. Please check the vega configuration '
+                                 'you requested is correct. If this is a new parameter that does '
+                                 'not have a default value yet, please add it to the parameters '
+                                 'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
         if self.sampler:
@@ -426,7 +449,13 @@ class BuildConfig:
             main_path = self.config_path / 'main.ini'
         else:
             main_path = self.config_path / 'main-{}.ini'.format(self.name_extension)
+
+        if main_path.is_file() and not self.overwrite:
+            raise ValueError(f'File {main_path} already exists. Please change the name extension.')
+
         with open(main_path, 'w') as configfile:
+            configfile.write(f'# File written on {datetime.now()} \n')
+            configfile.write(f'# Vega git hash: {git_hash} \n\n')
             config.write(configfile)
 
         return main_path
@@ -495,56 +524,48 @@ class BuildConfig:
             new_params['sigmaNL_par'] = 0.
         new_params['bao_amp'] = get_par('bao_amp')
 
+        def add_bias_beta(new_params, tracer, bias_beta_config, bias, bias_eta, beta, growth_rate):
+            if bias_beta_config == 'bias_beta':
+                new_params[f'bias_{tracer}'] = bias
+                new_params[f'beta_{tracer}'] = beta
+            elif bias_beta_config == 'bias_bias_eta':
+                new_params[f'bias_{tracer}'] = bias
+                new_params[f'bias_eta_{tracer}'] = bias_eta
+                new_params['growth_rate'] = growth_rate
+            elif bias_beta_config == 'bias_eta_beta':
+                new_params[f'beta_{tracer}'] = beta
+                new_params[f'bias_eta_{tracer}'] = bias_eta
+                new_params['growth_rate'] = growth_rate
+            else:
+                raise ValueError(f'Option {bias_beta_config} not a valid bias_beta_config. '
+                                 'Choose from ["bias_beta", "bias_eta_beta", "bias_bias_eta"].')
+
         # bias beta model
         for name in self.corr_names:
-            use_bias_eta = self.fit_info['use_bias_eta'].get(name, True)
+            bias_beta_config = self.fit_info['bias_beta_config'].get(name, 'bias_beta')
+
             growth_rate = parameters.get('growth_rate', None)
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if name == 'LYA':
-                bias_lya = self.get_lya_bias(self.zeff_in)
-                bias_eta_lya = parameters.get('bias_eta_LYA', None)
-                beta_lya = float(get_par('beta_LYA'))
+            if (name == 'LYA') or (name == 'LYB'):
+                bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
+                bias_eta = parameters.get(f'bias_eta_{name}', None)
+                beta = float(get_par(f'beta_{name}'))
 
-                if bias_eta_lya is None:
-                    bias_eta_lya = bias_lya * beta_lya / growth_rate
-
-                if use_bias_eta:
-                    new_params['growth_rate'] = growth_rate
-                    new_params['bias_eta_LYA'] = bias_eta_lya
-                else:
-                    new_params['bias_LYA'] = bias_lya
-                new_params['beta_LYA'] = beta_lya
-            elif name == 'LYB':
-                bias_lyb = self.get_lya_bias(self.zeff_in)
-                bias_eta_lyb = parameters.get('bias_eta_LYB', None)
-                beta_lyb = float(get_par('beta_LYB'))
-
-                if bias_eta_lyb is None:
-                    bias_eta_lyb = bias_lyb * beta_lyb / growth_rate
-
-                if use_bias_eta:
-                    new_params['growth_rate'] = growth_rate
-                    new_params['bias_eta_LYB'] = bias_eta_lyb
-                else:
-                    new_params['bias_LYB'] = bias_lyb
-                new_params['beta_LYB'] = beta_lyb
+                if bias_eta is None:
+                    bias_eta = bias * beta / growth_rate
             elif name == 'QSO':
-                bias_qso = self.get_qso_bias(self.zeff_in)
-                beta_qso = parameters.get('beta_QSO', None)
+                bias = parameters.get('bias_QSO', self.get_qso_bias(self.zeff_in))
+                beta = parameters.get('beta_QSO', None)
+                bias_eta = 1
 
-                if beta_qso is None:
-                    beta_qso = growth_rate / bias_qso
-
-                if use_bias_eta:
-                    new_params['growth_rate'] = growth_rate
-                    new_params['bias_eta_QSO'] = 1.
-                else:
-                    new_params['bias_QSO'] = bias_qso
-                new_params['beta_QSO'] = beta_qso
+                if beta is None:
+                    beta = growth_rate / bias
             else:
-                raise ValueError('Tracer {} not supported yet.'.format(name))
+                raise ValueError(f'Tracer {name} not supported yet. Please open an issue')
+
+            add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
             new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
 
@@ -602,6 +623,10 @@ class BuildConfig:
                 new_params['par_exp_smooth'] = get_par('par_exp_smooth')
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
 
+        # DESI instrumental systematics amplitude
+        if self.options['desi-instrumental-systematics']:
+            new_params['desi_inst_sys_amp'] = get_par('desi_inst_sys_amp')
+
         # Check for broadband parameters
         for name, value in parameters.items():
             if 'BB' in name and name not in new_params:
@@ -642,7 +667,7 @@ class BuildConfig:
         return 3.91 * ((1 + z) / (1 + 2.39))**1.7133
 
     @staticmethod
-    def get_growth_rate(z, Omega_m=0.31457):
+    def get_growth_rate(z, Omega_m=0.3153):
         """Compute default growth rate at redshift z
 
         Parameters
@@ -650,7 +675,7 @@ class BuildConfig:
         z : float
             Redshift
         Omega_m : float, optional
-            Matter fraction, by default 0.31457
+            Matter fraction, by default 0.3153
 
         Returns
         -------

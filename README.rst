@@ -18,6 +18,7 @@ Vega is a tool for computing 3D correlation function models for tracers used by 
 
 * Free software: GPL-3.0 License
 * Documentation: https://vega.readthedocs.io.
+* Referencing: If you use Vega in a publication please give the link to this repository (https://github.com/andreicuceu/vega). Right now there is no Vega paper. The best descriptions of what the code does are found in Cuceu et al. 2022 (https://arxiv.org/abs/2209.12931) and du Mas des Bourboux et al. 2020 (https://arxiv.org/abs/2007.08995).
 
 Installation
 ------------
@@ -51,6 +52,12 @@ Once you have a copy of the source, you can install it with:
 
 Installing the sampler
 ----------------------
+
+First install mpi4py using the NERSC specific commmand:
+
+.. code-block:: console
+
+    $ MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 
 If you want to run the sampler, you will need `Polychord`_. Older instructions for Cori at NERSC can be found `here`_. Here are instructions for installing it on Perlmutter. Note that this requires the default Perlmutter envrinoment with no changes (except module load python). Start by following the steps above to install vega and its dendencies. After that clone `Polychord`_ and revert to an older stable commit:
 
@@ -98,6 +105,13 @@ Vega needs one "main.ini" file with the configuration, and at least one correlat
 
 In the `examples`_ folder you can find examples of these config files with a lot of comments explaining what each option does. If you don't understand something, or we missed something, please open an issue.
 
+Vega now has a Config `Builder`_ that is designed to create full Vega config files with minimal input. This is now the preffered way of interacting with Vega, as it automates fits and reduces the chance of mistakes. You can use the BuildConfig class interactively (e.g. in a notebook) as shown in this `tutorial`_.
+
+.. _documentation: https://vega.readthedocs.io/en/latest/?badge=latest
+.. _examples: https://github.com/andreicuceu/Vega/tree/master/examples
+.. _Builder: https://github.com/andreicuceu/vega/blob/master/vega/build_config.py
+.. _tutorial: https://github.com/andreicuceu/vega/blob/master/examples/config_creation.ipynb
+
 Using the terminal
 ------------------
 You can call Vega from a terminal using the scripts in the bin folder, and pointing them to a "main.ini" file like this:
@@ -119,13 +133,11 @@ We strongly suggest you run the sampler in parallel on many cores, as normal run
 Interactive use
 ---------------
 
-You can run Vega interactively using Ipython or a Jupyter notebook. The `tutorial`_ notebook takes you through the steps of intializing Vega, computing a model and performing a fit.
+You can run Vega interactively using Ipython or a Jupyter notebook. This `example`_ notebook takes you through the steps of intializing Vega, computing a model and performing a fit.
 
 This process is much more powerful compared to running in terminal as you directly have access to all the output, model components and fit results. Additionally, Vega was built in a modular structure with the aim of the user being able to call each module independently. Therefore, you have access to much more functionality this way. The `documentation`_ is the best source on how to run these modules independently, but if you can't find something there, please open an issue and we will try to help you and also improve the documentation.
 
-.. _documentation: https://vega.readthedocs.io/en/latest/?badge=latest
-.. _examples: https://github.com/andreicuceu/Vega/tree/master/examples
-.. _tutorial: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
+.. _example: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
 
 Credits
 -------

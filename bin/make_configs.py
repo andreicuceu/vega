@@ -126,7 +126,7 @@ if __name__ == '__main__':
     fit_info['fitter'] = True
     fit_info['zeff'] = args.zeff
     fit_info['sample_params'] = args.sample_params
-    fit_info['use_bias_eta'] = {}
+    fit_info['bias_beta_config'] = {}
     fit_info['sampler'] = args.sampler
     if args.sampler:
         fit_info['Polychord'] = {}

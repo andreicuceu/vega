@@ -113,6 +113,10 @@ class Output:
 
         hdul.writeto(Path(self.outfile), overwrite=self.overwrite)
 
+    @staticmethod
+    def pad_array(array, size_to_match, pad_value=0.):
+        return np.pad(array, (0, size_to_match - len(array)), constant_values=pad_value)
+
     def _model_hdu(self, corr_funcs, params):
         """Create HDU with the computed model correlations,
         and the parameters used to compute them
@@ -133,26 +137,35 @@ class Output:
         num_rows = np.max(list(sizes.values()))
         columns = []
         for name, cf in corr_funcs.items():
-            pad = (0, num_rows - sizes[name])
-            padded_cf = np.pad(cf, pad, constant_values=0.)
-            padded_mask = np.pad(self.data[name].mask, pad, constant_values=False)
-            padded_data = np.pad(self.data[name].data_vec, pad, constant_values=0.)
-            padded_variance = np.pad(self.data[name].cov_mat.diagonal(), pad, constant_values=0.)
-            padded_rp = np.pad(self.corr_items[name].rp_rt_grid[0], pad, constant_values=0.)
-            padded_rt = np.pad(self.corr_items[name].rp_rt_grid[1], pad, constant_values=0.)
-            padded_z = np.pad(self.corr_items[name].z_grid, pad, constant_values=0.)
+            if len(self.data[name].data_vec) > num_rows:
+                raise ValueError('Data coordinate grid is larger than the model grid.')
 
-            columns.append(fits.Column(name=name+'_MODEL', format='D', array=padded_cf))
-            columns.append(fits.Column(name=name+'_MASK', format='L', array=padded_mask))
-            columns.append(fits.Column(name=name+'_DATA', format='D', array=padded_data))
-            columns.append(fits.Column(name=name+'_VAR', format='D', array=padded_variance))
-            columns.append(fits.Column(name=name+'_RP', format='D', array=padded_rp))
-            columns.append(fits.Column(name=name+'_RT', format='D', array=padded_rt))
-            columns.append(fits.Column(name=name+'_Z', format='D', array=padded_z))
+            columns.append(fits.Column(name=name+'_MODEL', format='D',
+                                       array=self.pad_array(cf, num_rows)))
+            columns.append(fits.Column(name=name+'_MODEL_MASK', format='L',
+                                       array=self.pad_array(self.data[name].model_mask,
+                                                            num_rows, False)))
+            columns.append(fits.Column(name=name+'_MASK', format='L',
+                                       array=self.pad_array(self.data[name].data_mask,
+                                                            num_rows, False)))
+            columns.append(fits.Column(name=name+'_DATA', format='D',
+                                       array=self.pad_array(self.data[name].data_vec, num_rows)))
+            columns.append(fits.Column(name=name+'_VAR', format='D',
+                                       array=self.pad_array(self.data[name].cov_mat.diagonal(),
+                                                            num_rows)))
+            columns.append(fits.Column(name=name+'_RP', format='D',
+                                       array=self.pad_array(self.corr_items[name].rp_rt_grid[0],
+                                                            num_rows)))
+            columns.append(fits.Column(name=name+'_RT', format='D',
+                                       array=self.pad_array(self.corr_items[name].rp_rt_grid[1],
+                                                            num_rows)))
+            columns.append(fits.Column(name=name+'_Z', format='D',
+                                       array=self.pad_array(self.corr_items[name].z_grid,
+                                                            num_rows)))
 
             if self.data[name].nb is not None:
-                padded_nb = np.pad(self.data[name].nb, pad, constant_values=0)
-                columns.append(fits.Column(name=name+'_NB', format='K', array=padded_nb))
+                columns.append(fits.Column(name=name+'_NB', format='K',
+                                           array=self.pad_array(self.data[name].nb, num_rows)))
 
         model_hdu = fits.BinTableHDU.from_columns(columns)
         model_hdu.name = 'Model'

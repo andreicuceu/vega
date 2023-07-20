@@ -1,6 +1,7 @@
 """Main module."""
 import os.path
 import numpy as np
+import scipy.stats
 from astropy.io import fits
 import configparser
 import copy
@@ -13,6 +14,10 @@ from vega.analysis import Analysis
 from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
+
+BLIND_FIXED_PARS = ['ap_full', 'at_full', 'aiso_full', 'epsilon_full',
+                    'phi_smooth', 'alpha_smooth', 'phi_full', 'alpha_full',
+                    'growth_rate']
 
 
 class VegaInterface:
@@ -49,6 +54,8 @@ class VegaInterface:
         self.fiducial['save-components'] = write_cf or write_pk
         ini_files = self.main_config['data sets'].get('ini files').split()
 
+        self.model_pk = self.main_config['control'].getboolean('model_pk', False)
+
         # Initialize the individual components
         self.corr_items = {}
         for path in ini_files:
@@ -57,7 +64,7 @@ class VegaInterface:
             config.read(utils.find_file(os.path.expandvars(path)))
 
             name = config['data'].get('name')
-            self.corr_items[name] = correlation_item.CorrelationItem(config)
+            self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
 
         # Check if all correlations have data files
         self.data = {}
@@ -88,17 +95,21 @@ class VegaInterface:
         self.sample_params = self._read_sample(self.main_config['sample'])
 
         # Check blinding
-        self._scale_par_names = ['ap', 'at', 'ap_sb', 'at_sb', 'phi', 'gamma', 'alpha',
-                                 'phi_smooth', 'gamma_smooth', 'alpha_smooth', 'aiso', 'epsilon']
+        self._blind = False
         if self._has_data:
-            self._blind = False
             for data_obj in self.data.values():
                 if data_obj.blind:
                     self._blind = True
-            if self._blind:
-                for par in self.sample_params['limits'].keys():
-                    if par in self._scale_par_names:
-                        raise ValueError('Running on blind data, please fix scale parameters')
+
+        # Apply blinding
+        if self._blind:
+            for par in self.sample_params['limits'].keys():
+                if par in BLIND_FIXED_PARS:
+                    raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
+
+            if ('bias_QSO' in self.sample_params['limits']) and (
+                    'beta_QSO' in self.sample_params['limits']):
+                print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
 
         # Get priors
         self.priors = {}
@@ -218,7 +229,7 @@ class VegaInterface:
         # Enforce blinding
         if self._blind:
             for par, val in local_params.items():
-                if par in self._scale_par_names:
+                if par in BLIND_FIXED_PARS:
                     local_params[par] = 1.
 
         # Go trough each component and compute the chi^2
@@ -235,10 +246,10 @@ class VegaInterface:
                 return 1e100
 
             if self.monte_carlo:
-                diff = self.data[name].masked_mc_mock - model_cf[self.data[name].mask]
+                diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
                 chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
-                diff = self.data[name].masked_data_vec - model_cf[self.data[name].mask]
+                diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
                 chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         # Add priors
@@ -354,6 +365,45 @@ class VegaInterface:
             # self.set_fast_metals()
 
         self.minimizer.minimize()
+
+        self.bestfit_model = self.compute_model(self.minimizer.values, run_init=False)
+        self.total_data_size = 0
+        self.bestfit_corr_stats = {}
+
+        num_pars = len(self.sample_params['limits'])
+        print('\n----------------------------------------------------')
+        for name in self.corr_items:
+            data_size = self.data[name].data_size
+            self.total_data_size += data_size
+
+            if self.monte_carlo:
+                diff = self.data[name].masked_mc_mock \
+                    - self.bestfit_model[name][self.data[name].model_mask]
+                chisq = diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+            else:
+                diff = self.data[name].masked_data_vec \
+                    - self.bestfit_model[name][self.data[name].model_mask]
+                chisq = diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+
+            reduced_chisq = chisq / (data_size - num_pars)
+            p_value = 1 - scipy.stats.chi2.cdf(chisq, data_size - num_pars)
+
+            print(f'{name} chi^2/(ndata-nparam): {chisq:.1f}/({data_size}-{num_pars}) '
+                  f'= {reduced_chisq:.3f}, PTE={p_value:.2f}')
+            print('----------------------------------------------------')
+
+            self.bestfit_corr_stats[name] = {'size': data_size, 'chisq': chisq,
+                                             'reduced_chisq': reduced_chisq, 'p_value': p_value}
+
+        self.chisq = self.minimizer.fmin.fval
+        self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
+        self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
+        print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
+              f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
+        print('----------------------------------------------------\n')
+
+        if not self.minimizer.fmin.is_valid:
+            print('Invalid fit!!! Check data, covariance, model and priors.')
 
     @property
     def bestfit(self):

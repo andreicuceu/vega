@@ -24,6 +24,7 @@ class Model:
             data object corresponding to the cf component, by default None
         """
         self._corr_item = corr_item
+        self._model_pk = corr_item.model_pk
 
         assert corr_item.r_mu_grid is not None
         assert corr_item.z_grid is not None
@@ -35,10 +36,11 @@ class Model:
         self._data = data
         data_has_distortion = False
         if self._data is not None:
-            data_has_distortion = self._data.has_distortion()
-            self._corr_item.config['model']['bin_size_rp'] = str(self._data.bin_size_rp)
-            self._corr_item.config['model']['bin_size_rt'] = str(self._data.bin_size_rt)
+            data_has_distortion = self._data.has_distortion
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
+
+        self._corr_item.config['model']['bin_size_rp'] = str(self._corr_item.bin_size_rp_data)
+        self._corr_item.config['model']['bin_size_rt'] = str(self._corr_item.bin_size_rt_data)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -50,8 +52,9 @@ class Model:
         self.bb_config = None
         if 'broadband' in self._corr_item.config:
             self.bb_config = self.init_broadband(self._corr_item.config['broadband'],
-                                                 self._corr_item.name, self._corr_item.bin_size_rp,
-                                                 self._corr_item.coeff_binning_model)
+                                                 self._corr_item.name,
+                                                 self._corr_item.bin_size_rp_data,
+                                                 self._corr_item.bin_size_rp_model)
 
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(self._corr_item.config['model'],
@@ -76,8 +79,11 @@ class Model:
         if self._corr_item.has_metals:
             self.metals = metals.Metals(corr_item, fiducial, scale_params, self.PktoXi, data)
 
+        self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
+            'desi-instrumental-systematics', False)
+
     @staticmethod
-    def init_broadband(bb_input, cf_name, bin_size_rp, coeff_binning_model):
+    def init_broadband(bb_input, cf_name, bin_size_rp_data, bin_size_rp_model):
         """Read the broadband config and initialize what we need.
 
         Parameters
@@ -86,10 +92,10 @@ class Model:
             broadband section from the config file
         cf_name : string
             Name of corr item
-        bin_size_rp : int
-            Size of r parallel bins
-        coeff_binning_model : float
-            Ratio of distorted coordinate grid bin size to undistorted bin size
+        bin_size_rp_data : float
+            Size of data r parallel bins
+        bin_size_rp_model : float
+            Size of model r parallel bins
 
         Returns
         -------
@@ -124,9 +130,9 @@ class Model:
             config['r_config'] = (int(r_min), int(r_max), int(dr))
             config['mu_config'] = (int(mu_min), int(mu_max), int(dmu))
             if config['pre'] == 'pre':
-                config['bin_size_rp'] = bin_size_rp
+                config['bin_size_rp'] = bin_size_rp_model
             else:
-                config['bin_size_rp'] = bin_size_rp / coeff_binning_model
+                config['bin_size_rp'] = bin_size_rp_data
 
             config['cf_name'] = cf_name
             bb_config.append(config)
@@ -158,6 +164,9 @@ class Model:
         # Compute core model correlation function
         pk_model = self.Pk_core.compute(pk_lin, pars)
 
+        if self._model_pk:
+            return self.PktoXi.compute_pk_ells(pk_model)
+
         # Protect against old caches that have not been cleaned
         self.PktoXi.cache_pars = None
         xi_model = self.Xi_core.compute(pk_model, pk_lin, self.PktoXi, pars)
@@ -177,6 +186,11 @@ class Model:
                 self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
                 self.xi_distorted[component] = {**self.xi_distorted[component],
                                                 **self.metals.xi_distorted[component]}
+
+        # Add DESI instrumental systematics model
+        if self._instrumental_systematics_flag:
+            xi_model += self.Xi_core.compute_desi_instrumental_systematics(
+                pars, self._corr_item.bin_size_rp_data)
 
         # Apply pre distortion broadband
         if self.bb_config is not None:

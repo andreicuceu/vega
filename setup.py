@@ -14,7 +14,7 @@ with open('HISTORY.rst') as history_file:
 scripts = glob.glob('bin/*')
 
 requirements = ['numpy', 'scipy', 'astropy', 'numba', 'iminuit', 'h5py', 'mcfit',
-                'setuptools', 'cachetools', 'matplotlib']
+                'setuptools', 'cachetools', 'matplotlib', 'gitpython', 'getdist']
 
 setup_requirements = ['pytest-runner', ]
 
@@ -31,9 +31,8 @@ setup(
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9'
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10'
     ],
     description="Package for modeling and fitting 2-point statistics for the Lyman-alpha forest.",
     entry_points={
@@ -53,6 +52,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/andreicuceu/Vega',
-    version='0.2.0',
+    version='0.4.2',
     zip_safe=False,
 )

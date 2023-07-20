@@ -8,8 +8,12 @@ class CorrelationItem:
     _rp_rt_grid = None
     _r_mu_grid = None
     _z_grid = None
+    _bin_size_rp_model = None
+    _bin_size_rt_model = None
+    _bin_size_rp_data = None
+    _bin_size_rt_data = None
 
-    def __init__(self, config):
+    def __init__(self, config, model_pk=False):
         """
 
         Parameters
@@ -19,6 +23,7 @@ class CorrelationItem:
         """
         # Save the config and read the tracer info
         self.config = config
+        self.model_pk = model_pk
         self.name = config['data'].get('name')
         self.tracer1 = {}
         self.tracer2 = {}
@@ -56,7 +61,7 @@ class CorrelationItem:
         self.metal_correlations = metal_correlations
         self.has_metals = True
 
-    def init_broadband(self, bin_size_rp, coeff_binning_model):
+    def init_broadband(self, coeff_binning_model):
         """Initialize the parameters we need to compute
         the broadband functions
 
@@ -67,7 +72,6 @@ class CorrelationItem:
         coeff_binning_model : float
             Ratio of distorted coordinate grid bin size to undistorted bin size
         """
-        self.bin_size_rp = bin_size_rp
         self.coeff_binning_model = coeff_binning_model
         self.has_bb = True
 
@@ -117,3 +121,45 @@ class CorrelationItem:
         else:
             assert z_grid >= 0 and z_grid <= 10
             self._z_grid = z_grid
+
+    @property
+    def bin_size_rp_model(self):
+        if self._bin_size_rp_model is None:
+            raise ValueError('You must set the value of "bin_size_rp_model" in vega.corr_items to '
+                             'compute model without data.')
+        return self._bin_size_rp_model
+
+    @bin_size_rp_model.setter
+    def bin_size_rp_model(self, bin_size_rp_model):
+        self._bin_size_rp_model = bin_size_rp_model
+
+    @property
+    def bin_size_rt_model(self):
+        if self._bin_size_rt_model is None:
+            raise ValueError('You must set the value of "bin_size_rt_model" in vega.corr_items to '
+                             'compute model without data.')
+        return self._bin_size_rt_model
+
+    @bin_size_rt_model.setter
+    def bin_size_rt_model(self, bin_size_rt_model):
+        self._bin_size_rt_model = bin_size_rt_model
+
+    @property
+    def bin_size_rp_data(self):
+        if self._bin_size_rp_data is None:
+            return self.bin_size_rp_model
+        return self._bin_size_rp_data
+
+    @bin_size_rp_data.setter
+    def bin_size_rp_data(self, bin_size_rp_data):
+        self._bin_size_rp_data = bin_size_rp_data
+
+    @property
+    def bin_size_rt_data(self):
+        if self._bin_size_rt_data is None:
+            return self.bin_size_rt_model
+        return self._bin_size_rt_data
+
+    @bin_size_rt_data.setter
+    def bin_size_rt_data(self, bin_size_rt_data):
+        self._bin_size_rt_data = bin_size_rt_data

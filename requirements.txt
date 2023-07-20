@@ -8,3 +8,5 @@ iminuit>=2.0.0
 mcfit
 cachetools
 matplotlib
+gitpython
+getdist
