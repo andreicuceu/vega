@@ -151,7 +151,10 @@ class BuildConfig:
 
         # Get git hash
         vega_path = Path(os.path.dirname(vega.__file__))
-        git_hash = git.Repo(vega_path.parents[0]).head.object.hexsha
+        try:
+            git_hash = git.Repo(vega_path.parents[0]).head.object.hexsha
+        except git.InvalidGitRepositoryError:
+            git_hash = "None"
 
         # Build config files for each correlation
         self.corr_paths = []
