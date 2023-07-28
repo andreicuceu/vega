@@ -50,6 +50,12 @@ Once you have a copy of the source, you can install it with:
     $ cd vega
     $ pip install -e .
 
+If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
+
+.. code-block:: console
+
+    $ python -m ipykernel install --user --name vega --display-name Vega
+
 Installing the sampler
 ----------------------
 
