@@ -3,6 +3,7 @@
 # vega_name latex_name
 ap \alpha_{||}
 at \alpha_\bot
+bao_amp A_{\rm{BAO}}
 aiso \alpha_{iso}
 epsilon \epsilon
 phi \phi_p
@@ -15,9 +16,14 @@ growth_rate f
 bias_gamma b_\gamma
 bias_prim b'
 lambda_uv \lambda_{UV}
-bias_hcd b_{HCD}
+bias_eta_LYA |b_{\eta,Ly\alpha}|
+bias_LYA |b_{Ly\alpha}|
+bias_hcd |b_{HCD}|
+bias_eff |b_{eff,Ly\alpha}|
+bias_F_hcd |b^F_{HCD}|
+bias_F_hcd-L_hcd |b^F_{HCD}|*\exp{(-0.001*L_{HCD})}
 beta_hcd \beta_{HCD}
-L0_hcd L_0
+L0_hcd L_{HCD}
 sigmaNL_par \Sigma_{||}
 sigmaNL_per \Sigma_\bot
 dnl_arinyo_q1 q_1

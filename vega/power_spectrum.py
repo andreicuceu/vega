@@ -245,11 +245,11 @@ class PowerSpectrum:
             Effective bias and beta
         """
         # Check if we have an HCD bias for each component
-        hcd_bias_name = "bias_hcd_{}".format(self._name)
-        bias_hcd = params.get(hcd_bias_name, None)
-        if bias_hcd is None:
-            bias_hcd = params['bias_hcd']
-
+        #hcd_bias_name = "bias_hcd_{}".format(self._name)
+        #bias_hcd = params.get(hcd_bias_name, None)
+        #if bias_hcd is None:
+        #    bias_hcd = params['bias_hcd']
+        bias_hcd = params['bias_hcd']
         # Get the other parameters
         beta_hcd = params["beta_hcd"]
         L0_hcd = params["L0_hcd"]
@@ -325,12 +325,21 @@ class PowerSpectrum:
         """
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
+        from scipy.interpolate import splev, splrep
+        #f_pk = splrep(k_data, F_data)
+        #F_hcd = splev(kp,f_pk)
 
         if self.tracer1_name == self.tracer2_name:
-            F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data,
-                              left=0, right=0)
+            #F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data,
+            #                  left=0, right=0)
+            from scipy.interpolate import splev, splrep
+            f_pk = splrep(k_data, F_data)
+            F_hcd = splev(L0 * self.k_par_grid,f_pk)
         else:
-            F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data)
+            #F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data)
+            from scipy.interpolate import splev, splrep
+            f_pk = splrep(k_data, F_data)
+            F_hcd = splev(L0 * self.k_par_grid,f_pk)
 
         return F_hcd
 
