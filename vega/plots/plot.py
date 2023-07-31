@@ -328,7 +328,7 @@ class VegaPlots:
             ax.imshow(P.reshape(nrp,nrt), origin='lower', interpolation='none', cmap='seismic',
                     vmin=-vlim, vmax=+vlim, extent=bbox, aspect='auto')
             ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
-            ax.text(0.95, y2, '{rtxt}∂M(rp,rt)/∂p', ha='right', transform=ax.transAxes)
+            ax.text(0.95, y2, f'{rtxt}∂M(rp,rt)/∂p', ha='right', transform=ax.transAxes)
 
             cmap = plt.get_cmap('afmhot_r').copy()
             cmap.set_bad('lightgray')
