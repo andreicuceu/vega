@@ -61,6 +61,7 @@ class PowerSpectrum:
                 self._add_uv = True
 
         # Check if we need fvoigt model
+        '''
         self._Fvoigt_data = None
         if 'fvoigt_model' in self._config.keys():
             fvoigt_model = self._config.get('fvoigt_model')
@@ -70,6 +71,13 @@ class PowerSpectrum:
             else:
                 path = fvoigt_model
             self._Fvoigt_data = np.loadtxt(path)
+        '''
+        self._Fvoigt_data = None
+        if 'fvoigt_model' in self._config.keys():
+            fvoigt_model = self._config.get('fvoigt_model')
+            type_pdf = str(fvoigt_model)
+            Fvoigt_data=get_Fhcd(type_pdf)
+            self._Fvoigt_data = Fvoigt_data
 
         # Initialize some stuff we need
         self.pk_Gk = None
@@ -306,6 +314,146 @@ class PowerSpectrum:
         """
         f_hcd = np.exp(-L0 * k_par_grid)
         return f_hcd
+    
+    def _hcd_voigt(self, L0):
+        """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
+        without masking them ! (L0 = 1)
+
+        (If you want to mask them use Fvoigt_exp.txt and L0 = 10 as eBOSS DR14)
+
+        Parameters
+        ----------
+        L0 : float
+            Characteristic length scale of HCDs
+
+        Returns
+        -------
+        ND Array
+            F_hcd
+        """
+        k_data = self._Fvoigt_data[:, 0]
+        F_data = self._Fvoigt_data[:, 1]
+        from scipy.interpolate import splev, splrep
+        #f_pk = splrep(k_data, F_data)
+        #F_hcd = splev(kp,f_pk)
+
+        if self.tracer1_name == self.tracer2_name:
+            #F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data,
+            #                  left=0, right=0)
+            from scipy.interpolate import splev, splrep
+            f_pk = splrep(k_data, F_data)
+            F_hcd = splev(L0 * self.k_par_grid,f_pk)
+        else:
+            #F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data)
+            from scipy.interpolate import splev, splrep
+            f_pk = splrep(k_data, F_data)
+            F_hcd = splev(L0 * self.k_par_grid,f_pk)
+
+        return F_hcd
+    
+    def get_Fhcd(type_pdf='masking'):
+        path = f"{resource_filename('vega', 'models')}/fvoigt_models/"
+        if type_pdf=='masking':
+            path_weight_lambda = path+'weight_lambda.txt'
+            path_fn = path+'fn_masking.txt'
+            zdla = 2.367814751069972
+        elif type_pdf=='nomasking':
+            path_weight_lambda = path+'weight_lambda_nomasking.txt'
+            path_fn = path+'fn_nomasking.txt'
+            zdla = 2.3431498081550854
+        ################
+        weight_lambda = np.loadtxt(path_weight_lambda)
+        lamb_w = weight_lambda[:,0]
+        weight = weight_lambda[:,1]
+
+        def build_pdf(type_pdf):
+            cddf_NHI, dN_NHI = np.loadtxt(path_fn)
+            return cddf_NHI, dN_NHI
+
+        def voigt(x, sigma=1, gamma=1):
+            return np.real(wofz((x + 1j*gamma)/(sigma*np.sqrt(2))))
+
+        def tau(lamb, z, N_hi): # lamb = lambda in A and N_HI in log10 and 10**N_hi in cm^-2
+            lamb_rf = lamb/(1+z)
+            e = 1.6021e-19 # C
+            epsilon0 = 8.8541e-12 # C^2.s^2.kg^-1.m^-3
+            f = 0.4164
+            mp = 1.6726e-27 # kg
+            me = 9.109e-31 # kg
+            c = 2.9979e8 # m.s^-1
+            k = 1.3806e-23 # m^2.kg.s^-2.K-1
+            T = 1e4 # K
+            gamma = 6.265e8 # s^-1
+            lamb_alpha = constants.absorber_IGM["LYA"] # A
+            Deltat_lamb = lamb_alpha/c*np.sqrt(2*k*T/mp) # A
+
+            a = gamma/(4*np.pi*Deltat_lamb)*lamb_alpha**2/c*1e-10
+            u = (lamb_rf - lamb_alpha)/Deltat_lamb
+            H = voigt(u, np.sqrt(1/2), a)
+
+            absorb = np.sqrt(np.pi)*e**2*f*lamb_alpha**2*1e-10/(4*np.pi*epsilon0*me*c**2*Deltat_lamb)*H
+            # 10^N_hi in cm^-2 and absorb in m^2
+            return 10**N_hi*1e4*absorb
+
+        def profile_voigt_lambda(x, z, N_hi):
+            t = tau(x, z, N_hi).astype(float)
+            return np.exp(-t)
+
+        def profile_lambda_to_r(lamb, profile_lambda, fidcosmo): # for lyman-alpha otherwise use an other emission line
+            z = lamb/constants.absorber_IGM["LYA"] - 1
+            r = fidcosmo.r_comoving(z)
+            rr = np.linspace(r[0], r[-1], r.size)
+            profile_r = np.interp(rr, r, profile_lambda) # to have a linear sample
+            return rr, profile_r
+
+        def fft_profile(profile, dx): # not normalized
+            n = profile.size
+            tmp = (profile-1)
+            ft_profile = dx*np.fft.fftshift(np.fft.fft(tmp))
+            k = np.fft.fftshift(np.fft.fftfreq(n, dx))*(2*np.pi)
+            return ft_profile, k
+
+        def lambda_to_r(lamb, profile_lambda, fidcosmo): # f(lambda)dlambda = f(r)dr
+                z = lamb/constants.absorber_IGM["LYA"] - 1
+                r = fidcosmo.r_comoving(z)
+                rr = np.linspace(r[0], r[-1], r.size)
+                profile_lambda = profile_lambda*fidcosmo.hubble(z)*constants.absorber_IGM["LYA"]/3e5
+                profile_r = np.interp(rr,r,profile_lambda)
+                return rr, profile_r
+
+        def save_function(type_pdf):
+            fidcosmo = constants.cosmo(Om=0.3147)
+            lamb = np.arange(2000, 8000, 1)
+            if type_pdf=='nomasking':
+                f_lambda=np.loadtxt(path+'f_lambda_nomasking.txt')
+            elif type_pdf=='masking':
+                f_lambda=np.loadtxt(path+'f_lambda_masking.txt')
+            r, f_r = lambda_to_r(f_lambda[0], f_lambda[1], fidcosmo)
+            r_w, weight_r = profile_lambda_to_r(lamb_w, weight, fidcosmo)
+            weight_interp = np.interp(r, r_w, weight_r, left=0, right=0)
+            mean_density = np.average(f_r, weights=weight_interp)
+            cddf_NHI, dN_NHI = build_pdf(type_pdf)
+            for i in range(dN_NHI.size):
+                profile_lambda = profile_voigt_lambda(lamb, zdla, dN_NHI[i])
+                profile_lambda = profile_lambda/np.mean(profile_lambda)
+                r, profile_r = profile_lambda_to_r(lamb, profile_lambda, fidcosmo) # r is in Mpc h^-1 --> k (from tf) will be in (Mpc h^-1)^-1 = h Mpc^-1 :)
+                ft_profile, k = fft_profile(profile_r, np.abs(r[1]-r[0]))
+                ft_profile = np.abs(ft_profile)
+                if i == 0:
+                    df = np.array([ft_profile*mean_density*cddf_NHI[i]])
+                else:
+                    df = np.concatenate((df, np.array([ft_profile*mean_density*cddf_NHI[i]])))
+            Fvoigt = np.zeros(k.size)
+            for i in range(k.size):
+                Fvoigt[i] = integrate.trapz(df[:,i], dN_NHI)
+            Fvoigt = -Fvoigt[k>0]
+            k = k[k>0]
+            save = np.transpose(np.concatenate((np.array([k]), np.array([Fvoigt]))))
+            return save
+        save_all = save_function(type_pdf)
+        return save_all
+
+
 
     def _hcd_no_mask(self, L0):
         """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
