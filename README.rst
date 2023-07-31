@@ -97,6 +97,18 @@ After that, you can install PolyChord:
     $ make COMPILER_TYPE=gnu
     $ pip install -e .
 
+You can test if PolyChord works by running the test script on an interactive node:
+
+.. code-block:: console
+
+    $ srun -n 2 python run_pypolychord.py
+
+Finally, you should add this line to your :code:`.bashrc` file, or at the beginning of your scripts (make sure to replace with the correct path to your version of PolyChord):
+
+.. code-block:: console
+
+    export LD_LIBRARY_PATH=/path/to/PolyChordLite/lib:${LD_LIBRARY_PATH}
+
 If you have any problems or questions about the sampler please raise an issue or email Andrei.
 
 
