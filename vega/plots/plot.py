@@ -236,15 +236,14 @@ class VegaPlots:
 
         return r, d
 
-    def plot_sensitivity(self, sensitivity, pname='ap', pname2=None, pct=95, dist=0, comp='both', rpow=0, save=None):
+    def plot_sensitivity(self, sensitivity, pname='ap', pname2=None, pct=95,
+                         distorted=True, comp='both', rpow=0, save=None):
         """Plot parameter sensitivities.
 
         Plot the sensitivity to one parameter or the joint sensitivity to a pair of parameters.
         The resulting plot shows the partial derivatives of `pname` on the left-hand side and
         the distribution of the Fisher information for pname or, if pname2 is specified,
         (pname, pname2) on the right-hand side.
-
-        The `compute_sensitivity()` method must be called before calling this method.
 
         Parameters
         ----------
@@ -260,9 +259,9 @@ class VegaPlots:
             the covariance of (pname,pname2) when specified. If None, then use (pname,pname).
         pct - float
             Clip the color map for values above this percentile value.
-        dist - 0 or 1
-            The distortion index to use. A value of zero means no distortion correction and 1
-            uses the distortion matrix.
+        distorted - bool
+            Plot the sensitivity of the predicted correlation including the distortion matrix
+            when True.  Otherwise, use the undistorted correlation function model.
         comp - str
             Which component of the signal model to display. Select either `peak`, `smooth`
             or `both`.
@@ -283,6 +282,9 @@ class VegaPlots:
             raise RuntimeError(f'Unknown floating parameter "{pname2}".')
         fidx = pidx * len(pnames) + pidx2
 
+        if comp not in ('peak', 'smooth', 'both'):
+            raise ValueError(f'Invalid comp "{comp}" (expected peak/smooth/both)')
+
         fig = plt.figure(figsize=(12, 9), constrained_layout=True)
         pvalue, perror = sensitivity['nominal'][pname]
         title = f'{pname} = {pvalue:.4f} ± {perror:.3f}'
@@ -296,6 +298,7 @@ class VegaPlots:
         max_info = np.max([ np.nanpercentile(sensitivity['fisher'][cname][fidx], pct) for cname in sensitivity['fisher'] ])
 
         rtxt = '' if rpow == 0 else ('r ' if rpow == 1 else f'r**{rpow} ')
+        dist = 0 if distorted else 1
 
         for cname in self.data:
 
@@ -318,8 +321,6 @@ class VegaPlots:
                 P = P[0]
             elif comp == 'smooth':
                 P = P[1]
-            else:
-                raise ValueError(f'Invalid comp "{comp}" (expected both/peak/smooth)')
             if np.all(P == 0):
                 continue
 
@@ -332,12 +333,13 @@ class VegaPlots:
 
             cmap = plt.get_cmap('afmhot_r').copy()
             cmap.set_bad('lightgray')
+            # Lookup the Fisher distribution for this sample, the specified params, and distortion option.
             F = sensitivity['fisher'][cname][fidx][dist]
             ax = fig.add_subplot(gs[row, col + 2])
             ax.imshow(F.reshape(nrp,nrt), origin='lower', interpolation='none', cmap=cmap,
                     vmin=0, vmax=max_info, extent=bbox, aspect='auto')
             ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
-            ax.text(0.95, y2, '∂$^2$F$_{pq}$(p)/∂rt∂rp', ha='right', transform=ax.transAxes)
+            ax.text(0.95, y2, '∂$^2$F$_{pq}$(rt,rp)/∂rt∂rp', ha='right', transform=ax.transAxes)
 
         if save:
             plt.savefig(save)
