@@ -34,7 +34,10 @@ We strongly suggest you run the sampler in parallel on many cores, as normal run
 Interactive use
 ---------------
 
-You can run Vega interactively using Ipython or a Jupyter notebook. The "Vega_tutorial" notebook takes you through the steps of intializing Vega, computing a model and performing a fit. 
+You can run Vega interactively using Ipython or a Jupyter notebook. The "Vega_tutorial" notebook takes you through the steps of intializing Vega, computing a model and performing a fit.
+
+The "Sensitivity_tutorial" notebook shows how to calculate and plot the model sensitivity and distribution of information
+available on each parameter over (rt,rp).
 
 This process is much more powerful compared to running in terminal as you directly have access to all the output, model components and fit results. Additionally, Vega was built in a modular structure with the aim of the user being able to call each module independently. Therefore, you have access to much more functionality this way. The `documentation`_ is the best source on how to run these modules independently, but if you can't find something there, please open an issue and we will try to help you and also improve the documentation.
 
