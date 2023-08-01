@@ -3,8 +3,9 @@ import copy
 from pkg_resources import resource_filename
 from numba import njit, float64
 from . import utils
-
-
+from . import constants
+from scipy.special import wofz
+import scipy.integrate as integrate
 class PowerSpectrum:
     """Power Spectrum computation and handling.
 
@@ -76,8 +77,16 @@ class PowerSpectrum:
         if 'fvoigt_model' in self._config.keys():
             fvoigt_model = self._config.get('fvoigt_model')
             type_pdf = str(fvoigt_model)
-            Fvoigt_data=get_Fhcd(type_pdf)
+            Fvoigt_data=self._get_Fhcd(type_pdf)
             self._Fvoigt_data = Fvoigt_data
+        else:
+            fvoigt_model = self._config.get('fvoigt_model')
+            if '/' not in fvoigt_model:
+                path = f"{resource_filename('vega', 'models')}/fvoigt_models/"
+                path += f"Fvoigt_{fvoigt_model}.txt"
+            else:
+                path = fvoigt_model
+            self._Fvoigt_data = np.loadtxt(path)
 
         # Initialize some stuff we need
         self.pk_Gk = None
@@ -272,6 +281,8 @@ class PowerSpectrum:
                 self._F_hcd = self._hcd_no_mask(L0_hcd)
             elif 'sinc' in self.hcd_model:
                 self._F_hcd = self._hcd_sinc(L0_hcd)
+            elif 'voigt' in self.hcd_model:
+                self._F_hcd = self._hcd_voigt(L0_hcd)
 
             self._L0_hcd_cache = L0_hcd
 
@@ -351,7 +362,7 @@ class PowerSpectrum:
 
         return F_hcd
     
-    def get_Fhcd(type_pdf='masking'):
+    def _get_Fhcd(self,type_pdf='masking'):
         path = f"{resource_filename('vega', 'models')}/fvoigt_models/"
         if type_pdf=='masking':
             path_weight_lambda = path+'weight_lambda.txt'
@@ -362,6 +373,7 @@ class PowerSpectrum:
             path_fn = path+'fn_nomasking.txt'
             zdla = 2.3431498081550854
         ################
+        #print(path_weight_lambda)
         weight_lambda = np.loadtxt(path_weight_lambda)
         lamb_w = weight_lambda[:,0]
         weight = weight_lambda[:,1]
