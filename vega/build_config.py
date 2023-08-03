@@ -388,6 +388,12 @@ class BuildConfig:
         else:
             raise TypeError('The sample_params object has to be either a list or a dict.')
 
+        # Write the compression parameters
+        if 'compression' in fit_info:
+            config['compression'] = {}
+            for par, value in fit_info['compression'].items():
+                config['compression'][par] = value        
+            
         # Write the priors
         if 'priors' in fit_info:
             config['priors'] = {}
@@ -404,6 +410,22 @@ class BuildConfig:
         # Check all sampled parameters are defined
         for param in sample_params:
             assert param in config['parameters']
+            
+        # Write the montecarlo parameters
+        if 'montecarlo' in fit_info:
+            config['control'] = {}
+            config['control']['run_montecarlo'] = 'True'
+            config['monte carlo'] = {}
+            for par, value in fit_info['montecarlo'].items():
+                config['monte carlo'][par] = value
+            
+        if 'montecarlo_params' in fit_info:
+            config['mc parameters'] = {}
+            for par in config['parameters']:
+                config['mc parameters'][par] = str(config['parameters'][par])
+            for par, value in fit_info['montecarlo_params'].items():
+                if par not in config['mc parameters']:
+                    config['control'][par] = value  
 
         # Check if we need the sampler
         if self.sampler:

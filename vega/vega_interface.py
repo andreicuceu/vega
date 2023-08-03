@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 import configparser
 import copy
+import yaml
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -81,9 +82,16 @@ class VegaInterface:
         # initialize the models
         self.models = {}
         if self._has_data:
+            model_contaminants = self.main_config['control'].getboolean('model_contaminants', True)
             for name, corr_item in self.corr_items.items():
+                self.changed_metals_original_state = {}
+                if model_contaminants == False and corr_item.has_metals == True:
+                        self.changed_metals_original_state[name] = True
+                        setattr(corr_item, 'has_metals', False)
+                        print('CHANGED STATUS: modelling contaminants?', corr_item.has_metals)
                 self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
+
 
         # Read parameters
         self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
@@ -120,7 +128,13 @@ class VegaInterface:
             self.mc_config['params'] = copy.deepcopy(self.params)
             mc_params = self.main_config['mc parameters']
             for param, value in mc_params.items():
-                self.mc_config['params'][param] = float(value)
+                if param == 'model_contaminants':
+                    self.mc_config['params'][param] = value
+                else:
+                    self.mc_config['params'][param] = float(value)
+
+            self.mc_config['sample'] = self._read_sample(config)
+
 
             self.mc_config['sample'] = self._read_sample(config)
 
@@ -130,30 +144,82 @@ class VegaInterface:
             for item, value in self.main_config['compression'].items():
                 self.compression_config[item] = value
             self.data_compression = {}
-            self.fisher_compression = {}
-            self.model_derivative = {}
-            for name in self.corr_items:
-                self.model_derivative[name] = {}
-                for key in self.main_config['sample']:
-                    value = float(self.compression_config[key])
-                    def _model(y):
-                        return self.compute_model(params={key: y})[name][self.data[name].mask]
-                    self.model_derivative[name][key] = derivative(_model, self.params[key], dx = value)
-                self.data_compression[name] = self.compute_compression(name)
-                model_derivative = np.array([value for value in self.model_derivative[name].values()])
-                self.fisher_compression[name] = np.matmul(model_derivative,np.matmul(self.data[name].inv_masked_cov, model_derivative.T))
+            if self.compression_config['type'] == 'score':
+                self.cov_compression = {}
+                self.model_derivative = {}
+                self.fiducial_model = {}
+                for name in self.corr_items:
+                    self.fiducial_model[name] = {}
+                    if 'fiducial_model_path' in self.compression_config:
+                        print("using the fiducial model from "+self.compression_config['fiducial_model_path'])
+                        self.fiducial_model[name]['fid'] = np.load(self.compression_config['fiducial_model_path']+f'_{name}.npy')
+                    else:
+                        self.fiducial_model[name]['fid'] = self.compute_model(direct_pk = None)[name][self.data[name].mask]
+                    self.model_derivative[name] = {}
+                    if 'derivatives_path' in self.compression_config:
+                        print("using derivatives from "+self.compression_config['derivatives_path'])
+                        derivatives_file = np.load(self.compression_config['derivatives_path']+f'_{name}.npy', allow_pickle = True)
+                        for key in derivatives_file.item().keys():
+                            self.model_derivative[name][key] = derivatives_file.item().get(key)
+                            self.fiducial_model[name][key] = self.fiducial_model[name]['fid']
+                    else:
+                        if 'other_fiducial' in self.compression_config:
+                            other_fiducials = yaml.load(self.compression_config['other_fiducial'], Loader=yaml.Loader)
+                        else:
+                            other_fiducials = None
+                        for key in self.main_config['sample']:
+                            if other_fiducials is not None and key in other_fiducials[0]:
+                                multi_idx = 0
+                                for fiducial in other_fiducials:
+                                    other_pars = {par:fiducial[par] for par in set(list(fiducial.keys()))-set([key])}
+                                    print(fiducial[key], other_pars)
+                                    def _model(y):
+                                        return self.compute_model(params={key: y, **other_pars})[name][self.data[name].mask]
+                                    self.model_derivative[name][key+str(multi_idx)] = derivative(_model, fiducial[key], dx = float(self.compression_config[key]))
+                                    self.fiducial_model[name][key+str(multi_idx)] = self.compute_model(params = fiducial, direct_pk = None)[name][self.data[name].mask]
+                                    multi_idx += 1
+                            else:
+                                def _model(y):
+                                    return self.compute_model(params={key: y})[name][self.data[name].mask]
+                                self.model_derivative[name][key] = derivative(_model, self.params[key], dx = float(self.compression_config[key]))
+                                self.fiducial_model[name][key] = self.fiducial_model[name]['fid']
+                        #print(self.model_derivative[name])
+                    self.data_compression[name] = self.compute_compression(name)     
+                    
+                ### COVARIANCE MATRIX IN COMPRESSED SPACE: either the Fisher or the mock to mock covariance matrix
+                    if 'cov' in self.compression_config:
+                        self.cov_compression_type = 'mock_to_mock'
+                        print("Using summaries' covariance matrix from "+self.compression_config['cov'])
+                        mocktomock_cov = np.load(self.compression_config['cov']+'.npy')
+                        ns = 100 # number of mocks
+                        nd = mocktomock_cov.shape[0]   # length of data vector
+                        h_factor_inv = (ns-nd-2)/(ns-1)
+                        print("### value of inverse Hartlap factor "+ str(h_factor_inv))
+                        if 'mock_to_mock' not in self.compression_config:
+                            self.cov_compression['mock_to_mock'] = {}
+                            self.cov_compression['mock_to_mock']['mat'] = mocktomock_cov
+                            self.cov_compression['mock_to_mock']['inv'] = np.linalg.inv(self.cov_compression['mock_to_mock']['mat'])*h_factor_inv
+                            self.cov_compression['mock_to_mock']['det'] = np.linalg.det(self.cov_compression['mock_to_mock']['mat'])
+                    else:
+                        self.cov_compression_type = 'fisher'
+                        print("Using the Fisher matrix")
+                        model_derivative =  np.array([value for value in self.model_derivative[name].values()])
+                        if 'fisher' not in self.cov_compression:
+                            self.cov_compression['fisher'] = {}
+                        self.cov_compression['fisher'][name] = np.matmul(model_derivative,np.matmul(self.data[name].inv_masked_cov, model_derivative.T))
+                if self.cov_compression_type == 'fisher':
+                    # the sum is made over the correlation functions names
+                    # Note the sum is made to avoid zero elements on the fisher because of null derivatives
+                    self.cov_compression['fisher']['mat'] = sum(self.cov_compression['fisher'][name] for name in self.corr_items)
+                    self.cov_compression['fisher']['inv'] = np.linalg.inv(self.cov_compression['fisher']['mat'])
+                    self.cov_compression['fisher']['det'] = np.linalg.det(self.cov_compression['fisher']['mat'])
                 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
             self.minimizer = None
         else:
-            if self.compression_config['type'] != 'None':
-                self.minimizer = Minimizer(self.chi2_compression, self.sample_params)
-                self.analysis = Analysis(Minimizer(self.chi2_compression, self.sample_params),
-                                    self.main_config, self.mc_config)
-            else:
-                self.minimizer = Minimizer(self.chi2, self.sample_params)
-                self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
+            self.minimizer = Minimizer(self.compute_chi2, self.sample_params)
+        self.analysis = Analysis(Minimizer(self.compute_chi2, self.sample_params),
                                  self.main_config, self.mc_config)
             
             
@@ -212,22 +278,35 @@ class VegaInterface:
 
         return model_cf
 
-    def compute_compression(self, corr_item, local_params=None, direct_pk=None):
+    def compute_compression(self, corr_item, local_params=None, direct_pk=None, montecarlo_sim=False):
 
+        if local_params is None:
+            # then we are computing the score compression of either the data or montecarlo simulations
+            if montecarlo_sim:
+                d = self.data[corr_item].masked_mc_mock
+            else:
+                d = self.data[corr_item].masked_data_vec
+        else:
+            d = self.compute_model(local_params, direct_pk)[corr_item][self.data[corr_item].mask]
+        
         if self.compression_config['type'] == 'score':
             
-            if local_params is None:
-                # then we are computing the score compression of the data
-                d = self.data[corr_item].masked_data_vec
-            else:
-                d =  self.compute_model(local_params, direct_pk)[corr_item][self.data[corr_item].mask]
-            fiducial_model = self.compute_model(direct_pk = direct_pk)[corr_item][self.data[corr_item].mask]
             inv_cov = self.data[corr_item].inv_masked_cov
-                
-            diff = d - fiducial_model
-            model_derivative = np.array([value for value in self.model_derivative[corr_item].values()])
+        
+            summaries_components = {}
+            for key in self.model_derivative[corr_item]:
+                diff = d - self.fiducial_model[corr_item][key]
+                model_derivative = self.model_derivative[corr_item][key]
+                summaries_components[key] = np.matmul(model_derivative, np.matmul(inv_cov,diff))
             
-            return np.matmul(model_derivative, np.matmul(inv_cov,diff))
+            return np.array([value for value in summaries_components.values()])
+    
+    def compute_chi2(self, params=None, direct_pk=None):
+        
+        if self.compression_config['type'] != 'None':
+            return self.chi2_compression(params, direct_pk)
+        else:
+            return self.chi2(params, direct_pk)
     
     def chi2(self, params=None, direct_pk=None):
         """Compute full chi2 for all components.
@@ -332,19 +411,15 @@ class VegaInterface:
             for par, val in local_params.items():
                 if par in self._scale_par_names:
                     local_params[par] = 1.
-            
 
-        # Go trough each component and compute the chi^2
-        chi2 = 0
-        for name in self.corr_items:
-            try:
-                assert not self.monte_carlo
-                diff = self.data_compression[name] - self.compute_compression(name, local_params)
-            except utils.VegaBoundsError:
-                self.models[name].PktoXi.cache_pars = None
-                return 1e100
-            
-            chi2 += np.matmul(diff.T, np.matmul(np.linalg.inv(self.fisher_compression[name]),diff))
+                
+        if self.compression_config['type'] == 'score':
+            # Compute the chi^2 for the compressed summary statistics
+            if self.monte_carlo:
+                diff = sum((self.compute_compression(name, montecarlo_sim=True) - self.compute_compression(name, local_params)) for name in self.corr_items)
+            else:    
+                diff = sum((self.data_compression[name] - self.compute_compression(name, local_params)) for name in self.corr_items)
+            chi2 = diff.T.dot(self.cov_compression[self.cov_compression_type]['inv'].dot(diff))
             
 
         # Add priors
@@ -382,15 +457,14 @@ class VegaInterface:
         else:
             chi2 = self.chi2(params, direct_pk)
 
-        # Compute the normalization for each component
+        # Compute the normalization
         log_norm = 0
-        for name in self.corr_items:
-
-            if self.compression_config['type'] != 'None':
-                assert not self.monte_carlo
-                log_norm -= 0.5 * self.data_compression[name].shape[0] * np.log(2 * np.pi)
-                log_norm -= 0.5 * np.log(np.linalg.det(self.fisher_compression[name]))
-            else:
+        if self.compression_config['type'] == 'score':
+            log_norm -= 0.5 * self.cov_compression[self.cov_compression_type]['mat'].shape[0] * np.log(2 * np.pi)
+            log_norm -= 0.5 * np.log(self.cov_compression[self.cov_compression_type]['det'])
+        else:
+            # Compute the normalization for each component
+            for name in self.corr_items:
                 log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
                 if self.monte_carlo:
                     log_norm -= 0.5 * self.data[name].scaled_log_cov_det
@@ -436,6 +510,12 @@ class VegaInterface:
 
         mocks = {}
         for name in self.corr_items:
+            if name in self.changed_metals_original_state:
+                if self.changed_metals_original_state[name] == True: # and self.corr_items[name].has_metals == False:
+                    setattr(self.corr_items[name], 'has_metals', True)
+                    self.models[name] = Model(self.corr_items[name], self.fiducial, self.scale_params,
+                                          self.data[name])
+                print('MONTE CARLO SIM: modelling contaminants?', self.corr_items[name].has_metals)
             # Compute fiducial model
             fiducial_model = self.models[name].compute(
                 local_params, self.fiducial['pk_full'],
@@ -456,7 +536,18 @@ class VegaInterface:
                                                              forecast)
 
         self.monte_carlo = True
+        
+        # Reinitializing the model without contaminants if we don't want to model them
+        for name, corr_item in self.corr_items.items():
+            if name in self.changed_metals_original_state:
+                if self.changed_metals_original_state[name] == True:
+                    setattr(corr_item, 'has_metals', False)
+                    self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
+                                          self.data[name])
+        print('END OF MONTE CARLO SIM: modelling contaminants?', corr_item.has_metals)
+
         return mocks
+
 
     def minimize(self):
         """Minimize the chi2 over the sampled parameters.
