@@ -70,13 +70,13 @@ def compute_bias_beta_hcd(pk):
     assert np.allclose(F_hcd, pk._F_hcd)
     assert pk._L0_hcd_cache == 10
 
-    pk.hcd_model = 'mask'
+    pk.hcd_model = 'fvoigt'
     pk._F_hcd = None
     bias_eff, beta_eff = pk.compute_bias_beta_hcd(-0.12, 1.6, params)
     assert np.sum(bias_eff) == pytest.approx(-116028.8158)
     assert np.sum(beta_eff) == pytest.approx(1179893.9263)
 
-    F_hcd = pk._hcd_no_mask(10)
+    F_hcd = pk._hcd_fvoigt(10)
     assert np.allclose(F_hcd, pk._F_hcd)
 
     pk.hcd_model = 'sinc'
