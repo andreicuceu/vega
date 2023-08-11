@@ -43,26 +43,15 @@ class PowerSpectrum:
         self._bin_size_rt = config.getfloat('bin_size_rt')
         self.use_Gk = self._config.getboolean('model binning', True)
 
-        # Check for the old config
-        pk_model = self._config.get('model-pk', None)
-
         # Get the HCD model and check for UV
-        self.hcd_model = None
-        self._add_uv = False
-        if pk_model is None:
-            # Get the new config
-            self.hcd_model = self._config.get('model-hcd', None)
-            self._add_uv = self._config.getboolean('add uv', False)
-        else:
-            # Get the old config
-            if 'hcd' in pk_model:
-                self.hcd_model = pk_model
-            if 'uv' in pk_model:
-                self._add_uv = True
+        self.hcd_model = self._config.get('model-hcd', None)
+        self._add_uv = self._config.getboolean('add uv', False)
 
-        # Check if we need fvoigt model
+        # Check the HCD model
         self._Fvoigt_data = None
-        if 'fvoigt_model' in self._config.keys():
+        if self.hcd_model is not None and 'fvoigt' in self.hcd_model:
+            assert 'fvoigt_model' in self._config.keys(), "No fvoigt_model specified in config"
+
             fvoigt_model = self._config.get('fvoigt_model')
             if '/' not in fvoigt_model:
                 path = f"{resource_filename('vega', 'models')}/fvoigt_models/"
@@ -252,26 +241,32 @@ class PowerSpectrum:
 
         # Get the other parameters
         beta_hcd = params["beta_hcd"]
-        L0_hcd = params["L0_hcd"]
 
-        # TODO Maybe improve the names we search for
         # Check which model we need
-        if L0_hcd != self._L0_hcd_cache or self._F_hcd is None:
-            if 'Rogers' in self.hcd_model:
-                self._F_hcd = self._hcd_Rogers2018(L0_hcd, self.k_par_grid)
-            elif 'mask' in self.hcd_model:
-                assert self._Fvoigt_data is not None
-                self._F_hcd = self._hcd_no_mask(L0_hcd)
-            elif 'sinc' in self.hcd_model:
-                self._F_hcd = self._hcd_sinc(L0_hcd)
-
-            self._L0_hcd_cache = L0_hcd
+        if 'Rogers' in self.hcd_model:
+            L0 = params["L0_hcd"]
+            self._compute_hcd_cached(self._hcd_Rogers2018, L0, self.k_par_grid)
+        elif 'fvoigt' in self.hcd_model:
+            assert self._Fvoigt_data is not None
+            L0 = params.get("L0_fvoigt", 1)
+            self._compute_hcd_cached(self._hcd_fvoigt, L0)
+        elif 'sinc' in self.hcd_model:
+            L0 = params.get("L0_sinc", 1)
+            self._compute_hcd_cached(self._hcd_sinc, L0)
+        else:
+            raise ValueError(f"Unknown hcd model {self.hcd_model}. "
+                             "Choose from ['Rogers', 'fvoigt', 'sinc']")
 
         bias_eff = bias + bias_hcd * self._F_hcd
         beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
         beta_eff /= (bias + bias_hcd * self._F_hcd)
 
         return bias_eff, beta_eff
+
+    def _compute_hcd_cached(self, func, L0_hcd, *args):
+        if L0_hcd != self._L0_hcd_cache or self._F_hcd is None:
+            self._F_hcd = func(L0_hcd, *args)
+            self._L0_hcd_cache = L0_hcd
 
     def _hcd_sinc(self, L0):
         """HCD sinc model.
@@ -307,7 +302,7 @@ class PowerSpectrum:
         f_hcd = np.exp(-L0 * k_par_grid)
         return f_hcd
 
-    def _hcd_no_mask(self, L0):
+    def _hcd_fvoigt(self, L0):
         """Use Fvoigt function to fit the DLA in the autocorrelation Lyman-alpha
         without masking them ! (L0 = 1)
 
