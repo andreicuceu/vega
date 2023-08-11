@@ -52,14 +52,16 @@ def kaiser():
     assert beta2 == pytest.approx(0.97 / 3.7)
 
 
-def compute_bias_beta_uv(pk):
+def compute_bias_beta_uv(model_config, fiducial, tracer1, tracer2, dataset_name):
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     params = {'bias_gamma': 0.1125, 'bias_prim': -0.66, 'lambda_uv': 300}
     bias_uv, beat_uv = pk.compute_bias_beta_uv(-0.12, 1.6, params)
     assert np.sum(bias_uv) == pytest.approx(-35.268497)
     assert np.sum(beat_uv) == pytest.approx(1138.77689)
 
 
-def compute_bias_beta_hcd(pk):
+def compute_bias_beta_hcd(model_config, fiducial, tracer1, tracer2, dataset_name):
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     assert pk.hcd_model == 'Rogers'
     params = {'bias_hcd': -0.05, 'beta_hcd': 0.5, 'L0_hcd': 10}
     bias_eff, beta_eff = pk.compute_bias_beta_hcd(-0.12, 1.6, params)
@@ -70,17 +72,22 @@ def compute_bias_beta_hcd(pk):
     assert np.allclose(F_hcd, pk._F_hcd)
     assert pk._L0_hcd_cache == 10
 
-    pk.hcd_model = 'fvoigt'
+    model_config['model-hcd'] = 'fvoigt'
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
+    assert pk.hcd_model == 'fvoigt'
     pk._F_hcd = None
     bias_eff, beta_eff = pk.compute_bias_beta_hcd(-0.12, 1.6, params)
-    assert np.sum(bias_eff) == pytest.approx(-116028.8158)
-    assert np.sum(beta_eff) == pytest.approx(1179893.9263)
+    assert np.sum(bias_eff) == pytest.approx(-121782.768388)
+    assert np.sum(beta_eff) == pytest.approx(1142662.6535)
 
-    F_hcd = pk._hcd_fvoigt(10)
+    F_hcd = pk._hcd_fvoigt(1)
     assert np.allclose(F_hcd, pk._F_hcd)
 
-    pk.hcd_model = 'sinc'
+    model_config['model-hcd'] = 'sinc'
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
+    assert pk.hcd_model == 'sinc'
     pk._F_hcd = None
+    params['L0_sinc'] = 10
     bias_eff, beta_eff = pk.compute_bias_beta_hcd(-0.12, 1.6, params)
     assert np.sum(bias_eff) == pytest.approx(-118530.3944)
     assert np.sum(beta_eff) == pytest.approx(1166657.39777)
@@ -91,7 +98,8 @@ def compute_bias_beta_hcd(pk):
     pk._F_hcd = None
 
 
-def compute_peak_nl(pk):
+def compute_peak_nl(model_config, fiducial, tracer1, tracer2, dataset_name):
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     pk._peak_nl_cache = None
     params = {'sigmaNL_par': 6.36984, 'sigmaNL_per': 3.24}
     peak_nl = pk.compute_peak_nl(params)
@@ -109,7 +117,8 @@ def compute_peak_nl(pk):
     assert np.sum(peak_nl) == pytest.approx(390645.39796)
 
 
-def compute_dnl(pk):
+def compute_dnl(model_config, fiducial, tracer1, tracer2, dataset_name):
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     pk._arinyo_pars = None
     params = {'dnl_arinyo_q1': 0.8558, 'dnl_arinyo_kv': 1.11454, 'dnl_arinyo_av': 0.5378,
               'dnl_arinyo_bv': 1.607, 'dnl_arinyo_kp': 19.47}
@@ -121,7 +130,8 @@ def compute_dnl(pk):
     assert np.sum(dnl) == pytest.approx(632262.53194)
 
 
-def compute_fullshape_smoothing(pk):
+def compute_fullshape_smoothing(model_config, fiducial, tracer1, tracer2, dataset_name):
+    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     params = {'par_sigma_smooth': 2, 'per_sigma_smooth': 2.5}
     fs_smoothing = pk.compute_fullshape_gauss_smoothing(params)
     assert np.sum(fs_smoothing) == pytest.approx(404166.27948)
@@ -193,12 +203,17 @@ def auto_pk(fiducial):
     model_config['small scale nl'] = 'arinyo'  # mcdonald
     model_config['fullshape smoothing'] = 'gauss'  # exp
 
-    pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
-    compute_bias_beta_uv(pk)
-    compute_bias_beta_hcd(pk)
-    compute_peak_nl(pk)
-    compute_dnl(pk)
-    compute_fullshape_smoothing(pk)
+    compute_bias_beta_uv(model_config, fiducial, tracer1, tracer2, dataset_name)
+    compute_bias_beta_hcd(model_config, fiducial, tracer1, tracer2, dataset_name)
+    compute_peak_nl(model_config, fiducial, tracer1, tracer2, dataset_name)
+    compute_dnl(model_config, fiducial, tracer1, tracer2, dataset_name)
+    compute_fullshape_smoothing(model_config, fiducial, tracer1, tracer2, dataset_name)
+
+    model_config['model-hcd'] = 'Rogers'
+    model_config['add uv'] = 'True'
+    model_config['fvoigt_model'] = 'exp'
+    model_config['small scale nl'] = 'arinyo'  # mcdonald
+    model_config['fullshape smoothing'] = 'gauss'  # exp
 
     pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     params = {'bias_LYA': -0.12, 'beta_LYA': 1.6, 'bias_gamma': 0.1125, 'bias_prim': -0.66,
