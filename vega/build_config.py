@@ -39,7 +39,7 @@ class BuildConfig:
                 velocity_dispersion: string from [None, 'lorentz', 'gauss'], default None
                 radiation_effects: Bool, default False
 
-                hcd_model: string from [None, 'Rogers', 'nomask', 'sinc'], default None
+                hcd_model: string from [None, 'Rogers', 'fvoigt', 'sinc'], default None
                 fvoigt_model: string, default exp
                 fullshape_smoothing: string from [None, 'gauss', 'gauss_iso', 'exp'], default None
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
@@ -244,9 +244,9 @@ class BuildConfig:
                 config['model']['add uv'] = 'True'
 
             if self.options['hcd_model'] is not None:
-                assert self.options['hcd_model'] in ['mask', 'Rogers2018', 'sinc']
+                assert self.options['hcd_model'] in ['fvoigt', 'Rogers2018', 'sinc']
                 config['model']['model-hcd'] = self.options['hcd_model']
-                if self.options['hcd_model'] == 'mask':
+                if self.options['hcd_model'] == 'fvoigt':
                     config['model']['fvoigt_model'] = self.options['fvoigt_model']
 
             if self.options['metals'] is not None:
