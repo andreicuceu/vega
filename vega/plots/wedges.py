@@ -122,6 +122,24 @@ class Wedge:
         wedge_cov = data_weights.dot(cov_slice).dot(data_weights.T)
         return r, wedge, wedge_cov
 
+    def build_one_by_one(self, data, covariance):
+        wedge = np.empty(self.weights.shape[0])
+        r = np.empty_like(wedge)
+
+        for i, w in enumerate(self.weights):
+            m = w > 0
+            cov_slice = covariance[m, :][:, m]
+            cov_weight = np.linalg.inv(cov_slice)
+
+            data_weights = w[m] @ cov_weight
+            norm = data_weights.sum()
+            data_weights /= norm
+
+            wedge[i] = data_weights.dot(data[m])
+            r[i] = data_weights.dot(self.r_centers[m])
+
+        return r, wedge
+
     @staticmethod
     def get_bin_centers(bin_limits):
         """Computes array of bin centers given an array of bin limits
