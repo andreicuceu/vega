@@ -288,10 +288,9 @@ class Output:
                 scan_hdu.header[par + '_min'] = grid[0]
                 scan_hdu.header[par + '_max'] = grid[-1]
                 scan_hdu.header[par + '_num_bins'] = len(grid)
-                scan_hdu.header.comments[par + '_min'] = 'Grid start for '+par
-                scan_hdu.header.comments[par + '_max'] = 'Grid end for '+par
-                scan_hdu.header.comments[par + '_num_bins'] = 'Grid size for '\
-                                                              + par
+                scan_hdu.header.comments[par + '_min'] = 'Grid start for ' + par
+                scan_hdu.header.comments[par + '_max'] = 'Grid end for ' + par
+                scan_hdu.header.comments[par + '_num_bins'] = 'Grid size for ' + par
 
         scan_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
         for i, comm in enumerate(comms):

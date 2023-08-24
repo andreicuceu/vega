@@ -340,9 +340,9 @@ class Data:
         self.rp_min_model = header['RPMIN']
         self.rp_max_model = header['RPMAX']
         self.rt_max_model = header['RTMAX']
-        self.num_bins_rp_model = header['NP']
-        self.num_bins_rt_model = header['NT']
         self.coeff_binning_model = header['COEFMOD']
+        self.num_bins_rp_model = header['NP'] * self.coeff_binning_model
+        self.num_bins_rt_model = header['NT'] * self.coeff_binning_model
 
         # Get the model bin size
         # TODO If RTMIN is ever added to the cf data files this needs modifying
@@ -356,8 +356,10 @@ class Data:
             rt_custom_grid = np.arange(self.bin_size_rt_data / 2,
                                        self.rt_max_model, self.bin_size_rt_data)
 
+            rt_custom_grid, rp_custom_grid = np.meshgrid(rt_custom_grid, rp_custom_grid)
+
             self.model_mask = self._build_mask(
-                rp_custom_grid, rt_custom_grid, cuts_config, self.rp_min_model,
+                rp_custom_grid.flatten(), rt_custom_grid.flatten(), cuts_config, self.rp_min_model,
                 self.bin_size_rp_data, self.bin_size_rt_data
             )
         else:
