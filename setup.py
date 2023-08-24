@@ -23,7 +23,7 @@ test_requirements = ['pytest>=3', ]
 setup(
     author="Andrei Cuceu",
     author_email='andreicuceu@gmail.com',
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',

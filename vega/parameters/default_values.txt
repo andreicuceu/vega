@@ -23,6 +23,8 @@ beta_QSO                        0.0         5.0         0.1
 bias_hcd                       -0.2         0.0         0.01
 beta_hcd                        0.0         5.0         0.1
 L0_hcd                          0.0        40.0         0.1
+L0_fvoigt                       0.0        40.0         0.1
+L0_sinc                         0.0        40.0         0.1
 sigmaNL_par                     0.0        20.0         0.1
 sigmaNL_per                     0.0        20.0         0.1
 sigma_velo_disp_gauss_QSO       0.0        15.0         0.1
