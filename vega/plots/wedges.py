@@ -78,6 +78,7 @@ class Wedge:
         weights_idx = np.unravel_index(positive_idx, np.shape(self.weights))
         self.weights[weights_idx] = counts[positive_idx]
         self.r = self.get_bin_centers(r_bins)
+        self.r_centers = r_centers
 
     def __call__(self, data, covariance=None):
         """Computes the wedge for the input data and optional covariance
@@ -96,28 +97,30 @@ class Wedge:
         """
         # Init covariance
         if covariance is None:
+            m = np.ones(len(data), dtype=bool)
             cov_weight = np.ones(len(data))
             data_weights = self.weights * cov_weight
         else:
-            cov_weight = np.linalg.inv(covariance)
             m = self.weights.sum(axis=0) > 0
-            cov_weight[:, m] = 0
+            cov_slice = covariance[m, :][:, m]
+            cov_weight = np.linalg.inv(cov_slice)
 
-            data_weights = self.weights @ cov_weight
+            data_weights = self.weights[:, m] @ cov_weight
 
         # Transform weights using the covariance and norm
         norm = data_weights.sum(axis=1)
-        mask = norm > 0
-        data_weights[mask, :] /= norm[mask, None]
+        # mask = norm > 0
+        data_weights /= norm[:, None]
 
         # Compute wedge and return simple
-        wedge = data_weights.dot(data)
+        wedge = data_weights.dot(data[m])
+        r = data_weights.dot(self.r_centers[m])
         if covariance is None:
-            return self.r, wedge
+            return r, wedge
 
         # Compute wedge covariance and return full
-        wedge_cov = data_weights.dot(covariance).dot(data_weights.T)
-        return self.r, wedge, wedge_cov
+        wedge_cov = data_weights.dot(cov_slice).dot(data_weights.T)
+        return r, wedge, wedge_cov
 
     @staticmethod
     def get_bin_centers(bin_limits):
