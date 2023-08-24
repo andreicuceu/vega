@@ -57,7 +57,7 @@ class VegaPlots:
                     bin_center_rt = (bin_index_rt + 0.5) * data.bin_size_rt_model
 
                     # Build the model to data mask
-                    self.mask[name] = (bin_center_rp > data.rp_min_data) 
+                    self.mask[name] = (bin_center_rp > data.rp_min_data)
                     self.mask[name] &= (bin_center_rp < data.rp_max_data)
                     self.mask[name] &= (bin_center_rt < data.rt_max_data)
 
@@ -235,6 +235,114 @@ class VegaPlots:
             ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
 
         return r, d
+
+    def plot_sensitivity(self, sensitivity, pname='ap', pname2=None, pct=95,
+                         distorted=True, comp='both', rpow=0, save=None):
+        """Plot parameter sensitivities.
+
+        Plot the sensitivity to one parameter or the joint sensitivity to a pair of parameters.
+        The resulting plot shows the partial derivatives of `pname` on the left-hand side and
+        the distribution of the Fisher information for pname or, if pname2 is specified,
+        (pname, pname2) on the right-hand side.
+
+        Parameters
+        ----------
+        sensitivity - dict
+            Dictionary with keys `nominal`, `partials` and `fisher`, normally obtained by calling
+            `compute_sensitivity()` on a VegaInterface object, then passing its `sensitivity`
+            attribute here.
+        pname - str
+            Name of the first parameter to use. Partial derivatives are only displayed for this
+            parameter, even when pname2 is specified.
+        pname2 - str or None
+            Name of the second parameter to use. Displays the Fisher information associated with
+            the covariance of (pname,pname2) when specified. If None, then use (pname,pname).
+        pct - float
+            Clip the color map for values above this percentile value.
+        distorted - bool
+            Plot the sensitivity of the predicted correlation including the distortion matrix
+            when True.  Otherwise, use the undistorted correlation function model.
+        comp - str
+            Which component of the signal model to display. Select either `peak`, `smooth`
+            or `both`.
+        rpow - float
+            The power of the radial weight to use for plotting the partial derivatives of pname.
+        save - str or None
+            Save the produced plot a file with this name. When None, do not save the plot.
+        """
+        # Get the indices of the requested parameters.
+        pnames = list(sensitivity['nominal'].keys())
+        try:
+            pidx = pnames.index(pname)
+        except ValueError:
+            raise RuntimeError(f'Unknown floating parameter "{pname}".')
+        try:
+            pidx2 = pnames.index(pname2) if pname2 else pidx
+        except ValueError:
+            raise RuntimeError(f'Unknown floating parameter "{pname2}".')
+        fidx = pidx * len(pnames) + pidx2
+
+        if comp not in ('peak', 'smooth', 'both'):
+            raise ValueError(f'Invalid comp "{comp}" (expected peak/smooth/both)')
+
+        fig = plt.figure(figsize=(12, 9), constrained_layout=True)
+        pvalue, perror = sensitivity['nominal'][pname]
+        title = f'{pname} = {pvalue:.4f} ± {perror:.3f}'
+        if pname2:
+            pvalue2, perror2 = sensitivity['nominal'][pname2]
+            title += f', {pname2} = {pvalue2:.4f} ± {perror2:.3f}'
+        fig.suptitle(title)
+        gs = fig.add_gridspec(3, 4)
+
+        # Lookup the max value of the Fisher info over all datasets, to normalize the Fisher info plots.
+        max_info = np.max([ np.nanpercentile(sensitivity['fisher'][cname][fidx], pct) for cname in sensitivity['fisher'] ])
+
+        rtxt = '' if rpow == 0 else ('r ' if rpow == 1 else f'r**{rpow} ')
+        dist = 0 if distorted else 1
+
+        for cname in self.data:
+
+            rtgrid = np.linspace(*self.rt_setup_data[cname])
+            rpgrid = np.linspace(*self.rp_setup_data[cname])
+            rt, rp = np.meshgrid(rpgrid, rtgrid)
+            r = np.hypot(rp, rt).reshape(-1)
+            nrt = len(rtgrid)
+            nrp = len(rpgrid)
+            bbox = tuple(np.percentile(rp, (0, 100))) + tuple(np.percentile(rt, (0, 100)))
+
+            row = 0 if cname.startswith('lya') else slice(1,None)
+            col = 0 if cname.endswith('lya') else 1
+            y1, y2 = (0.92, 0.84) if cname.startswith('lya') else (0.96,0.92)
+
+            P = r**rpow * sensitivity['partials'][cname][pidx][dist]
+            if comp == 'both':
+                P = P.sum(axis=0)
+            elif comp == 'peak':
+                P = P[0]
+            elif comp == 'smooth':
+                P = P[1]
+            if np.all(P == 0):
+                continue
+
+            ax = fig.add_subplot(gs[row, col])
+            vlim = np.percentile(np.abs(P), pct)
+            ax.imshow(P.reshape(nrp,nrt), origin='lower', interpolation='none', cmap='seismic',
+                    vmin=-vlim, vmax=+vlim, extent=bbox, aspect='auto')
+            ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
+            ax.text(0.95, y2, f'{rtxt}∂M(rp,rt)/∂p', ha='right', transform=ax.transAxes)
+
+            cmap = plt.get_cmap('afmhot_r').copy()
+            cmap.set_bad('lightgray')
+            # Lookup the Fisher distribution for this sample, the specified params, and distortion option.
+            F = sensitivity['fisher'][cname][fidx][dist]
+            ax = fig.add_subplot(gs[row, col + 2])
+            ax.imshow(F.reshape(nrp,nrt), origin='lower', interpolation='none', cmap=cmap,
+                    vmin=0, vmax=max_info, extent=bbox, aspect='auto')
+            ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
+            ax.text(0.95, y2, '∂$^2$F$_{pq}$(rt,rp)/∂rt∂rp', ha='right', transform=ax.transAxes)
+
+        if save:
+            plt.savefig(save)
 
     def postprocess_plot(self, ax, mu_bin=None, xlim=(0, 180), ylim=None, no_legend=False,
                          title='mu_bin', legend_loc='best', legend_ncol=1, **kwargs):

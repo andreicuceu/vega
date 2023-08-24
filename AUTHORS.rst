@@ -11,3 +11,4 @@ Contributors
 ------------
 
 * Ignasi Pérez-Ràfols
+* David Kirkby <dkirkby@uci.edu>
