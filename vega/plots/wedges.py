@@ -78,7 +78,6 @@ class Wedge:
         weights_idx = np.unravel_index(positive_idx, np.shape(self.weights))
         self.weights[weights_idx] = counts[positive_idx]
         self.r = self.get_bin_centers(r_bins)
-        self.r_centers = r_centers
 
     def __call__(self, data, covariance=None):
         """Computes the wedge for the input data and optional covariance
@@ -114,17 +113,17 @@ class Wedge:
 
         # Compute wedge and return simple
         wedge = data_weights.dot(data[m])
-        r = data_weights.dot(self.r_centers[m])
+        # r = data_weights.dot(self.r_centers[m])
         if covariance is None:
-            return r, wedge
+            return self.r, wedge
 
         # Compute wedge covariance and return full
         wedge_cov = data_weights.dot(cov_slice).dot(data_weights.T)
-        return r, wedge, wedge_cov
+        return self.r, wedge, wedge_cov
 
     def build_one_by_one(self, data, covariance):
         wedge = np.empty(self.weights.shape[0])
-        r = np.empty_like(wedge)
+        # r = np.empty_like(wedge)
 
         for i, w in enumerate(self.weights):
             m = w > 0
@@ -136,9 +135,9 @@ class Wedge:
             data_weights /= norm
 
             wedge[i] = data_weights.dot(data[m])
-            r[i] = data_weights.dot(self.r_centers[m])
+            # r[i] = data_weights.dot(self.r_centers[m])
 
-        return r, wedge
+        return self.r, wedge
 
     @staticmethod
     def get_bin_centers(bin_limits):
