@@ -349,8 +349,22 @@ class Data:
         self.bin_size_rp_model = (self.rp_max_model - self.rp_min_model) / self.num_bins_rp_model
         self.bin_size_rt_model = self.rt_max_model / self.num_bins_rt_model
 
-        self.model_mask = self._build_mask(rp_grid, rt_grid, cuts_config, self.rp_min_model,
-                                           self.bin_size_rp_model, self.bin_size_rt_model)
+        if ((self.bin_size_rp_model != self.bin_size_rp_data)
+                or (self.bin_size_rt_model != self.bin_size_rt_data)):
+            rp_custom_grid = np.arange(self.rp_min_model + self.bin_size_rp_data / 2,
+                                       self.rp_max_model, self.bin_size_rp_data)
+            rt_custom_grid = np.arange(self.bin_size_rt_data / 2,
+                                       self.rt_max_model, self.bin_size_rt_data)
+
+            self.model_mask = self._build_mask(
+                rp_custom_grid, rt_custom_grid, cuts_config, self.rp_min_model,
+                self.bin_size_rp_data, self.bin_size_rt_data
+            )
+        else:
+            self.model_mask = self._build_mask(
+                rp_grid, rt_grid, cuts_config, self.rp_min_model,
+                self.bin_size_rp_data, self.bin_size_rt_data
+            )
 
         return rp_grid, rt_grid, z_grid
 
