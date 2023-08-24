@@ -12,9 +12,7 @@ Vega
         :target: https://codecov.io/gh/andreicuceu/Vega
 
 
-.. |alpha| image:: https://latex.codecogs.com/svg.image?{\color{Red}&space;\alpha}
-
-Vega is a tool for computing 3D correlation function models for tracers used by the Ly-|alpha| forest group (such as Ly-|alpha| flux, Quasar positions or different metal lines) and for fitting data produced by `picca <https://github.com/igmhub/picca>`__ primarily to measure Baryon Acoustic Oscillations (BAO).
+Vega is a tool for computing 3D correlation function models for tracers used by the Ly-α forest group (such as Ly-α flux, Quasar positions or different metal lines) and for fitting data produced by `picca <https://github.com/igmhub/picca>`__ primarily to measure Baryon Acoustic Oscillations (BAO).
 
 * Free software: GPL-3.0 License
 * Documentation: https://vega.readthedocs.io.
