@@ -97,12 +97,16 @@ class Wedge:
         # Init covariance
         if covariance is None:
             cov_weight = np.ones(len(data))
+            data_weights = self.weights * cov_weight
         else:
-            cov_weight = 1 / np.diagonal(covariance)
+            cov_weight = np.linalg.inv(covariance)
+            m = self.weights.sum(axis=0) > 0
+            cov_weight[:, m] = 0
+
+            data_weights = self.weights @ cov_weight
 
         # Transform weights using the covariance and norm
-        norm = self.weights.dot(cov_weight)
-        data_weights = self.weights * cov_weight
+        norm = data_weights.sum(axis=1)
         mask = norm > 0
         data_weights[mask, :] /= norm[mask, None]
 
