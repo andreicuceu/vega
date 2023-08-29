@@ -577,7 +577,7 @@ class VegaPlots:
             plt.rcParams['font.size'] = 14
 
         if fig is None:
-            fig, axs = plt.subplots(1, figsize=(10, 6))
+            fig, axs = plt.subplots(2, 2, figsize=figsize)
         else:
             axs = fig.axes
 
@@ -642,7 +642,7 @@ class VegaPlots:
             plt.rcParams['font.size'] = 14
 
         if fig is None:
-            fig, ax = plt.subplots(1, figsize=(10, 6))
+            fig, ax = plt.subplots(1, figsize=figsize)
         else:
             ax = fig.axes[0]
 
