@@ -120,7 +120,7 @@ class VegaPlots:
         return Wedge(mu=mu_bin, rp=rp, rt=rt, r=r, abs_mu=abs_mu)
 
     def plot_data(self, ax, mu_bin, data=None, cov_mat=None, cross_flag=False, label=None,
-                  corr_name='lyalya_lyalya', data_fmt='o', data_color=None,
+                  corr_name='lyaxlya', data_fmt='o', data_color=None,
                   scaling_power=2, use_local_coordinates=True, **kwargs):
         """Plot the data in the input ax object using the input wedge object
 
@@ -135,7 +135,7 @@ class VegaPlots:
         label : str, optional
             Label for the data points, by default None
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         data_fmt : str, optional
             Data formatting, by default 'o'
         data_color : str, optional
@@ -173,7 +173,7 @@ class VegaPlots:
         return rd, dd, cd
 
     def plot_model(self, ax, mu_bin, model=None, cov_mat=None, cross_flag=False,
-                   label=None, corr_name='lyalya_lyalya', model_ls='-', model_color=None,
+                   label=None, corr_name='lyaxlya', model_ls='-', model_color=None,
                    scaling_power=2, use_local_coordinates=True, **kwargs):
         """Plot the model in the input ax object using the input wedge object
 
@@ -190,7 +190,7 @@ class VegaPlots:
         label : str, optional
             Label for the model, by default None
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         model_ls : str, optional
             Model line style, by default '-'
         model_color : str, optional
@@ -378,7 +378,7 @@ class VegaPlots:
         ax.grid()
 
     def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
-                   cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
+                   cross_flag=False, corr_name='lyaxlya', models_only=False,
                    data_only=False, data_label=None, no_postprocess=False, **kwargs):
         """Plot a wedge into the input axes using the input mu_bin
 
@@ -399,7 +399,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -450,7 +450,7 @@ class VegaPlots:
         return data_wedge, model_wedge
 
     def plot_1wedge(self, models=None, cov_mat=None, labels=None, data=None, cross_flag=False,
-                    corr_name='lyalya_lyalya', models_only=False, data_only=False, data_label=None,
+                    corr_name='lyaxlya', models_only=False, data_only=False, data_label=None,
                     fig=None, **kwargs):
         """Plot the correlations into one wedge from mu=0 to mu=1
 
@@ -467,7 +467,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -490,7 +490,7 @@ class VegaPlots:
         self.fig = fig
 
     def plot_2wedges(self, mu_bins=(0, 0.5, 1), models=None, cov_mat=None, labels=None,
-                     data=None, cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
+                     data=None, cross_flag=False, corr_name='lyaxlya', models_only=False,
                      data_only=False, data_label=None, vertical_plots=False, fig=None, **kwargs):
         """Plot the correlations into two wedges defined by the limits in mu_bins
 
@@ -509,7 +509,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -544,7 +544,7 @@ class VegaPlots:
         self.fig = fig
 
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
-                     labels=None, data=None, cross_flag=False, corr_name='lyalya_lyalya',
+                     labels=None, data=None, cross_flag=False, corr_name='lyaxlya',
                      models_only=False, data_only=False, data_label=None, figsize=(14, 8),
                      mu_bin_labels=False, fig=None, **kwargs):
         """Plot the correlations into four wedges defined by the limits in mu_bins
@@ -564,7 +564,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -610,7 +610,7 @@ class VegaPlots:
         self.fig = fig
 
     def plot_4wedge_panel(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), model=None, cov_mat=None,
-                          data=None, cross_flag=False, corr_name='lyalya_lyalya', colors=None,
+                          data=None, cross_flag=False, corr_name='lyaxlya', colors=None,
                           data_only=False, title=None, figsize=(8, 6), fig=None, **kwargs):
         """Plot the correlations into four wedges on one panel
 
@@ -627,7 +627,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         colors : List[string], optional
             List of colors for the wedges, by default None
         data_only : bool, optional
