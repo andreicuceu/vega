@@ -377,6 +377,24 @@ class VegaPlots:
             ax.legend(loc=legend_loc, ncol=legend_ncol)
         ax.grid()
 
+    @staticmethod
+    def postprocess_fig(fig, xlim=(0, 180), ylim=None):
+        for ax in fig.axes:
+            ax.grid()
+            ax.set_xlim(xlim[0], xlim[1])
+
+        if ylim is not None:
+            ylim = np.array(ylim)
+            if ylim.ndim == 1:
+                for ax in fig.axes:
+                    ax.set_ylim(ylim[0], ylim[1])
+            elif ylim.ndim == 2:
+                for ax, (ymin, ymax) in zip(fig.axes, ylim):
+                    ax.set_ylim(ymin, ymax)
+            else:
+                raise ValueError(f'ylim variable has unsupported ndim {ylim.ndim}, '
+                                 'only 1D and 2D arrays/lists/tuples allowed')
+
     def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
                    cross_flag=False, corr_name='lyaxlya', models_only=False,
                    data_only=False, data_label=None, no_postprocess=False, **kwargs):
