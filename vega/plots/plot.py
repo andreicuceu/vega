@@ -120,7 +120,7 @@ class VegaPlots:
         return Wedge(mu=mu_bin, rp=rp, rt=rt, r=r, abs_mu=abs_mu)
 
     def plot_data(self, ax, mu_bin, data=None, cov_mat=None, cross_flag=False, label=None,
-                  corr_name='lyalya_lyalya', data_fmt='o', data_color=None,
+                  corr_name='lyaxlya', data_fmt='o', data_color=None,
                   scaling_power=2, use_local_coordinates=True, **kwargs):
         """Plot the data in the input ax object using the input wedge object
 
@@ -135,7 +135,7 @@ class VegaPlots:
         label : str, optional
             Label for the data points, by default None
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         data_fmt : str, optional
             Data formatting, by default 'o'
         data_color : str, optional
@@ -173,7 +173,7 @@ class VegaPlots:
         return rd, dd, cd
 
     def plot_model(self, ax, mu_bin, model=None, cov_mat=None, cross_flag=False,
-                   label=None, corr_name='lyalya_lyalya', model_ls='-', model_color=None,
+                   label=None, corr_name='lyaxlya', model_ls='-', model_color=None,
                    scaling_power=2, use_local_coordinates=True, **kwargs):
         """Plot the model in the input ax object using the input wedge object
 
@@ -190,7 +190,7 @@ class VegaPlots:
         label : str, optional
             Label for the model, by default None
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         model_ls : str, optional
             Model line style, by default '-'
         model_color : str, optional
@@ -377,8 +377,26 @@ class VegaPlots:
             ax.legend(loc=legend_loc, ncol=legend_ncol)
         ax.grid()
 
+    @staticmethod
+    def postprocess_fig(fig, xlim=(0, 180), ylim=None):
+        for ax in fig.axes:
+            ax.grid()
+            ax.set_xlim(xlim[0], xlim[1])
+
+        if ylim is not None:
+            ylim = np.array(ylim)
+            if ylim.ndim == 1:
+                for ax in fig.axes:
+                    ax.set_ylim(ylim[0], ylim[1])
+            elif ylim.ndim == 2:
+                for ax, (ymin, ymax) in zip(fig.axes, ylim):
+                    ax.set_ylim(ymin, ymax)
+            else:
+                raise ValueError(f'ylim variable has unsupported ndim {ylim.ndim}, '
+                                 'only 1D and 2D arrays/lists/tuples allowed')
+
     def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
-                   cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
+                   cross_flag=False, corr_name='lyaxlya', models_only=False,
                    data_only=False, data_label=None, no_postprocess=False, **kwargs):
         """Plot a wedge into the input axes using the input mu_bin
 
@@ -399,7 +417,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -450,8 +468,8 @@ class VegaPlots:
         return data_wedge, model_wedge
 
     def plot_1wedge(self, models=None, cov_mat=None, labels=None, data=None, cross_flag=False,
-                    corr_name='lyalya_lyalya', models_only=False, data_only=False, data_label=None,
-                    **kwargs):
+                    corr_name='lyaxlya', models_only=False, data_only=False, data_label=None,
+                    fig=None, **kwargs):
         """Plot the correlations into one wedge from mu=0 to mu=1
 
         Parameters
@@ -467,7 +485,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -477,7 +495,11 @@ class VegaPlots:
         """
         if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
-        fig, axs = plt.subplots(1, figsize=(10, 6))
+
+        if fig is None:
+            fig, axs = plt.subplots(1, figsize=(10, 6))
+        else:
+            axs = fig.axes[0]
 
         _ = self.plot_wedge(axs, (0, 1), models=models, cov_mat=cov_mat, labels=labels, data=data,
                             cross_flag=cross_flag, corr_name=corr_name, models_only=models_only,
@@ -486,8 +508,8 @@ class VegaPlots:
         self.fig = fig
 
     def plot_2wedges(self, mu_bins=(0, 0.5, 1), models=None, cov_mat=None, labels=None,
-                     data=None, cross_flag=False, corr_name='lyalya_lyalya', models_only=False,
-                     data_only=False, data_label=None, vertical_plots=False, **kwargs):
+                     data=None, cross_flag=False, corr_name='lyaxlya', models_only=False,
+                     data_only=False, data_label=None, vertical_plots=False, fig=None, **kwargs):
         """Plot the correlations into two wedges defined by the limits in mu_bins
 
         Parameters
@@ -505,7 +527,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -518,10 +540,14 @@ class VegaPlots:
         assert len(mu_bins) == 3
         if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
-        if not vertical_plots:
-            fig, axs = plt.subplots(1, 2, figsize=(18, 6))
+
+        if fig is None:
+            if not vertical_plots:
+                fig, axs = plt.subplots(1, 2, figsize=(18, 6))
+            else:
+                fig, axs = plt.subplots(2, 1, figsize=(10, 12))
         else:
-            fig, axs = plt.subplots(2, 1, figsize=(10, 12))
+            axs = np.array(fig.axes)
 
         axs = axs.flatten()
         mu_bins = np.flip(np.array(mu_bins))
@@ -536,9 +562,9 @@ class VegaPlots:
         self.fig = fig
 
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
-                     labels=None, data=None, cross_flag=False, corr_name='lyalya_lyalya',
+                     labels=None, data=None, cross_flag=False, corr_name='lyaxlya',
                      models_only=False, data_only=False, data_label=None, figsize=(14, 8),
-                     mu_bin_labels=False, **kwargs):
+                     mu_bin_labels=False, fig=None, **kwargs):
         """Plot the correlations into four wedges defined by the limits in mu_bins
 
         Parameters
@@ -556,7 +582,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         models_only : bool, optional
             Whether to only plot models and ignore the data, by default False
         data_only : bool, optional
@@ -567,9 +593,13 @@ class VegaPlots:
         assert len(mu_bins) == 5
         if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
-        fig, axs = plt.subplots(2, 2, figsize=figsize)
-        axs = axs.flatten()
 
+        if fig is None:
+            fig, axs = plt.subplots(2, 2, figsize=figsize)
+        else:
+            axs = np.array(fig.axes)
+
+        axs = axs.flatten()
         mu_bins = np.flip(np.array(mu_bins))
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
 
@@ -587,9 +617,9 @@ class VegaPlots:
             if self.has_data:
                 xmin, xmax = ax.get_xlim()
                 ymin, ymax = ax.get_ylim()
-                ax.fill_betweenx((ymin, ymax), xmin, self.cuts[corr_name]['r_min'],
+                ax.fill_betweenx((-100, 100), xmin, self.cuts[corr_name]['r_min'],
                                  color='gray', alpha=0.7)
-                ax.fill_betweenx((ymin, ymax), self.cuts[corr_name]['r_max'], xmax,
+                ax.fill_betweenx((-100, 100), self.cuts[corr_name]['r_max'], xmax,
                                  color='gray', alpha=0.7)
                 ax.set_ylim(ymin, ymax)
                 ax.set_xlim(xmin, xmax)
@@ -598,8 +628,8 @@ class VegaPlots:
         self.fig = fig
 
     def plot_4wedge_panel(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), model=None, cov_mat=None,
-                          data=None, cross_flag=False, corr_name='lyalya_lyalya', colors=None,
-                          data_only=False, title=None, figsize=(8, 6), **kwargs):
+                          data=None, cross_flag=False, corr_name='lyaxlya', colors=None,
+                          data_only=False, title=None, figsize=(8, 6), fig=None, **kwargs):
         """Plot the correlations into four wedges on one panel
 
         Parameters
@@ -615,7 +645,7 @@ class VegaPlots:
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         corr_name : str, optional
-            Name of the correlation component, by default 'lyalya_lyalya'
+            Name of the correlation component, by default 'lyaxlya'
         colors : List[string], optional
             List of colors for the wedges, by default None
         data_only : bool, optional
@@ -628,7 +658,11 @@ class VegaPlots:
         assert len(mu_bins) == 5
         if not kwargs.get('no_font', False):
             plt.rcParams['font.size'] = 14
-        fig, ax = plt.subplots(1, figsize=figsize)
+
+        if fig is None:
+            fig, ax = plt.subplots(1, figsize=figsize)
+        else:
+            ax = fig.axes[0]
 
         mu_bins = np.flip(np.array(mu_bins))
         mu_limits = zip(mu_bins[1:], mu_bins[:-1])
