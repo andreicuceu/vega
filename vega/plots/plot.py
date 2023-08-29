@@ -529,7 +529,7 @@ class VegaPlots:
             else:
                 fig, axs = plt.subplots(2, 1, figsize=(10, 12))
         else:
-            axs = fig.axes
+            axs = np.array(fig.axes)
 
         axs = axs.flatten()
         mu_bins = np.flip(np.array(mu_bins))
@@ -579,7 +579,7 @@ class VegaPlots:
         if fig is None:
             fig, axs = plt.subplots(2, 2, figsize=figsize)
         else:
-            axs = fig.axes
+            axs = np.array(fig.axes)
 
         axs = axs.flatten()
         mu_bins = np.flip(np.array(mu_bins))
