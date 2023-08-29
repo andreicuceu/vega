@@ -617,9 +617,9 @@ class VegaPlots:
             if self.has_data:
                 xmin, xmax = ax.get_xlim()
                 ymin, ymax = ax.get_ylim()
-                ax.fill_betweenx((ymin, ymax), xmin, self.cuts[corr_name]['r_min'],
+                ax.fill_betweenx((-100, 100), xmin, self.cuts[corr_name]['r_min'],
                                  color='gray', alpha=0.7)
-                ax.fill_betweenx((ymin, ymax), self.cuts[corr_name]['r_max'], xmax,
+                ax.fill_betweenx((-100, 100), self.cuts[corr_name]['r_max'], xmax,
                                  color='gray', alpha=0.7)
                 ax.set_ylim(ymin, ymax)
                 ax.set_xlim(xmin, xmax)
