@@ -178,7 +178,7 @@ class Output:
                     array=self.pad_array(self.corr_items[name].rp_rt_grid[1], num_rows)
                 ))
 
-            if num_rows < self.corr_items[name].z_grid:
+            if num_rows < self.corr_items[name].z_grid.shape[0]:
                 columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
             else:
                 columns.append(fits.Column(
