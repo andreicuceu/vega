@@ -21,6 +21,7 @@ class Data:
     _inv_masked_cov = None
     _log_cov_det = None
     _blind = None
+    rp_rt_custom_grid = None
 
     def __init__(self, corr_item):
         """
@@ -286,8 +287,7 @@ class Data:
 
         # Read distortion matrix and initialize coordinate grids for the model
         if dmat_path is not None:
-            rp_grid_model, rt_grid_model, z_grid_model = self._read_dmat(dmat_path, cuts_config,
-                                                                         dmat_column_name)
+            rp_grid_model, rt_grid_model, z_grid_model = self._read_dmat(dmat_path, cuts_config)
         else:
             self.rp_min_model = self.rp_min_data
             self.rp_max_model = self.rp_max_data
@@ -315,14 +315,14 @@ class Data:
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
         if self._blinding_strat is None:
             if not (blinding_flag == 'none' or blinding_flag == 'None'):
-                raise ValueError(f'Data has no blinding, but distortion matrix at {dmat_path} '
-                                 f'has a blinding flag {blinding_flag}')
+                print(f'Warning: Data has no blinding, but distortion matrix at {dmat_path} '
+                      f'has a blinding flag {blinding_flag}')
         else:
             if self._blinding_strat != blinding_flag:
-                raise ValueError(f'Data has a blinding flag {blinding_flag} that does not match '
-                                 f'the flag of the distortion matrix at {dmat_path}')
+                print(f'Warning: Data has a blinding flag {blinding_flag} that does not match '
+                      f'the flag of the distortion matrix at {dmat_path}')
 
-    def _read_dmat(self, dmat_path, cuts_config, dmat_column_name):
+    def _read_dmat(self, dmat_path, cuts_config):
         print(f'Reading distortion matrix file {dmat_path}\n')
         hdul = fits.open(find_file(dmat_path))
         header = hdul[1].header
@@ -330,6 +330,10 @@ class Data:
         if 'BLINDING' in header:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
+        dmat_column_name = 'DM'
+        if 'BLINDING' in header:
+            if header['BLINDING'] != 'none':
+                dmat_column_name = 'DM_BLIND'
         self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
         rp_grid = hdul[2].data['RP']
@@ -362,6 +366,7 @@ class Data:
                 rp_custom_grid.flatten(), rt_custom_grid.flatten(), cuts_config, self.rp_min_model,
                 self.bin_size_rp_data, self.bin_size_rt_data
             )
+            self.rp_rt_custom_grid = np.r_[rp_custom_grid, rt_custom_grid]
         else:
             self.model_mask = self._build_mask(
                 rp_grid, rt_grid, cuts_config, self.rp_min_model,
@@ -465,6 +470,11 @@ class Data:
         # Read the metal file
         metal_hdul = fits.open(find_file(metal_config.get('filename')))
 
+        dm_prefix = 'DM_'
+        if 'BLINDING' in metal_hdul[1].header:
+            if metal_hdul[1].header['BLINDING'] != 'none':
+                dm_prefix = 'DM_BLIND_'
+
         metal_correlations = []
         # First look for correlations between tracer1 and metals
         if 'in tracer2' in metal_config:
@@ -475,7 +485,7 @@ class Data:
                 name = self.tracer1['name'] + '_' + metal
                 if 'RP_' + name not in metal_hdul[2].columns.names:
                     name = metal + '_' + self.tracer1['name']
-                self._read_metal_correlation(metal_hdul, tracers, name)
+                self._read_metal_correlation(metal_hdul, tracers, name, dm_prefix)
                 metal_correlations.append(tracers)
 
         # Then look for correlations between metals and tracer2
@@ -488,7 +498,7 @@ class Data:
                 name = metal + '_' + self.tracer2['name']
                 if 'RP_' + name not in metal_hdul[2].columns.names:
                     name = self.tracer2['name'] + '_' + metal
-                self._read_metal_correlation(metal_hdul, tracers, name)
+                self._read_metal_correlation(metal_hdul, tracers, name, dm_prefix)
                 metal_correlations.append(tracers)
 
         # Finally look for metal-metal correlations
@@ -505,7 +515,7 @@ class Data:
 
                     if 'RP_' + name not in metal_hdul[2].columns.names:
                         name = metal2 + '_' + metal1
-                    self._read_metal_correlation(metal_hdul, tracers, name)
+                    self._read_metal_correlation(metal_hdul, tracers, name, dm_prefix)
                     metal_correlations.append(tracers)
 
         metal_hdul.close()
@@ -534,7 +544,7 @@ class Data:
         else:
             return True
 
-    def _read_metal_correlation(self, metal_hdul, tracers, name):
+    def _read_metal_correlation(self, metal_hdul, tracers, name, dm_prefix):
         """Read a metal correlation from the metal file and add
         the data to the existing member dictionaries.
 
@@ -553,11 +563,7 @@ class Data:
 
         metal_mat_size = len(self.metal_rp_grids[tracers])
 
-        if self._blinding_strat is None:
-            dm_name = 'DM_' + name
-        else:
-            dm_name = 'DM_BLIND_' + name
-
+        dm_name = dm_prefix + name
         if dm_name in metal_hdul[2].columns.names:
             self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
         elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:

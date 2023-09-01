@@ -140,28 +140,51 @@ class Output:
             if len(self.data[name].data_vec) > num_rows:
                 raise ValueError('Data coordinate grid is larger than the model grid.')
 
-            columns.append(fits.Column(name=name+'_MODEL', format='D',
-                                       array=self.pad_array(cf, num_rows)))
-            columns.append(fits.Column(name=name+'_MODEL_MASK', format='L',
-                                       array=self.pad_array(self.data[name].model_mask,
-                                                            num_rows, False)))
-            columns.append(fits.Column(name=name+'_MASK', format='L',
-                                       array=self.pad_array(self.data[name].data_mask,
-                                                            num_rows, False)))
-            columns.append(fits.Column(name=name+'_DATA', format='D',
-                                       array=self.pad_array(self.data[name].data_vec, num_rows)))
-            columns.append(fits.Column(name=name+'_VAR', format='D',
-                                       array=self.pad_array(self.data[name].cov_mat.diagonal(),
-                                                            num_rows)))
-            columns.append(fits.Column(name=name+'_RP', format='D',
-                                       array=self.pad_array(self.corr_items[name].rp_rt_grid[0],
-                                                            num_rows)))
-            columns.append(fits.Column(name=name+'_RT', format='D',
-                                       array=self.pad_array(self.corr_items[name].rp_rt_grid[1],
-                                                            num_rows)))
-            columns.append(fits.Column(name=name+'_Z', format='D',
-                                       array=self.pad_array(self.corr_items[name].z_grid,
-                                                            num_rows)))
+            columns.append(fits.Column(
+                name=name+'_MODEL', format='D', array=self.pad_array(cf, num_rows)))
+            columns.append(fits.Column(
+                name=name+'_MODEL_MASK', format='L',
+                array=self.pad_array(self.data[name].model_mask, num_rows, False)
+            ))
+            columns.append(fits.Column(
+                name=name+'_MASK', format='L',
+                array=self.pad_array(self.data[name].data_mask, num_rows, False)
+            ))
+            columns.append(fits.Column(
+                name=name+'_DATA', format='D',
+                array=self.pad_array(self.data[name].data_vec, num_rows)
+            ))
+            columns.append(fits.Column(
+                name=name+'_VAR', format='D',
+                array=self.pad_array(self.data[name].cov_mat.diagonal(), num_rows)
+            ))
+
+            if num_rows < self.corr_items[name].rp_rt_grid.shape[1]:
+                columns.append(fits.Column(
+                    name=name+'_RP', format='D',
+                    array=self.pad_array(self.data[name].rp_rt_custom_grid[0], num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_RT', format='D',
+                    array=self.pad_array(self.data[name].rp_rt_custom_grid[1], num_rows)
+                ))
+            else:
+                columns.append(fits.Column(
+                    name=name+'_RP', format='D',
+                    array=self.pad_array(self.corr_items[name].rp_rt_grid[0], num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_RT', format='D',
+                    array=self.pad_array(self.corr_items[name].rp_rt_grid[1], num_rows)
+                ))
+
+            if num_rows < self.corr_items[name].z_grid:
+                columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+            else:
+                columns.append(fits.Column(
+                    name=name+'_Z', format='D',
+                    array=self.pad_array(self.corr_items[name].z_grid, num_rows)
+                ))
 
             if self.data[name].nb is not None:
                 columns.append(fits.Column(name=name+'_NB', format='K',
