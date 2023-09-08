@@ -64,8 +64,10 @@ class BuildConfig:
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
         self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
-        self.options['desi-instrumental-systematics'] = options.get('desi-instrumental-systematics',
-                                                                    False)
+        self.options['fullshape_smoothing_metals'] = options.get(
+            'fullshape_smoothing_metals', False)
+        self.options['desi-instrumental-systematics'] = options.get(
+            'desi-instrumental-systematics', False)
         self.options['test'] = options.get('test', False)
 
         metals = options.get('metals', None)
@@ -284,6 +286,13 @@ class BuildConfig:
         if self.options['fullshape_smoothing'] is not None:
             assert self.options['fullshape_smoothing'] in ['gauss', 'gauss_iso', 'exp']
             config['model']['fullshape smoothing'] = self.options['fullshape_smoothing']
+
+            condition = (type1 == 'continuous' or type2 == 'continuous')
+            condition &= self.options['metals'] is not None
+            condition &= self.options['fullshape_smoothing_metals']
+            if condition:
+                config['metals']['fullshape smoothing'] = self.options['fullshape_smoothing']
+                config['model']['fast_metals'] = "False"
 
         if self.name_extension is None:
             corr_path = self.config_path / '{}.ini'.format(name)
