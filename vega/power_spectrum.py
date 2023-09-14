@@ -320,12 +320,7 @@ class PowerSpectrum:
         """
         k_data = self._Fvoigt_data[:, 0]
         F_data = self._Fvoigt_data[:, 1]
-
-        if self.tracer1_name == self.tracer2_name:
-            F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data,
-                              left=0, right=0)
-        else:
-            F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data)
+        F_hcd = np.interp(L0 * self.k_par_grid, k_data, F_data, left=1, right=0)
 
         return F_hcd
 
