@@ -620,6 +620,6 @@ class Data:
         else:
             ran_vec = np.random.randn(self.full_data_size)
             self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
-        self.masked_mc_mock = self.mc_mock[self.mask]
+        self.masked_mc_mock = self.mc_mock[self.model_mask]
 
         return self.masked_mc_mock
