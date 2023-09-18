@@ -6,6 +6,19 @@ import numpy as np
 from scipy.interpolate import interp1d
 from astropy.table import Table
 
+def read_csv(filename) :
+    import csv
+    with open(filename) as f :
+        reader = csv.DictReader(f)
+        rt=[]
+        xi=[]
+        for row in reader:
+            rt.append(row["RT"])
+            xi.append(row["XI"])
+    return rt,xi
+
+read_csv("desi-instrument-syst-for-forest-auto-correlation.csv")
+sys.exit(0)
 '''
 # DESI specific code used to generate the table
 # of angular coordinates of the fiber positioners

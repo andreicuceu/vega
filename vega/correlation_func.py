@@ -1,6 +1,9 @@
 import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
+import csv
+from pkg_resources import resource_exists, resource_filename
+
 from . import utils
 
 
@@ -97,6 +100,9 @@ class CorrelationFunction:
             if ('continuous' not in types) or (types[0] == types[1]):
                 raise ValueError('You asked for relativistic effects or standard asymmetry,'
                                  ' but they only work for the cross')
+
+        # Place holder for interpolation function for DESI intrumental systematics
+        self.desi_instrumental_systematics_interp = None
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -654,8 +660,37 @@ class CorrelationFunction:
         # b = 0.0003189935987295203
         b = params.get('desi_inst_sys_amp', 0.0003189935987295203)
 
-        w = (rp > 0) & (rp < bin_size_rp) & (rt < 80)
+        w = (rp > 0) & (rp < bin_size_rp)
         correction = np.zeros(rt.shape)
-        correction[w] = b * (rt[w] / 80 - 1)**2
+
+        if self.desi_instrumental_systematics_interp is None :
+
+            # See in that directory the code to generate the table
+            # This is the correlation function induced by the sky model white noise.
+            srch_filename = "models/instrumental_systematics/desi-instrument-syst-for-forest-auto-correlation.csv"
+            if not resource_exists('vega', srch_filename):
+                raise Exception("Cannot find DESI instrumental syst file {:s}".format(srch_filename))
+            table_filename = resource_filename('vega', srch_filename)
+            print("Reading desi_instrumental_systematics table",table_filename)
+            syst_rt=[]
+            syst_xi=[]
+            with open(table_filename) as f :
+                reader = csv.DictReader(f)
+                for row in reader:
+                    syst_rt.append(row["RT"])
+                    syst_xi.append(row["XI"])
+            syst_rt=np.array(syst_rt).astype(float)
+            syst_xi=np.array(syst_xi).astype(float)
+            if syst_rt[0] > 0 :
+                syst_rt=np.append(0.,syst_rt)
+                syst_xi=np.append(syst_xi[0],syst_xi)
+            eps=0.001
+            rtmax=1000.
+            if syst_rt[-1] < rtmax-eps :
+                syst_rt=np.append(syst_rt,[syst_rt[-1]+eps,rtmax])
+                syst_xi=np.append(syst_xi,[0.,0.])
+            self.desi_instrumental_systematics_interp = interp1d(syst_rt,syst_xi,kind='linear')
+
+        correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
         return correction
