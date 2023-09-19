@@ -6,19 +6,6 @@ import numpy as np
 from scipy.interpolate import interp1d
 from astropy.table import Table
 
-def read_csv(filename) :
-    import csv
-    with open(filename) as f :
-        reader = csv.DictReader(f)
-        rt=[]
-        xi=[]
-        for row in reader:
-            rt.append(row["RT"])
-            xi.append(row["XI"])
-    return rt,xi
-
-read_csv("desi-instrument-syst-for-forest-auto-correlation.csv")
-sys.exit(0)
 '''
 # DESI specific code used to generate the table
 # of angular coordinates of the fiber positioners
@@ -53,6 +40,7 @@ t.write("desi-positioners.csv")
 print("wrote desi-positioners.csv")
 '''
 
+print("reading desi-positioners.csv")
 positioner_table=Table.read("desi-positioners.csv")
 xp=positioner_table["FOCAL_PLANE_X_DEG"]
 yp=positioner_table["FOCAL_PLANE_Y_DEG"]
@@ -73,6 +61,7 @@ print("rcom=",rcom)
 '''
 
 rcom=3941.86 # Mpc/h
+print("use a comoving distance of {} Mpc/h to convert angles to distance".format(rcom))
 
 print("compute randoms...")
 nr=50000
@@ -98,13 +87,23 @@ ok=(h0>0)
 rt=(bins[:-1]+(bins[1]-bins[0])/2)
 rt=rt[ok]
 xi=h0[ok]/rt # number of random pairs scales as rt
-xi /= xi[0] # norm
+
+
+# add a value at 0, last measured bin + 1 step, and 1000 Mpc to avoid extrapolations
+
+xi_at_0=(xi[0]-xi[1])/(rt[0]-rt[1])*(0-rt[0])+xi[0] # linearly extrapolated value to r=0
+rt=np.append(0,rt)
+xi=np.append(xi_at_0,xi)
+rt=np.append(rt,[rt[-1]+bins[1]-bins[0],1000.])
+xi=np.append(xi,[0,0])
+xi /= np.max(xi) # norm
 
 t=Table()
 t["RT"]=rt
 t["XI"]=xi
 filename="desi-instrument-syst-for-forest-auto-correlation.csv".format(int(rcom))
 t.write(filename,overwrite=True)
+print("wrote",filename)
 
 '''
 # plotting
