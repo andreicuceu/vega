@@ -68,7 +68,7 @@ class VegaInterface:
 
         if self.fiducial['z_eff'] is None:
             self.fiducial['z_eff'] = utils.get_zeff(self.corr_items.values())
-            print(self.fiducial['z_eff'])
+            print(f'LOG: Computed z_eff from input sample: {self.fiducial['z_eff']}')
 
         # Check if all correlations have data files
         self.data = {}
