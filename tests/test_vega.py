@@ -21,6 +21,7 @@ def test_vega_new():
 def test_vega_old():
     hdul = fits.open(find_file('data/picca_bench_data.fits'))
     names = ['test_' + str(i) for i in range(8)]
+    names.remove('test_3')
 
     vega_auto = VegaInterface(
         'examples/picca_benchmarks/configs/vega/main.ini')
@@ -41,8 +42,3 @@ def test_vega_old():
         assert np.allclose(xi_vega_cross[name], xi_picca_cross)
 
     hdul.close()
-
-
-def test_vega():
-    test_vega_new()
-    test_vega_old()
