@@ -66,6 +66,10 @@ class VegaInterface:
             name = config['data'].get('name')
             self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
 
+        if self.fiducial['z_eff'] is None:
+            self.fiducial['z_eff'] = utils.get_zeff(self.corr_items.values())
+            print(self.fiducial['z_eff'])
+
         # Check if all correlations have data files
         self.data = {}
         self._has_data = True
