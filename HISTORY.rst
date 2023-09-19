@@ -2,6 +2,13 @@
 History
 =======
 
+0.5.1 (2023-09-19)
+------------------
+
+* Small fixes for non-standard model binning
+* Metal smoothing for mocks
+* Fixed interpolation bounds for fvoigt model
+
 0.5.0 (2023-08-24)
 ------------------
 
