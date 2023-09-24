@@ -541,6 +541,8 @@ class Data:
         # For CIV we only want it's autocorrelation
         if name1 == 'CIV(eff)' or name2 == 'CIV(eff)':
             return name1 == name2
+        if 'SiII' in name1 and 'SiII' in name2:
+            return False
         else:
             return True
 
