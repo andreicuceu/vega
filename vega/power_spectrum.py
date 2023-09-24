@@ -263,7 +263,10 @@ class PowerSpectrum:
                              "Choose from ['Rogers', 'fvoigt', 'sinc']")
 
         bias_eff = bias + bias_hcd * self._F_hcd
-        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd) / bias_eff
+        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
+
+        w = bias_eff != 0
+        beta_eff[w] /= bias_eff[w]
 
         return bias_eff, beta_eff
 
