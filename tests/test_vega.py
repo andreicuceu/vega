@@ -11,11 +11,11 @@ def test_vega_new():
     vega = VegaInterface('full_configs/main.ini')
 
     loglik = vega.log_lik()
-    assert isclose(loglik, -58967.38302103199)
+    assert isclose(loglik, -58967.3910853859)
 
     vega.minimize()
 
-    assert isclose(vega.bestfit.fmin.fval, 100380.65140993778)
+    assert isclose(vega.bestfit.fmin.fval, 100380.79155514616)
 
 
 def test_vega_old():

@@ -467,6 +467,8 @@ class Data:
             for metal in metals_in_tracer2:
                 tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
 
+        metal_corr_sets = []
+
         # Read the metal file
         metal_hdul = fits.open(find_file(metal_config.get('filename')))
 
@@ -481,6 +483,12 @@ class Data:
             for metal in metals_in_tracer2:
                 if not self._use_correlation(self.tracer1['name'], metal):
                     continue
+
+                if set((self.tracer1['name'], metal)) not in metal_corr_sets:
+                    metal_corr_sets.append(set((self.tracer1['name'], metal)))
+                else:
+                    continue
+
                 tracers = (self.tracer1['name'], metal)
                 name = self.tracer1['name'] + '_' + metal
                 if 'RP_' + name not in metal_hdul[2].columns.names:
@@ -494,6 +502,12 @@ class Data:
             for metal in metals_in_tracer1:
                 if not self._use_correlation(metal, self.tracer2['name']):
                     continue
+
+                if set((self.tracer1['name'], metal)) not in metal_corr_sets:
+                    metal_corr_sets.append(set((self.tracer1['name'], metal)))
+                else:
+                    continue
+
                 tracers = (metal, self.tracer2['name'])
                 name = metal + '_' + self.tracer2['name']
                 if 'RP_' + name not in metal_hdul[2].columns.names:
@@ -510,6 +524,12 @@ class Data:
                 for metal2 in metals_in_tracer2[j0:]:
                     if not self._use_correlation(metal1, metal2):
                         continue
+
+                    if set((self.tracer1['name'], metal)) not in metal_corr_sets:
+                        metal_corr_sets.append(set((self.tracer1['name'], metal)))
+                    else:
+                        continue
+
                     tracers = (metal1, metal2)
                     name = metal1 + '_' + metal2
 
