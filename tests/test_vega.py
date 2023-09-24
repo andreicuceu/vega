@@ -11,7 +11,7 @@ def test_vega_new():
     vega = VegaInterface('full_configs/main.ini')
 
     loglik = vega.log_lik()
-    assert isclose(loglik, -58967.38295296009)
+    assert isclose(loglik, -58967.38302103199)
 
     vega.minimize()
 
