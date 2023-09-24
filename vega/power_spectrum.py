@@ -106,6 +106,21 @@ class PowerSpectrum:
             if self.tracer2_name == 'LYA':
                 bias2, beta2 = self.compute_bias_beta_uv(bias2, beta2, params)
 
+        # compute non linear small scales
+        if 'small scale nl' in self._config.keys():
+            if 'arinyo' in self._config.get('small scale nl'):
+                pk_nl = self.compute_dnl_arinyo(params)
+            elif 'mcdonald' in self._config.get('small scale nl'):
+                pk_nl = self.compute_dnl_mcdonald()
+            else:
+                print('small scale nl: must be either mcdonald or arinyo')
+                raise ValueError('Incorrect \'small scale nl\' specified')
+
+            if "LY" in self.tracer1_name:
+                bias1 = bias1 * np.sqrt(pk_nl)
+            if "LY" in self.tracer2_name:
+                bias2 = bias2 * np.sqrt(pk_nl)
+
         # Add HCD model
         if self.hcd_model is not None:
             if self.tracer1_name == 'LYA':
@@ -115,16 +130,6 @@ class PowerSpectrum:
 
         # Compute kaiser model
         pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2, fast_metals)
-
-        # add non linear small scales
-        if 'small scale nl' in self._config.keys():
-            if 'arinyo' in self._config.get('small scale nl'):
-                pk_full *= self.compute_dnl_arinyo(params)
-            elif 'mcdonald' in self._config.get('small scale nl'):
-                pk_full *= self.compute_dnl_mcdonald()
-            else:
-                print('small scale nl: must be either mcdonald or arinyo')
-                raise ValueError('Incorrect \'small scale nl\' specified')
 
         # model the effect of binning
         if self.use_Gk:
@@ -258,8 +263,7 @@ class PowerSpectrum:
                              "Choose from ['Rogers', 'fvoigt', 'sinc']")
 
         bias_eff = bias + bias_hcd * self._F_hcd
-        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
-        beta_eff /= (bias + bias_hcd * self._F_hcd)
+        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd) / bias_eff
 
         return bias_eff, beta_eff
 
