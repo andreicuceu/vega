@@ -1,4 +1,5 @@
 import numpy as np
+from astropy.io import fits
 from scipy.integrate import quad
 from numba import njit, float64
 import os.path
@@ -227,6 +228,41 @@ def find_file(path):
 
     raise RuntimeError('The path/file does not exists: ', input_path)
 
+def get_zeff(corr_items):
+    """Compute effective redshift of all correlations
+
+    Parameters
+    ----------
+    corr_items : List[vega.correlation_item.CorrelationItem]
+        List of correlation items.
+
+    Returns
+    -------
+    float
+        Effective redshift
+    """
+    zeff_list = []
+    weights = []
+    
+    for corr_item in corr_items:
+        rmin = corr_item.config['cuts'].getfloat('r-min', 10)
+        rmax = corr_item.config['cuts'].getfloat('r-max', 300)
+
+        hdul = fits.open(corr_item.config['data'].get('filename'))
+
+        r_arr = np.sqrt(hdul[1].data['RP']**2 + hdul[1].data['RT']**2)
+        cells = (r_arr > rmin) * (r_arr < rmax)
+
+        zeff = np.average(hdul[1].data['Z'][cells], weights=hdul[1].data['NB'][cells])
+        weight = np.sum(hdul[1].data['NB'][cells])
+
+        hdul.close()
+
+        zeff_list.append(zeff)
+        weights.append(weight)
+
+    zeff = np.average(zeff_list, weights=weights)
+    return zeff
 
 class VegaBoundsError(Exception):
     pass
