@@ -69,6 +69,7 @@ class BuildConfig:
         self.options['desi-instrumental-systematics'] = options.get(
             'desi-instrumental-systematics', False)
         self.options['test'] = options.get('test', False)
+        self.options['use_metal_autos'] = options.get('use_metal_autos', True)
 
         metals = options.get('metals', None)
         if metals is not None:
@@ -237,6 +238,7 @@ class BuildConfig:
 
         # Things that require both tracers to be continuous
         if type1 == 'continuous' and type2 == 'continuous':
+            config['model']['use_metal_autos'] = self.options['use_metal_autos']
             if self.options['desi-instrumental-systematics']:
                 config['model']['desi-instrumental-systematics'] = 'True'
 
