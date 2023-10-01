@@ -238,7 +238,7 @@ class BuildConfig:
 
         # Things that require both tracers to be continuous
         if type1 == 'continuous' and type2 == 'continuous':
-            config['model']['use_metal_autos'] = self.options['use_metal_autos']
+            config['model']['use_metal_autos'] = str(self.options['use_metal_autos'])
             if self.options['desi-instrumental-systematics']:
                 config['model']['desi-instrumental-systematics'] = 'True'
 
