@@ -669,9 +669,6 @@ class CorrelationFunction:
             # This is the correlation function induced by the sky model white noise.
             path = "instrumental_systematics/desi-instrument-syst-for-forest-auto-correlation.csv"
             table_filename = utils.find_file(path)
-            # if not resource_exists('vega', srch_filename):
-            #     raise Exception("Cannot find DESI instrumental syst file {:s}".format(srch_filename))
-            # table_filename = resource_filename('vega', srch_filename)
             print("Reading desi_instrumental_systematics table", table_filename)
             syst_table = Table.read(table_filename)
             self.desi_instrumental_systematics_interp = interp1d(

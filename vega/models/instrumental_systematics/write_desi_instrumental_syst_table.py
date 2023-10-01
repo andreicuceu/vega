@@ -81,7 +81,7 @@ def main():
     nbins = bins.size - 1
     h0 = np.zeros(nbins)
     for xx, yy in zip(x, y):
-        d = np.sqrt((xx -x)**2 + (yy - y)**2) * deg2mpc
+        d = np.sqrt((xx - x)**2 + (yy - y)**2) * deg2mpc
         t, _ = np.histogram(d, bins=bins)
         h0 += t
     ok = (h0 > 0)
