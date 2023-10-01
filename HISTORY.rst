@@ -2,6 +2,12 @@
 History
 =======
 
+0.5.2 (2023-10-01)
+------------------
+
+* New more accurate model for desi instrumental systematics
+* Added option to skip all metal auto-correlations (turned off by default)
+
 0.5.1 (2023-09-19)
 ------------------
 
