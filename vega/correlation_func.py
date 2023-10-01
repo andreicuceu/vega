@@ -663,17 +663,19 @@ class CorrelationFunction:
         w = (rp > 0) & (rp < bin_size_rp)
         correction = np.zeros(rt.shape)
 
-        if self.desi_instrumental_systematics_interp is None :
+        if self.desi_instrumental_systematics_interp is None:
 
             # See in the cvs table directory the code to generate the table.
             # This is the correlation function induced by the sky model white noise.
-            srch_filename = "models/instrumental_systematics/desi-instrument-syst-for-forest-auto-correlation.csv"
-            if not resource_exists('vega', srch_filename):
-                raise Exception("Cannot find DESI instrumental syst file {:s}".format(srch_filename))
-            table_filename = resource_filename('vega', srch_filename)
-            print("Reading desi_instrumental_systematics table",table_filename)
+            path = "instrumental_systematics/desi-instrument-syst-for-forest-auto-correlation.csv"
+            table_filename = utils.find_file(path)
+            # if not resource_exists('vega', srch_filename):
+            #     raise Exception("Cannot find DESI instrumental syst file {:s}".format(srch_filename))
+            # table_filename = resource_filename('vega', srch_filename)
+            print("Reading desi_instrumental_systematics table", table_filename)
             syst_table = Table.read(table_filename)
-            self.desi_instrumental_systematics_interp = interp1d(syst_table["RT"],syst_table["XI"],kind='linear')
+            self.desi_instrumental_systematics_interp = interp1d(
+                syst_table["RT"], syst_table["XI"], kind='linear')
 
         correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
