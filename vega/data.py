@@ -35,7 +35,7 @@ class Data:
         self.corr_item = corr_item
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
-        self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', False)
+        self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
