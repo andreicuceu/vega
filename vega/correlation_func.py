@@ -1,6 +1,9 @@
 import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
+from astropy.table import Table
+from pkg_resources import resource_exists, resource_filename
+
 from . import utils
 
 
@@ -97,6 +100,9 @@ class CorrelationFunction:
             if ('continuous' not in types) or (types[0] == types[1]):
                 raise ValueError('You asked for relativistic effects or standard asymmetry,'
                                  ' but they only work for the cross')
+
+        # Place holder for interpolation function for DESI intrumental systematics
+        self.desi_instrumental_systematics_interp = None
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -654,8 +660,20 @@ class CorrelationFunction:
         # b = 0.0003189935987295203
         b = params.get('desi_inst_sys_amp', 0.0003189935987295203)
 
-        w = (rp > 0) & (rp < bin_size_rp) & (rt < 80)
+        w = (rp > 0) & (rp < bin_size_rp)
         correction = np.zeros(rt.shape)
-        correction[w] = b * (rt[w] / 80 - 1)**2
+
+        if self.desi_instrumental_systematics_interp is None:
+
+            # See in the cvs table directory the code to generate the table.
+            # This is the correlation function induced by the sky model white noise.
+            path = "instrumental_systematics/desi-instrument-syst-for-forest-auto-correlation.csv"
+            table_filename = utils.find_file(path)
+            print("Reading desi_instrumental_systematics table", table_filename)
+            syst_table = Table.read(table_filename)
+            self.desi_instrumental_systematics_interp = interp1d(
+                syst_table["RT"], syst_table["XI"], kind='linear')
+
+        correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
         return correction
