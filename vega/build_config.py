@@ -294,7 +294,6 @@ class BuildConfig:
             condition &= self.options['fullshape_smoothing_metals']
             if condition:
                 config['metals']['fullshape smoothing'] = self.options['fullshape_smoothing']
-                config['model']['fast_metals'] = "False"
 
         if self.name_extension is None:
             corr_path = self.config_path / '{}.ini'.format(name)
