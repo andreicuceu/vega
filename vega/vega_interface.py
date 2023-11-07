@@ -5,6 +5,7 @@ from astropy.io import fits
 import configparser
 import copy
 import yaml
+from scipy.special import loggamma
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -145,6 +146,7 @@ class VegaInterface:
                 self.compression_config[item] = value
             self.data_compression = {}
             if self.compression_config['type'] == 'score':
+                self.lik_type = 'gaussian'
                 self.cov_compression = {}
                 self.model_derivative = {}
                 self.fiducial_model = {}
@@ -190,15 +192,23 @@ class VegaInterface:
                     if 'cov' in self.compression_config:
                         self.cov_compression_type = 'mock_to_mock'
                         print("Using summaries' covariance matrix from "+self.compression_config['cov'])
+                        self.lik_type = self.compression_config.get('lik_type', 'gaussian')
                         mocktomock_cov = np.load(self.compression_config['cov']+'.npy')
                         ns = 100 # number of mocks
                         nd = mocktomock_cov.shape[0]   # length of data vector
                         h_factor_inv = (ns-nd-2)/(ns-1)
+                        self.num_sims = ns
+                        self.num_compressed_dims = nd 
                         print("### value of inverse Hartlap factor "+ str(h_factor_inv))
                         if 'mock_to_mock' not in self.compression_config:
                             self.cov_compression['mock_to_mock'] = {}
                             self.cov_compression['mock_to_mock']['mat'] = mocktomock_cov
-                            self.cov_compression['mock_to_mock']['inv'] = np.linalg.inv(self.cov_compression['mock_to_mock']['mat'])*h_factor_inv
+                            if self.lik_type == 'gaussian':
+                                self.cov_compression['mock_to_mock']['inv'] = np.linalg.inv(self.cov_compression['mock_to_mock']['mat'])*h_factor_inv
+                            elif self.lik_type == 't-distribution':
+                                self.cov_compression['mock_to_mock']['inv'] = np.linalg.inv(self.cov_compression['mock_to_mock']['mat'])
+                            else:
+                                raise ValueError(f'Unknown likelihood type {self.lik_type}. Choose from ["gaussian", "t-distribution"]')
                             self.cov_compression['mock_to_mock']['det'] = np.linalg.det(self.cov_compression['mock_to_mock']['mat'])
                     else:
                         self.cov_compression_type = 'fisher'
@@ -460,8 +470,17 @@ class VegaInterface:
         # Compute the normalization
         log_norm = 0
         if self.compression_config['type'] == 'score':
-            log_norm -= 0.5 * self.cov_compression[self.cov_compression_type]['mat'].shape[0] * np.log(2 * np.pi)
-            log_norm -= 0.5 * np.log(self.cov_compression[self.cov_compression_type]['det'])
+            if self.lik_type == 'gaussian':
+                log_norm -= 0.5 * self.cov_compression[self.cov_compression_type]['mat'].shape[0] * np.log(2 * np.pi)
+                log_norm -= 0.5 * np.log(self.cov_compression[self.cov_compression_type]['det'])
+            elif self.lik_type == 't-distribution':
+                Cp = loggamma(0.5 * self.num_sims) - 0.5 * self.num_compressed_dims * np.log(np.pi * (self.num_sims - 1))
+                Cp -= loggamma(0.5 * (self.num_sims - self.num_compressed_dims))
+
+                log_lik = Cp - 0.5 * np.log(self.cov_compression[self.cov_compression_type]['det'])
+                log_lik -= 0.5 * self.num_sims * np.log(1 + chi2 / (self.num_sims - 1))
+            else:
+                raise ValueError(f'Unknown likelihood type {self.lik_type}. Choose from ["gaussian", "t-distribution"]')
         else:
             # Compute the normalization for each component
             for name in self.corr_items:
