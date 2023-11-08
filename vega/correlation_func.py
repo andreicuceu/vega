@@ -531,10 +531,21 @@ class CorrelationFunction:
             for j in r2_powers:
                 bb_params.append(params['{} ({},{})'.format(
                         bb_term['name'], i, j)])
-        bb_params = np.array(bb_params).reshape(-1, r_max - r_min + 1)
 
-        corr = (bb_params[:, :, None, None] * r1**r1_powers[:, None, None] *
-                r2**r2_powers[None, :, None]).sum(axis=(0, 1, 2))
+        # the first dimension of bb_params is that of r1 power indices
+        # the second dimension of bb_params is that of r2 power indices
+        bb_params = np.array(bb_params).reshape(r_max - r_min + 1, -1)
+
+        # we are summing 3D array along 2 dimensions.
+        # first dimension is the data array (2500 for the standard rp rt grid of 50x50)
+        # second dimension is the first dimension of bb_params  = r1 power indices
+        # third dimension is the sectond dimension of bb_params = r2 power indices
+        # dimensions addressed in an array get the indices ':'
+        # dimensions not addressed in an array get the indices 'None'
+        # we sum over the second and third dimensions which are powers of r
+        corr = (bb_params[None,:, :] * r1[:,None,None]**r1_powers[None, :, None] *
+                r2[:,None,None]**r2_powers[None, None, :]).sum(axis=(1, 2))
+
         return corr
 
     def compute_qso_radiation(self, params):
