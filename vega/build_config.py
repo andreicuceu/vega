@@ -454,8 +454,10 @@ class BuildConfig:
                                                                         str(25*len(sample_params)))
             config['Polychord']['num_repeats'] = fit_info['Polychord'].get('num_repeats',
                                                                            str(len(sample_params)))
-            config['Polychord']['do_clustering'] = 'True'
-            config['Polychord']['boost_posterior'] = str(3)
+            config['Polychord']['do_clustering'] = fit_info['Polychord'].get('do_clustering',
+                                                                             'True')
+            config['Polychord']['boost_posterior'] = fit_info['Polychord'].get('boost_posterior',
+                                                                               str(0))
 
         # Write main config
         if self.name_extension is None:
