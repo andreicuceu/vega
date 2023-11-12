@@ -7,7 +7,7 @@ from sys import stdout
 class Minimizer:
     """Class for handling the interface to the minimizer.
     """
-    def __init__(self, chi2_func, sample_params):
+    def __init__(self, chi2_func, sample_params, cf_names):
         """
 
         Parameters
@@ -18,9 +18,14 @@ class Minimizer:
             Dictionary with the sample params config
         """
         self.chi2_func = chi2_func
+        self._cf_names = cf_names
         self._names = sample_params['limits'].keys()
         self._sample_params = sample_params
         self._config = {}
+        self.params_init = copy.deepcopy(self._sample_params['values'])
+        self.run_errors = copy.deepcopy(self._sample_params['errors'])
+        self.limits = copy.deepcopy(self._sample_params['limits'])
+        self.fixed = copy.deepcopy(self._sample_params['fix'])
 
         self._run_flag = False
 
@@ -35,6 +40,25 @@ class Minimizer:
         sample_params = {par: pars[i] for i, par in enumerate(self._names)}
         return self.chi2_func(sample_params)
 
+    def run_iminuit(self, params_to_sample):
+        minuit = iminuit.Minuit(self.chi2, name=self._names, **self.params_init)
+        for name in self._names:
+            minuit.errors[name] = self.run_errors[name]
+            minuit.limits[name] = self.limits[name]
+            minuit.fixed[name] = self.fixed[name]
+
+        for name in self._names:
+            if name not in params_to_sample:
+                minuit.fixed[name] = True
+
+        minuit.errordef = 1
+        minuit.print_level = 1
+        minuit.migrad()
+        print(minuit.fmin)
+        print(minuit.params)
+
+        return minuit
+
     def minimize(self, params=None):
         """Minimize the chi2.
 
@@ -46,56 +70,36 @@ class Minimizer:
         """
         t0 = time.time()
 
-        params_init = copy.deepcopy(self._sample_params['values'])
-        errors = copy.deepcopy(self._sample_params['errors'])
-        limits = copy.deepcopy(self._sample_params['limits'])
-        fixed = copy.deepcopy(self._sample_params['fix'])
-
-        def write_settings(params, name, out_container):
-            if name in params:
-                for par, val in params[name].items():
-                    out_container[par] = val
-
         if params is not None:
-            write_settings(params, 'values', params_init)
-            write_settings(params, 'errors', errors)
-            write_settings(params, 'limits', limits)
-            write_settings(params, 'fix', fixed)
+            if 'values' in params:
+                self.params_init |= params['values']
+            if 'errors' in params:
+                self.run_errors |= params['errors']
+            if 'limits' in params:
+                self.limits |= params['limits']
+            if 'fix' in params:
+                self.fixed |= params['fix']
 
         # Do an initial "fast" minimization over biases
-        bias_flag = bool(len([par for par in self._names if 'bias' in par]))
-        if bias_flag:
-            mig_init = iminuit.Minuit(self.chi2, name=self._names, **params_init)
-            for name in self._names:
-                mig_init.errors[name] = errors[name]
-                mig_init.limits[name] = limits[name]
-                mig_init.fixed[name] = fixed[name]
+        bias_params = [par for par in self._names if 'bias' in par]
+        if bool(len(bias_params)):
+            minuit_biases = self.run_iminuit(bias_params)
 
-            for name in self._names:
-                if 'bias' not in name:
-                    mig_init.fixed[name] = True
+            for param, value in minuit_biases.values.to_dict().items():
+                self.params_init[param] = value
 
-            mig_init.errordef = 1
-            mig_init.print_level = 1
-            mig_init.migrad()
-            print(mig_init.fmin)
-            print(mig_init.params)
+        # If we have broadband polynomials, we first maximize one correlation at a time
+        bb_params = [par for par in self._names if 'BB-' in par]
+        if bool(len(bb_params)):
+            for cf_name in self._cf_names:
+                cf_bb_params = [par for par in bb_params if cf_name in par]
+                minuit_bb = self.run_iminuit(cf_bb_params)
 
-            for param, value in mig_init.values.to_dict().items():
-                params_init[param] = value
+                for param, value in minuit_bb.values.to_dict().items():
+                    self.params_init[param] = value
 
         # Do the actual minimization
-        self._minuit = iminuit.Minuit(self.chi2, name=self._names, **params_init)
-        for name in self._names:
-            self._minuit.errors[name] = errors[name]
-            self._minuit.limits[name] = limits[name]
-            self._minuit.fixed[name] = fixed[name]
-
-        self._minuit.errordef = 1
-        self._minuit.print_level = 1
-        self._minuit.migrad()
-        print(self._minuit.fmin)
-        print(self._minuit.params)
+        self._minuit = self.run_iminuit(self._names)
 
         print("INFO: minimized in {}".format(time.time()-t0))
         stdout.flush()

@@ -137,8 +137,8 @@ class VegaInterface:
         if not self.sample_params['limits']:
             self.minimizer = None
         else:
-            self.minimizer = Minimizer(self.chi2, self.sample_params)
-        self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
+            self.minimizer = Minimizer(self.chi2, self.sample_params, self.corr_items.keys())
+        self.analysis = Analysis(Minimizer(self.chi2, self.sample_params, self.corr_items.keys()),
                                  self.main_config, self.mc_config)
 
         # Check for sampler
