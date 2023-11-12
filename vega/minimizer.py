@@ -88,15 +88,27 @@ class Minimizer:
             for param, value in minuit_biases.values.to_dict().items():
                 self.params_init[param] = value
 
-        # If we have broadband polynomials, we first maximize one correlation at a time
+        print(self.params_init)
+        # If we have broadband polynomials we first maximize all other parameters,
+        # and then the broadband parameters one correlation at a time
         bb_params = [par for par in self._names if 'BB-' in par]
         if bool(len(bb_params)):
+            cf_bb_params = [par for par in self._names if 'BB-' not in par]
+            minuit_bb = self.run_iminuit(cf_bb_params)
+
+            for param, value in minuit_bb.values.to_dict().items():
+                self.params_init[param] = value
+
+            print(self.params_init)
+
             for cf_name in self._cf_names:
                 cf_bb_params = [par for par in bb_params if cf_name in par]
                 minuit_bb = self.run_iminuit(cf_bb_params)
 
                 for param, value in minuit_bb.values.to_dict().items():
                     self.params_init[param] = value
+
+                print(self.params_init)
 
         # Do the actual minimization
         self._minuit = self.run_iminuit(self._names)
