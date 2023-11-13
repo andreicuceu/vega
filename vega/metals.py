@@ -65,18 +65,22 @@ class Metals:
         self.new_metals = self._corr_item.new_metals
         if self.new_metals:
             self.metal_matrix_config = self._corr_item.config['metal-matrix']
+            self.rp_size = self._corr_item.num_bins_rp_model
+            self.rt_size = self._corr_item.num_bins_rt_model
 
             self.cosmo = picca_constants.Cosmo(
                 corr_item.cosmo_params['Omega_m'], corr_item.cosmo_params['Omega_k'],
                 corr_item.cosmo_params['Omega_r'], corr_item.cosmo_params['wl'], blinding='none'
             )
 
-            self.stack_table_1 = fits.open(self._corr_item.tracer1['delta-stack'])[1].data
+            with fits.open(self._corr_item.tracer1['delta-stack']) as hdul:
+                self.stack_table_1 = hdul[1].data
 
             if self._corr_item.tracer1['name'] == self._corr_item.tracer2['name']:
                 self.stack_table_2 = self.stack_table_1
             else:
-                self.stack_table_2 = fits.open(self._corr_item.tracer2['delta-stack'])[1].data
+                with fits.open(self._corr_item.tracer2['delta-stack']) as hdul:
+                    self.stack_table_2 = hdul[1].data
 
         # Initialize metals
         self.Pk_metal = None
@@ -150,7 +154,8 @@ class Metals:
 
         # Apply the metal matrix
         if self.new_metals:
-            xi = (self.rp_metal_dmats[(name1, name2)] @ xi.reshape(50, 50)).flatten()
+            xi = (self.rp_metal_dmats[(name1, name2)]
+                  @ xi.reshape(self.rp_size, self.rt_size)).flatten()
         else:
             xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -209,7 +214,8 @@ class Metals:
 
                     # Apply the metal matrix
                     if self.new_metals:
-                        xi = (self.rp_metal_dmats[(name1, name2)] @ xi.reshape(50, 50)).flatten()
+                        xi = (self.rp_metal_dmats[(name1, name2)]
+                              @ xi.reshape(self.rp_size, self.rt_size)).flatten()
                     else:
                         xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -237,7 +243,8 @@ class Metals:
 
             # Apply the metal matrix
             if self.new_metals:
-                xi = (self.rp_metal_dmats[(name1, name2)] @ xi.reshape(50, 50)).flatten()
+                xi = (self.rp_metal_dmats[(name1, name2)]
+                      @ xi.reshape(self.rp_size, self.rt_size)).flatten()
             else:
                 xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -297,7 +304,7 @@ class Metals:
         true_rp_pairs, true_z1, true_z2 = self.get_all_rp_pairs(
             wave1, wave2, true_abs_1, true_abs_2)
 
-        assumed_rp_pairs, assumed_z1, assumed_z2 = self.get_all_rp_pairs(
+        assumed_rp_pairs, _, __ = self.get_all_rp_pairs(
             wave1, wave2, assumed_abs_1, assumed_abs_2)
 
         # Weights
@@ -318,11 +325,11 @@ class Metals:
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
 
         # Distortion matrix grid
-        rp_bin_edges = np.linspace(self._corr_item.rp_min_model, self._corr_item.rp_max_model,
-                                   self._corr_item.num_bins_rp_model + 1)
+        rp_bin_edges = np.linspace(
+            self._corr_item.rp_min_model, self._corr_item.rp_max_model, self.rp_size + 1)
 
         # I checked the orientation of the matrix
-        dmat, _, _ = np.histogram2d(
+        dmat, _, __ = np.histogram2d(
             assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights)
 
         # Normalize (sum of weights should be one for each input rp,rt)
@@ -345,19 +352,19 @@ class Metals:
         rp_eff = sum_assumed_weight_rp / (sum_assumed_weight + (sum_assumed_weight == 0))
         z_eff = sum_weight_z / (sum_assumed_weight + (sum_assumed_weight == 0))
 
-        num_bins_total = self._corr_item.num_bins_rp_model * self._corr_item.num_bins_rt_model
+        num_bins_total = self.rp_size * self.rt_size
         full_rp_eff = np.zeros(num_bins_total)
         full_rt_eff = np.zeros(num_bins_total)
         full_z_eff = np.zeros(num_bins_total)
 
-        rp_indices = np.arange(self._corr_item.num_bins_rp_model)
+        rp_indices = np.arange(self.rp_size)
         rt_bins = np.arange(
             self._corr_item.bin_size_rt_model / 2, self._corr_item.rt_max_model,
             self._corr_item.bin_size_rt_model
         )
 
-        for j in range(self._corr_item.num_bins_rt_model):
-            indices = j + self._corr_item.num_bins_rt_model * rp_indices
+        for j in range(self.rt_size):
+            indices = j + self.rt_size * rp_indices
 
             full_rp_eff[indices] = rp_eff
             full_rt_eff[indices] = rt_bins[j]
