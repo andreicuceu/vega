@@ -1,7 +1,10 @@
 import numpy as np
 import copy
+from astropy.io import fits
 from cachetools import cached, LRUCache
 from cachetools.keys import hashkey
+
+from picca import constants as picca_constants
 
 from . import power_spectrum
 from . import correlation_func as corr_func
@@ -38,9 +41,9 @@ class Metals:
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
-        self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
-        if self.fast_metals_unsafe:
-            self.fast_metals = True
+        # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
+        # if self.fast_metals_unsafe:
+        #     self.fast_metals = True
 
         self.save_components = fiducial.get('save-components', False)
 
@@ -58,18 +61,42 @@ class Metals:
         self.main_cross_mask = [tracer1 in self.main_tracers or tracer2 in self.main_tracers
                                 for (tracer1, tracer2) in corr_item.metal_correlations]
 
+        # If in new metals mode, read the stacked delta files
+        self.new_metals = self._corr_item.new_metals
+        if self.new_metals:
+            self.metal_matrix_config = self._corr_item.config['metal-matrix']
+
+            self.cosmo = picca_constants.Cosmo(
+                corr_item.cosmo_params['Omega_m'], corr_item.cosmo_params['Omega_k'],
+                corr_item.cosmo_params['Omega_r'], corr_item.cosmo_params['wl'], blinding='none'
+            )
+
+            self.stack_table_1 = fits.open(self._corr_item.tracer1['delta-stack'])[1].data
+
+            if self._corr_item.tracer1['name'] == self._corr_item.tracer2['name']:
+                self.stack_table_2 = self.stack_table_1
+            else:
+                self.stack_table_2 = fits.open(self._corr_item.tracer2['delta-stack'])[1].data
+
         # Initialize metals
         self.Pk_metal = None
         self.Xi_metal = {}
+        self.rp_metal_dmats = {}
         if self._corr_item.has_metals:
             for name1, name2 in self._corr_item.metal_correlations:
                 # Get the tracer info
                 tracer1 = self._corr_item.tracer_catalog[name1]
                 tracer2 = self._corr_item.tracer_catalog[name2]
 
-                # Read rp and rt for the metal correlation
-                rp_grid = data.metal_rp_grids[(name1, name2)]
-                rt_grid = data.metal_rt_grids[(name1, name2)]
+                if self.new_metals:
+                    dmat, rp_grid, rt_grid, z_grid = self.compute_fast_metal_dmat(
+                        name1, name2, self.main_tracers[0], self.main_tracers[1])
+                    self.rp_metal_dmats[(name1, name2)] = dmat
+                else:
+                    # Read rp and rt for the metal correlation
+                    rp_grid = data.metal_rp_grids[(name1, name2)]
+                    rt_grid = data.metal_rt_grids[(name1, name2)]
+                    z_grid = data.metal_z_grids[(name1, name2)]
 
                 # Compute the corresponding r/mu coords
                 r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
@@ -81,7 +108,7 @@ class Metals:
                 coords_grid = {}
                 coords_grid['r'] = r_grid
                 coords_grid['mu'] = mu_grid
-                coords_grid['z'] = data.metal_z_grids[(name1, name2)]
+                coords_grid['z'] = z_grid
 
                 # Get bin sizes
                 if self._data is not None:
@@ -92,9 +119,10 @@ class Metals:
 
                 # Initialize the metal correlation P(k)
                 if self.Pk_metal is None:
-                    self.Pk_metal = power_spectrum.PowerSpectrum(self._corr_item.config['metals'],
-                                                                 fiducial, tracer1, tracer2,
-                                                                 self._corr_item.name)
+                    self.Pk_metal = power_spectrum.PowerSpectrum(
+                        self._corr_item.config['metals'], fiducial,
+                        tracer1, tracer2, self._corr_item.name
+                    )
 
                 # assert len(self.Pk_metal[(name1, name2)].muk_grid) == len(self.Pk_core.muk_grid)
                 assert self._corr_item.config['metals'].getint('ell_max', ell_max) == ell_max, \
@@ -106,10 +134,6 @@ class Metals:
                 self.Xi_metal[corr_hash] = corr_func.CorrelationFunction(
                                     self._corr_item.config['metals'], fiducial, coords_grid,
                                     scale_params, tracer1, tracer2, metal_corr=True)
-
-            self._has_metal_mats = False
-            if self._data is not None:
-                self._has_metal_mats = self._data.metal_mats is not None
 
     @cached(cache=cache_pk, key=lambda self, call_pars, *cache_pars: hashkey(*cache_pars))
     def compute_pk(self, call_pars, *cache_pars):
@@ -125,7 +149,9 @@ class Metals:
         xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, pars)
 
         # Apply the metal matrix
-        if self._has_metal_mats:
+        if self.new_metals:
+            xi = (self.rp_metal_dmats[(name1, name2)] @ xi.reshape(50, 50)).flatten()
+        else:
             xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
         return xi
@@ -153,56 +179,6 @@ class Metals:
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
             bias1, beta1, bias2, beta2 = utils.bias_beta(pars, name1, name2)
-
-            # Fast metals mode
-            # if self.fast_metals:
-            #     # Return saved distorted correlation if it exists
-            #     if (name1, name2) in self.xi_distorted[component]:
-            #         xi_metals += bias1 * bias2 * self.xi_distorted[component][(name1, name2)]
-            #         continue
-            #     # Return saved correlation if it exists
-            #     elif (name1, name2) in self.xi[component]:
-            #         xi_metals += bias1 * bias2 * self.xi[component][(name1, name2)]
-            #         continue
-
-            # No saved correlations, compute and save them
-            # First try the fastest mode where we compute and save everything
-            # if self.fast_metals and self.fast_metals_unsafe:
-            #     pk = self.Pk_metal[(name1, name2)].compute(pk_lin, pars, fast_metals=True)
-            #     xi = self.Xi_metal[(name1, name2)].compute(pk, pk_lin, self.PktoXi, pars)
-
-            #     # Apply the metal matrix
-            #     if self._has_metal_mats:
-            #         xi = self._data.metal_mats[(name1, name2)].dot(xi)
-            #         self.xi_distorted[component][(name1, name2)] = xi.copy()
-            #     else:
-            #         self.xi[component][(name1, name2)] = xi.copy()
-
-            #     xi_metals += bias1 * bias2 * xi
-            #     continue
-
-            # Next try the fast safe mode where we only save Metal x Metal correlations
-            # elif self.fast_metals:
-            #     # If it's a QSO/DLA cross, or LyaxMetal, we do the slow route because
-            #     # beta_lya and beta_qso are usually sampled
-            #     type1 = self._corr_item.tracer_catalog[name1]['type']
-            #     type2 = self._corr_item.tracer_catalog[name2]['type']
-            #     slow_condition = (type1 == 'discrete') or (type2 == 'discrete')
-            #     slow_condition = slow_condition or (name1 == 'LYA') or (name2 == 'LYA')
-
-            #     if not slow_condition:
-            #         pk = self.Pk_metal[(name1, name2)].compute(pk_lin, pars, fast_metals=True)
-            #         xi = self.Xi_metal[(name1, name2)].compute(pk, pk_lin, self.PktoXi, pars)
-
-            #         # Apply the metal matrix
-            #         if self._has_metal_mats:
-            #             xi = self._data.metal_mats[(name1, name2)].dot(xi)
-            #             self.xi_distorted[component][(name1, name2)] = xi.copy()
-            #         else:
-            #             self.xi[component][(name1, name2)] = xi.copy()
-
-            #         xi_metals += bias1 * bias2 * xi
-            #         continue
 
             self.Pk_metal.tracer1_name = name1
             self.Pk_metal.tracer2_name = name2
@@ -232,14 +208,16 @@ class Metals:
                     self.PktoXi.cache_pars = None
 
                     # Apply the metal matrix
-                    if self._has_metal_mats:
+                    if self.new_metals:
+                        xi = (self.rp_metal_dmats[(name1, name2)] @ xi.reshape(50, 50)).flatten()
+                    else:
                         xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
                     xi_metals += bias1 * bias2 * xi
 
                 else:
-                    xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(pk_lin, pars, name1,
-                                                                             name2, component)
+                    xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
+                        pk_lin, pars, name1, name2, component)
 
                 continue
 
@@ -258,11 +236,131 @@ class Metals:
                 self.xi[component][(name1, name2)] = copy.deepcopy(xi)
 
             # Apply the metal matrix
-            if self._has_metal_mats:
+            if self.new_metals:
+                xi = (self.rp_metal_dmats[(name1, name2)] @ xi.reshape(50, 50)).flatten()
+            else:
                 xi = self._data.metal_mats[(name1, name2)].dot(xi)
-                if self.save_components:
-                    self.xi_distorted[component][(name1, name2)] = copy.deepcopy(xi)
+
+            if self.save_components:
+                self.xi_distorted[component][(name1, name2)] = copy.deepcopy(xi)
 
             xi_metals += xi
 
         return xi_metals
+
+    @staticmethod
+    def rebin(vector, rebin_factor):
+        """Rebin a vector by a factor of rebin_factor.
+
+        Parameters
+        ----------
+        vector : 1D Array
+            Vector to rebin
+        rebin_factor : int
+            Rebinning factor
+
+        Returns
+        -------
+        1D Array
+            Rebinned vector
+        """
+        size = vector.size
+        return vector[:(size // rebin_factor) * rebin_factor].reshape(
+            (size // rebin_factor), rebin_factor).mean(-1)
+
+    def get_all_rp_pairs(self, wave1, wave2, abs_1, abs_2):
+        z1 = wave1 / picca_constants.ABSORBER_IGM[abs_1] - 1.
+        z2 = wave2 / picca_constants.ABSORBER_IGM[abs_2] - 1.
+        r1 = self.cosmo.get_r_comov(z1)
+        r2 = self.cosmo.get_r_comov(z2)
+
+        # Get all pairs
+        rp_pairs = (r1[:, None] - r2[None, :]).ravel()  # same sign as line 676 of cf.py (1-2)
+        if 'discrete' not in self.main_tracer_types:
+            rp_pairs = np.abs(rp_pairs)
+
+        return rp_pairs, z1, z2
+
+    def compute_fast_metal_dmat(self, true_abs_1, true_abs_2, assumed_abs_1, assumed_abs_2):
+        wave1 = 10**self.stack_table_1["LOGLAM"]
+        weights1 = self.stack_table_1["WEIGHT"]
+        wave2 = 10**self.stack_table_2["LOGLAM"]
+        weights2 = self.stack_table_2["WEIGHT"]
+
+        rebin_factor = self.metal_matrix_config.getint('rebin_factor', None)
+        if rebin_factor is not None:
+            wave1 = self.rebin(wave1, rebin_factor)
+            weights1 = self.rebin(weights1, rebin_factor)
+            wave2 = self.rebin(wave2, rebin_factor)
+            weights2 = self.rebin(weights2, rebin_factor)
+
+        true_rp_pairs, true_z1, true_z2 = self.get_all_rp_pairs(
+            wave1, wave2, true_abs_1, true_abs_2)
+
+        assumed_rp_pairs, assumed_z1, assumed_z2 = self.get_all_rp_pairs(
+            wave1, wave2, assumed_abs_1, assumed_abs_2)
+
+        # Weights
+        # alpha_in: in (1+z)^(alpha_in-1) is a scaling used to model how the metal contribution
+        # evolves with redshift (by default alpha_in=1 so that this has no effect)
+        # alpha_out: (1+z)^(alpha_out-1) is applied to the delta weights in io.read_deltas and
+        # used for the correlation function. It also has to be applied here.
+        # we have them for both forests (1 and 2)
+        true_alpha_1 = self.metal_matrix_config.getfloat(f'alpha_{true_abs_1}')
+        true_alpha_2 = self.metal_matrix_config.getfloat(f'alpha_{true_abs_2}')
+        assumed_alpha_1 = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs_1}', 2.9)
+        assumed_alpha_2 = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs_2}', 2.9)
+
+        # so here we have to apply both scalings (in the original code :
+        # alpha_in is applied in cf.calc_metal_dmat and alpha_out in io.read_deltas)
+        scaling_1 = (1 + true_z1)**(true_alpha_1 + assumed_alpha_1 - 2)
+        scaling_2 = (1 + true_z2)**(true_alpha_2 + assumed_alpha_2 - 2)
+        weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+
+        # Distortion matrix grid
+        rp_bin_edges = np.linspace(self._corr_item.rp_min_model, self._corr_item.rp_max_model,
+                                   self._corr_item.num_bins_rp_model + 1)
+
+        # I checked the orientation of the matrix
+        dmat, _, _ = np.histogram2d(
+            assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights)
+
+        # Normalize (sum of weights should be one for each input rp,rt)
+        sum_true_weight, _ = np.histogram(true_rp_pairs, bins=rp_bin_edges, weights=weights)
+        dmat *= ((sum_true_weight > 0) / (sum_true_weight + (sum_true_weight == 0)))[None, :]
+
+        # Mean assumed weights
+        sum_assumed_weight, _ = np.histogram(assumed_rp_pairs, bins=rp_bin_edges, weights=weights)
+        sum_assumed_weight_rp, _ = np.histogram(
+            assumed_rp_pairs, bins=rp_bin_edges,
+            weights=weights * (assumed_rp_pairs[None, :].ravel())
+        )
+
+        # Return the redshift of the actual absorber, which is the average of true_z1 and true_z2
+        sum_weight_z, _ = np.histogram(
+            assumed_rp_pairs, bins=rp_bin_edges,
+            weights=weights * ((true_z1[:, None] + true_z2[None, :]) / 2.).ravel()
+        )
+
+        rp_eff = sum_assumed_weight_rp / (sum_assumed_weight + (sum_assumed_weight == 0))
+        z_eff = sum_weight_z / (sum_assumed_weight + (sum_assumed_weight == 0))
+
+        num_bins_total = self._corr_item.num_bins_rp_model * self._corr_item.num_bins_rt_model
+        full_rp_eff = np.zeros(num_bins_total)
+        full_rt_eff = np.zeros(num_bins_total)
+        full_z_eff = np.zeros(num_bins_total)
+
+        rp_indices = np.arange(self._corr_item.num_bins_rp_model)
+        rt_bins = np.arange(
+            self._corr_item.bin_size_rt_model / 2, self._corr_item.rt_max_model,
+            self._corr_item.bin_size_rt_model
+        )
+
+        for j in range(self._corr_item.num_bins_rt_model):
+            indices = j + self._corr_item.num_bins_rt_model * rp_indices
+
+            full_rp_eff[indices] = rp_eff
+            full_rt_eff[indices] = rt_bins[j]
+            full_z_eff[indices] = z_eff
+
+        return dmat, full_rp_eff, full_rt_eff, full_z_eff

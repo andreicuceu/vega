@@ -22,6 +22,7 @@ class Data:
     _log_cov_det = None
     _blind = None
     rp_rt_custom_grid = None
+    cosmo_params = None
 
     def __init__(self, corr_item):
         """
@@ -47,16 +48,30 @@ class Data:
         self.corr_item.bin_size_rt_model = self.bin_size_rt_model
         self.corr_item.bin_size_rp_data = self.bin_size_rp_data
         self.corr_item.bin_size_rt_data = self.bin_size_rt_data
+        self.corr_item.rp_min_model = self.rp_min_model
+        self.corr_item.rp_max_model = self.rp_max_model
+        self.corr_item.rt_max_model = self.rt_max_model
+        self.corr_item.num_bins_rp_model = self.num_bins_rp_model
+        self.corr_item.num_bins_rt_model = self.num_bins_rt_model
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
-            tracer_catalog, metal_correlations = self._init_metals(
-                                                 corr_item.config['metals'])
+            if not corr_item.new_metals:
+                tracer_catalog, metal_correlations = self._init_metals(corr_item.config['metals'])
+            else:
+                metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
+                    corr_item.config['metals'])
+                metal_correlations = self._init_metal_correlations(
+                    corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
+
             self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
         # Check if we have broadband
         if 'broadband' in corr_item.config:
             self.corr_item.init_broadband(self.coeff_binning_model)
+
+        if self.cosmo_params is not None:
+            self.corr_item.cosmo_params = self.cosmo_params
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
@@ -262,6 +277,13 @@ class Data:
         self.num_bins_rp_data = header['NP']
         self.num_bins_rt_data = header['NT']
 
+        if "OMEGAM" in header:
+            self.cosmo_params = {}
+            self.cosmo_params['Omega_m'] = header['OMEGAM']
+            self.cosmo_params['Omega_k'] = header.get('OMEGAK', 0.)
+            self.cosmo_params['Omega_r'] = header.get('OMEGAR', 0.)
+            self.cosmo_params['wl'] = header.get('WL', -1.)
+
         # Get the data bin size
         # TODO If RTMIN is ever added to the cf data files this needs modifying
         self.bin_size_rp_data = (self.rp_max_data - self.rp_min_data) / self.num_bins_rp_data
@@ -424,6 +446,57 @@ class Data:
         mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
 
         return mask
+    
+    def _init_metal_tracers(self, metal_config):
+        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
+
+        # Read metal tracers
+        metals_in_tracer1 = None
+        metals_in_tracer2 = None
+        if 'in tracer1' in metal_config:
+            metals_in_tracer1 = metal_config.get('in tracer1').split()
+        if 'in tracer2' in metal_config:
+            metals_in_tracer2 = metal_config.get('in tracer2').split()
+
+        # Build tracer Catalog
+        tracer_catalog = {}
+        tracer_catalog[self.tracer1['name']] = self.tracer1
+        tracer_catalog[self.tracer2['name']] = self.tracer2
+
+        if metals_in_tracer1 is not None:
+            for metal in metals_in_tracer1:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+
+        if metals_in_tracer2 is not None:
+            for metal in metals_in_tracer2:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+        
+        return metals_in_tracer1, metals_in_tracer2, tracer_catalog
+    
+    def _init_metal_correlations(self, metal_config, metals_in_tracer1, metals_in_tracer2):
+        metal_correlations = []
+        if 'in tracer2' in metal_config:
+            for metal in metals_in_tracer2:
+                if not self._use_correlation(self.tracer1['name'], metal):
+                    continue
+                metal_correlations.append((self.tracer1['name'], metal))
+
+        if 'in tracer1' in metal_config:
+            for metal in metals_in_tracer1:
+                if not self._use_correlation(metal, self.tracer2['name']):
+                    continue
+                metal_correlations.append((metal, self.tracer2['name']))
+
+        if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
+            for i, metal1 in enumerate(metals_in_tracer1):
+                j0 = i if self.tracer1 == self.tracer2 else 0
+
+                for metal2 in metals_in_tracer2[j0:]:
+                    if not self._use_correlation(metal1, metal2):
+                        continue
+                    metal_correlations.append((metal1, metal2))
+        
+        return metal_correlations
 
     def _init_metals(self, metal_config):
         """Read the metal file and initialize all the metal data.
@@ -440,33 +513,12 @@ class Data:
         list
             list of all metal correlations we need to compute
         """
-        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
-
-        # Read metal tracers
-        metals_in_tracer1 = None
-        metals_in_tracer2 = None
-        if 'in tracer1' in metal_config:
-            metals_in_tracer1 = metal_config.get('in tracer1').split()
-        if 'in tracer2' in metal_config:
-            metals_in_tracer2 = metal_config.get('in tracer2').split()
+        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(metal_config)
 
         self.metal_mats = {}
         self.metal_rp_grids = {}
         self.metal_rt_grids = {}
         self.metal_z_grids = {}
-
-        # Build tracer Catalog
-        tracer_catalog = {}
-        tracer_catalog[self.tracer1['name']] = self.tracer1
-        tracer_catalog[self.tracer2['name']] = self.tracer2
-
-        if metals_in_tracer1 is not None:
-            for metal in metals_in_tracer1:
-                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
-
-        if metals_in_tracer2 is not None:
-            for metal in metals_in_tracer2:
-                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
 
         # Read the metal file
         metal_hdul = fits.open(find_file(metal_config.get('filename')))

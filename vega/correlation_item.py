@@ -12,6 +12,12 @@ class CorrelationItem:
     _bin_size_rt_model = None
     _bin_size_rp_data = None
     _bin_size_rt_data = None
+    cosmo_params = None
+    rp_min_model = None
+    rp_max_model = None
+    rt_max_model = None
+    num_bins_rp_model = None
+    num_bins_rt_model = None
 
     def __init__(self, config, model_pk=False):
         """
@@ -39,6 +45,11 @@ class CorrelationItem:
         self.has_data = config['data'].getboolean('has_datafile', True)
         if 'filename' not in config['data']:
             self.has_data = False
+
+        self.new_metals = config['model'].getboolean('new_metals', False)
+        if self.new_metals:
+            self.tracer1['delta-stack'] = config['data'].get(f'delta_stack_{self.tracer1["name"]}')
+            self.tracer2['delta-stack'] = config['data'].get(f'delta_stack_{self.tracer2["name"]}')
 
         self.test_flag = config['data'].getboolean('test', False)
 
