@@ -69,8 +69,9 @@ class Metals:
             self.rt_size = self._corr_item.num_bins_rt_model
 
             self.cosmo = picca_constants.Cosmo(
-                corr_item.cosmo_params['Omega_m'], corr_item.cosmo_params['Omega_k'],
-                corr_item.cosmo_params['Omega_r'], corr_item.cosmo_params['wl'], blinding='none'
+                Om=corr_item.cosmo_params['Omega_m'], Ok=corr_item.cosmo_params['Omega_k'],
+                Or=corr_item.cosmo_params['Omega_r'], wl=corr_item.cosmo_params['wl'],
+                blinding='none'
             )
 
             with fits.open(self._corr_item.tracer1['delta-stack']) as hdul:
