@@ -74,14 +74,11 @@ class Metals:
                 blinding='none'
             )
 
-            with fits.open(self._corr_item.tracer1['delta-stack']) as hdul:
+            with fits.open(self._corr_item.tracer1['weights-path']) as hdul:
                 self.stack_table_1 = hdul[1].data
 
-            if self._corr_item.tracer1['name'] == self._corr_item.tracer2['name']:
-                self.stack_table_2 = self.stack_table_1
-            else:
-                with fits.open(self._corr_item.tracer2['delta-stack']) as hdul:
-                    self.stack_table_2 = hdul[1].data
+            with fits.open(self._corr_item.tracer2['weights-path']) as hdul:
+                self.stack_table_2 = hdul[1].data
 
         # Initialize metals
         self.Pk_metal = None

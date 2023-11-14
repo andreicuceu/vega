@@ -48,8 +48,10 @@ class CorrelationItem:
 
         self.new_metals = config['model'].getboolean('new_metals', False)
         if self.new_metals:
-            self.tracer1['delta-stack'] = config['data'].get(f'delta_stack_{self.tracer1["name"]}')
-            self.tracer2['delta-stack'] = config['data'].get(f'delta_stack_{self.tracer2["name"]}')
+            self.tracer1['weights-path'] = config['data'].get('weights-tracer1')
+            self.tracer2['weights-path'] = config['data'].get('weights-tracer2', None)
+            if self.tracer2['weights-path'] is None:
+                self.tracer2['weights-path'] = self.tracer1['weights-path']
 
         self.test_flag = config['data'].getboolean('test', False)
 
