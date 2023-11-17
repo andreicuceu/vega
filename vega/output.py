@@ -424,7 +424,7 @@ class Output:
         names = np.array(list(bestfits.keys()))
         bestfit_table = np.array([bestfits[name][:, 0] for name in names])
         errors_table = np.array([bestfits[name][:, 1] for name in names])
-        covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names))
+        covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names)).T
 
         # Get the data types for the columns
         max_length = np.max([len(name) for name in names])
