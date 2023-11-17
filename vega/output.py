@@ -422,15 +422,15 @@ class Output:
         covariances = np.array(self.analysis.mc_covariances)
 
         names = np.array(list(bestfits.keys()))
-        bestfit_table = np.array([bestfits[name][:, 0] for name in names]).T
-        errors_table = np.array([bestfits[name][:, 1] for name in names]).T
-        covariances = covariances.reshape(bestfit_table.shape[0]*len(names), len(names))
+        bestfit_table = np.array([bestfits[name][:, 0] for name in names])
+        errors_table = np.array([bestfits[name][:, 1] for name in names])
+        covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names))
 
         # Get the data types for the columns
         max_length = np.max([len(name) for name in names])
         name_format = str(max_length) + 'A'
-        fit_format = f'{bestfit_table.shape[0]}D'
-        cov_format = f'{covariances.shape[0]}D'
+        fit_format = f'{bestfit_table.shape[1]}D'
+        cov_format = f'{covariances.shape[1]}D'
 
         # Create the columns with the bestfit data
         col1 = fits.Column(name='names', format=name_format, array=names)
