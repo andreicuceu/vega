@@ -182,7 +182,7 @@ class Analysis:
         self.mc_failed_mask = []
 
         for i in range(num_mocks):
-            print(f'INFO: running Monte Carlo realization {i}')
+            print(f'INFO: Running Monte Carlo realization {i}')
             sys.stdout.flush()
 
             # Create the mocks
@@ -199,7 +199,7 @@ class Analysis:
                 minimizer.minimize()
                 self.mc_failed_mask.append(False)
             except ValueError:
-                print('WARNING: minimizer failed for mock {}'.format(i))
+                print('WARNING: Minimizer failed for mock {}'.format(i))
                 self.mc_failed_mask.append(True)
                 self.mc_chisq.append(np.nan)
                 self.mc_valid_minima.append(False)
@@ -211,12 +211,12 @@ class Analysis:
                     self.mc_bestfits[param] = []
                 self.mc_bestfits[param].append([value, minimizer.errors[param]])
 
-            for param in self.mc_bestfits.keys():
-                self.mc_bestfits[param] = np.array(self.mc_bestfits[param])
-
             self.mc_covariances.append(minimizer.covariance)
             self.mc_chisq.append(minimizer.fmin.fval)
             self.mc_valid_minima.append(minimizer.fmin.is_valid)
             self.mc_valid_hesse.append(not minimizer.fmin.hesse_failed)
+
+        for param in self.mc_bestfits.keys():
+            self.mc_bestfits[param] = np.array(self.mc_bestfits[param])
 
         self.has_monte_carlo = True
