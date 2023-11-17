@@ -149,7 +149,7 @@ class Analysis:
 
             # Create the mock
             mocks[name] = self._data[name].create_monte_carlo(
-                fiducial_model, item_scale, seed, forecast)
+                fiducial_model[name], item_scale, seed, forecast)
 
         return mocks
 
