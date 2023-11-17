@@ -61,10 +61,13 @@ if __name__ == '__main__':
         num_local_mc += 1
 
     # Get fiducial model
-    fiducial_path = vega.main_config['control'].get('mc_fiducial', None)
-    if fiducial_path is not None:
-        with fits.open('fiducial_path') as hdul:
-            fiducial_model = hdul[1].data['DA']
+    use_measured_fiducial = vega.main_config['control'].getboolean('use_measured_fiducial', False)
+    if use_measured_fiducial:
+        fiducial_model = {}
+        for name in vega.corr_items.keys():
+            fiducial_path = vega.main_config['control'].get(f'mc_fiducial_{name}')
+            with fits.open(fiducial_path) as hdul:
+                fiducial_model[name] = hdul[1].data['DA']
     else:
         fiducial_model = vega.compute_model(vega.mc_config['params'], run_init=False)
 
