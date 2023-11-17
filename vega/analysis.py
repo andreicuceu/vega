@@ -189,7 +189,7 @@ class Analysis:
             mocks = self.create_monte_carlo_sim(
                 fiducial_model, seed=None, scale=scale, forecast=False)
 
-            for name, cf_mock in mocks.keys():
+            for name, cf_mock in mocks.items():
                 if name not in self.mc_mocks:
                     self.mc_mocks[name] = []
                 self.mc_mocks[name].append(cf_mock)
