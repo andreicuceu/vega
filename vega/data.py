@@ -446,7 +446,7 @@ class Data:
         mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
 
         return mask
-    
+
     def _init_metal_tracers(self, metal_config):
         assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
 
@@ -470,9 +470,9 @@ class Data:
         if metals_in_tracer2 is not None:
             for metal in metals_in_tracer2:
                 tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
-        
+
         return metals_in_tracer1, metals_in_tracer2, tracer_catalog
-    
+
     def _init_metal_correlations(self, metal_config, metals_in_tracer1, metals_in_tracer2):
         metal_correlations = []
         if 'in tracer2' in metal_config:
@@ -495,7 +495,7 @@ class Data:
                     if not self._use_correlation(metal1, metal2):
                         continue
                     metal_correlations.append((metal1, metal2))
-        
+
         return metal_correlations
 
     def _init_metals(self, metal_config):
@@ -628,7 +628,7 @@ class Data:
             raise ValueError("Cannot find correct metal matrices."
                              " Check that blinding is consistent between cf and metal files.")
 
-    def create_monte_carlo(self, fiducial_model, scale=1., seed=0,
+    def create_monte_carlo(self, fiducial_model, scale=1., seed=None,
                            forecast=False):
         """Create monte carlo mock of data using a fiducial model.
 
@@ -668,7 +668,8 @@ class Data:
             self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
-        np.random.seed(seed)
+        if seed is not None:
+            np.random.seed(seed)
         if forecast:
             self.mc_mock = fiducial_model
         else:
@@ -676,4 +677,4 @@ class Data:
             self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
         self.masked_mc_mock = self.mc_mock[self.model_mask]
 
-        return self.masked_mc_mock
+        return self.mc_mock

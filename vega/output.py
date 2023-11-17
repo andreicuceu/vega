@@ -412,6 +412,67 @@ class Output:
 
         return columns
 
+    def write_monte_carlo(self, cpu_id=None):
+        assert self.analysis is not None
+        assert self.analysis.has_monte_carlo
+
+        primary_hdu = fits.PrimaryHDU()
+
+        bestfits = self.analysis.mc_bestfits
+        covariances = np.array(self.analysis.mc_covariances)
+
+        names = np.array(list(bestfits.keys()))
+        bestfit_table = np.array([bestfits[name][:, 0] for name in names])
+        errors_table = np.array([bestfits[name][:, 1] for name in names])
+        covariances = covariances.reshape(bestfit_table.shape[0]*len(names), len(names))
+
+        # Get the data types for the columns
+        max_length = np.max([len(name) for name in names])
+        name_format = str(max_length) + 'A'
+        fit_format = f'{bestfit_table.shape[0]}D'
+        cov_format = f'{covariances.shape[0]}D'
+
+        # Create the columns with the bestfit data
+        col1 = fits.Column(name='names', format=name_format, array=names)
+        col2 = fits.Column(name='values', format=fit_format, array=bestfit_table)
+        col3 = fits.Column(name='errors', format=fit_format, array=errors_table)
+        col4 = fits.Column(name='covariance', format=cov_format, array=covariances)
+
+        # Create the Table HDU from the columns
+        bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+        bestfit_hdu.name = 'Bestfit'
+
+        # Create the columns with the fit information
+        col1 = fits.Column(name='chisq', format='D', array=self.analysis.mc_chisq)
+        col2 = fits.Column(name='valid_minima', format='L', array=self.analysis.mc_valid_minima)
+        col3 = fits.Column(name='valid_hesse', format='L', array=self.analysis.mc_valid_hesse)
+        col4 = fits.Column(name='failed_mask', format='L', array=self.analysis.mc_failed_mask)
+
+        # Create the Table HDU from the columns
+        fitinfo_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+        fitinfo_hdu.name = 'FitInfo'
+
+        mocks = self.analysis.mc_mocks
+        columns = []
+        for name in mocks.keys():
+            table = np.array(mocks[name]).T
+            columns.append(fits.Column(name=name, format=f'{table.shape[0]}D', array=table))
+
+        mocks_hdu = fits.BinTableHDU.from_columns(columns)
+        mocks_hdu.name = 'Mocks'
+
+        hdu_list = [primary_hdu, bestfit_hdu, fitinfo_hdu, mocks_hdu]
+
+        hdul = fits.HDUList(hdu_list)
+        dir_path = Path(self.outfile).parent / 'monte_carlo'
+        dir_path.mkdir(parents=True, exist_ok=True)
+        if cpu_id is None:
+            filepath = dir_path / 'monte_carlo.fits'
+        else:
+            filepath = dir_path / f'monte_carlo_{cpu_id}.fits'
+
+        hdul.writeto(filepath, overwrite=self.overwrite)
+
     def write_results_hdf(self, minimizer, scan_results=None):
         """Write Vega analysis results, including the bestfit
         and chi2 scan results if they exist.

@@ -138,8 +138,10 @@ class VegaInterface:
             self.minimizer = None
         else:
             self.minimizer = Minimizer(self.chi2, self.sample_params)
-        self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
-                                 self.main_config, self.mc_config)
+        self.analysis = Analysis(
+            self.chi2, self.sample_params, self.main_config,
+            self.corr_items, self.data, self.mc_config
+        )
 
         # Check for sampler
         self.has_sampler = False
@@ -441,8 +443,8 @@ class VegaInterface:
                 item_scale = 1.
 
             # Create the mock
-            mocks[name] = self.data[name].create_monte_carlo(fiducial_model, item_scale, seed,
-                                                             forecast)
+            mocks[name] = self.data[name].create_monte_carlo(
+                fiducial_model, item_scale, seed, forecast)
 
         self.monte_carlo = True
         return mocks
