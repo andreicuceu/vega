@@ -455,8 +455,8 @@ class Output:
         mocks = self.analysis.mc_mocks
         columns = []
         for name in mocks.keys():
-            table = np.array(mocks[name]).T
-            columns.append(fits.Column(name=name, format=f'{table.shape[0]}D', array=table))
+            table = np.array(mocks[name])
+            columns.append(fits.Column(name=name, format=f'{table.shape[1]}D', array=table))
 
         mocks_hdu = fits.BinTableHDU.from_columns(columns)
         mocks_hdu.name = 'Mocks'
