@@ -45,6 +45,9 @@ if __name__ == '__main__':
         raise ValueError('Warning: You called "run_vega_mc_mpi.py" without asking'
                          ' for monte carlo. Add "run_montecarlo = True" to the "[control]" section.')
 
+    # Activate monte carlo mode
+    vega.monte_carlo = True
+
     # Check if we need to run a forecast
     forecast = vega.main_config['control'].getboolean('forecast', False)
     if forecast:

@@ -422,8 +422,8 @@ class Output:
         covariances = np.array(self.analysis.mc_covariances)
 
         names = np.array(list(bestfits.keys()))
-        bestfit_table = np.array([bestfits[name][:, 0] for name in names])
-        errors_table = np.array([bestfits[name][:, 1] for name in names])
+        bestfit_table = np.array([bestfits[name][:, 0] for name in names]).T
+        errors_table = np.array([bestfits[name][:, 1] for name in names]).T
         covariances = covariances.reshape(bestfit_table.shape[0]*len(names), len(names))
 
         # Get the data types for the columns
