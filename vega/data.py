@@ -47,7 +47,7 @@ class Data:
 
         self._read_data(data_path, corr_item.config['cuts'], dmat_path)
         self.corr_item.init_coordinates(
-            self.data_coordinates, self.dist_model_coordinates, self.model_coordinates)
+            self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
