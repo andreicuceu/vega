@@ -76,4 +76,7 @@ if __name__ == '__main__':
     vega.analysis.run_monte_carlo(fiducial_model, num_mocks=num_local_mc, seed=local_seed)
 
     # Write output
-    vega.output.write_monte_carlo()
+    if num_cpus > 1:
+        vega.output.write_monte_carlo(cpu_rank)
+    else:
+        vega.output.write_monte_carlo()
