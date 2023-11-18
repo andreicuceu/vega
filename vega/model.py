@@ -27,10 +27,6 @@ class Model:
         self._model_pk = corr_item.model_pk
 
         assert corr_item.model_coordinates is not None
-        # self._coords_grid = {}
-        # self._coords_grid['r'] = corr_item.r_mu_grid[0]
-        # self._coords_grid['mu'] = corr_item.r_mu_grid[1]
-        # self._coords_grid['z'] = corr_item.z_grid
 
         self._data = data
         data_has_distortion = False

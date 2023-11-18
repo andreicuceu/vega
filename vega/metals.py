@@ -102,21 +102,6 @@ class Metals:
                 else:
                     # Read rp and rt for the metal correlation
                     metal_coordinates = data.metal_coordinates[(name1, name2)]
-                    # rp_grid = data.metal_rp_grids[(name1, name2)]
-                    # rt_grid = data.metal_rt_grids[(name1, name2)]
-                    # z_grid = data.metal_z_grids[(name1, name2)]
-
-                # Compute the corresponding r/mu coords
-                # r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
-                # mask = r_grid != 0
-                # mu_grid = np.zeros(len(r_grid))
-                # mu_grid[mask] = rp_grid[mask] / r_grid[mask]
-
-                # Initialize the coords grid dictionary
-                # coords_grid = {}
-                # coords_grid['r'] = r_grid
-                # coords_grid['mu'] = mu_grid
-                # coords_grid['z'] = z_grid
 
                 # Get bin sizes
                 if self._data is not None:

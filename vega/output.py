@@ -233,10 +233,6 @@ class Output:
         bestfit_hdu.name = 'Bestfit'
 
         # Add all the attributes of the minimum to the header
-        # for item, value in minimizer.fmin.items():
-        #     name = item
-        #     if len(item) > 8:
-        #         name = 'hierarch ' + item
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
         bestfit_hdu.header['VALID'] = minimizer.minuit.valid
         bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate

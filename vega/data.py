@@ -363,89 +363,6 @@ class Data:
 
         hdul.close()
 
-        # self.rp_min_model = header['RPMIN']
-        # self.rp_max_model = header['RPMAX']
-        # self.rt_max_model = header['RTMAX']
-        # self.coeff_binning_model = header['COEFMOD']
-        # self.num_bins_rp_model = header['NP'] * self.coeff_binning_model
-        # self.num_bins_rt_model = header['NT'] * self.coeff_binning_model
-
-        # Get the model bin size
-        # TODO If RTMIN is ever added to the cf data files this needs modifying
-        # self.bin_size_rp_model = (self.rp_max_model - self.rp_min_model) / self.num_bins_rp_model
-        # self.bin_size_rt_model = self.rt_max_model / self.num_bins_rt_model
-
-        # if ((self.bin_size_rp_model != self.bin_size_rp_data)
-        #         or (self.bin_size_rt_model != self.bin_size_rt_data)):
-        #     rp_custom_grid = np.arange(self.rp_min_model + self.bin_size_rp_data / 2,
-        #                                self.rp_max_model, self.bin_size_rp_data)
-        #     rt_custom_grid = np.arange(self.bin_size_rt_data / 2,
-        #                                self.rt_max_model, self.bin_size_rt_data)
-
-        #     rt_custom_grid, rp_custom_grid = np.meshgrid(rt_custom_grid, rp_custom_grid)
-
-        #     self.model_mask = self._build_mask(
-        #         rp_custom_grid.flatten(), rt_custom_grid.flatten(), cuts_config, self.rp_min_model,
-        #         self.bin_size_rp_data, self.bin_size_rt_data
-        #     )
-        #     self.rp_rt_custom_grid = np.r_[rp_custom_grid, rt_custom_grid]
-        # else:
-        #     self.model_mask = self._build_mask(
-        #         rp_grid, rt_grid, cuts_config, self.rp_min_model,
-        #         self.bin_size_rp_data, self.bin_size_rt_data
-        #     )
-
-        # return rp_grid, rt_grid, z_grid
-
-    # def _build_mask(self, rp_grid, rt_grid, cuts_config, rp_min, bin_size_rp, bin_size_rt):
-    #     """Build the mask for the data by comparing
-    #     the cuts from config with the data limits.
-
-    #     Parameters
-    #     ----------
-    #     rp_grid : 1D Array
-    #         Vector of data rp coordinates
-    #     rt_grid : 1D Array
-    #         Vector of data rt coordinates
-    #     cuts_config : ConfigParser
-    #         cuts section from config
-    #     header : fits header
-    #         Data file header
-
-    #     Returns
-    #     -------
-    #     (ND Array, float, float)
-    #         Mask, Bin size in rp, Bin size in rt
-    #     """
-    #     # Read the cuts
-    #     rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-    #     rp_max_cut = cuts_config.getfloat('rp-max', 200.)
-
-    #     rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-    #     rt_max_cut = cuts_config.getfloat('rt-max', 200.)
-
-    #     self.r_min_cut = cuts_config.getfloat('r-min', 10.)
-    #     self.r_max_cut = cuts_config.getfloat('r-max', 180.)
-
-    #     self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
-    #     self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
-
-    #     # Compute bin centers
-    #     bin_index_rp = np.floor((rp_grid - rp_min) / bin_size_rp)
-    #     bin_center_rp = rp_min + (bin_index_rp + 0.5) * bin_size_rp
-    #     bin_center_rt = (np.floor(rt_grid / bin_size_rt) + 0.5) * bin_size_rt
-
-    #     bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
-    #     bin_center_mu = bin_center_rp / bin_center_r
-
-    #     # Build the mask by comparing the data bins to the cuts
-    #     mask = (bin_center_rp > rp_min_cut) & (bin_center_rp < rp_max_cut)
-    #     mask &= (bin_center_rt > rt_min_cut) & (bin_center_rt < rt_max_cut)
-    #     mask &= (bin_center_r > self.r_min_cut) & (bin_center_r < self.r_max_cut)
-    #     mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
-
-    #     return mask
-
     def _init_metal_tracers(self, metal_config):
         assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
 
@@ -516,9 +433,6 @@ class Data:
 
         self.metal_mats = {}
         self.metal_coordinates = {}
-        # self.metal_rp_grids = {}
-        # self.metal_rt_grids = {}
-        # self.metal_z_grids = {}
 
         # Read the metal file
         metal_hdul = fits.open(find_file(metal_config.get('filename')))
@@ -618,10 +532,6 @@ class Data:
             rt_grid=metal_hdul[2].data['RT_' + name],
             z_grid=metal_hdul[2].data['Z_' + name]
         )
-
-        # self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name]
-        # self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
-        # self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
 
         metal_mat_size = self.metal_coordinates[tracers].rp_grid.size
 
