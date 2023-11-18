@@ -194,7 +194,7 @@ class Model:
         # Add DESI instrumental systematics model
         if self._instrumental_systematics_flag:
             xi_model += self.Xi_core.compute_desi_instrumental_systematics(
-                pars, self._corr_item.bin_size_rp_data)
+                pars, self._corr_item.data_coordinates.rp_binsize)
 
         # Apply pre distortion broadband
         if self.bb_config is not None:

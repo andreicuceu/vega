@@ -83,8 +83,6 @@ class CorrelationItem:
 
         Parameters
         ----------
-        bin_size_rp : int
-            Size of r parallel bins
         coeff_binning_model : float
             Ratio of distorted coordinate grid bin size to undistorted bin size
         """
