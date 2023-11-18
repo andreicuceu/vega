@@ -38,36 +38,25 @@ class VegaPlots:
                     self.cov_mat[name] = data.cov_mat
 
                 # Initialize data coordinates
-                self.rp_setup_data[name] = (data.rp_min_data, data.rp_max_data,
-                                            data.num_bins_rp_data)
-                self.rt_setup_data[name] = (0., data.rt_max_data, data.num_bins_rt_data)
-                self.r_setup_data[name] = self.rp_setup_data[name]
+                self.rp_setup_data[name], self.rt_setup_data[name], self.r_setup_data[name] = \
+                    self.initialize_wedge_coordinates(data.data_coordinates)
 
                 self.cuts[name] = {'r_min': data.r_min_cut,
                                    'r_max': data.r_max_cut}
 
-                if np.allclose([data.bin_size_rp_data, data.bin_size_rt_data],
-                               [data.bin_size_rp_model, data.bin_size_rt_model]):
-                    # Compute bin centers
-                    bin_index_rp = np.floor((data.corr_item.rp_rt_grid[0] - data.rp_min_model)
-                                            / data.bin_size_rp_model)
-                    bin_center_rp = data.rp_min_model
-                    bin_center_rp += (bin_index_rp + 0.5) * data.bin_size_rp_model
-                    bin_index_rt = np.floor(data.corr_item.rp_rt_grid[1] / data.bin_size_rt_model)
-                    bin_center_rt = (bin_index_rt + 0.5) * data.bin_size_rt_model
-
-                    # Build the model to data mask
-                    self.mask[name] = (bin_center_rp > data.rp_min_data)
-                    self.mask[name] &= (bin_center_rp < data.rp_max_data)
-                    self.mask[name] &= (bin_center_rt < data.rt_max_data)
+                self.mask[name] = data.model_coordinates.get_mask_to_other(data.data_coordinates)
 
                 # Initialize model coordinates
-                self.rp_setup_model[name] = (data.rp_min_model, data.rp_max_model,
-                                             data.num_bins_rp_model)
-                self.rt_setup_model[name] = (0., data.rt_max_model, data.num_bins_rt_model)
-                self.r_setup_model[name] = self.rp_setup_model[name]
+                self.rp_setup_model[name], self.rt_setup_model[name], self.r_setup_model[name] = \
+                    self.initialize_wedge_coordinates(data.model_coordinates)
 
             self.has_data = True
+
+    def initialize_wedge_coordinates(self, coordinates):
+        rp_setup = (coordinates.rp_min, coordinates.rp_max, coordinates.rp_nbins)
+        rt_setup = (0., coordinates.rt_max, coordinates.rt_nbins)
+        r_setup = rt_setup
+        return rp_setup, rt_setup, r_setup
 
     def initialize_wedge(self, mu_bin, corr_name=None, is_data=False, cross_flag=False,
                          rp_setup=None, rt_setup=None, r_setup=None, abs_mu=True, **kwargs):

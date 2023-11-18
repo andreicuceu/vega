@@ -5,6 +5,7 @@ from scipy import sparse
 from scipy.sparse import csr_matrix
 
 from vega.utils import find_file
+from vega.coordinates import Coordinates
 
 BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
 
@@ -21,11 +22,13 @@ class Data:
     _inv_masked_cov = None
     _log_cov_det = None
     _blind = None
-    rp_rt_custom_grid = None
     cosmo_params = None
+    dist_model_coordinates = None
+    model_coordinates = None
+    data_coordinates = None
 
     def __init__(self, corr_item):
-        """
+        """Read the data and initialize the coordinate grids.
 
         Parameters
         ----------
@@ -41,18 +44,10 @@ class Data:
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
         dmat_path = corr_item.config['data'].get('distortion-file', None)
-        rp_rt_grid, z_grid = self._read_data(data_path, corr_item.config['cuts'], dmat_path)
-        self.corr_item.rp_rt_grid = rp_rt_grid
-        self.corr_item.z_grid = z_grid
-        self.corr_item.bin_size_rp_model = self.bin_size_rp_model
-        self.corr_item.bin_size_rt_model = self.bin_size_rt_model
-        self.corr_item.bin_size_rp_data = self.bin_size_rp_data
-        self.corr_item.bin_size_rt_data = self.bin_size_rt_data
-        self.corr_item.rp_min_model = self.rp_min_model
-        self.corr_item.rp_max_model = self.rp_max_model
-        self.corr_item.rt_max_model = self.rt_max_model
-        self.corr_item.num_bins_rp_model = self.num_bins_rp_model
-        self.corr_item.num_bins_rt_model = self.num_bins_rt_model
+
+        self._read_data(data_path, corr_item.config['cuts'], dmat_path)
+        self.corr_item.init_coordinates(
+            self.data_coordinates, self.dist_model_coordinates, self.model_coordinates)
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
@@ -232,6 +227,7 @@ class Data:
         hdul = fits.open(find_file(data_path))
         header = hdul[1].header
 
+        # Read the data vector
         self._blinding_strat = None
         if 'BLINDING' in header:
             self._blinding_strat = header['BLINDING']
@@ -257,26 +253,18 @@ class Data:
         elif self._blinding_strat is None:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
-            if dmat_column_name in hdul[1].columns.names:
+            if dmat_column_name in hdul[1].columns.names and dmat_path is None:
                 self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
         else:
             self._blind = True
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
+        # Read the covariance matrix
         if 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
 
-        rp_grid = hdul[1].data['RP']
-        rt_grid = hdul[1].data['RT']
-        z_grid = hdul[1].data['Z']
-
-        self.rp_min_data = header['RPMIN']
-        self.rp_max_data = header['RPMAX']
-        self.rt_max_data = header['RTMAX']
-        self.num_bins_rp_data = header['NP']
-        self.num_bins_rt_data = header['NT']
-
+        # Get the cosmological parameters
         if "OMEGAM" in header:
             self.cosmo_params = {}
             self.cosmo_params['Omega_m'] = header['OMEGAM']
@@ -284,56 +272,60 @@ class Data:
             self.cosmo_params['Omega_r'] = header.get('OMEGAR', 0.)
             self.cosmo_params['wl'] = header.get('WL', -1.)
 
-        # Get the data bin size
-        # TODO If RTMIN is ever added to the cf data files this needs modifying
-        self.bin_size_rp_data = (self.rp_max_data - self.rp_min_data) / self.num_bins_rp_data
-        self.bin_size_rt_data = self.rt_max_data / self.num_bins_rt_data
-
+        # Get the number of pairs
         if 'NB' in hdul[1].columns.names:
             self.nb = hdul[1].data['NB']
         else:
             self.nb = None
 
-        if len(hdul) > 2:
-            rp_grid_model = hdul[2].data['DMRP']
-            rt_grid_model = hdul[2].data['DMRT']
-            z_grid_model = hdul[2].data['DMZ']
-        else:
-            rp_grid_model = rp_grid
-            rt_grid_model = rt_grid
-            z_grid_model = z_grid
+        # Initialize the data coordinates
+        self.data_coordinates = Coordinates(
+            header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
+            rp_grid=hdul[1].data['RP'], rt_grid=hdul[1].data['RT'], z_grid=hdul[1].data['Z'],
+        )
+
+        if dmat_path is None:
+            if len(hdul) > 2:
+                rp_grid_model = hdul[2].data['DMRP']
+                rt_grid_model = hdul[2].data['DMRT']
+                z_grid_model = hdul[2].data['DMZ']
+
+                # Initialize the model coordinates
+                self.model_coordinates = Coordinates(
+                    header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
+                    rp_grid=rp_grid_model, rt_grid=rt_grid_model, z_grid=z_grid_model
+                )
+
+            self.coeff_binning_model = 1
+
         hdul.close()
 
         # Compute the data mask
-        self.data_mask = self._build_mask(rp_grid, rt_grid, cuts_config, self.rp_min_data,
-                                          self.bin_size_rp_data, self.bin_size_rt_data)
+        self.data_mask = self.data_coordinates.get_mask_scale_cuts(cuts_config)
 
         # Read distortion matrix and initialize coordinate grids for the model
         if dmat_path is not None:
-            rp_grid_model, rt_grid_model, z_grid_model = self._read_dmat(dmat_path, cuts_config)
-        else:
-            self.rp_min_model = self.rp_min_data
-            self.rp_max_model = self.rp_max_data
-            self.rt_max_model = self.rt_max_data
-            self.num_bins_rp_model = self.num_bins_rp_data
-            self.num_bins_rt_model = self.num_bins_rt_data
-            self.bin_size_rp_model = self.bin_size_rp_data
-            self.bin_size_rt_model = self.bin_size_rt_data
-            self.coeff_binning_model = 1
-            self.model_mask = self.data_mask
+            self._read_dmat(dmat_path, cuts_config)
 
+        # Check if we still need to initialize the model coordinates
+        if self.model_coordinates is None:
+            self.model_coordinates = self.data_coordinates
+        if self.dist_model_coordinates is None:
+            self.dist_model_coordinates = self.model_coordinates
+
+        # Compute the model mask
+        self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
+
+        # Compute data size
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
-        # TODO this was needed for post distortion BB polynomials. Fix at some point!
-        # self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
-        # self.mu_square_grid = np.zeros(self.r_square_grid.size)
-        # w = self.r_square_grid > 0.
-        # self.mu_square_grid[w] = rp_grid[w] / self.r_square_grid[w]
+        # Read the cuts we need to save for plotting
+        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
+        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
 
-        # return the model coordinate grids
-        rp_rt_grid = np.array([rp_grid_model, rt_grid_model])
-        return rp_rt_grid, z_grid_model
+        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
+        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
         if self._blinding_strat is None:
@@ -359,93 +351,100 @@ class Data:
                 dmat_column_name = 'DM_BLIND'
         self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
-        rp_grid = hdul[2].data['RP']
-        rt_grid = hdul[2].data['RT']
-        z_grid = hdul[2].data['Z']
+        self.coeff_binning_model = header['COEFMOD']
+        self.model_coordinates = Coordinates(
+            header['RPMIN'], header['RPMAX'], header['RTMAX'],
+            header['NP']*self.coeff_binning_model, header['NT']*self.coeff_binning_model,
+            rp_grid=hdul[2].data['RP'], rt_grid=hdul[2].data['RT'], z_grid=hdul[2].data['Z']
+        )
+
+        self.dist_model_coordinates = Coordinates(
+            header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
+
         hdul.close()
 
-        self.rp_min_model = header['RPMIN']
-        self.rp_max_model = header['RPMAX']
-        self.rt_max_model = header['RTMAX']
-        self.coeff_binning_model = header['COEFMOD']
-        self.num_bins_rp_model = header['NP'] * self.coeff_binning_model
-        self.num_bins_rt_model = header['NT'] * self.coeff_binning_model
+        # self.rp_min_model = header['RPMIN']
+        # self.rp_max_model = header['RPMAX']
+        # self.rt_max_model = header['RTMAX']
+        # self.coeff_binning_model = header['COEFMOD']
+        # self.num_bins_rp_model = header['NP'] * self.coeff_binning_model
+        # self.num_bins_rt_model = header['NT'] * self.coeff_binning_model
 
         # Get the model bin size
         # TODO If RTMIN is ever added to the cf data files this needs modifying
-        self.bin_size_rp_model = (self.rp_max_model - self.rp_min_model) / self.num_bins_rp_model
-        self.bin_size_rt_model = self.rt_max_model / self.num_bins_rt_model
+        # self.bin_size_rp_model = (self.rp_max_model - self.rp_min_model) / self.num_bins_rp_model
+        # self.bin_size_rt_model = self.rt_max_model / self.num_bins_rt_model
 
-        if ((self.bin_size_rp_model != self.bin_size_rp_data)
-                or (self.bin_size_rt_model != self.bin_size_rt_data)):
-            rp_custom_grid = np.arange(self.rp_min_model + self.bin_size_rp_data / 2,
-                                       self.rp_max_model, self.bin_size_rp_data)
-            rt_custom_grid = np.arange(self.bin_size_rt_data / 2,
-                                       self.rt_max_model, self.bin_size_rt_data)
+        # if ((self.bin_size_rp_model != self.bin_size_rp_data)
+        #         or (self.bin_size_rt_model != self.bin_size_rt_data)):
+        #     rp_custom_grid = np.arange(self.rp_min_model + self.bin_size_rp_data / 2,
+        #                                self.rp_max_model, self.bin_size_rp_data)
+        #     rt_custom_grid = np.arange(self.bin_size_rt_data / 2,
+        #                                self.rt_max_model, self.bin_size_rt_data)
 
-            rt_custom_grid, rp_custom_grid = np.meshgrid(rt_custom_grid, rp_custom_grid)
+        #     rt_custom_grid, rp_custom_grid = np.meshgrid(rt_custom_grid, rp_custom_grid)
 
-            self.model_mask = self._build_mask(
-                rp_custom_grid.flatten(), rt_custom_grid.flatten(), cuts_config, self.rp_min_model,
-                self.bin_size_rp_data, self.bin_size_rt_data
-            )
-            self.rp_rt_custom_grid = np.r_[rp_custom_grid, rt_custom_grid]
-        else:
-            self.model_mask = self._build_mask(
-                rp_grid, rt_grid, cuts_config, self.rp_min_model,
-                self.bin_size_rp_data, self.bin_size_rt_data
-            )
+        #     self.model_mask = self._build_mask(
+        #         rp_custom_grid.flatten(), rt_custom_grid.flatten(), cuts_config, self.rp_min_model,
+        #         self.bin_size_rp_data, self.bin_size_rt_data
+        #     )
+        #     self.rp_rt_custom_grid = np.r_[rp_custom_grid, rt_custom_grid]
+        # else:
+        #     self.model_mask = self._build_mask(
+        #         rp_grid, rt_grid, cuts_config, self.rp_min_model,
+        #         self.bin_size_rp_data, self.bin_size_rt_data
+        #     )
 
-        return rp_grid, rt_grid, z_grid
+        # return rp_grid, rt_grid, z_grid
 
-    def _build_mask(self, rp_grid, rt_grid, cuts_config, rp_min, bin_size_rp, bin_size_rt):
-        """Build the mask for the data by comparing
-        the cuts from config with the data limits.
+    # def _build_mask(self, rp_grid, rt_grid, cuts_config, rp_min, bin_size_rp, bin_size_rt):
+    #     """Build the mask for the data by comparing
+    #     the cuts from config with the data limits.
 
-        Parameters
-        ----------
-        rp_grid : 1D Array
-            Vector of data rp coordinates
-        rt_grid : 1D Array
-            Vector of data rt coordinates
-        cuts_config : ConfigParser
-            cuts section from config
-        header : fits header
-            Data file header
+    #     Parameters
+    #     ----------
+    #     rp_grid : 1D Array
+    #         Vector of data rp coordinates
+    #     rt_grid : 1D Array
+    #         Vector of data rt coordinates
+    #     cuts_config : ConfigParser
+    #         cuts section from config
+    #     header : fits header
+    #         Data file header
 
-        Returns
-        -------
-        (ND Array, float, float)
-            Mask, Bin size in rp, Bin size in rt
-        """
-        # Read the cuts
-        rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
+    #     Returns
+    #     -------
+    #     (ND Array, float, float)
+    #         Mask, Bin size in rp, Bin size in rt
+    #     """
+    #     # Read the cuts
+    #     rp_min_cut = cuts_config.getfloat('rp-min', 0.)
+    #     rp_max_cut = cuts_config.getfloat('rp-max', 200.)
 
-        rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
+    #     rt_min_cut = cuts_config.getfloat('rt-min', 0.)
+    #     rt_max_cut = cuts_config.getfloat('rt-max', 200.)
 
-        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
-        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
+    #     self.r_min_cut = cuts_config.getfloat('r-min', 10.)
+    #     self.r_max_cut = cuts_config.getfloat('r-max', 180.)
 
-        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
-        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
+    #     self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
+    #     self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
-        # Compute bin centers
-        bin_index_rp = np.floor((rp_grid - rp_min) / bin_size_rp)
-        bin_center_rp = rp_min + (bin_index_rp + 0.5) * bin_size_rp
-        bin_center_rt = (np.floor(rt_grid / bin_size_rt) + 0.5) * bin_size_rt
+    #     # Compute bin centers
+    #     bin_index_rp = np.floor((rp_grid - rp_min) / bin_size_rp)
+    #     bin_center_rp = rp_min + (bin_index_rp + 0.5) * bin_size_rp
+    #     bin_center_rt = (np.floor(rt_grid / bin_size_rt) + 0.5) * bin_size_rt
 
-        bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
-        bin_center_mu = bin_center_rp / bin_center_r
+    #     bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
+    #     bin_center_mu = bin_center_rp / bin_center_r
 
-        # Build the mask by comparing the data bins to the cuts
-        mask = (bin_center_rp > rp_min_cut) & (bin_center_rp < rp_max_cut)
-        mask &= (bin_center_rt > rt_min_cut) & (bin_center_rt < rt_max_cut)
-        mask &= (bin_center_r > self.r_min_cut) & (bin_center_r < self.r_max_cut)
-        mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
+    #     # Build the mask by comparing the data bins to the cuts
+    #     mask = (bin_center_rp > rp_min_cut) & (bin_center_rp < rp_max_cut)
+    #     mask &= (bin_center_rt > rt_min_cut) & (bin_center_rt < rt_max_cut)
+    #     mask &= (bin_center_r > self.r_min_cut) & (bin_center_r < self.r_max_cut)
+    #     mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
 
-        return mask
+    #     return mask
 
     def _init_metal_tracers(self, metal_config):
         assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
@@ -516,9 +515,10 @@ class Data:
         metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(metal_config)
 
         self.metal_mats = {}
-        self.metal_rp_grids = {}
-        self.metal_rt_grids = {}
-        self.metal_z_grids = {}
+        self.metal_coordinates = {}
+        # self.metal_rp_grids = {}
+        # self.metal_rt_grids = {}
+        # self.metal_z_grids = {}
 
         # Read the metal file
         metal_hdul = fits.open(find_file(metal_config.get('filename')))
@@ -611,11 +611,19 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name]
-        self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
-        self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
+        self.metal_coordinates[tracers] = Coordinates(
+            metal_hdul[1].header['RPMIN'], metal_hdul[1].header['RPMAX'],
+            metal_hdul[1].header['RTMAX'], metal_hdul[1].header['NP'], metal_hdul[1].header['NT'],
+            rp_grid=metal_hdul[2].data['RP_' + name],
+            rt_grid=metal_hdul[2].data['RT_' + name],
+            z_grid=metal_hdul[2].data['Z_' + name]
+        )
 
-        metal_mat_size = len(self.metal_rp_grids[tracers])
+        # self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name]
+        # self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
+        # self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
+
+        metal_mat_size = self.metal_coordinates[tracers].rp_grid.size
 
         dm_name = dm_prefix + name
         if dm_name in metal_hdul[2].columns.names:

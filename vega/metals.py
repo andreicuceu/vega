@@ -8,6 +8,7 @@ from picca import constants as picca_constants
 
 from . import power_spectrum
 from . import correlation_func as corr_func
+from . import coordinates
 from . import utils
 
 
@@ -37,8 +38,9 @@ class Metals:
         self._corr_item = corr_item
         self._data = data
         self.PktoXi = PktoXi_obj
-        self.size = len(corr_item.r_mu_grid[0])
+        self.size = corr_item.model_coordinates.rp_grid.size
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
+        self._coordinates = corr_item.model_coordinates
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
@@ -65,8 +67,8 @@ class Metals:
         self.new_metals = self._corr_item.new_metals
         if self.new_metals:
             self.metal_matrix_config = self._corr_item.config['metal-matrix']
-            self.rp_size = self._corr_item.num_bins_rp_model
-            self.rt_size = self._corr_item.num_bins_rt_model
+            self.rp_nbins = self._coordinates.rp_nbins
+            self.rt_nbins = self._coordinates.rt_nbins
 
             self.cosmo = picca_constants.Cosmo(
                 Om=corr_item.cosmo_params['Omega_m'], Ok=corr_item.cosmo_params['Omega_k'],
@@ -93,31 +95,35 @@ class Metals:
                 if self.new_metals:
                     dmat, rp_grid, rt_grid, z_grid = self.compute_fast_metal_dmat(
                         name1, name2, self.main_tracers[0], self.main_tracers[1])
+
                     self.rp_metal_dmats[(name1, name2)] = dmat
+                    metal_coordinates = coordinates.Coordinates.init_from_grids(
+                        self._coordinates, rp_grid, rt_grid, z_grid)
                 else:
                     # Read rp and rt for the metal correlation
-                    rp_grid = data.metal_rp_grids[(name1, name2)]
-                    rt_grid = data.metal_rt_grids[(name1, name2)]
-                    z_grid = data.metal_z_grids[(name1, name2)]
+                    metal_coordinates = data.metal_coordinates[(name1, name2)]
+                    # rp_grid = data.metal_rp_grids[(name1, name2)]
+                    # rt_grid = data.metal_rt_grids[(name1, name2)]
+                    # z_grid = data.metal_z_grids[(name1, name2)]
 
                 # Compute the corresponding r/mu coords
-                r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
-                mask = r_grid != 0
-                mu_grid = np.zeros(len(r_grid))
-                mu_grid[mask] = rp_grid[mask] / r_grid[mask]
+                # r_grid = np.sqrt(rp_grid**2 + rt_grid**2)
+                # mask = r_grid != 0
+                # mu_grid = np.zeros(len(r_grid))
+                # mu_grid[mask] = rp_grid[mask] / r_grid[mask]
 
                 # Initialize the coords grid dictionary
-                coords_grid = {}
-                coords_grid['r'] = r_grid
-                coords_grid['mu'] = mu_grid
-                coords_grid['z'] = z_grid
+                # coords_grid = {}
+                # coords_grid['r'] = r_grid
+                # coords_grid['mu'] = mu_grid
+                # coords_grid['z'] = z_grid
 
                 # Get bin sizes
                 if self._data is not None:
                     self._corr_item.config['metals']['bin_size_rp'] = \
-                        str(self._corr_item.bin_size_rp_data)
+                        str(self._coordinates.rp_binsize)
                     self._corr_item.config['metals']['bin_size_rt'] = \
-                        str(self._corr_item.bin_size_rt_data)
+                        str(self._coordinates.rt_binsize)
 
                 # Initialize the metal correlation P(k)
                 if self.Pk_metal is None:
@@ -134,8 +140,8 @@ class Metals:
                 # Assumes cross-corelations Lya x Metal and Metal x Lya are the same
                 corr_hash = tuple(set((name1, name2)))
                 self.Xi_metal[corr_hash] = corr_func.CorrelationFunction(
-                                    self._corr_item.config['metals'], fiducial, coords_grid,
-                                    scale_params, tracer1, tracer2, metal_corr=True)
+                    self._corr_item.config['metals'], fiducial, metal_coordinates,
+                    scale_params, tracer1, tracer2, metal_corr=True)
 
     @cached(cache=cache_pk, key=lambda self, call_pars, *cache_pars: hashkey(*cache_pars))
     def compute_pk(self, call_pars, *cache_pars):
@@ -153,7 +159,7 @@ class Metals:
         # Apply the metal matrix
         if self.new_metals:
             xi = (self.rp_metal_dmats[(name1, name2)]
-                  @ xi.reshape(self.rp_size, self.rt_size)).flatten()
+                  @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
         else:
             xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -213,7 +219,7 @@ class Metals:
                     # Apply the metal matrix
                     if self.new_metals:
                         xi = (self.rp_metal_dmats[(name1, name2)]
-                              @ xi.reshape(self.rp_size, self.rt_size)).flatten()
+                              @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
                     else:
                         xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -242,7 +248,7 @@ class Metals:
             # Apply the metal matrix
             if self.new_metals:
                 xi = (self.rp_metal_dmats[(name1, name2)]
-                      @ xi.reshape(self.rp_size, self.rt_size)).flatten()
+                      @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
             else:
                 xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -324,7 +330,7 @@ class Metals:
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
-            self._corr_item.rp_min_model, self._corr_item.rp_max_model, self.rp_size + 1)
+            self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1)
 
         # I checked the orientation of the matrix
         dmat, _, __ = np.histogram2d(
@@ -350,19 +356,19 @@ class Metals:
         rp_eff = sum_assumed_weight_rp / (sum_assumed_weight + (sum_assumed_weight == 0))
         z_eff = sum_weight_z / (sum_assumed_weight + (sum_assumed_weight == 0))
 
-        num_bins_total = self.rp_size * self.rt_size
+        num_bins_total = self.rp_nbins * self.rt_nbins
         full_rp_eff = np.zeros(num_bins_total)
         full_rt_eff = np.zeros(num_bins_total)
         full_z_eff = np.zeros(num_bins_total)
 
-        rp_indices = np.arange(self.rp_size)
+        rp_indices = np.arange(self.rp_nbins)
         rt_bins = np.arange(
-            self._corr_item.bin_size_rt_model / 2, self._corr_item.rt_max_model,
-            self._corr_item.bin_size_rt_model
+            self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
+            self._coordinates.rt_binsize
         )
 
-        for j in range(self.rt_size):
-            indices = j + self.rt_size * rp_indices
+        for j in range(self.rt_nbins):
+            indices = j + self.rt_nbins * rp_indices
 
             full_rp_eff[indices] = rp_eff
             full_rt_eff[indices] = rt_bins[j]

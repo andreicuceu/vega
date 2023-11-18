@@ -159,31 +159,21 @@ class Output:
                 array=self.pad_array(self.data[name].cov_mat.diagonal(), num_rows)
             ))
 
-            if num_rows < self.corr_items[name].rp_rt_grid.shape[1]:
-                columns.append(fits.Column(
-                    name=name+'_RP', format='D',
-                    array=self.pad_array(self.data[name].rp_rt_custom_grid[0], num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_RT', format='D',
-                    array=self.pad_array(self.data[name].rp_rt_custom_grid[1], num_rows)
-                ))
-            else:
-                columns.append(fits.Column(
-                    name=name+'_RP', format='D',
-                    array=self.pad_array(self.corr_items[name].rp_rt_grid[0], num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_RT', format='D',
-                    array=self.pad_array(self.corr_items[name].rp_rt_grid[1], num_rows)
-                ))
+            columns.append(fits.Column(
+                name=name+'_RP', format='D',
+                array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
+            ))
+            columns.append(fits.Column(
+                name=name+'_RT', format='D',
+                array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
+            ))
 
-            if num_rows < self.corr_items[name].z_grid.shape[0]:
+            if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
                 columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
             else:
                 columns.append(fits.Column(
                     name=name+'_Z', format='D',
-                    array=self.pad_array(self.corr_items[name].z_grid, num_rows)
+                    array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
                 ))
 
             if self.data[name].nb is not None:

@@ -231,7 +231,8 @@ class VegaInterface:
         # Initialize the sensitivity results.
         self.sensitivity = dict(nominal = copy.deepcopy(nominal), partials={ }, fisher={ })
         for n in self.corr_items:
-            rp, rt = self.corr_items[n].rp_rt_grid
+            rp = self.corr_items[n].model_coordinates.rp_grid
+            rt = self.corr_items[n].model_coordinates.rt_grid
             self.sensitivity['partials'][n] = np.zeros((nfloating, 2, 2, len(rp)))
             self.sensitivity['fisher'][n] = np.zeros((ninfo, 2, len(rp)))
         # Loop over fit parameters
