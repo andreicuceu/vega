@@ -44,7 +44,8 @@ class VegaPlots:
                 self.cuts[name] = {'r_min': data.r_min_cut,
                                    'r_max': data.r_max_cut}
 
-                self.mask[name] = data.model_coordinates.get_mask_to_other(data.data_coordinates)
+                self.mask[name] = data.dist_model_coordinates.get_mask_to_other(
+                    data.data_coordinates)
 
                 # Initialize model coordinates
                 self.rp_setup_model[name], self.rt_setup_model[name], self.r_setup_model[name] = \
