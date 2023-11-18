@@ -588,11 +588,19 @@ class Data:
         # Create the mock
         if seed is not None:
             np.random.seed(seed)
+
+        masked_fiducial = fiducial_model
+        if fiducial_model.size != self.full_data_size:
+            if fiducial_model.size != self.dist_model_coordinates.rp_grid.size:
+                raise ValueError("Could not match fiducial model to data or model size.")
+            mask = self.dist_model_coordinates.get_mask_to_other(self.data_coordinates)
+            masked_fiducial = fiducial_model[mask]
+
         if forecast:
-            self.mc_mock = fiducial_model
+            self.mc_mock = masked_fiducial
         else:
             ran_vec = np.random.randn(self.full_data_size)
-            self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
+            self.mc_mock = self._cholesky.dot(ran_vec) + masked_fiducial
         self.masked_mc_mock = self.mc_mock[self.model_mask]
 
         return self.mc_mock
