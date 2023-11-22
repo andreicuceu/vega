@@ -277,9 +277,9 @@ class Metals:
         with fits.open(tracer['weights-path']) as hdul:
             z_qso_cat = hdul[1].data['Z']
 
-        z_ref = self.metal_matrix_config.getint('z_ref_objects', 2.25)
-        z_evol = self.metal_matrix_config.getint('z_evol_objects', 1.44)
-        qso_z_bins = self.metal_matrix_config.get('z_bins_objects', 1000)
+        z_ref = self.metal_matrix_config.getfloat('z_ref_objects', 2.25)
+        z_evol = self.metal_matrix_config.getfloat('z_evol_objects', 1.44)
+        qso_z_bins = self.metal_matrix_config.getint('z_bins_objects', 1000)
         weights_qso_cat = ((1. + z_qso_cat) / (1. + z_ref))**(z_evol - 1.)
 
         zbins = qso_z_bins
