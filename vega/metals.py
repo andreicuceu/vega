@@ -87,8 +87,7 @@ class Metals:
                 tracer2 = self._corr_item.tracer_catalog[name2]
 
                 if self.new_metals:
-                    dmat, rp_grid, rt_grid, z_grid = self.compute_fast_metal_dmat(
-                        name1, name2, self.main_tracers[0], self.main_tracers[1])
+                    dmat, rp_grid, rt_grid, z_grid = self.compute_fast_metal_dmat(name1, name2)
 
                     self.rp_metal_dmats[(name1, name2)] = dmat
                     metal_coordinates = coordinates.Coordinates.init_from_grids(
