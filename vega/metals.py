@@ -76,12 +76,6 @@ class Metals:
                 blinding='none'
             )
 
-            with fits.open(self._corr_item.tracer1['weights-path']) as hdul:
-                self.stack_table_1 = hdul[1].data
-
-            with fits.open(self._corr_item.tracer2['weights-path']) as hdul:
-                self.stack_table_2 = hdul[1].data
-
         # Initialize metals
         self.Pk_metal = None
         self.Xi_metal = {}
@@ -264,9 +258,42 @@ class Metals:
         return vector[:(size // rebin_factor) * rebin_factor].reshape(
             (size // rebin_factor), rebin_factor).mean(-1)
 
-    def get_all_rp_pairs(self, wave1, wave2, abs_1, abs_2):
-        z1 = wave1 / picca_constants.ABSORBER_IGM[abs_1] - 1.
-        z2 = wave2 / picca_constants.ABSORBER_IGM[abs_2] - 1.
+    def get_forest_weights(self, main_tracer):
+        assert main_tracer['type'] == 'continuous'
+        with fits.open(main_tracer['weights-path']) as hdul:
+            stack_table = hdul[1].data
+
+        wave = 10**stack_table["LOGLAM"]
+        weights = stack_table["WEIGHT"]
+
+        rebin_factor = self.metal_matrix_config.getint('rebin_factor', None)
+        if rebin_factor is not None:
+            wave = self.rebin(wave, rebin_factor)
+            weights = self.rebin(weights, rebin_factor)
+
+        return wave, weights
+
+    def get_qso_weights(self, tracer):
+        assert tracer['type'] == 'discrete'
+        with fits.open(tracer['weights-path']) as hdul:
+            catalog = hdul[1].data
+
+        z_qso_cat = catalog[1].data['Z']
+        z_ref = self.metal_matrix_config.getint('z_ref_objects', 2.25)
+        z_evol = self.metal_matrix_config.getint('z_evol_objects', 1.44)
+        qso_z_bins = self.metal_matrix_config.get('z_bins_objects', 1000)
+        weights_qso_cat = ((1. + z_qso_cat) / (1. + z_ref))**(z_evol - 1.)
+
+        zbins = qso_z_bins
+        histo_w, zbins = np.histogram(z_qso_cat, bins=zbins, weights=weights_qso_cat)
+        histo_wz, _ = np.histogram(z_qso_cat, bins=zbins, weights=weights_qso_cat*z_qso_cat)
+        selection = histo_w > 0
+        z_qso = histo_wz[selection] / histo_w[selection]  # weighted mean in bins
+        weights_qso = histo_w[selection]
+
+        return z_qso, weights_qso
+
+    def get_rp_pairs(self, z1, z2):
         r1 = self.cosmo.get_r_comov(z1)
         r2 = self.cosmo.get_r_comov(z2)
 
@@ -275,49 +302,49 @@ class Metals:
         if 'discrete' not in self.main_tracer_types:
             rp_pairs = np.abs(rp_pairs)
 
-        return rp_pairs, z1, z2
+        return rp_pairs
 
-    def compute_fast_metal_dmat(self, true_abs_1, true_abs_2, assumed_abs_1, assumed_abs_2):
-        wave1 = 10**self.stack_table_1["LOGLAM"]
-        weights1 = self.stack_table_1["WEIGHT"]
-        wave2 = 10**self.stack_table_2["LOGLAM"]
-        weights2 = self.stack_table_2["WEIGHT"]
+    def get_forest_weight_scaling(self, z, true_abs, assumed_abs):
+        true_alpha = self.metal_matrix_config.getfloat(f'alpha_{true_abs}')
+        assumed_alpha = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs}', 2.9)
+        scaling = (1 + z)**(true_alpha + assumed_alpha - 2)
+        return scaling
 
-        rebin_factor = self.metal_matrix_config.getint('rebin_factor', None)
-        if rebin_factor is not None:
-            wave1 = self.rebin(wave1, rebin_factor)
-            weights1 = self.rebin(weights1, rebin_factor)
-            wave2 = self.rebin(wave2, rebin_factor)
-            weights2 = self.rebin(weights2, rebin_factor)
+    def compute_fast_metal_dmat(self, true_abs_1, true_abs_2):
+        # Initialize tracer 1 redshift and weights
+        if self.main_tracer_types[0] == 'continuous':
+            wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
+            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
+            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
+            scaling_1 = self.get_forest_weight_scaling(true_z1, true_abs_1, self.main_tracers[0])
+        else:
+            true_z1, weights1 = self.get_qso_weights(self._corr_item.tracer1)
+            assumed_z1 = true_z1
+            scaling_1 = 1.
 
-        true_rp_pairs, true_z1, true_z2 = self.get_all_rp_pairs(
-            wave1, wave2, true_abs_1, true_abs_2)
+        # Initialize tracer 2 redshift and weights
+        if self.main_tracer_types[1] == 'continuous':
+            wave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
+            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
+            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
+            scaling_2 = self.get_forest_weight_scaling(true_z2, true_abs_2, self.main_tracers[1])
+        else:
+            true_z2, weights2 = self.get_qso_weights(self._corr_item.tracer2)
+            assumed_z2 = true_z2
+            scaling_2 = 1.
 
-        assumed_rp_pairs, _, __ = self.get_all_rp_pairs(
-            wave1, wave2, assumed_abs_1, assumed_abs_2)
+        # Compute rp pairs
+        true_rp_pairs = self.get_rp_pairs(true_z1, true_z2)
+        assumed_rp_pairs = self.get_rp_pairs(assumed_z1, assumed_z2)
 
-        # Weights
-        # alpha_in: in (1+z)^(alpha_in-1) is a scaling used to model how the metal contribution
-        # evolves with redshift (by default alpha_in=1 so that this has no effect)
-        # alpha_out: (1+z)^(alpha_out-1) is applied to the delta weights in io.read_deltas and
-        # used for the correlation function. It also has to be applied here.
-        # we have them for both forests (1 and 2)
-        true_alpha_1 = self.metal_matrix_config.getfloat(f'alpha_{true_abs_1}')
-        true_alpha_2 = self.metal_matrix_config.getfloat(f'alpha_{true_abs_2}')
-        assumed_alpha_1 = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs_1}', 2.9)
-        assumed_alpha_2 = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs_2}', 2.9)
-
-        # so here we have to apply both scalings (in the original code :
-        # alpha_in is applied in cf.calc_metal_dmat and alpha_out in io.read_deltas)
-        scaling_1 = (1 + true_z1)**(true_alpha_1 + assumed_alpha_1 - 2)
-        scaling_2 = (1 + true_z2)**(true_alpha_2 + assumed_alpha_2 - 2)
+        # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
             self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1)
 
-        # I checked the orientation of the matrix
+        # Compute the distortion matrix
         dmat, _, __ = np.histogram2d(
             assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights)
 
