@@ -275,9 +275,8 @@ class Metals:
     def get_qso_weights(self, tracer):
         assert tracer['type'] == 'discrete'
         with fits.open(tracer['weights-path']) as hdul:
-            catalog = hdul[1].data
+            z_qso_cat = hdul[1].data['Z']
 
-        z_qso_cat = catalog[1].data['Z']
         z_ref = self.metal_matrix_config.getint('z_ref_objects', 2.25)
         z_evol = self.metal_matrix_config.getint('z_evol_objects', 1.44)
         qso_z_bins = self.metal_matrix_config.get('z_bins_objects', 1000)
