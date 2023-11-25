@@ -31,7 +31,7 @@ class Output:
         self.outfile = os.path.expandvars(config['filename'])
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
-        self.mc_output = config.getboolean('mc_output', None)
+        self.mc_output = config.get('mc_output', None)
 
     def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
         """Write results in the fits or hdf format
