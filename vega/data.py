@@ -546,8 +546,7 @@ class Data:
             raise ValueError("Cannot find correct metal matrices."
                              " Check that blinding is consistent between cf and metal files.")
 
-    def create_monte_carlo(self, fiducial_model, scale=1., seed=None,
-                           forecast=False):
+    def create_monte_carlo(self, fiducial_model, scale=None, seed=None, forecast=False):
         """Create monte carlo mock of data using a fiducial model.
 
         Parameters
@@ -555,9 +554,9 @@ class Data:
         fiducial_model : 1D Array
             Fiducial model of the data
         scale : float, optional
-            Scaling for the covariance, by default 1.
+            Scaling for the covariance, by default None.
         seed : int, optional
-            Seed for the random number generator, by default 0
+            Seed for the random number generator, by default None
         forecast : boolean, optional
             Forecast option. If true, we don't add noise to the mock,
             by default False
@@ -567,6 +566,11 @@ class Data:
         1D Array
             Monte Carlo mock of the data
         """
+        if scale is None and self.corr_item.cov_rescale is None:
+            scale = 1
+        elif scale is None:
+            scale = self.corr_item.cov_rescale
+
         # Check if scale has changed and we need to recompute
         if np.isclose(scale, self._scale):
             self._recompute = False
