@@ -31,6 +31,7 @@ class Output:
         self.outfile = os.path.expandvars(config['filename'])
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
+        self.mc_output = config.getboolean('mc_output', None)
 
     def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
         """Write results in the fits or hdf format
@@ -450,7 +451,10 @@ class Output:
         hdu_list = [primary_hdu, bestfit_hdu, fitinfo_hdu, mocks_hdu]
 
         hdul = fits.HDUList(hdu_list)
-        dir_path = Path(self.outfile).parent / 'monte_carlo'
+        if self.mc_output is None:
+            dir_path = Path(self.outfile).parent / 'monte_carlo'
+        else:
+            dir_path = Path(self.mc_output)
         dir_path.mkdir(parents=True, exist_ok=True)
         if cpu_id is None:
             filepath = dir_path / 'monte_carlo.fits'
