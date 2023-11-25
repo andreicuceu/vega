@@ -51,7 +51,8 @@ if __name__ == '__main__':
     # Check if we need to run a forecast
     forecast = vega.main_config['control'].getboolean('forecast', False)
     if forecast:
-        raise ValueError('You asked to run a forecast. Use run_vega.py instead.')
+        print('Warning: You called "run_vega_mc_mpi.py" with forecast=True.')
+        # raise ValueError('You asked to run a forecast. Use run_vega.py instead.')
 
     # Get the MC seed and the number of mocks to run
     seed = vega.main_config['control'].getint('mc_seed', 0)
@@ -73,7 +74,8 @@ if __name__ == '__main__':
 
     # Run the mocks
     local_seed = int(seed + cpu_rank)
-    vega.analysis.run_monte_carlo(fiducial_model, num_mocks=num_local_mc, seed=local_seed)
+    vega.analysis.run_monte_carlo(
+        fiducial_model, num_mocks=num_local_mc, seed=local_seed, forecast=forecast)
 
     # Write output
     if num_cpus > 1:

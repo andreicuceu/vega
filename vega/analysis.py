@@ -153,7 +153,7 @@ class Analysis:
 
         return mocks
 
-    def run_monte_carlo(self, fiducial_model, num_mocks=1, seed=0, scale=None):
+    def run_monte_carlo(self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False):
         """Run Monte Carlo simulations
 
         Parameters
@@ -187,7 +187,7 @@ class Analysis:
 
             # Create the mocks
             mocks = self.create_monte_carlo_sim(
-                fiducial_model, seed=None, scale=scale, forecast=False)
+                fiducial_model, seed=None, scale=scale, forecast=forecast)
 
             for name, cf_mock in mocks.items():
                 if name not in self.mc_mocks:
