@@ -40,6 +40,8 @@ class Data:
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
+        self.invert_full_cov = corr_item.config['data'].getboolean('invert-full-cov', False)
+        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', False)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -155,19 +157,7 @@ class Data:
         """
         if self._inv_masked_cov is None:
             # Compute inverse of the covariance matrix
-            masked_cov = self.cov_mat[:, self.data_mask]
-            masked_cov = masked_cov[self.data_mask, :]
-            try:
-                linalg.cholesky(self.cov_mat)
-                print('LOG: Full matrix is positive definite')
-            except linalg.LinAlgError:
-                print('WARNING: Full matrix is not positive definite')
-            try:
-                linalg.cholesky(masked_cov)
-                print('LOG: Reduced matrix is positive definite')
-            except linalg.LinAlgError:
-                print('WARNING: Reduced matrix is not positive definite')
-            self._inv_masked_cov = linalg.inv(masked_cov)
+            self.compute_masked_invcov()
 
         return self._inv_masked_cov
 
@@ -587,7 +577,12 @@ class Data:
 
         # Compute cholesky decomposition
         if (self._cholesky is None or self._recompute) and not forecast:
-            self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
+            if self.cholesky_masked_cov:
+                masked_cov = self.cov_mat[:, self.data_mask]
+                masked_cov = masked_cov[self.data_mask, :]
+                self._cholesky = linalg.cholesky(self._scale * masked_cov)
+            else:
+                self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
         if seed is not None:
@@ -603,8 +598,43 @@ class Data:
         if forecast:
             self.mc_mock = masked_fiducial
         else:
-            ran_vec = np.random.randn(self.full_data_size)
-            self.mc_mock = self._cholesky.dot(ran_vec) + masked_fiducial
+            self.mc_mock = np.full(self.full_data_size, np.nan)
+            if self.cholesky_masked_cov:
+                ran_vec = np.random.randn(self.data_mask.sum())
+                self.mc_mock[self.data_mask] = masked_fiducial + self._cholesky.dot(ran_vec)
+            else:
+                ran_vec = np.random.randn(self.full_data_size)
+                self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
+
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
+
+    def compute_masked_invcov(self):
+        """Compute the masked inverse of the covariance matrix.
+        """
+        masked_cov = self.cov_mat[:, self.data_mask]
+        masked_cov = masked_cov[self.data_mask, :]
+
+        try:
+            linalg.cholesky(self.cov_mat)
+            print('LOG: Full matrix is positive definite')
+        except linalg.LinAlgError:
+            if self.invert_full_cov:
+                raise ValueError('Full matrix is not positive definite. '
+                                 'Use invert-full-cov = False to work with the masked covariance')
+            else:
+                print('WARNING: Full matrix is not positive definite')
+
+        try:
+            linalg.cholesky(masked_cov)
+            print('LOG: Reduced matrix is positive definite')
+        except linalg.LinAlgError:
+            print('WARNING: Reduced matrix is not positive definite')
+
+        if self.invert_full_cov:
+            inv_cov = linalg.inv(self.cov_mat)
+            self._inv_masked_cov = inv_cov[:, self.data_mask]
+            self._inv_masked_cov = self._inv_masked_cov[self.data_mask, :]
+        else:
+            self._inv_masked_cov = linalg.inv(masked_cov)
