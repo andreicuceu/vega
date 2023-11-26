@@ -41,7 +41,7 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.invert_full_cov = corr_item.config['data'].getboolean('invert-full-cov', False)
-        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', False)
+        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
