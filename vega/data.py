@@ -601,7 +601,8 @@ class Data:
             self.mc_mock = np.full(self.full_data_size, np.nan)
             if self.cholesky_masked_cov:
                 ran_vec = np.random.randn(self.data_mask.sum())
-                self.mc_mock[self.data_mask] = masked_fiducial + self._cholesky.dot(ran_vec)
+                self.mc_mock[self.data_mask] = \
+                    masked_fiducial[self.data_mask] + self._cholesky.dot(ran_vec)
             else:
                 ran_vec = np.random.randn(self.full_data_size)
                 self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
