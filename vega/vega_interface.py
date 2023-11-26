@@ -398,7 +398,7 @@ class VegaInterface:
 
         return log_lik
 
-    def monte_carlo_sim(self, params=None, scale=None, seed=0, forecast=False):
+    def monte_carlo_sim(self, params=None, scale=None, seed=int(0), forecast=False):
         """Compute Monte Carlo simulations for each Correlation item.
 
         Parameters

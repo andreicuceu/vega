@@ -13,7 +13,7 @@ def run_vega(config_path):
         run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
         if run_montecarlo and vega.mc_config is not None:
             # Get the MC seed and forecast flag
-            seed = vega.main_config['control'].getfloat('mc_seed', 0)
+            seed = vega.main_config['control'].getint('mc_seed', 0)
             forecast = vega.main_config['control'].getboolean('forecast', False)
 
             # Create the mocks
