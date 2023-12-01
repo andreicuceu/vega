@@ -215,6 +215,8 @@ class BuildConfig:
         config['data']['filename'] = corr_info.get('corr_path')
         if 'distortion-file' in corr_info:
             config['data']['distortion-file'] = corr_info.get('distortion-file')
+        if 'covariance-file' in corr_info:
+            config['data']['covariance-file'] = corr_info.get('covariance-file')
 
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
