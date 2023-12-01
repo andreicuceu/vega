@@ -46,8 +46,9 @@ class Data:
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
         dmat_path = corr_item.config['data'].get('distortion-file', None)
+        cov_path = corr_item.config['data'].get('covariance-file', None)
 
-        self._read_data(data_path, corr_item.config['cuts'], dmat_path)
+        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path)
         self.corr_item.init_coordinates(
             self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
@@ -203,7 +204,7 @@ class Data:
         """
         return self._distortion_mat is not None
 
-    def _read_data(self, data_path, cuts_config, dmat_path=None):
+    def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None):
         """Read the data, mask it and prepare the environment.
 
         Parameters
@@ -251,7 +252,11 @@ class Data:
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
         # Read the covariance matrix
-        if 'CO' in hdul[1].columns.names:
+        if cov_path is not None:
+            print(f'Reading covariance matrix file {cov_path}\n')
+            with fits.open(find_file(cov_path)) as cov_hdul:
+                self._cov_mat = cov_hdul[1].data['CO']
+        elif 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
 
         # Get the cosmological parameters
