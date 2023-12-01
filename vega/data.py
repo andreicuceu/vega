@@ -47,8 +47,9 @@ class Data:
         data_path = corr_item.config['data'].get('filename')
         dmat_path = corr_item.config['data'].get('distortion-file', None)
         cov_path = corr_item.config['data'].get('covariance-file', None)
+        cov_rescale = corr_item.config['data'].getfloat('cov_rescale', None)
 
-        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path)
+        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
         self.corr_item.init_coordinates(
             self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
@@ -204,7 +205,7 @@ class Data:
         """
         return self._distortion_mat is not None
 
-    def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None):
+    def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.
 
         Parameters
@@ -258,6 +259,9 @@ class Data:
                 self._cov_mat = cov_hdul[1].data['CO']
         elif 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
+
+        if cov_rescale is not None:
+            self._cov_mat *= cov_rescale
 
         # Get the cosmological parameters
         if "OMEGAM" in header:
