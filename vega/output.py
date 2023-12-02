@@ -31,6 +31,7 @@ class Output:
         self.outfile = os.path.expandvars(config['filename'])
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
+        self.mc_output = config.get('mc_output', None)
 
     def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
         """Write results in the fits or hdf format
@@ -159,31 +160,21 @@ class Output:
                 array=self.pad_array(self.data[name].cov_mat.diagonal(), num_rows)
             ))
 
-            if num_rows < self.corr_items[name].rp_rt_grid.shape[1]:
-                columns.append(fits.Column(
-                    name=name+'_RP', format='D',
-                    array=self.pad_array(self.data[name].rp_rt_custom_grid[0], num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_RT', format='D',
-                    array=self.pad_array(self.data[name].rp_rt_custom_grid[1], num_rows)
-                ))
-            else:
-                columns.append(fits.Column(
-                    name=name+'_RP', format='D',
-                    array=self.pad_array(self.corr_items[name].rp_rt_grid[0], num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_RT', format='D',
-                    array=self.pad_array(self.corr_items[name].rp_rt_grid[1], num_rows)
-                ))
+            columns.append(fits.Column(
+                name=name+'_RP', format='D',
+                array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
+            ))
+            columns.append(fits.Column(
+                name=name+'_RT', format='D',
+                array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
+            ))
 
-            if num_rows < self.corr_items[name].z_grid.shape[0]:
+            if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
                 columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
             else:
                 columns.append(fits.Column(
                     name=name+'_Z', format='D',
-                    array=self.pad_array(self.corr_items[name].z_grid, num_rows)
+                    array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
                 ))
 
             if self.data[name].nb is not None:
@@ -243,10 +234,6 @@ class Output:
         bestfit_hdu.name = 'Bestfit'
 
         # Add all the attributes of the minimum to the header
-        # for item, value in minimizer.fmin.items():
-        #     name = item
-        #     if len(item) > 8:
-        #         name = 'hierarch ' + item
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
         bestfit_hdu.header['VALID'] = minimizer.minuit.valid
         bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate
@@ -411,6 +398,70 @@ class Output:
                                                array=item))
 
         return columns
+
+    def write_monte_carlo(self, cpu_id=None):
+        assert self.analysis is not None
+        assert self.analysis.has_monte_carlo
+
+        primary_hdu = fits.PrimaryHDU()
+
+        bestfits = self.analysis.mc_bestfits
+        covariances = np.array(self.analysis.mc_covariances)
+
+        names = np.array(list(bestfits.keys()))
+        bestfit_table = np.array([bestfits[name][:, 0] for name in names])
+        errors_table = np.array([bestfits[name][:, 1] for name in names])
+        covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names)).T
+
+        # Get the data types for the columns
+        max_length = np.max([len(name) for name in names])
+        name_format = str(max_length) + 'A'
+        fit_format = f'{bestfit_table.shape[1]}D'
+        cov_format = f'{covariances.shape[1]}D'
+
+        # Create the columns with the bestfit data
+        col1 = fits.Column(name='names', format=name_format, array=names)
+        col2 = fits.Column(name='values', format=fit_format, array=bestfit_table)
+        col3 = fits.Column(name='errors', format=fit_format, array=errors_table)
+        col4 = fits.Column(name='covariance', format=cov_format, array=covariances)
+
+        # Create the Table HDU from the columns
+        bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+        bestfit_hdu.name = 'Bestfit'
+
+        # Create the columns with the fit information
+        col1 = fits.Column(name='chisq', format='D', array=self.analysis.mc_chisq)
+        col2 = fits.Column(name='valid_minima', format='L', array=self.analysis.mc_valid_minima)
+        col3 = fits.Column(name='valid_hesse', format='L', array=self.analysis.mc_valid_hesse)
+        col4 = fits.Column(name='failed_mask', format='L', array=self.analysis.mc_failed_mask)
+
+        # Create the Table HDU from the columns
+        fitinfo_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+        fitinfo_hdu.name = 'FitInfo'
+
+        mocks = self.analysis.mc_mocks
+        columns = []
+        for name in mocks.keys():
+            table = np.array(mocks[name])
+            columns.append(fits.Column(name=name, format=f'{table.shape[1]}D', array=table))
+
+        mocks_hdu = fits.BinTableHDU.from_columns(columns)
+        mocks_hdu.name = 'Mocks'
+
+        hdu_list = [primary_hdu, bestfit_hdu, fitinfo_hdu, mocks_hdu]
+
+        hdul = fits.HDUList(hdu_list)
+        if self.mc_output is None:
+            dir_path = Path(self.outfile).parent / 'monte_carlo'
+        else:
+            dir_path = Path(self.mc_output)
+        dir_path.mkdir(parents=True, exist_ok=True)
+        if cpu_id is None:
+            filepath = dir_path / 'monte_carlo.fits'
+        else:
+            filepath = dir_path / f'monte_carlo_{cpu_id}.fits'
+
+        hdul.writeto(filepath, overwrite=self.overwrite)
 
     def write_results_hdf(self, minimizer, scan_results=None):
         """Write Vega analysis results, including the bestfit

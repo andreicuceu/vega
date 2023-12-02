@@ -26,12 +26,7 @@ class Model:
         self._corr_item = corr_item
         self._model_pk = corr_item.model_pk
 
-        assert corr_item.r_mu_grid is not None
-        assert corr_item.z_grid is not None
-        self._coords_grid = {}
-        self._coords_grid['r'] = corr_item.r_mu_grid[0]
-        self._coords_grid['mu'] = corr_item.r_mu_grid[1]
-        self._coords_grid['z'] = corr_item.z_grid
+        assert corr_item.model_coordinates is not None
 
         self._data = data
         data_has_distortion = False
@@ -39,8 +34,8 @@ class Model:
             data_has_distortion = self._data.has_distortion
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
 
-        self._corr_item.config['model']['bin_size_rp'] = str(self._corr_item.bin_size_rp_data)
-        self._corr_item.config['model']['bin_size_rt'] = str(self._corr_item.bin_size_rt_data)
+        self._corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
+        self._corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -49,30 +44,35 @@ class Model:
             self.xi_distorted = {'peak': {}, 'smooth': {}, 'full': {}}
 
         # Initialize Broadband
+        bin_size_rp_data = corr_item.data_coordinates.rp_binsize
+        bin_size_rp_model = corr_item.model_coordinates.rp_binsize
         self.bb_config = None
         if 'broadband' in self._corr_item.config:
-            self.bb_config = self.init_broadband(self._corr_item.config['broadband'],
-                                                 self._corr_item.name,
-                                                 self._corr_item.bin_size_rp_data,
-                                                 self._corr_item.bin_size_rp_model)
+            self.bb_config = self.init_broadband(
+                self._corr_item.config['broadband'], self._corr_item.name, 
+                bin_size_rp_data, bin_size_rp_model
+            )
 
         # Initialize main Power Spectrum object
-        self.Pk_core = power_spectrum.PowerSpectrum(self._corr_item.config['model'],
-                                                    fiducial, self._corr_item.tracer1,
-                                                    self._corr_item.tracer2, self._corr_item.name)
+        self.Pk_core = power_spectrum.PowerSpectrum(
+            self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
+            self._corr_item.tracer2, self._corr_item.name
+        )
 
         # Initialize the Pk to Xi transform
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         fht_lowring = self._corr_item.config['model'].getboolean('fht_lowring', True)
         fht_extrap = self._corr_item.config['model'].getboolean('fht_extrap', False)
-        self.PktoXi = pktoxi.PktoXi(self.Pk_core.k_grid, self.Pk_core.muk_grid, ell_max,
-                                    self._corr_item.old_fftlog, fht_lowring, fht_extrap)
+        self.PktoXi = pktoxi.PktoXi(
+            self.Pk_core.k_grid, self.Pk_core.muk_grid, ell_max,
+            self._corr_item.old_fftlog, fht_lowring, fht_extrap
+        )
 
         # Initialize main Correlation function object
-        self.Xi_core = corr_func.CorrelationFunction(self._corr_item.config['model'], fiducial,
-                                                     self._coords_grid, scale_params,
-                                                     self._corr_item.tracer1,
-                                                     self._corr_item.tracer2, self.bb_config)
+        self.Xi_core = corr_func.CorrelationFunction(
+            self._corr_item.config['model'], fiducial, corr_item.model_coordinates,
+            scale_params, self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config
+        )
 
         # Initialize metals if needed
         self.metals = None
@@ -190,7 +190,7 @@ class Model:
         # Add DESI instrumental systematics model
         if self._instrumental_systematics_flag:
             xi_model += self.Xi_core.compute_desi_instrumental_systematics(
-                pars, self._corr_item.bin_size_rp_data)
+                pars, self._corr_item.data_coordinates.rp_binsize)
 
         # Apply pre distortion broadband
         if self.bb_config is not None:

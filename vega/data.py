@@ -5,6 +5,7 @@ from scipy import sparse
 from scipy.sparse import csr_matrix
 
 from vega.utils import find_file
+from vega.coordinates import Coordinates
 
 BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
 
@@ -21,10 +22,13 @@ class Data:
     _inv_masked_cov = None
     _log_cov_det = None
     _blind = None
-    rp_rt_custom_grid = None
+    cosmo_params = None
+    dist_model_coordinates = None
+    model_coordinates = None
+    data_coordinates = None
 
     def __init__(self, corr_item):
-        """
+        """Read the data and initialize the coordinate grids.
 
         Parameters
         ----------
@@ -36,27 +40,37 @@ class Data:
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
+        self.invert_full_cov = corr_item.config['data'].getboolean('invert-full-cov', False)
+        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
         dmat_path = corr_item.config['data'].get('distortion-file', None)
-        rp_rt_grid, z_grid = self._read_data(data_path, corr_item.config['cuts'], dmat_path)
-        self.corr_item.rp_rt_grid = rp_rt_grid
-        self.corr_item.z_grid = z_grid
-        self.corr_item.bin_size_rp_model = self.bin_size_rp_model
-        self.corr_item.bin_size_rt_model = self.bin_size_rt_model
-        self.corr_item.bin_size_rp_data = self.bin_size_rp_data
-        self.corr_item.bin_size_rt_data = self.bin_size_rt_data
+        cov_path = corr_item.config['data'].get('covariance-file', None)
+        cov_rescale = corr_item.config['data'].getfloat('cov_rescale', None)
+
+        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
+        self.corr_item.init_coordinates(
+            self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
         # Read the metal file and init metals in the corr item
         if 'metals' in corr_item.config:
-            tracer_catalog, metal_correlations = self._init_metals(
-                                                 corr_item.config['metals'])
+            if not corr_item.new_metals:
+                tracer_catalog, metal_correlations = self._init_metals(corr_item.config['metals'])
+            else:
+                metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
+                    corr_item.config['metals'])
+                metal_correlations = self._init_metal_correlations(
+                    corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
+
             self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
         # Check if we have broadband
         if 'broadband' in corr_item.config:
             self.corr_item.init_broadband(self.coeff_binning_model)
+
+        if self.cosmo_params is not None:
+            self.corr_item.cosmo_params = self.cosmo_params
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
@@ -145,19 +159,7 @@ class Data:
         """
         if self._inv_masked_cov is None:
             # Compute inverse of the covariance matrix
-            masked_cov = self.cov_mat[:, self.data_mask]
-            masked_cov = masked_cov[self.data_mask, :]
-            try:
-                linalg.cholesky(self.cov_mat)
-                print('LOG: Full matrix is positive definite')
-            except linalg.LinAlgError:
-                print('WARNING: Full matrix is not positive definite')
-            try:
-                linalg.cholesky(masked_cov)
-                print('LOG: Reduced matrix is positive definite')
-            except linalg.LinAlgError:
-                print('WARNING: Reduced matrix is not positive definite')
-            self._inv_masked_cov = linalg.inv(masked_cov)
+            self.compute_masked_invcov()
 
         return self._inv_masked_cov
 
@@ -203,7 +205,7 @@ class Data:
         """
         return self._distortion_mat is not None
 
-    def _read_data(self, data_path, cuts_config, dmat_path=None):
+    def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.
 
         Parameters
@@ -217,6 +219,7 @@ class Data:
         hdul = fits.open(find_file(data_path))
         header = hdul[1].header
 
+        # Read the data vector
         self._blinding_strat = None
         if 'BLINDING' in header:
             self._blinding_strat = header['BLINDING']
@@ -242,76 +245,86 @@ class Data:
         elif self._blinding_strat is None:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
-            if dmat_column_name in hdul[1].columns.names:
+            if dmat_column_name in hdul[1].columns.names and dmat_path is None:
                 self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
         else:
             self._blind = True
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
-        if 'CO' in hdul[1].columns.names:
+        # Read the covariance matrix
+        if cov_path is not None:
+            print(f'Reading covariance matrix file {cov_path}\n')
+            with fits.open(find_file(cov_path)) as cov_hdul:
+                self._cov_mat = cov_hdul[1].data['CO']
+        elif 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
 
-        rp_grid = hdul[1].data['RP']
-        rt_grid = hdul[1].data['RT']
-        z_grid = hdul[1].data['Z']
+        if cov_rescale is not None:
+            self._cov_mat *= cov_rescale
 
-        self.rp_min_data = header['RPMIN']
-        self.rp_max_data = header['RPMAX']
-        self.rt_max_data = header['RTMAX']
-        self.num_bins_rp_data = header['NP']
-        self.num_bins_rt_data = header['NT']
+        # Get the cosmological parameters
+        if "OMEGAM" in header:
+            self.cosmo_params = {}
+            self.cosmo_params['Omega_m'] = header['OMEGAM']
+            self.cosmo_params['Omega_k'] = header.get('OMEGAK', 0.)
+            self.cosmo_params['Omega_r'] = header.get('OMEGAR', 0.)
+            self.cosmo_params['wl'] = header.get('WL', -1.)
 
-        # Get the data bin size
-        # TODO If RTMIN is ever added to the cf data files this needs modifying
-        self.bin_size_rp_data = (self.rp_max_data - self.rp_min_data) / self.num_bins_rp_data
-        self.bin_size_rt_data = self.rt_max_data / self.num_bins_rt_data
-
+        # Get the number of pairs
         if 'NB' in hdul[1].columns.names:
             self.nb = hdul[1].data['NB']
         else:
             self.nb = None
 
-        if len(hdul) > 2:
-            rp_grid_model = hdul[2].data['DMRP']
-            rt_grid_model = hdul[2].data['DMRT']
-            z_grid_model = hdul[2].data['DMZ']
-        else:
-            rp_grid_model = rp_grid
-            rt_grid_model = rt_grid
-            z_grid_model = z_grid
+        # Initialize the data coordinates
+        self.data_coordinates = Coordinates(
+            header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
+            rp_grid=hdul[1].data['RP'], rt_grid=hdul[1].data['RT'], z_grid=hdul[1].data['Z'],
+        )
+
+        if dmat_path is None:
+            if len(hdul) > 2:
+                rp_grid_model = hdul[2].data['DMRP']
+                rt_grid_model = hdul[2].data['DMRT']
+                z_grid_model = hdul[2].data['DMZ']
+
+                # Initialize the model coordinates
+                self.model_coordinates = Coordinates(
+                    header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
+                    rp_grid=rp_grid_model, rt_grid=rt_grid_model, z_grid=z_grid_model
+                )
+
+            self.coeff_binning_model = 1
+
         hdul.close()
 
         # Compute the data mask
-        self.data_mask = self._build_mask(rp_grid, rt_grid, cuts_config, self.rp_min_data,
-                                          self.bin_size_rp_data, self.bin_size_rt_data)
+        self.data_mask = self.data_coordinates.get_mask_scale_cuts(cuts_config)
 
         # Read distortion matrix and initialize coordinate grids for the model
         if dmat_path is not None:
-            rp_grid_model, rt_grid_model, z_grid_model = self._read_dmat(dmat_path, cuts_config)
-        else:
-            self.rp_min_model = self.rp_min_data
-            self.rp_max_model = self.rp_max_data
-            self.rt_max_model = self.rt_max_data
-            self.num_bins_rp_model = self.num_bins_rp_data
-            self.num_bins_rt_model = self.num_bins_rt_data
-            self.bin_size_rp_model = self.bin_size_rp_data
-            self.bin_size_rt_model = self.bin_size_rt_data
-            self.coeff_binning_model = 1
-            self.model_mask = self.data_mask
+            self._read_dmat(dmat_path, cuts_config)
 
+        # Check if we still need to initialize the model coordinates
+        if self.model_coordinates is None:
+            self.model_coordinates = self.data_coordinates
+        if self.dist_model_coordinates is None:
+            self.dist_model_coordinates = self.model_coordinates
+
+        # Compute the model mask
+        self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
+
+        # Compute data size
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
-        # TODO this was needed for post distortion BB polynomials. Fix at some point!
-        # self.r_square_grid = np.sqrt(rp_grid**2 + rt_grid**2)
-        # self.mu_square_grid = np.zeros(self.r_square_grid.size)
-        # w = self.r_square_grid > 0.
-        # self.mu_square_grid[w] = rp_grid[w] / self.r_square_grid[w]
+        # Read the cuts we need to save for plotting
+        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
+        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
 
-        # return the model coordinate grids
-        rp_rt_grid = np.array([rp_grid_model, rt_grid_model])
-        return rp_rt_grid, z_grid_model
+        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
+        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
         if self._blinding_strat is None:
@@ -337,93 +350,68 @@ class Data:
                 dmat_column_name = 'DM_BLIND'
         self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
-        rp_grid = hdul[2].data['RP']
-        rt_grid = hdul[2].data['RT']
-        z_grid = hdul[2].data['Z']
+        self.coeff_binning_model = header['COEFMOD']
+        self.model_coordinates = Coordinates(
+            header['RPMIN'], header['RPMAX'], header['RTMAX'],
+            header['NP']*self.coeff_binning_model, header['NT']*self.coeff_binning_model,
+            rp_grid=hdul[2].data['RP'], rt_grid=hdul[2].data['RT'], z_grid=hdul[2].data['Z']
+        )
+
+        self.dist_model_coordinates = Coordinates(
+            header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
+
         hdul.close()
 
-        self.rp_min_model = header['RPMIN']
-        self.rp_max_model = header['RPMAX']
-        self.rt_max_model = header['RTMAX']
-        self.coeff_binning_model = header['COEFMOD']
-        self.num_bins_rp_model = header['NP'] * self.coeff_binning_model
-        self.num_bins_rt_model = header['NT'] * self.coeff_binning_model
+    def _init_metal_tracers(self, metal_config):
+        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
 
-        # Get the model bin size
-        # TODO If RTMIN is ever added to the cf data files this needs modifying
-        self.bin_size_rp_model = (self.rp_max_model - self.rp_min_model) / self.num_bins_rp_model
-        self.bin_size_rt_model = self.rt_max_model / self.num_bins_rt_model
+        # Read metal tracers
+        metals_in_tracer1 = None
+        metals_in_tracer2 = None
+        if 'in tracer1' in metal_config:
+            metals_in_tracer1 = metal_config.get('in tracer1').split()
+        if 'in tracer2' in metal_config:
+            metals_in_tracer2 = metal_config.get('in tracer2').split()
 
-        if ((self.bin_size_rp_model != self.bin_size_rp_data)
-                or (self.bin_size_rt_model != self.bin_size_rt_data)):
-            rp_custom_grid = np.arange(self.rp_min_model + self.bin_size_rp_data / 2,
-                                       self.rp_max_model, self.bin_size_rp_data)
-            rt_custom_grid = np.arange(self.bin_size_rt_data / 2,
-                                       self.rt_max_model, self.bin_size_rt_data)
+        # Build tracer Catalog
+        tracer_catalog = {}
+        tracer_catalog[self.tracer1['name']] = self.tracer1
+        tracer_catalog[self.tracer2['name']] = self.tracer2
 
-            rt_custom_grid, rp_custom_grid = np.meshgrid(rt_custom_grid, rp_custom_grid)
+        if metals_in_tracer1 is not None:
+            for metal in metals_in_tracer1:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
 
-            self.model_mask = self._build_mask(
-                rp_custom_grid.flatten(), rt_custom_grid.flatten(), cuts_config, self.rp_min_model,
-                self.bin_size_rp_data, self.bin_size_rt_data
-            )
-            self.rp_rt_custom_grid = np.r_[rp_custom_grid, rt_custom_grid]
-        else:
-            self.model_mask = self._build_mask(
-                rp_grid, rt_grid, cuts_config, self.rp_min_model,
-                self.bin_size_rp_data, self.bin_size_rt_data
-            )
+        if metals_in_tracer2 is not None:
+            for metal in metals_in_tracer2:
+                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
 
-        return rp_grid, rt_grid, z_grid
+        return metals_in_tracer1, metals_in_tracer2, tracer_catalog
 
-    def _build_mask(self, rp_grid, rt_grid, cuts_config, rp_min, bin_size_rp, bin_size_rt):
-        """Build the mask for the data by comparing
-        the cuts from config with the data limits.
+    def _init_metal_correlations(self, metal_config, metals_in_tracer1, metals_in_tracer2):
+        metal_correlations = []
+        if 'in tracer2' in metal_config:
+            for metal in metals_in_tracer2:
+                if not self._use_correlation(self.tracer1['name'], metal):
+                    continue
+                metal_correlations.append((self.tracer1['name'], metal))
 
-        Parameters
-        ----------
-        rp_grid : 1D Array
-            Vector of data rp coordinates
-        rt_grid : 1D Array
-            Vector of data rt coordinates
-        cuts_config : ConfigParser
-            cuts section from config
-        header : fits header
-            Data file header
+        if 'in tracer1' in metal_config:
+            for metal in metals_in_tracer1:
+                if not self._use_correlation(metal, self.tracer2['name']):
+                    continue
+                metal_correlations.append((metal, self.tracer2['name']))
 
-        Returns
-        -------
-        (ND Array, float, float)
-            Mask, Bin size in rp, Bin size in rt
-        """
-        # Read the cuts
-        rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
+        if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
+            for i, metal1 in enumerate(metals_in_tracer1):
+                j0 = i if self.tracer1 == self.tracer2 else 0
 
-        rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
+                for metal2 in metals_in_tracer2[j0:]:
+                    if not self._use_correlation(metal1, metal2):
+                        continue
+                    metal_correlations.append((metal1, metal2))
 
-        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
-        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
-
-        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
-        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
-
-        # Compute bin centers
-        bin_index_rp = np.floor((rp_grid - rp_min) / bin_size_rp)
-        bin_center_rp = rp_min + (bin_index_rp + 0.5) * bin_size_rp
-        bin_center_rt = (np.floor(rt_grid / bin_size_rt) + 0.5) * bin_size_rt
-
-        bin_center_r = np.sqrt(bin_center_rp**2 + bin_center_rt**2)
-        bin_center_mu = bin_center_rp / bin_center_r
-
-        # Build the mask by comparing the data bins to the cuts
-        mask = (bin_center_rp > rp_min_cut) & (bin_center_rp < rp_max_cut)
-        mask &= (bin_center_rt > rt_min_cut) & (bin_center_rt < rt_max_cut)
-        mask &= (bin_center_r > self.r_min_cut) & (bin_center_r < self.r_max_cut)
-        mask &= (bin_center_mu > self.mu_min_cut) & (bin_center_mu < self.mu_max_cut)
-
-        return mask
+        return metal_correlations
 
     def _init_metals(self, metal_config):
         """Read the metal file and initialize all the metal data.
@@ -440,33 +428,10 @@ class Data:
         list
             list of all metal correlations we need to compute
         """
-        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
-
-        # Read metal tracers
-        metals_in_tracer1 = None
-        metals_in_tracer2 = None
-        if 'in tracer1' in metal_config:
-            metals_in_tracer1 = metal_config.get('in tracer1').split()
-        if 'in tracer2' in metal_config:
-            metals_in_tracer2 = metal_config.get('in tracer2').split()
+        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(metal_config)
 
         self.metal_mats = {}
-        self.metal_rp_grids = {}
-        self.metal_rt_grids = {}
-        self.metal_z_grids = {}
-
-        # Build tracer Catalog
-        tracer_catalog = {}
-        tracer_catalog[self.tracer1['name']] = self.tracer1
-        tracer_catalog[self.tracer2['name']] = self.tracer2
-
-        if metals_in_tracer1 is not None:
-            for metal in metals_in_tracer1:
-                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
-
-        if metals_in_tracer2 is not None:
-            for metal in metals_in_tracer2:
-                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+        self.metal_coordinates = {}
 
         # Read the metal file
         metal_hdul = fits.open(find_file(metal_config.get('filename')))
@@ -559,11 +524,15 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_rp_grids[tracers] = metal_hdul[2].data['RP_' + name]
-        self.metal_rt_grids[tracers] = metal_hdul[2].data['RT_' + name]
-        self.metal_z_grids[tracers] = metal_hdul[2].data['Z_' + name]
+        self.metal_coordinates[tracers] = Coordinates(
+            metal_hdul[1].header['RPMIN'], metal_hdul[1].header['RPMAX'],
+            metal_hdul[1].header['RTMAX'], metal_hdul[1].header['NP'], metal_hdul[1].header['NT'],
+            rp_grid=metal_hdul[2].data['RP_' + name],
+            rt_grid=metal_hdul[2].data['RT_' + name],
+            z_grid=metal_hdul[2].data['Z_' + name]
+        )
 
-        metal_mat_size = len(self.metal_rp_grids[tracers])
+        metal_mat_size = self.metal_coordinates[tracers].rp_grid.size
 
         dm_name = dm_prefix + name
         if dm_name in metal_hdul[2].columns.names:
@@ -576,8 +545,7 @@ class Data:
             raise ValueError("Cannot find correct metal matrices."
                              " Check that blinding is consistent between cf and metal files.")
 
-    def create_monte_carlo(self, fiducial_model, scale=1., seed=0,
-                           forecast=False):
+    def create_monte_carlo(self, fiducial_model, scale=None, seed=None, forecast=False):
         """Create monte carlo mock of data using a fiducial model.
 
         Parameters
@@ -585,9 +553,9 @@ class Data:
         fiducial_model : 1D Array
             Fiducial model of the data
         scale : float, optional
-            Scaling for the covariance, by default 1.
+            Scaling for the covariance, by default None.
         seed : int, optional
-            Seed for the random number generator, by default 0
+            Seed for the random number generator, by default None
         forecast : boolean, optional
             Forecast option. If true, we don't add noise to the mock,
             by default False
@@ -597,6 +565,11 @@ class Data:
         1D Array
             Monte Carlo mock of the data
         """
+        if scale is None and self.corr_item.cov_rescale is None:
+            scale = 1
+        elif scale is None:
+            scale = self.corr_item.cov_rescale
+
         # Check if scale has changed and we need to recompute
         if np.isclose(scale, self._scale):
             self._recompute = False
@@ -613,15 +586,65 @@ class Data:
 
         # Compute cholesky decomposition
         if (self._cholesky is None or self._recompute) and not forecast:
-            self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
+            if self.cholesky_masked_cov:
+                masked_cov = self.cov_mat[:, self.data_mask]
+                masked_cov = masked_cov[self.data_mask, :]
+                self._cholesky = linalg.cholesky(self._scale * masked_cov)
+            else:
+                self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
-        np.random.seed(seed)
-        if forecast:
-            self.mc_mock = fiducial_model
-        else:
-            ran_vec = np.random.randn(self.full_data_size)
-            self.mc_mock = self._cholesky.dot(ran_vec) + fiducial_model
-        self.masked_mc_mock = self.mc_mock[self.model_mask]
+        if seed is not None:
+            np.random.seed(seed)
 
-        return self.masked_mc_mock
+        masked_fiducial = fiducial_model
+        if fiducial_model.size != self.full_data_size:
+            if fiducial_model.size != self.dist_model_coordinates.rp_grid.size:
+                raise ValueError("Could not match fiducial model to data or model size.")
+            mask = self.dist_model_coordinates.get_mask_to_other(self.data_coordinates)
+            masked_fiducial = fiducial_model[mask]
+
+        if forecast:
+            self.mc_mock = masked_fiducial
+        else:
+            self.mc_mock = np.full(self.full_data_size, np.nan)
+            if self.cholesky_masked_cov:
+                ran_vec = np.random.randn(self.data_mask.sum())
+                self.mc_mock[self.data_mask] = \
+                    masked_fiducial[self.data_mask] + self._cholesky.dot(ran_vec)
+            else:
+                ran_vec = np.random.randn(self.full_data_size)
+                self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
+
+        self.masked_mc_mock = self.mc_mock[self.data_mask]
+
+        return self.mc_mock
+
+    def compute_masked_invcov(self):
+        """Compute the masked inverse of the covariance matrix.
+        """
+        masked_cov = self.cov_mat[:, self.data_mask]
+        masked_cov = masked_cov[self.data_mask, :]
+
+        try:
+            linalg.cholesky(self.cov_mat)
+            print('LOG: Full matrix is positive definite')
+        except linalg.LinAlgError:
+            if self.invert_full_cov:
+                raise ValueError('Full matrix is not positive definite. '
+                                 'Use invert-full-cov = False to work with the masked covariance')
+            else:
+                print('WARNING: Full matrix is not positive definite')
+
+        try:
+            linalg.cholesky(masked_cov)
+            print('LOG: Reduced matrix is positive definite')
+        except linalg.LinAlgError:
+            print('WARNING: Reduced matrix is not positive definite')
+
+        if self.invert_full_cov:
+            inv_cov = linalg.inv(self.cov_mat)
+            self._inv_masked_cov = inv_cov[:, self.data_mask]
+            self._inv_masked_cov = self._inv_masked_cov[self.data_mask, :]
+        else:
+            self._inv_masked_cov = linalg.inv(masked_cov)

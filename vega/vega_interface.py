@@ -138,8 +138,10 @@ class VegaInterface:
             self.minimizer = None
         else:
             self.minimizer = Minimizer(self.chi2, self.sample_params)
-        self.analysis = Analysis(Minimizer(self.chi2, self.sample_params),
-                                 self.main_config, self.mc_config)
+        self.analysis = Analysis(
+            self.chi2, self.sample_params, self.main_config,
+            self.corr_items, self.data, self.mc_config
+        )
 
         # Check for sampler
         self.has_sampler = False
@@ -229,7 +231,8 @@ class VegaInterface:
         # Initialize the sensitivity results.
         self.sensitivity = dict(nominal = copy.deepcopy(nominal), partials={ }, fisher={ })
         for n in self.corr_items:
-            rp, rt = self.corr_items[n].rp_rt_grid
+            rp = self.corr_items[n].model_coordinates.rp_grid
+            rt = self.corr_items[n].model_coordinates.rt_grid
             self.sensitivity['partials'][n] = np.zeros((nfloating, 2, 2, len(rp)))
             self.sensitivity['fisher'][n] = np.zeros((ninfo, 2, len(rp)))
         # Loop over fit parameters
@@ -395,7 +398,7 @@ class VegaInterface:
 
         return log_lik
 
-    def monte_carlo_sim(self, params=None, scale=None, seed=0, forecast=False):
+    def monte_carlo_sim(self, params=None, scale=None, seed=int(0), forecast=False):
         """Compute Monte Carlo simulations for each Correlation item.
 
         Parameters
@@ -441,8 +444,8 @@ class VegaInterface:
                 item_scale = 1.
 
             # Create the mock
-            mocks[name] = self.data[name].create_monte_carlo(fiducial_model, item_scale, seed,
-                                                             forecast)
+            mocks[name] = self.data[name].create_monte_carlo(
+                fiducial_model, item_scale, seed, forecast)
 
         self.monte_carlo = True
         return mocks

@@ -153,7 +153,10 @@ You can run Vega interactively using Ipython or a Jupyter notebook. This `exampl
 
 This process is much more powerful compared to running in terminal as you directly have access to all the output, model components and fit results. Additionally, Vega was built in a modular structure with the aim of the user being able to call each module independently. Therefore, you have access to much more functionality this way. The `documentation`_ is the best source on how to run these modules independently, but if you can't find something there, please open an issue and we will try to help you and also improve the documentation.
 
+Vega also has a FitResults module for analysing the results of a fit. You can find example usage of it in this `notebook`_.
+
 .. _example: https://github.com/andreicuceu/Vega/blob/master/examples/Vega_tutorial.ipynb
+.. _notebook: https://github.com/andreicuceu/Vega/blob/master/examples/FitResultsTutorial.ipynb
 
 Credits
 -------

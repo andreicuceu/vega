@@ -30,10 +30,12 @@ def test_data():
 
         assert np.allclose(data.data_vec, hdul[1].data['DA'])
 
-        rp_rt_grid = corr_item.rp_rt_grid
-        assert np.allclose(rp_rt_grid[0], hdul[1].data['RP'])
-        assert np.allclose(rp_rt_grid[1], hdul[1].data['RT'])
-        assert np.allclose(corr_item.z_grid, hdul[1].data['Z'])
+        rp_grid = corr_item.model_coordinates.rp_grid
+        rt_grid = corr_item.model_coordinates.rt_grid
+        z_grid = corr_item.model_coordinates.z_grid
+        assert np.allclose(rp_grid, hdul[1].data['RP'])
+        assert np.allclose(rt_grid, hdul[1].data['RT'])
+        assert np.allclose(z_grid, hdul[1].data['Z'])
 
         hdul.close()
 

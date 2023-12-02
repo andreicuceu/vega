@@ -2,7 +2,6 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from astropy.table import Table
-from pkg_resources import resource_exists, resource_filename
 
 from . import utils
 
@@ -17,7 +16,7 @@ class CorrelationFunction:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, coords_grid, scale_params,
+    def __init__(self, config, fiducial, coordinates, scale_params,
                  tracer1, tracer2, bb_config=None, metal_corr=False):
         """
 
@@ -27,8 +26,8 @@ class CorrelationFunction:
             model section of config file
         fiducial : dict
             fiducial config
-        coords_grid : dict
-            Dictionary with coordinate grid - r, mu, z
+        coordinates : Coordinates
+            Vega coordinates object
         scale_params : ScaleParameters
             ScaleParameters object
         tracer1 : dict
@@ -41,9 +40,9 @@ class CorrelationFunction:
             Whether this is a metal correlation, by default False
         """
         self._config = config
-        self._r = coords_grid['r']
-        self._mu = coords_grid['mu']
-        self._z = coords_grid['z']
+        self._r = coordinates.r_grid
+        self._mu = coordinates.mu_grid
+        self._z = coordinates.z_grid
         self._multipole = config.getint('single_multipole', -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2

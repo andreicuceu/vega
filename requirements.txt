@@ -10,3 +10,4 @@ cachetools
 matplotlib
 gitpython
 getdist
+picca
