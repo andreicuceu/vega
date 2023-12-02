@@ -4,7 +4,7 @@ from scipy import linalg
 from scipy import sparse
 from scipy.sparse import csr_matrix
 
-from vega.utils import find_file
+from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
 
 BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
@@ -159,7 +159,8 @@ class Data:
         """
         if self._inv_masked_cov is None:
             # Compute inverse of the covariance matrix
-            self.compute_masked_invcov()
+            self._inv_masked_cov = compute_masked_invcov(
+                self.cov_mat, self.data_mask, self.invert_full_cov)
 
         return self._inv_masked_cov
 
@@ -173,13 +174,7 @@ class Data:
             Logarithm of the determinant of the covariance matrix
         """
         if self._log_cov_det is None:
-            # Compute the log determinant using and LDL^T decomposition
-            # |C| = Product of Diagonal components of D
-            masked_cov = self.cov_mat[:, self.data_mask]
-            masked_cov = masked_cov[self.data_mask, :]
-            _, d, __ = linalg.ldl(masked_cov)
-            self._log_cov_det = np.log(d.diagonal()).sum()
-            assert isinstance(self.log_cov_det, float)
+            self._log_cov_det = compute_log_cov_det(self.cov_mat, self.data_mask)
 
         return self._log_cov_det
 
@@ -619,32 +614,3 @@ class Data:
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
-
-    def compute_masked_invcov(self):
-        """Compute the masked inverse of the covariance matrix.
-        """
-        masked_cov = self.cov_mat[:, self.data_mask]
-        masked_cov = masked_cov[self.data_mask, :]
-
-        try:
-            linalg.cholesky(self.cov_mat)
-            print('LOG: Full matrix is positive definite')
-        except linalg.LinAlgError:
-            if self.invert_full_cov:
-                raise ValueError('Full matrix is not positive definite. '
-                                 'Use invert-full-cov = False to work with the masked covariance')
-            else:
-                print('WARNING: Full matrix is not positive definite')
-
-        try:
-            linalg.cholesky(masked_cov)
-            print('LOG: Reduced matrix is positive definite')
-        except linalg.LinAlgError:
-            print('WARNING: Reduced matrix is not positive definite')
-
-        if self.invert_full_cov:
-            inv_cov = linalg.inv(self.cov_mat)
-            self._inv_masked_cov = inv_cov[:, self.data_mask]
-            self._inv_masked_cov = self._inv_masked_cov[self.data_mask, :]
-        else:
-            self._inv_masked_cov = linalg.inv(masked_cov)

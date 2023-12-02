@@ -30,6 +30,7 @@ class VegaInterface:
     Handle the parameter config and call the analysis class.
     """
     _blind = None
+    _use_global_cov = False
 
     def __init__(self, main_path):
         """
@@ -158,6 +159,11 @@ class VegaInterface:
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
 
+        global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
+        if global_cov_file is not None:
+            self.read_global_cov(global_cov_file)
+            self._use_global_cov = True
+
     def compute_model(self, params=None, run_init=True, direct_pk=None):
         """Compute correlation function model using input parameters.
 
@@ -198,100 +204,6 @@ class VegaInterface:
 
         return model_cf
 
-    def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
-        """Compute the model sensitivity to each floating parameter.
-
-        Calculate numerical partial derivatives of the model with respect to each floating
-        pararameter, evaluated at a specified point in parameter space. Calculate Fisher information
-        distributed over bins of (rt,rp).  Results are stored in a dictionary attribute
-        named `sensitivity` with keys `nominal`, `partials`, and `fisher`.
-
-        Parameters
-        ----------
-        nominal : dict or None
-            Dictionary of (value,error) tuples for each floating parameter. Uses the results
-            of the last call to minimize when None, or raises a RuntimeError when minimize
-            has not yet been called.
-        frac : float
-            Estimate partial derivatives of the likelihood using central finite differences
-            at value +/- frac * error for each floating parameter.
-        verbose : bool
-            Print progress of the computation when True.
-        """
-        # Copy the baseline parameters to use.
-        if nominal is None:
-            if self.bestfit.params is None:
-                raise RuntimeError('No nominal parameter values provided or saved by minimize()')
-            nominal = {p.name: ( p.value, p.error ) for p in self.bestfit.params}
-        nfloating = len(nominal)
-        ninfo = (nfloating * (nfloating + 1)) // 2
-        params = copy.deepcopy(self.params)
-        for pname, (pvalue, perror) in nominal.items():
-            params[pname] = pvalue
-        # Initialize the sensitivity results.
-        self.sensitivity = dict(nominal = copy.deepcopy(nominal), partials={ }, fisher={ })
-        for n in self.corr_items:
-            rp = self.corr_items[n].model_coordinates.rp_grid
-            rt = self.corr_items[n].model_coordinates.rt_grid
-            self.sensitivity['partials'][n] = np.zeros((nfloating, 2, 2, len(rp)))
-            self.sensitivity['fisher'][n] = np.zeros((ninfo, 2, len(rp)))
-        # Loop over fit parameters
-        self.fiducial['save-components'] = True
-        bao_amp = self.params['bao_amp']
-        for pindex, (pname, (pvalue, perror)) in enumerate(nominal.items()):
-            if verbose:
-                print(f'Calculating sensitivity for [{pindex}] {pname} at {pvalue:.4f} ± {perror:.4f}')
-            # Compute partial derivatives wrt to p for each multipole
-            delta = frac * perror
-            for sign in (+1, -1):
-                params[pname] = pvalue + sign * delta
-                # Compute the model for all datasets.
-                cfs = self.compute_model(params, run_init=True)
-                # Loop over datasets to update the partial derivative calculations.
-                for n, cf in cfs.items():
-                    model = self.models[n]
-                    # Distorted peak
-                    self.sensitivity['partials'][n][pindex,0,0] += sign * bao_amp * model.xi_distorted['peak']['core']
-                    # Distorted smooth
-                    self.sensitivity['partials'][n][pindex,0,1] += sign * model.xi_distorted['smooth']['core']
-                    # Undistorted peak
-                    self.sensitivity['partials'][n][pindex,1,0] += sign * bao_amp * model.xi['peak']['core']
-                    # Distorted smooth
-                    self.sensitivity['partials'][n][pindex,1,1] += sign * model.xi['smooth']['core']
-            # Normalize the partial derivatives.
-            for n in self.corr_items:
-                self.sensitivity['partials'][n][pindex] /= 2 * delta
-            # Restore the fitted parameter value.
-            params[pname] = pvalue
-
-        # Loop over pairs of fit parameters.
-        if verbose:
-            print('Computing Fisher information for each pair of parameters...')
-        idx = 0
-        for pindex1, (pname1, (pvalue1, perror1)) in enumerate(nominal.items()):
-            for pindex2, (pname2, (pvalue2, perror2)) in enumerate(nominal.items()):
-                if pindex1 > pindex2:
-                    continue
-                # Loop over datasets.
-                for n in self.corr_items:
-                    fisher = self.sensitivity['fisher'][n][idx]
-                    # Lookup the data vector mask for this dataset
-                    mask = self.data[n].data_mask
-                    # Loop over distorted / non-distorted.
-                    for idistort in range(2):
-                        # Combine peak + smooth partials.
-                        partial1 = self.sensitivity['partials'][n][pindex1,idistort].sum(axis=0)
-                        partial2 = self.sensitivity['partials'][n][pindex2,idistort].sum(axis=0)
-                        # Calculate the Fisher info for all unmasked correlation bins.
-                        masked_info = partial1[mask] * self.data[n].inv_masked_cov.dot(partial2[mask])
-                        fisher[idistort, self.data[n].data_mask] = masked_info
-                        # Calculate the predicted inverse covariance for this parameter pair.
-                        #ivar[idistort] = np.sum(fisher[idistort])
-                        #ferror = ivar ** -0.5 if ivar > 0 else np.nan
-                        # Set unused bins to NaN for plotting
-                        fisher[idistort, ~mask] = np.nan
-                idx += 1
-
     def chi2(self, params=None, direct_pk=None):
         """Compute full chi2 for all components.
 
@@ -328,25 +240,42 @@ class VegaInterface:
                 if par in BLIND_FIXED_PARS:
                     local_params[par] = 1.
 
-        # Go trough each component and compute the chi^2
+        # Compute chisq
         chi2 = 0
+        full_model = []
+        full_masked_data = []
         for name in self.corr_items:
             try:
                 if direct_pk is None:
-                    model_cf = self.models[name].compute(local_params, self.fiducial['pk_full'],
-                                                         self.fiducial['pk_smooth'])
+                    model_cf = self.models[name].compute(
+                        local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'])
                 else:
                     model_cf = self.models[name].compute_direct(local_params, direct_pk)
             except utils.VegaBoundsError:
                 self.models[name].PktoXi.cache_pars = None
                 return 1e100
 
+            if self._use_global_cov:
+                full_model.append(model_cf)
+
             if self.monte_carlo:
-                diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
-                chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+                if self._use_global_cov:
+                    raise NotImplementedError('Monte Carlo not implemented with global covariance')
+                    # full_masked_data.append(self.data[name].masked_mc_mock)
+                else:
+                    diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
+                    chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
-                diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
-                chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+                if self._use_global_cov:
+                    full_masked_data.append(self.data[name].masked_data_vec)
+                else:
+                    diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
+                    chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+
+        if self._use_global_cov:
+            full_model = np.concatenate(full_model)
+            diff = full_masked_data - full_model[self.full_model_mask]
+            chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
         # Add priors
         for param, prior in self.priors.items():
@@ -384,10 +313,14 @@ class VegaInterface:
         for name in self.corr_items:
             log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
 
-            if self.monte_carlo:
-                log_norm -= 0.5 * self.data[name].scaled_log_cov_det
-            else:
-                log_norm -= 0.5 * self.data[name].log_cov_det
+            if not self._use_global_cov:
+                if self.monte_carlo:
+                    log_norm -= 0.5 * self.data[name].scaled_log_cov_det
+                else:
+                    log_norm -= 0.5 * self.data[name].log_cov_det
+
+        if self._use_global_cov:
+            log_norm -= 0.5 * self.masked_global_log_cov_det
 
         # Compute log lik
         log_lik = log_norm - 0.5 * chi2
@@ -703,3 +636,118 @@ class VegaInterface:
             prior_dict[param] = np.array(prior_list[1:]).astype(float)
 
         return prior_dict
+
+    def read_global_cov(self, global_cov_file):
+        print(f'INFO: Reading global covariance from {global_cov_file}')
+        with fits.open(utils.find_file(global_cov_file)) as hdul:
+            self.global_cov = hdul[1].data['COV']
+
+        self._use_global_cov = True
+
+        self.full_data_mask = []
+        self.full_model_mask = []
+        for name in self.corr_items:
+            self.full_data_mask.append(self.data[name].data_mask)
+            self.full_model_mask.append(self.data[name].model_mask)
+
+        self.full_data_mask = np.concatenate(self.full_data_mask)
+        self.full_model_mask = np.concatenate(self.full_model_mask)
+        self.masked_global_invcov = utils.compute_masked_invcov(
+            self.global_cov, self.full_data_mask)
+        self.masked_global_log_cov_det = utils.compute_log_cov_det(
+            self.global_cov, self.full_data_mask)
+
+    def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
+        """Compute the model sensitivity to each floating parameter.
+
+        Calculate numerical partial derivatives of the model with respect to each floating
+        pararameter, evaluated at a specified point in parameter space. Calculate Fisher information
+        distributed over bins of (rt,rp).  Results are stored in a dictionary attribute
+        named `sensitivity` with keys `nominal`, `partials`, and `fisher`.
+
+        Parameters
+        ----------
+        nominal : dict or None
+            Dictionary of (value,error) tuples for each floating parameter. Uses the results
+            of the last call to minimize when None, or raises a RuntimeError when minimize
+            has not yet been called.
+        frac : float
+            Estimate partial derivatives of the likelihood using central finite differences
+            at value +/- frac * error for each floating parameter.
+        verbose : bool
+            Print progress of the computation when True.
+        """
+        # Copy the baseline parameters to use.
+        if nominal is None:
+            if self.bestfit.params is None:
+                raise RuntimeError('No nominal parameter values provided or saved by minimize()')
+            nominal = {p.name: ( p.value, p.error ) for p in self.bestfit.params}
+        nfloating = len(nominal)
+        ninfo = (nfloating * (nfloating + 1)) // 2
+        params = copy.deepcopy(self.params)
+        for pname, (pvalue, perror) in nominal.items():
+            params[pname] = pvalue
+        # Initialize the sensitivity results.
+        self.sensitivity = dict(nominal = copy.deepcopy(nominal), partials={ }, fisher={ })
+        for n in self.corr_items:
+            rp = self.corr_items[n].model_coordinates.rp_grid
+            rt = self.corr_items[n].model_coordinates.rt_grid
+            self.sensitivity['partials'][n] = np.zeros((nfloating, 2, 2, len(rp)))
+            self.sensitivity['fisher'][n] = np.zeros((ninfo, 2, len(rp)))
+        # Loop over fit parameters
+        self.fiducial['save-components'] = True
+        bao_amp = self.params['bao_amp']
+        for pindex, (pname, (pvalue, perror)) in enumerate(nominal.items()):
+            if verbose:
+                print(f'Calculating sensitivity for [{pindex}] {pname} at {pvalue:.4f} ± {perror:.4f}')
+            # Compute partial derivatives wrt to p for each multipole
+            delta = frac * perror
+            for sign in (+1, -1):
+                params[pname] = pvalue + sign * delta
+                # Compute the model for all datasets.
+                cfs = self.compute_model(params, run_init=True)
+                # Loop over datasets to update the partial derivative calculations.
+                for n, cf in cfs.items():
+                    model = self.models[n]
+                    # Distorted peak
+                    self.sensitivity['partials'][n][pindex,0,0] += sign * bao_amp * model.xi_distorted['peak']['core']
+                    # Distorted smooth
+                    self.sensitivity['partials'][n][pindex,0,1] += sign * model.xi_distorted['smooth']['core']
+                    # Undistorted peak
+                    self.sensitivity['partials'][n][pindex,1,0] += sign * bao_amp * model.xi['peak']['core']
+                    # Distorted smooth
+                    self.sensitivity['partials'][n][pindex,1,1] += sign * model.xi['smooth']['core']
+            # Normalize the partial derivatives.
+            for n in self.corr_items:
+                self.sensitivity['partials'][n][pindex] /= 2 * delta
+            # Restore the fitted parameter value.
+            params[pname] = pvalue
+
+        # Loop over pairs of fit parameters.
+        if verbose:
+            print('Computing Fisher information for each pair of parameters...')
+        idx = 0
+        for pindex1, (pname1, (pvalue1, perror1)) in enumerate(nominal.items()):
+            for pindex2, (pname2, (pvalue2, perror2)) in enumerate(nominal.items()):
+                if pindex1 > pindex2:
+                    continue
+                # Loop over datasets.
+                for n in self.corr_items:
+                    fisher = self.sensitivity['fisher'][n][idx]
+                    # Lookup the data vector mask for this dataset
+                    mask = self.data[n].data_mask
+                    # Loop over distorted / non-distorted.
+                    for idistort in range(2):
+                        # Combine peak + smooth partials.
+                        partial1 = self.sensitivity['partials'][n][pindex1,idistort].sum(axis=0)
+                        partial2 = self.sensitivity['partials'][n][pindex2,idistort].sum(axis=0)
+                        # Calculate the Fisher info for all unmasked correlation bins.
+                        masked_info = partial1[mask] * self.data[n].inv_masked_cov.dot(partial2[mask])
+                        fisher[idistort, self.data[n].data_mask] = masked_info
+                        # Calculate the predicted inverse covariance for this parameter pair.
+                        #ivar[idistort] = np.sum(fisher[idistort])
+                        #ferror = ivar ** -0.5 if ivar > 0 else np.nan
+                        # Set unused bins to NaN for plotting
+                        fisher[idistort, ~mask] = np.nan
+                idx += 1
+
