@@ -2,6 +2,18 @@
 History
 =======
 
+0.6.0 (2023-12-02)
+------------------
+
+* New metal modelling:
+    - Metal matrices are now computed on the fly in vega
+    - To compute metal matrices vega now requires weights 
+    (delta-attributes file for forests and catalogs for discrete objects)
+    - Backwards compatibility with old metal matrices is maintained
+
+* New Monte-Carlo mock functionality, including a new MPI parallelized script
+* Overhaul of coordinate handling in vega
+
 0.5.2 (2023-10-01)
 ------------------
 
