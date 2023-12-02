@@ -274,6 +274,7 @@ class VegaInterface:
 
         if self._use_global_cov:
             full_model = np.concatenate(full_model)
+            full_masked_data = np.concatenate(full_masked_data)
             diff = full_masked_data - full_model[self.full_model_mask]
             chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
