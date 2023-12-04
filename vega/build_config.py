@@ -392,6 +392,8 @@ class BuildConfig:
         config['data sets']['zeff'] = str(self.zeff_in)
         corr_paths = [str(path) for path in self.corr_paths]
         config['data sets']['ini files'] = ' '.join(corr_paths)
+        if 'global_cov_file' in fit_info:
+            config['data sets']['global-cov-file'] = fit_info.get('global_cov_file')
 
         # Write the scale parameters functions
         config['cosmo-fit type'] = {}

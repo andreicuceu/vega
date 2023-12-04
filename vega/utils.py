@@ -228,5 +228,66 @@ def find_file(path):
     raise RuntimeError('The path/file does not exists: ', input_path)
 
 
+def compute_masked_invcov(cov_mat, data_mask, invert_full_cov=False):
+    """Compute the masked inverse of the covariance matrix
+
+    Parameters
+    ----------
+    cov_mat : Array
+        Covariance matrix
+    data_mask : Array
+        Mask of the data
+    invert_full_cov : bool, optional
+        Flag to invert the full covariance matrix, by default False
+    """
+    masked_cov = cov_mat[:, data_mask]
+    masked_cov = masked_cov[data_mask, :]
+
+    try:
+        np.linalg.cholesky(cov_mat)
+        print('LOG: Full matrix is positive definite')
+    except np.linalg.LinAlgError:
+        if invert_full_cov:
+            raise ValueError('Full matrix is not positive definite. '
+                             'Use invert-full-cov = False to work with the masked covariance')
+        else:
+            print('WARNING: Full matrix is not positive definite')
+
+    try:
+        np.linalg.cholesky(masked_cov)
+        print('LOG: Reduced matrix is positive definite')
+    except np.linalg.LinAlgError:
+        print('WARNING: Reduced matrix is not positive definite')
+
+    if invert_full_cov:
+        inv_cov = np.linalg.inv(cov_mat)
+        inv_masked_cov = inv_cov[:, data_mask]
+        inv_masked_cov = inv_masked_cov[data_mask, :]
+    else:
+        inv_masked_cov = np.linalg.inv(masked_cov)
+
+    return inv_masked_cov
+
+
+def compute_log_cov_det(cov_mat, data_mask):
+    """Compute the log of the determinant of the covariance matrix
+
+    Parameters
+    ----------
+    cov_mat : Array
+        Covariance matrix
+    data_mask : Array
+        Mask of the data
+
+    Returns
+    -------
+    float
+        Log of the determinant of the covariance matrix
+    """
+    masked_cov = cov_mat[:, data_mask]
+    masked_cov = masked_cov[data_mask, :]
+    return np.linalg.slogdet(masked_cov)[1]
+
+
 class VegaBoundsError(Exception):
     pass
