@@ -259,7 +259,7 @@ class BuildConfig:
 
             if self.options['metals'] is not None:
                 config['metals'] = {}
-                config['metals']['filename'] = corr_info.get('metal_path')
+                config['metals']['filename'] = corr_info.get('metal_path', "None")
                 config['metals']['z evol'] = 'bias_vs_z_std'
                 if type1 == 'continuous':
                     config['metals']['in tracer1'] = ' '.join(self.options['metals'])
@@ -268,6 +268,35 @@ class BuildConfig:
 
                 if 'fast_metals' in corr_info:
                     config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
+
+                if self.options['new_metals']:
+                    config['model']['new_metals'] = 'True'
+
+                    config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
+                    config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
+
+                    config['metal-matrix'] = {}
+                    config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
+                        'rebin_factor', '1.')
+                    config['metal-matrix']['alpha_LYA'] = self.options['metal-matrix'].get(
+                        'alpha_LYA', '2.9')
+                    config['metal-matrix']['alpha_SiII(1260)'] = self.options['metal-matrix'].get(
+                        'alpha_SiII(1260)', '1.')
+                    config['metal-matrix']['alpha_SiIII(1207)'] = self.options['metal-matrix'].get(
+                        'alpha_SiIII(1207)', '1.')
+                    config['metal-matrix']['alpha_SiII(1193)'] = self.options['metal-matrix'].get(
+                        'alpha_SiII(1193)', '1.')
+                    config['metal-matrix']['alpha_SiII(1190)'] = self.options['metal-matrix'].get(
+                        'alpha_SiII(1190)', '1.')
+                    config['metal-matrix']['alpha_CIV(eff)'] = self.options['metal-matrix'].get(
+                        'alpha_CIV(eff)', '1.')
+
+                    config['metal-matrix']['z_ref_objects'] = self.options['metal-matrix'].get(
+                        'z_ref_objects', '2.25')
+                    config['metal-matrix']['z_evol_objects'] = self.options['metal-matrix'].get(
+                        'z_evol_objects', '1.44')
+                    config['metal-matrix']['z_bins_objects'] = self.options['metal-matrix'].get(
+                        'z_bins_objects', '1000')
 
         # Things that require at least one discrete tracer
         if type1 == 'discrete' or type2 == 'discrete':
