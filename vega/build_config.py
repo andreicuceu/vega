@@ -280,7 +280,7 @@ class BuildConfig:
 
                     config['metal-matrix'] = {}
                     config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
-                        'rebin_factor', '1.')
+                        'rebin_factor', '3')
                     config['metal-matrix']['alpha_LYA'] = self.options['metal-matrix'].get(
                         'alpha_LYA', '2.9')
                     config['metal-matrix']['alpha_SiII(1260)'] = self.options['metal-matrix'].get(
