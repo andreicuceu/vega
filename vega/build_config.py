@@ -269,7 +269,8 @@ class BuildConfig:
                 if 'fast_metals' in corr_info:
                     config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
 
-                if self.options['new_metals']:
+                new_metals_flag = self.options.get('new_metals', False)
+                if new_metals_flag:
                     config['model']['new_metals'] = 'True'
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
