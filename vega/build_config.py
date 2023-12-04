@@ -70,6 +70,8 @@ class BuildConfig:
             'desi-instrumental-systematics', False)
         self.options['test'] = options.get('test', False)
         self.options['use_metal_autos'] = options.get('use_metal_autos', True)
+        self.options['new_metals'] = options.get('new_metals', False)
+        self.options['metal-matrix'] = options.get('metal-matrix', {})
 
         metals = options.get('metals', None)
         if metals is not None:
