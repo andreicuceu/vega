@@ -2,6 +2,12 @@
 History
 =======
 
+0.6.1 (2023-12-04)
+------------------
+
+* Added option to use the full covariance matrix, including all cross-covariances
+
+
 0.6.0 (2023-12-02)
 ------------------
 
