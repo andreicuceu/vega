@@ -54,8 +54,11 @@ class VegaInterface:
         write_pk = self.main_config['output'].getboolean('write_pk', False)
         self.fiducial['save-components'] = write_cf or write_pk
         ini_files = self.main_config['data sets'].get('ini files').split()
+        global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
 
         self.model_pk = self.main_config['control'].getboolean('model_pk', False)
+        self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
+        self.low_mem_mode &= global_cov_file is not None
 
         # Initialize the individual components
         self.corr_items = {}
@@ -66,6 +69,7 @@ class VegaInterface:
 
             name = config['data'].get('name')
             self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
+            self.corr_items[name].low_mem_mode = self.low_mem_mode
 
         # Check if all correlations have data files
         self.data = {}
@@ -159,7 +163,6 @@ class VegaInterface:
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
 
-        global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
         if global_cov_file is not None:
             self.read_global_cov(global_cov_file)
             self._use_global_cov = True
@@ -653,10 +656,20 @@ class VegaInterface:
 
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)
-        self.masked_global_invcov = utils.compute_masked_invcov(
-            self.global_cov, self.full_data_mask)
-        self.masked_global_log_cov_det = utils.compute_log_cov_det(
-            self.global_cov, self.full_data_mask)
+
+        if self.low_mem_mode:
+            masked_cov = self.global_cov[:, self.full_data_mask]
+            masked_cov = masked_cov[self.full_data_mask, :]
+            del self.global_cov
+
+            self.masked_global_log_cov_det = np.linalg.slogdet(masked_cov)[1]
+            self.masked_global_invcov = np.linalg.inv(masked_cov)
+            del masked_cov
+        else:
+            self.masked_global_invcov = utils.compute_masked_invcov(
+                self.global_cov, self.full_data_mask)
+            self.masked_global_log_cov_det = utils.compute_log_cov_det(
+                self.global_cov, self.full_data_mask)
 
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.

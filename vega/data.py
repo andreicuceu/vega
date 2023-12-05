@@ -40,7 +40,6 @@ class Data:
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
-        self.invert_full_cov = corr_item.config['data'].getboolean('invert-full-cov', False)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
 
         # Read the data file and init the corrdinate grids
@@ -74,8 +73,8 @@ class Data:
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
-        if not self.has_cov_mat:
-            self._cov_mat = np.eye(self.full_data_size)
+        # if not self.has_cov_mat:
+        #     self._cov_mat = np.eye(self.full_data_size)
 
         self._cholesky = None
         self._scale = 1.
@@ -159,8 +158,7 @@ class Data:
         """
         if self._inv_masked_cov is None:
             # Compute inverse of the covariance matrix
-            self._inv_masked_cov = compute_masked_invcov(
-                self.cov_mat, self.data_mask, self.invert_full_cov)
+            self._inv_masked_cov = compute_masked_invcov(self.cov_mat, self.data_mask)
 
         return self._inv_masked_cov
 
@@ -248,15 +246,16 @@ class Data:
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
         # Read the covariance matrix
-        if cov_path is not None:
-            print(f'Reading covariance matrix file {cov_path}\n')
-            with fits.open(find_file(cov_path)) as cov_hdul:
-                self._cov_mat = cov_hdul[1].data['CO']
-        elif 'CO' in hdul[1].columns.names:
-            self._cov_mat = hdul[1].data['CO']
+        if not self.corr_item.low_mem_mode:
+            if cov_path is not None:
+                print(f'Reading covariance matrix file {cov_path}\n')
+                with fits.open(find_file(cov_path)) as cov_hdul:
+                    self._cov_mat = cov_hdul[1].data['CO']
+            elif 'CO' in hdul[1].columns.names:
+                self._cov_mat = hdul[1].data['CO']
 
-        if cov_rescale is not None:
-            self._cov_mat *= cov_rescale
+            if cov_rescale is not None:
+                self._cov_mat *= cov_rescale
 
         # Get the cosmological parameters
         if "OMEGAM" in header:
