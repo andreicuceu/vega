@@ -370,10 +370,11 @@ class BuildConfig:
             hdul = fits.open(path)
 
             r_arr = np.sqrt(hdul[1].data['RP']**2 + hdul[1].data['RT']**2)
-            cells = (r_arr > rmin) * (r_arr < rmax)
+            cells = (r_arr > rmin) & (r_arr < rmax)
 
-            zeff = np.average(hdul[1].data['Z'][cells], weights=hdul[1].data['NB'][cells])
-            weight = np.sum(hdul[1].data['NB'][cells])
+            inverse_variance = 1 / np.diag(hdul[1].data['CO'])
+            zeff = np.average(hdul[1].data['Z'][cells], weights=inverse_variance[cells])
+            weight = np.sum(inverse_variance[cells])
 
             hdul.close()
 

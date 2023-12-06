@@ -2,6 +2,15 @@
 History
 =======
 
+0.6.2 (2023-12-06)
+------------------
+
+* Added new template at the effective redshift of the DESI Y1 auto-correlations
+* Update method used to compute the effective redshift
+* Added new metal configuration to the Config Builder
+* Added new low memory mode
+
+
 0.6.1 (2023-12-04)
 ------------------
 
