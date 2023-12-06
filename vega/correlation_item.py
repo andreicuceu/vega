@@ -6,6 +6,7 @@ class CorrelationItem:
     model_coordinates = None
     dist_model_coordinates = None
     data_coordinates = None
+    low_mem_mode = False
 
     def __init__(self, config, model_pk=False):
         """

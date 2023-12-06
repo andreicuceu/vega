@@ -73,8 +73,8 @@ class Data:
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
-        # if not self.has_cov_mat:
-        #     self._cov_mat = np.eye(self.full_data_size)
+        if not self.has_cov_mat and not self.corr_item.low_mem_mode:
+            self._cov_mat = np.eye(self.full_data_size)
 
         self._cholesky = None
         self._scale = 1.
