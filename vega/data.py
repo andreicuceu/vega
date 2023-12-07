@@ -41,6 +41,7 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
+        self.unblind_y1 = corr_item.config['data'].getboolean('unblind-y1', False)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -226,8 +227,16 @@ class Data:
             print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
 
             self._blind = True
-            self._data_vec = hdul[1].data['DA_BLIND']
-            dmat_column_name += '_BLIND'
+            if 'DA_BLIND' in hdul[1].columns.names:
+                print('Using DA_BLIND column')
+                self._data_vec = hdul[1].data['DA_BLIND']
+                dmat_column_name += '_BLIND'
+            elif self.unblind_y1:
+                print('Using DA column - No BAO blinding.')
+                self._data_vec = hdul[1].data['DA']
+            else:
+                raise ValueError('No DA_BLIND column found in data file.')
+
             if dmat_column_name in hdul[1].columns.names and dmat_path is None:
                 self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
@@ -298,7 +307,7 @@ class Data:
 
         # Read distortion matrix and initialize coordinate grids for the model
         if dmat_path is not None:
-            self._read_dmat(dmat_path, cuts_config)
+            self._read_dmat(dmat_path, dmat_column_name)
 
         # Check if we still need to initialize the model coordinates
         if self.model_coordinates is None:
@@ -330,7 +339,7 @@ class Data:
                 print(f'Warning: Data has a blinding flag {blinding_flag} that does not match '
                       f'the flag of the distortion matrix at {dmat_path}')
 
-    def _read_dmat(self, dmat_path, cuts_config):
+    def _read_dmat(self, dmat_path, dmat_column_name):
         print(f'Reading distortion matrix file {dmat_path}\n')
         hdul = fits.open(find_file(dmat_path))
         header = hdul[1].header
@@ -338,10 +347,6 @@ class Data:
         if 'BLINDING' in header:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
-        dmat_column_name = 'DM'
-        if 'BLINDING' in header:
-            if header['BLINDING'] != 'none':
-                dmat_column_name = 'DM_BLIND'
         self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
         self.coeff_binning_model = header['COEFMOD']
