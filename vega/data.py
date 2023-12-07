@@ -230,13 +230,13 @@ class Data:
             if 'DA_BLIND' in hdul[1].columns.names:
                 print('Using DA_BLIND column')
                 self._data_vec = hdul[1].data['DA_BLIND']
-                dmat_column_name += '_BLIND'
             elif self.unblind_y1:
                 print('Using DA column - No BAO blinding.')
                 self._data_vec = hdul[1].data['DA']
             else:
                 raise ValueError('No DA_BLIND column found in data file.')
 
+            dmat_column_name += '_BLIND'
             if dmat_column_name in hdul[1].columns.names and dmat_path is None:
                 self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
