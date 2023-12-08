@@ -41,7 +41,6 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
-        self.unblind_y1 = corr_item.config['data'].getboolean('unblind-y1', False)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -223,18 +222,18 @@ class Data:
 
         dmat_column_name = 'DM'
         if self._blinding_strat in BLINDING_STRATEGIES:
-            print(f'Warning! Running on blinded data {data_path}')
             print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
 
             self._blind = True
             if 'DA_BLIND' in hdul[1].columns.names:
+                print(f'Warning! Running on blinded data {data_path}')
                 print('Using DA_BLIND column')
                 self._data_vec = hdul[1].data['DA_BLIND']
-            elif self.unblind_y1:
+            elif 'DA' in hdul[1].columns.names:
                 print('Using DA column - No BAO blinding.')
                 self._data_vec = hdul[1].data['DA']
             else:
-                raise ValueError('No DA_BLIND column found in data file.')
+                raise ValueError('No DA or DA_BLIND column found in data file.')
 
             dmat_column_name += '_BLIND'
             if dmat_column_name in hdul[1].columns.names and dmat_path is None:
