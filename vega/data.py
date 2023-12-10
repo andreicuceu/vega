@@ -220,16 +220,19 @@ class Data:
             if self._blinding_strat == 'none' or self._blinding_strat == 'None':
                 self._blinding_strat = None
 
-        dmat_column_name = 'DM'
         if self._blinding_strat in BLINDING_STRATEGIES:
-            print(f'Warning! Running on blinded data {data_path}')
             print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
 
             self._blind = True
-            self._data_vec = hdul[1].data['DA_BLIND']
-            dmat_column_name += '_BLIND'
-            if dmat_column_name in hdul[1].columns.names and dmat_path is None:
-                self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
+            if 'DA_BLIND' in hdul[1].columns.names:
+                print(f'Warning! Running on blinded data {data_path}')
+                print('Using DA_BLIND column')
+                self._data_vec = hdul[1].data['DA_BLIND']
+            elif 'DA' in hdul[1].columns.names:
+                print('Using DA column - No BAO blinding.')
+                self._data_vec = hdul[1].data['DA']
+            else:
+                raise ValueError('No DA or DA_BLIND column found in data file.')
 
         elif self._blinding_strat == 'desi_y3':
             raise ValueError('Fits are forbidden on Y3 data as we do not have'
@@ -238,12 +241,16 @@ class Data:
         elif self._blinding_strat is None:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
-            if dmat_column_name in hdul[1].columns.names and dmat_path is None:
-                self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
 
         else:
             self._blind = True
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
+
+        if dmat_path is None:
+            if 'DM_BLIND' in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+            elif 'DM' in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data['DM'])
 
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
@@ -298,7 +305,7 @@ class Data:
 
         # Read distortion matrix and initialize coordinate grids for the model
         if dmat_path is not None:
-            self._read_dmat(dmat_path, cuts_config)
+            self._read_dmat(dmat_path)
 
         # Check if we still need to initialize the model coordinates
         if self.model_coordinates is None:
@@ -330,7 +337,7 @@ class Data:
                 print(f'Warning: Data has a blinding flag {blinding_flag} that does not match '
                       f'the flag of the distortion matrix at {dmat_path}')
 
-    def _read_dmat(self, dmat_path, cuts_config):
+    def _read_dmat(self, dmat_path):
         print(f'Reading distortion matrix file {dmat_path}\n')
         hdul = fits.open(find_file(dmat_path))
         header = hdul[1].header
@@ -338,11 +345,12 @@ class Data:
         if 'BLINDING' in header:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
-        dmat_column_name = 'DM'
-        if 'BLINDING' in header:
-            if header['BLINDING'] != 'none':
-                dmat_column_name = 'DM_BLIND'
-        self._distortion_mat = csr_matrix(hdul[1].data[dmat_column_name])
+        if 'DM' in hdul[1].columns.names:
+            self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+        elif 'DM_BLIND' in hdul[1].columns.names:
+            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+        else:
+            raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
         self.coeff_binning_model = header['COEFMOD']
         self.model_coordinates = Coordinates(
