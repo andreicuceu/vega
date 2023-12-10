@@ -246,13 +246,11 @@ class Data:
             self._blind = True
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
-        if 'DM_BLIND' in hdul[1].columns.names and dmat_path is None:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
-        elif 'DM' in hdul[1].columns.names and dmat_path is None:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'])
-        else:
-            raise ValueError('No DM or DM_BLIND column found in data file, '
-                             'and no distortion matrix file passed.')
+        if dmat_path is None:
+            if 'DM_BLIND' in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+            elif 'DM' in hdul[1].columns.names:
+                self._distortion_mat = csr_matrix(hdul[1].data['DM'])
 
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
