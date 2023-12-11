@@ -2,6 +2,12 @@
 History
 =======
 
+0.6.3 (2023-12-10)
+------------------
+
+* DESI Y1 is now unblinded. Vega supports both DA_BLIND and DA column names for desi_y1 blinding
+* Distortion matrix blinding status is now ignored
+
 0.6.2 (2023-12-06)
 ------------------
 
@@ -74,7 +80,6 @@ History
 * New plotting module
 * New metal computation and smart chaching
 
-
 0.2.0 (2022-01-07)
 ------------------
 
@@ -83,4 +88,4 @@ History
 0.1.0 (2020-03-03)
 ------------------
 
-* First release on PyPI.
+* First version of Vega
