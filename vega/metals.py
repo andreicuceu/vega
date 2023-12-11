@@ -41,6 +41,7 @@ class Metals:
         self.size = corr_item.model_coordinates.rp_grid.size
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
+        self.metal_growth_rate = fiducial['metal-growth_rate']
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
@@ -162,10 +163,13 @@ class Metals:
             Model correlation function for the specified component
         """
         assert self._corr_item.has_metals
+        local_pars = copy.deepcopy(pars)
+        if 'growth_rate' in local_pars:
+            local_pars['growth_rate'] = self.metal_growth_rate
 
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
-            bias1, beta1, bias2, beta2 = utils.bias_beta(pars, name1, name2)
+            bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
 
             self.Pk_metal.tracer1_name = name1
             self.Pk_metal.tracer2_name = name2
@@ -179,19 +183,19 @@ class Metals:
                     # We need to separate Lya and QSO correlations
                     # because they have different parameters
                     if 'discrete' in self.main_tracer_types:
-                        for par in pars.keys():
+                        for par in local_pars.keys():
                             if 'sigma_velo_disp' in par:
-                                cache_pars = (beta_main, pars[par], component)
+                                cache_pars = (beta_main, local_pars[par], component)
                                 break
 
                     if cache_pars is None:
                         cache_pars = (beta_main, component)
 
-                    pk = self.compute_pk((pk_lin, pars), *cache_pars)
+                    pk = self.compute_pk((pk_lin, local_pars), *cache_pars)
 
                     corr_hash = tuple(set((name1, name2)))
                     self.PktoXi.cache_pars = cache_pars
-                    xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, pars)
+                    xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, local_pars)
                     self.PktoXi.cache_pars = None
 
                     # Apply the metal matrix
@@ -205,18 +209,18 @@ class Metals:
 
                 else:
                     xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
-                        pk_lin, pars, name1, name2, component)
+                        pk_lin, local_pars, name1, name2, component)
 
                 continue
 
             # If not in fast metals mode, compute the usual way
             # Slow mode also allows the full save of components
-            pk = self.Pk_metal.compute(pk_lin, pars)
+            pk = self.Pk_metal.compute(pk_lin, local_pars)
             if self.save_components:
                 self.pk[component][(name1, name2)] = copy.deepcopy(pk)
 
             corr_hash = tuple(set((name1, name2)))
-            xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, pars)
+            xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, local_pars)
 
             # Save the components
             if self.save_components:

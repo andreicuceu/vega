@@ -71,6 +71,12 @@ class VegaInterface:
             self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
             self.corr_items[name].low_mem_mode = self.low_mem_mode
 
+        # Read parameters
+        self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
+        self.sample_params = self._read_sample(self.main_config['sample'])
+        if 'growth_rate' in self.params:
+            self.fiducial['metal-growth_rate'] = self.params['growth_rate']
+
         # Check if all correlations have data files
         self.data = {}
         self._has_data = True
@@ -95,9 +101,6 @@ class VegaInterface:
                 self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
 
-        # Read parameters
-        self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
-        self.sample_params = self._read_sample(self.main_config['sample'])
 
         # Check blinding
         self._blind = False
