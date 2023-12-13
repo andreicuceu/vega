@@ -42,6 +42,8 @@ class Metals:
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
         self.metal_growth_rate = fiducial['metal-growth_rate']
+        self.par_sigma_smooth = fiducial['par_sigma_smooth']
+        self.per_sigma_smooth = fiducial['per_sigma_smooth']
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
@@ -166,6 +168,10 @@ class Metals:
         local_pars = copy.deepcopy(pars)
         if 'growth_rate' in local_pars:
             local_pars['growth_rate'] = self.metal_growth_rate
+        if 'sigma_smooth_par' in local_pars:
+            local_pars['sigma_smooth_par'] = self.par_sigma_smooth
+        if 'sigma_smooth_per' in local_pars:
+            local_pars['sigma_smooth_per'] = self.per_sigma_smooth
 
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:

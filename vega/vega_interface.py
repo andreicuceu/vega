@@ -76,6 +76,10 @@ class VegaInterface:
         self.sample_params = self._read_sample(self.main_config['sample'])
         if 'growth_rate' in self.params:
             self.fiducial['metal-growth_rate'] = self.params['growth_rate']
+        if 'par_sigma_smooth' in self.params:
+            self.fiducial['par_sigma_smooth'] = self.params['par_sigma_smooth']
+        if 'per_sigma_smooth' in self.params:
+            self.fiducial['per_sigma_smooth'] = self.params['per_sigma_smooth']
 
         # Check if all correlations have data files
         self.data = {}
