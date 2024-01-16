@@ -42,8 +42,11 @@ class Metals:
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
         self.metal_growth_rate = fiducial['metal-growth_rate']
-        self.par_sigma_smooth = fiducial['par_sigma_smooth']
-        self.per_sigma_smooth = fiducial['per_sigma_smooth']
+
+        if 'par_sigma_smooth' in fiducial:
+            self.par_sigma_smooth = fiducial['par_sigma_smooth']
+        if 'per_sigma_smooth' in fiducial:
+            self.per_sigma_smooth = fiducial['per_sigma_smooth']
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
