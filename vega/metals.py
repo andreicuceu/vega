@@ -19,6 +19,11 @@ class Metals:
     cache_pk = LRUCache(128)
     cache_xi = LRUCache(128)
 
+    metal_growth_rate = None
+    par_sigma_smooth = None
+    per_sigma_smooth = None
+    fast_metals = False
+
     def __init__(self, corr_item, fiducial, scale_params, PktoXi_obj, data=None):
         """Initialize metals
 
@@ -41,17 +46,15 @@ class Metals:
         self.size = corr_item.model_coordinates.rp_grid.size
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
-        self.metal_growth_rate = fiducial['metal-growth_rate']
+        self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
 
+        # Read the growth rate and sigma_smooth from the fiducial config
+        if 'metal-growth_rate' in fiducial:
+            self.metal_growth_rate = fiducial['metal-growth_rate']
         if 'par_sigma_smooth' in fiducial:
             self.par_sigma_smooth = fiducial['par_sigma_smooth']
         if 'per_sigma_smooth' in fiducial:
             self.per_sigma_smooth = fiducial['per_sigma_smooth']
-
-        self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
-        # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
-        # if self.fast_metals_unsafe:
-        #     self.fast_metals = True
 
         self.save_components = fiducial.get('save-components', False)
 
@@ -169,12 +172,15 @@ class Metals:
         """
         assert self._corr_item.has_metals
         local_pars = copy.deepcopy(pars)
-        if 'growth_rate' in local_pars:
-            local_pars['growth_rate'] = self.metal_growth_rate
-        if 'sigma_smooth_par' in local_pars:
-            local_pars['sigma_smooth_par'] = self.par_sigma_smooth
-        if 'sigma_smooth_per' in local_pars:
-            local_pars['sigma_smooth_per'] = self.per_sigma_smooth
+
+        # TODO Check growth rate and sigma_smooth exist. They should be in the fiducial config.
+        if self.fast_metals:
+            if 'growth_rate' in local_pars and self.metal_growth_rate is not None:
+                local_pars['growth_rate'] = self.metal_growth_rate
+            if 'sigma_smooth_par' in local_pars and self.par_sigma_smooth is not None:
+                local_pars['sigma_smooth_par'] = self.par_sigma_smooth
+            if 'sigma_smooth_per' in local_pars and self.per_sigma_smooth is not None:
+                local_pars['sigma_smooth_per'] = self.per_sigma_smooth
 
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
