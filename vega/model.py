@@ -188,7 +188,7 @@ class Model:
                                                 **self.metals.xi_distorted[component]}
 
         # Add DESI instrumental systematics model
-        if self._instrumental_systematics_flag:
+        if self._instrumental_systematics_flag and component != 'peak':
             xi_model += self.Xi_core.compute_desi_instrumental_systematics(
                 pars, self._corr_item.data_coordinates.rp_binsize)
 
