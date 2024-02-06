@@ -82,7 +82,7 @@ class Metals:
             self.cosmo = picca_constants.Cosmo(
                 Om=corr_item.cosmo_params['Omega_m'], Ok=corr_item.cosmo_params['Omega_k'],
                 Or=corr_item.cosmo_params['Omega_r'], wl=corr_item.cosmo_params['wl'],
-                blinding='none'
+                blinding='none', verbose=False
             )
 
         # Initialize metals
