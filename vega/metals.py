@@ -177,10 +177,10 @@ class Metals:
         if self.fast_metals:
             if 'growth_rate' in local_pars and self.growth_rate is not None:
                 local_pars['growth_rate'] = self.growth_rate
-            if 'sigma_smooth_par' in local_pars and self.par_sigma_smooth is not None:
-                local_pars['sigma_smooth_par'] = self.par_sigma_smooth
-            if 'sigma_smooth_per' in local_pars and self.per_sigma_smooth is not None:
-                local_pars['sigma_smooth_per'] = self.per_sigma_smooth
+            if 'par_sigma_smooth' in local_pars and self.par_sigma_smooth is not None:
+                local_pars['par_sigma_smooth'] = self.par_sigma_smooth
+            if 'per_sigma_smooth' in local_pars and self.per_sigma_smooth is not None:
+                local_pars['per_sigma_smooth'] = self.per_sigma_smooth
 
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
