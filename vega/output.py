@@ -443,6 +443,8 @@ class Output:
         columns = []
         for name in mocks.keys():
             table = np.array(mocks[name])
+            print(table.shape)
+            print(table)
             columns.append(fits.Column(name=name, format=f'{table.shape[1]}D', array=table))
 
         mocks_hdu = fits.BinTableHDU.from_columns(columns)
