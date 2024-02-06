@@ -283,10 +283,7 @@ class VegaInterface:
                 full_model.append(model_cf)
 
             if self.monte_carlo:
-                if self._use_global_cov:
-                    raise NotImplementedError('Monte Carlo not implemented with global covariance')
-                    # full_masked_data.append(self.data[name].masked_mc_mock)
-                else:
+                if not self._use_global_cov:
                     diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
                     chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
@@ -298,7 +295,10 @@ class VegaInterface:
 
         if self._use_global_cov:
             full_model = np.concatenate(full_model)
-            full_masked_data = np.concatenate(full_masked_data)
+            if self.monte_carlo:
+                full_masked_data = self.analysis.current_mc_mock
+            else:
+                full_masked_data = np.concatenate(full_masked_data)
             diff = full_masked_data - full_model[self.full_model_mask]
             chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 

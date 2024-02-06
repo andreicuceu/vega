@@ -14,6 +14,7 @@ class Analysis:
 
     - Run FastMC analysis
     """
+    current_mc_mock = None
 
     def __init__(
         self, chi2_func, sampler_params, main_config, corr_items, data,
@@ -247,10 +248,10 @@ class Analysis:
                         self.mc_mocks[name] = []
                     self.mc_mocks[name].append(cf_mock)
             else:
-                mock = self.create_global_monte_carlo(
+                self.current_mc_mock = self.create_global_monte_carlo(
                     fiducial_model, scale=scale, forecast=forecast)
 
-                self.mc_mocks['global'] = mock
+                self.mc_mocks['global'] = self.current_mc_mock
 
             try:
                 # Run minimizer
