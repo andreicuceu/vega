@@ -155,6 +155,11 @@ class VegaInterface:
 
             self.mc_config['sample'] = self._read_sample(config)
 
+        # Read the global covariance
+        if global_cov_file is not None:
+            self.read_global_cov(global_cov_file)
+            self._use_global_cov = True
+
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
             self.minimizer = None
@@ -162,7 +167,7 @@ class VegaInterface:
             self.minimizer = Minimizer(self.chi2, self.sample_params)
         self.analysis = Analysis(
             self.chi2, self.sample_params, self.main_config,
-            self.corr_items, self.data, self.mc_config
+            self.corr_items, self.data, self.mc_config, self.global_cov
         )
 
         # Check for sampler
@@ -173,16 +178,15 @@ class VegaInterface:
                 if 'Polychord' not in self.main_config:
                     raise RuntimeError('run_sampler called, but no sampler initialized')
 
+        # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
+        # Initialize vega plots
         self.monte_carlo = False
         self.plots = None
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
 
-        if global_cov_file is not None:
-            self.read_global_cov(global_cov_file)
-            self._use_global_cov = True
 
     def compute_model(self, params=None, run_init=True, direct_pk=None):
         """Compute correlation function model using input parameters.
