@@ -186,6 +186,8 @@ class Analysis:
         if self._cholesky_global_cov is None:
             masked_cov = self._global_cov[:, full_data_mask]
             masked_cov = masked_cov[full_data_mask, :]
+            if scale is None:
+                scale = 1
             self._cholesky_global_cov = np.linalg.cholesky(scale * masked_cov)
 
         # TODO The corr items need to have an imposed order
