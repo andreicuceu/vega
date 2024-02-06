@@ -133,15 +133,6 @@ class VegaInterface:
                     'beta_QSO' in self.sample_params['limits']):
                 print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
 
-        # Get priors
-        self.priors = {}
-        if 'priors' in self.main_config:
-            self.priors = self._init_priors(self.main_config['priors'])
-            for param in self.priors.keys():
-                if param not in self.sample_params['limits'].keys():
-                    print('Warning: Prior specified for a parameter that is'
-                          ' not sampled!')
-
         # Read the monte carlo parameters
         self.mc_config = None
         if 'monte carlo' in self.main_config:
@@ -154,6 +145,18 @@ class VegaInterface:
                 self.mc_config['params'][param] = float(value)
 
             self.mc_config['sample'] = self._read_sample(config)
+
+        # Get priors
+        self.priors = {}
+        if 'priors' in self.main_config:
+            self.priors = self._init_priors(self.main_config['priors'])
+            for param in self.priors.keys():
+                param_is_not_sampled = param not in self.sample_params['limits']
+                if self.mc_config is not None:
+                    param_is_not_sampled &= param not in self.mc_config['sample']['limits']
+                if param_is_not_sampled:
+                    raise ValueError(
+                        f'Prior specified for a parameter that is not sampled: {param}')
 
         # Read the global covariance
         if global_cov_file is not None:
