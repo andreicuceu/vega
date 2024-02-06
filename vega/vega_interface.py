@@ -74,8 +74,18 @@ class VegaInterface:
         # Read parameters
         self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
         self.sample_params = self._read_sample(self.main_config['sample'])
-        if 'growth_rate' in self.params:
-            self.fiducial['metal-growth_rate'] = self.params['growth_rate']
+
+        # Set growth rate
+        use_template_growth_rate = self.main_config['control'].getboolean(
+            'use_template_growth_rate', True)
+        if use_template_growth_rate and 'growth_rate' in self.fiducial:
+            assert 'growth_rate' not in self.sample_params['limits']
+            self.params['growth_rate'] = self.fiducial['growth_rate']
+        elif 'growth_rate' not in self.fiducial:
+            print('WARNING: No growth rate specified in the template file. Using input value.')
+            if 'growth_rate' in self.params:
+                self.fiducial['growth_rate'] = self.params['growth_rate']
+
         if 'par_sigma_smooth' in self.params:
             self.fiducial['par_sigma_smooth'] = self.params['par_sigma_smooth']
         if 'per_sigma_smooth' in self.params:
@@ -496,6 +506,10 @@ class VegaInterface:
         fiducial['k'] = hdul[1].data['K']
         fiducial['pk_full'] = hdul[1].data['PK']
         fiducial['pk_smooth'] = hdul[1].data['PKSB']
+
+        if 'F_ZREF' in hdul[1].header:
+            fiducial['growth_rate'] = hdul[1].header['F_ZREF']
+
         hdul.close()
 
         return fiducial
