@@ -251,7 +251,9 @@ class Analysis:
                 self.current_mc_mock = self.create_global_monte_carlo(
                     fiducial_model, scale=scale, forecast=forecast)
 
-                self.mc_mocks['global'] = self.current_mc_mock
+                if 'global' not in self.mc_mocks:
+                    self.mc_mocks['global'] = []
+                self.mc_mocks['global'].append(self.current_mc_mock)
 
             try:
                 # Run minimizer
