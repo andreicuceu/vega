@@ -31,6 +31,7 @@ class VegaInterface:
     """
     _blind = None
     _use_global_cov = False
+    global_cov = None
 
     def __init__(self, main_path):
         """
@@ -114,7 +115,6 @@ class VegaInterface:
             for name, corr_item in self.corr_items.items():
                 self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
-
 
         # Check blinding
         self._blind = False
