@@ -206,7 +206,9 @@ class Analysis:
 
         return mc_mock
 
-    def run_monte_carlo(self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False):
+    def run_monte_carlo(
+            self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False, run_mc_fits=True
+    ):
         """Run Monte Carlo simulations
 
         Parameters
@@ -255,6 +257,9 @@ class Analysis:
                     self.mc_mocks['global'] = []
                 self.mc_mocks['global'].append(self.current_mc_mock)
 
+            if not run_mc_fits:
+                continue
+
             try:
                 # Run minimizer
                 minimizer.minimize()
@@ -277,7 +282,8 @@ class Analysis:
             self.mc_valid_minima.append(minimizer.fmin.is_valid)
             self.mc_valid_hesse.append(not minimizer.fmin.hesse_failed)
 
-        for param in self.mc_bestfits.keys():
-            self.mc_bestfits[param] = np.array(self.mc_bestfits[param])
+        if run_mc_fits:
+            for param in self.mc_bestfits.keys():
+                self.mc_bestfits[param] = np.array(self.mc_bestfits[param])
 
         self.has_monte_carlo = True

@@ -404,40 +404,46 @@ class Output:
         assert self.analysis.has_monte_carlo
 
         primary_hdu = fits.PrimaryHDU()
+        hdu_list = [primary_hdu]
 
         bestfits = self.analysis.mc_bestfits
         covariances = np.array(self.analysis.mc_covariances)
 
-        names = np.array(list(bestfits.keys()))
-        bestfit_table = np.array([bestfits[name][:, 0] for name in names])
-        errors_table = np.array([bestfits[name][:, 1] for name in names])
-        covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names)).T
+        if not bestfits:
+            print('No MC bestfit data to write.')
+        else:
+            names = np.array(list(bestfits.keys()))
+            bestfit_table = np.array([bestfits[name][:, 0] for name in names])
+            errors_table = np.array([bestfits[name][:, 1] for name in names])
+            covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names)).T
 
-        # Get the data types for the columns
-        max_length = np.max([len(name) for name in names])
-        name_format = str(max_length) + 'A'
-        fit_format = f'{bestfit_table.shape[1]}D'
-        cov_format = f'{covariances.shape[1]}D'
+            # Get the data types for the columns
+            max_length = np.max([len(name) for name in names])
+            name_format = str(max_length) + 'A'
+            fit_format = f'{bestfit_table.shape[1]}D'
+            cov_format = f'{covariances.shape[1]}D'
 
-        # Create the columns with the bestfit data
-        col1 = fits.Column(name='names', format=name_format, array=names)
-        col2 = fits.Column(name='values', format=fit_format, array=bestfit_table)
-        col3 = fits.Column(name='errors', format=fit_format, array=errors_table)
-        col4 = fits.Column(name='covariance', format=cov_format, array=covariances)
+            # Create the columns with the bestfit data
+            col1 = fits.Column(name='names', format=name_format, array=names)
+            col2 = fits.Column(name='values', format=fit_format, array=bestfit_table)
+            col3 = fits.Column(name='errors', format=fit_format, array=errors_table)
+            col4 = fits.Column(name='covariance', format=cov_format, array=covariances)
 
-        # Create the Table HDU from the columns
-        bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
-        bestfit_hdu.name = 'Bestfit'
+            # Create the Table HDU from the columns
+            bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+            bestfit_hdu.name = 'Bestfit'
+            hdu_list += [bestfit_hdu]
 
-        # Create the columns with the fit information
-        col1 = fits.Column(name='chisq', format='D', array=self.analysis.mc_chisq)
-        col2 = fits.Column(name='valid_minima', format='L', array=self.analysis.mc_valid_minima)
-        col3 = fits.Column(name='valid_hesse', format='L', array=self.analysis.mc_valid_hesse)
-        col4 = fits.Column(name='failed_mask', format='L', array=self.analysis.mc_failed_mask)
+            # Create the columns with the fit information
+            col1 = fits.Column(name='chisq', format='D', array=self.analysis.mc_chisq)
+            col2 = fits.Column(name='valid_minima', format='L', array=self.analysis.mc_valid_minima)
+            col3 = fits.Column(name='valid_hesse', format='L', array=self.analysis.mc_valid_hesse)
+            col4 = fits.Column(name='failed_mask', format='L', array=self.analysis.mc_failed_mask)
 
-        # Create the Table HDU from the columns
-        fitinfo_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
-        fitinfo_hdu.name = 'FitInfo'
+            # Create the Table HDU from the columns
+            fitinfo_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
+            fitinfo_hdu.name = 'FitInfo'
+            hdu_list += [fitinfo_hdu]
 
         mocks = self.analysis.mc_mocks
         columns = []
@@ -447,8 +453,7 @@ class Output:
 
         mocks_hdu = fits.BinTableHDU.from_columns(columns)
         mocks_hdu.name = 'Mocks'
-
-        hdu_list = [primary_hdu, bestfit_hdu, fitinfo_hdu, mocks_hdu]
+        hdu_list += [mocks_hdu]
 
         hdul = fits.HDUList(hdu_list)
         if self.mc_output is None:
