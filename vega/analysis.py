@@ -198,7 +198,7 @@ class Analysis:
             if data.data_mask.size == fiducial_model[name].size:
                 masked_fiducial.append(fiducial_model[name][data.data_mask])
             elif mask.size == fiducial_model[name].size:
-                masked_fiducial.append(fiducial_model[name][mask])
+                masked_fiducial.append(fiducial_model[name])
             else:
                 raise ValueError('Input fiducial has unknown size. '
                                  'It must match the data or the model.')
