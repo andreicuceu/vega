@@ -195,7 +195,13 @@ class Analysis:
         masked_fiducial = []
         for name, data in self._data.items():
             mask = data.dist_model_coordinates.get_mask_to_other(data.data_coordinates)
-            masked_fiducial.append(fiducial_model[name][mask])
+            if data.data_mask.size == fiducial_model[name].size:
+                masked_fiducial.append(fiducial_model[name][data.data_mask])
+            elif mask.size == fiducial_model[name].size:
+                masked_fiducial.append(fiducial_model[name][mask])
+            else:
+                raise ValueError('Input fiducial has unknown size. '
+                                 'It must match the data or the model.')
         masked_fiducial = np.concatenate(masked_fiducial)
 
         if forecast:

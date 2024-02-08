@@ -114,7 +114,7 @@ def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref):
     ww = (r >= sb1_rmin) & (r < sb2_rmax)
     xiSB[ww] = model[ww]
 
-    pkSB = xi_to_pk(r, xiSB, extrap=True)
+    pkSB = xi_to_pk(r, xiSB)
     pkSB = pkSB(k)
     pkSB *= pk[-1] / pkSB[-1]
 
