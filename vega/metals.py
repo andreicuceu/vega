@@ -19,6 +19,11 @@ class Metals:
     cache_pk = LRUCache(128)
     cache_xi = LRUCache(128)
 
+    growth_rate = None
+    par_sigma_smooth = None
+    per_sigma_smooth = None
+    fast_metals = False
+
     def __init__(self, corr_item, fiducial, scale_params, PktoXi_obj, data=None):
         """Initialize metals
 
@@ -41,11 +46,15 @@ class Metals:
         self.size = corr_item.model_coordinates.rp_grid.size
         ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
-
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
-        # self.fast_metals_unsafe = corr_item.config['model'].getboolean('fast_metals_unsafe', False)
-        # if self.fast_metals_unsafe:
-        #     self.fast_metals = True
+
+        # Read the growth rate and sigma_smooth from the fiducial config
+        if 'growth_rate' in fiducial:
+            self.growth_rate = fiducial['growth_rate']
+        if 'par_sigma_smooth' in fiducial:
+            self.par_sigma_smooth = fiducial['par_sigma_smooth']
+        if 'per_sigma_smooth' in fiducial:
+            self.per_sigma_smooth = fiducial['per_sigma_smooth']
 
         self.save_components = fiducial.get('save-components', False)
 
@@ -73,7 +82,7 @@ class Metals:
             self.cosmo = picca_constants.Cosmo(
                 Om=corr_item.cosmo_params['Omega_m'], Ok=corr_item.cosmo_params['Omega_k'],
                 Or=corr_item.cosmo_params['Omega_r'], wl=corr_item.cosmo_params['wl'],
-                blinding='none'
+                blinding='none', verbose=False
             )
 
         # Initialize metals
@@ -162,10 +171,20 @@ class Metals:
             Model correlation function for the specified component
         """
         assert self._corr_item.has_metals
+        local_pars = copy.deepcopy(pars)
+
+        # TODO Check growth rate and sigma_smooth exist. They should be in the fiducial config.
+        if self.fast_metals:
+            if 'growth_rate' in local_pars and self.growth_rate is not None:
+                local_pars['growth_rate'] = self.growth_rate
+            if 'par_sigma_smooth' in local_pars and self.par_sigma_smooth is not None:
+                local_pars['par_sigma_smooth'] = self.par_sigma_smooth
+            if 'per_sigma_smooth' in local_pars and self.per_sigma_smooth is not None:
+                local_pars['per_sigma_smooth'] = self.per_sigma_smooth
 
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
-            bias1, beta1, bias2, beta2 = utils.bias_beta(pars, name1, name2)
+            bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
 
             self.Pk_metal.tracer1_name = name1
             self.Pk_metal.tracer2_name = name2
@@ -179,19 +198,19 @@ class Metals:
                     # We need to separate Lya and QSO correlations
                     # because they have different parameters
                     if 'discrete' in self.main_tracer_types:
-                        for par in pars.keys():
+                        for par in local_pars.keys():
                             if 'sigma_velo_disp' in par:
-                                cache_pars = (beta_main, pars[par], component)
+                                cache_pars = (beta_main, local_pars[par], component)
                                 break
 
                     if cache_pars is None:
                         cache_pars = (beta_main, component)
 
-                    pk = self.compute_pk((pk_lin, pars), *cache_pars)
+                    pk = self.compute_pk((pk_lin, local_pars), *cache_pars)
 
                     corr_hash = tuple(set((name1, name2)))
                     self.PktoXi.cache_pars = cache_pars
-                    xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, pars)
+                    xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, local_pars)
                     self.PktoXi.cache_pars = None
 
                     # Apply the metal matrix
@@ -205,18 +224,18 @@ class Metals:
 
                 else:
                     xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
-                        pk_lin, pars, name1, name2, component)
+                        pk_lin, local_pars, name1, name2, component)
 
                 continue
 
             # If not in fast metals mode, compute the usual way
             # Slow mode also allows the full save of components
-            pk = self.Pk_metal.compute(pk_lin, pars)
+            pk = self.Pk_metal.compute(pk_lin, local_pars)
             if self.save_components:
                 self.pk[component][(name1, name2)] = copy.deepcopy(pk)
 
             corr_hash = tuple(set((name1, name2)))
-            xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, pars)
+            xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, local_pars)
 
             # Save the components
             if self.save_components:

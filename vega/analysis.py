@@ -14,8 +14,12 @@ class Analysis:
 
     - Run FastMC analysis
     """
+    current_mc_mock = None
 
-    def __init__(self, chi2_func, sampler_params, main_config, corr_items, data, mc_config=None):
+    def __init__(
+        self, chi2_func, sampler_params, main_config, corr_items, data,
+        mc_config=None, global_cov=None
+    ):
         """
 
         Parameters
@@ -41,6 +45,8 @@ class Analysis:
         self._data = data
         self.mc_config = mc_config
         self.has_monte_carlo = False
+        self._global_cov = global_cov
+        self._cholesky_global_cov = None
 
     def chi2_scan(self):
         """Compute a chi^2 scan over one or two parameters.
@@ -153,7 +159,62 @@ class Analysis:
 
         return mocks
 
-    def run_monte_carlo(self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False):
+    def create_global_monte_carlo(self, fiducial_model, scale=None, forecast=False):
+        """Create Monte Carlo simulation using global covariance matrix
+
+        Parameters
+        ----------
+        fiducial_model : dict
+            Input fiducial model to use as mean of the multvariate Gaussian
+        scale : float, optional
+            Optional rescaling of the covariance matrix, by default None
+        forecast : bool, optional
+            Forecast mode flag, by default False
+
+        Returns
+        -------
+        array
+            Global masked MC data vector
+        """
+        assert self._global_cov is not None
+
+        # TODO The corr items need to have an imposed order
+        full_data_mask = []
+        for name in self._corr_items:
+            full_data_mask.append(self._data[name].data_mask)
+        full_data_mask = np.concatenate(full_data_mask)
+
+        if self._cholesky_global_cov is None:
+            masked_cov = self._global_cov[:, full_data_mask]
+            masked_cov = masked_cov[full_data_mask, :]
+            if scale is None:
+                scale = 1
+            self._cholesky_global_cov = np.linalg.cholesky(scale * masked_cov)
+
+        # TODO The corr items need to have an imposed order
+        masked_fiducial = []
+        for name, data in self._data.items():
+            mask = data.dist_model_coordinates.get_mask_to_other(data.data_coordinates)
+            if data.data_mask.size == fiducial_model[name].size:
+                masked_fiducial.append(fiducial_model[name])
+            elif mask.size == fiducial_model[name].size:
+                masked_fiducial.append(fiducial_model[name][mask])
+            else:
+                raise ValueError('Input fiducial has unknown size. '
+                                 'It must match the data or the model.')
+        masked_fiducial = np.concatenate(masked_fiducial)
+
+        if forecast:
+            mc_mock = masked_fiducial
+        else:
+            ran_vec = np.random.randn(full_data_mask.sum())
+            mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(ran_vec)
+
+        return mc_mock
+
+    def run_monte_carlo(
+            self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False, run_mc_fits=True
+    ):
         """Run Monte Carlo simulations
 
         Parameters
@@ -186,13 +247,24 @@ class Analysis:
             sys.stdout.flush()
 
             # Create the mocks
-            mocks = self.create_monte_carlo_sim(
-                fiducial_model, seed=None, scale=scale, forecast=forecast)
+            if self._global_cov is None:
+                mocks = self.create_monte_carlo_sim(
+                    fiducial_model, seed=None, scale=scale, forecast=forecast)
 
-            for name, cf_mock in mocks.items():
-                if name not in self.mc_mocks:
-                    self.mc_mocks[name] = []
-                self.mc_mocks[name].append(cf_mock)
+                for name, cf_mock in mocks.items():
+                    if name not in self.mc_mocks:
+                        self.mc_mocks[name] = []
+                    self.mc_mocks[name].append(cf_mock)
+            else:
+                self.current_mc_mock = self.create_global_monte_carlo(
+                    fiducial_model, scale=scale, forecast=forecast)
+
+                if 'global' not in self.mc_mocks:
+                    self.mc_mocks['global'] = []
+                self.mc_mocks['global'].append(self.current_mc_mock)
+
+            if not run_mc_fits:
+                continue
 
             try:
                 # Run minimizer
@@ -216,7 +288,8 @@ class Analysis:
             self.mc_valid_minima.append(minimizer.fmin.is_valid)
             self.mc_valid_hesse.append(not minimizer.fmin.hesse_failed)
 
-        for param in self.mc_bestfits.keys():
-            self.mc_bestfits[param] = np.array(self.mc_bestfits[param])
+        if run_mc_fits:
+            for param in self.mc_bestfits.keys():
+                self.mc_bestfits[param] = np.array(self.mc_bestfits[param])
 
         self.has_monte_carlo = True

@@ -73,9 +73,12 @@ if __name__ == '__main__':
         fiducial_model = vega.compute_model(vega.mc_config['params'], run_init=False)
 
     # Run the mocks
+    run_mc_fits = vega.main_config['control'].getboolean('run_mc_fits', True)
     local_seed = int(seed + cpu_rank)
     vega.analysis.run_monte_carlo(
-        fiducial_model, num_mocks=num_local_mc, seed=local_seed, forecast=forecast)
+        fiducial_model, num_mocks=num_local_mc, seed=local_seed,
+        forecast=forecast, run_mc_fits=run_mc_fits
+    )
 
     # Write output
     if num_cpus > 1:

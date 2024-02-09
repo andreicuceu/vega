@@ -31,6 +31,7 @@ class VegaInterface:
     """
     _blind = None
     _use_global_cov = False
+    global_cov = None
 
     def __init__(self, main_path):
         """
@@ -71,6 +72,26 @@ class VegaInterface:
             self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
             self.corr_items[name].low_mem_mode = self.low_mem_mode
 
+        # Read parameters
+        self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
+        self.sample_params = self._read_sample(self.main_config['sample'])
+
+        # Set growth rate
+        use_template_growth_rate = self.main_config['control'].getboolean(
+            'use_template_growth_rate', True)
+        if use_template_growth_rate and 'growth_rate' in self.fiducial:
+            assert 'growth_rate' not in self.sample_params['limits']
+            self.params['growth_rate'] = self.fiducial['growth_rate']
+        elif 'growth_rate' not in self.fiducial:
+            print('WARNING: No growth rate specified in the template file. Using input value.')
+            if 'growth_rate' in self.params:
+                self.fiducial['growth_rate'] = self.params['growth_rate']
+
+        if 'par_sigma_smooth' in self.params:
+            self.fiducial['par_sigma_smooth'] = self.params['par_sigma_smooth']
+        if 'per_sigma_smooth' in self.params:
+            self.fiducial['per_sigma_smooth'] = self.params['per_sigma_smooth']
+
         # Check if all correlations have data files
         self.data = {}
         self._has_data = True
@@ -95,10 +116,6 @@ class VegaInterface:
                 self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
                                           self.data[name])
 
-        # Read parameters
-        self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
-        self.sample_params = self._read_sample(self.main_config['sample'])
-
         # Check blinding
         self._blind = False
         if self._has_data:
@@ -116,15 +133,6 @@ class VegaInterface:
                     'beta_QSO' in self.sample_params['limits']):
                 print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
 
-        # Get priors
-        self.priors = {}
-        if 'priors' in self.main_config:
-            self.priors = self._init_priors(self.main_config['priors'])
-            for param in self.priors.keys():
-                if param not in self.sample_params['limits'].keys():
-                    print('Warning: Prior specified for a parameter that is'
-                          ' not sampled!')
-
         # Read the monte carlo parameters
         self.mc_config = None
         if 'monte carlo' in self.main_config:
@@ -138,6 +146,23 @@ class VegaInterface:
 
             self.mc_config['sample'] = self._read_sample(config)
 
+        # Get priors
+        self.priors = {}
+        if 'priors' in self.main_config:
+            self.priors = self._init_priors(self.main_config['priors'])
+            for param in self.priors.keys():
+                param_is_not_sampled = param not in self.sample_params['limits']
+                if self.mc_config is not None:
+                    param_is_not_sampled &= param not in self.mc_config['sample']['limits']
+                if param_is_not_sampled:
+                    raise ValueError(
+                        f'Prior specified for a parameter that is not sampled: {param}')
+
+        # Read the global covariance
+        if global_cov_file is not None:
+            self.read_global_cov(global_cov_file)
+            self._use_global_cov = True
+
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
             self.minimizer = None
@@ -145,7 +170,7 @@ class VegaInterface:
             self.minimizer = Minimizer(self.chi2, self.sample_params)
         self.analysis = Analysis(
             self.chi2, self.sample_params, self.main_config,
-            self.corr_items, self.data, self.mc_config
+            self.corr_items, self.data, self.mc_config, self.global_cov
         )
 
         # Check for sampler
@@ -156,16 +181,15 @@ class VegaInterface:
                 if 'Polychord' not in self.main_config:
                     raise RuntimeError('run_sampler called, but no sampler initialized')
 
+        # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
+        # Initialize vega plots
         self.monte_carlo = False
         self.plots = None
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
 
-        if global_cov_file is not None:
-            self.read_global_cov(global_cov_file)
-            self._use_global_cov = True
 
     def compute_model(self, params=None, run_init=True, direct_pk=None):
         """Compute correlation function model using input parameters.
@@ -262,10 +286,7 @@ class VegaInterface:
                 full_model.append(model_cf)
 
             if self.monte_carlo:
-                if self._use_global_cov:
-                    raise NotImplementedError('Monte Carlo not implemented with global covariance')
-                    # full_masked_data.append(self.data[name].masked_mc_mock)
-                else:
+                if not self._use_global_cov:
                     diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
                     chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
@@ -277,7 +298,10 @@ class VegaInterface:
 
         if self._use_global_cov:
             full_model = np.concatenate(full_model)
-            full_masked_data = np.concatenate(full_masked_data)
+            if self.monte_carlo:
+                full_masked_data = self.analysis.current_mc_mock
+            else:
+                full_masked_data = np.concatenate(full_masked_data)
             diff = full_masked_data - full_model[self.full_model_mask]
             chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
@@ -489,6 +513,10 @@ class VegaInterface:
         fiducial['k'] = hdul[1].data['K']
         fiducial['pk_full'] = hdul[1].data['PK']
         fiducial['pk_smooth'] = hdul[1].data['PKSB']
+
+        if 'F_ZREF' in hdul[1].header:
+            fiducial['growth_rate'] = hdul[1].header['F_ZREF']
+
         hdul.close()
 
         return fiducial
