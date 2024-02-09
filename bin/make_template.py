@@ -25,7 +25,7 @@ def xi_to_pk(r, xi, ell=0, extrap=False):
     return InterpolatedUnivariateSpline(kk, Pk)
 
 
-def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref):
+def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap):
     minkh = 1.e-4
     maxkh = 1.1525e3
     npoints = 814
@@ -114,7 +114,8 @@ def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref):
     ww = (r >= sb1_rmin) & (r < sb2_rmax)
     xiSB[ww] = model[ww]
 
-    pkSB = xi_to_pk(r, xiSB)
+    extrap = not no_extrap
+    pkSB = xi_to_pk(r, xiSB, extrap=extrap)
     pkSB = pkSB(k)
     pkSB *= pk[-1] / pkSB[-1]
 
@@ -145,6 +146,9 @@ if __name__ == '__main__':
     parser.add_argument('--z-ref', type=float, default=None, required=False,
                         help='Power-spectrum redshift, default use the one from the config file')
 
+    parser.add_argument('--no-extrap', default=False, required=False, action='store_true',
+                        help='Turn off extrapolation in xi to pk')
+
     args = parser.parse_args()
 
-    main(args.ini, args.out, args.fid_H0, args.fid_Ok, args.fid_wl, args.z_ref)
+    main(args.ini, args.out, args.fid_H0, args.fid_Ok, args.fid_wl, args.z_ref, args.no_extrap)
