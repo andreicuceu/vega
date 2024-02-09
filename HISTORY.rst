@@ -2,6 +2,28 @@
 History
 =======
 
+1.0.0 (2024-02-09)
+------------------
+
+* This is the version used to run the DESI Y1 BAO analysis
+* New template: Planck18/DESI-2024_z_2.33.fits
+* The growth_rate parameter is now automatically read from the template file by default. 
+This means the value passed will be ignored from now on. There is a way to turn this off by setting
+use_template_growth_rate=False option in [control].
+* Added option to use bias_metal (instead of bias_eta_metal) in ConfigBuilder
+* Defaults values updated: beta_CIV=0.5, alpha_CIV=0
+* We now recommand sampling bias_metal instead of bias_eta_metal
+* Smoothing parameters are now fixed to input value for metal correlations. This fixes the bug
+that made fits fail when varying smoothing parameters with fast_metals turned on. (only matters for mocks)
+* Growth rate is now fixed for metal correlations by default (only matters for full-shape analyses).
+* Fixed a bug where the DESI instrumental systematics model was being added twice.
+This only impacts the value of the fitted amplitude for that model.
+* Monte Carlo mocks now support the use of the full covariance matrix.
+* Added option to turn off extrapolation when doing the FHT to go from xi to pk in the make_template script.
+We recommend turning this off when computing templates for non-Planck cosmologies.
+* Added example config files for the DESI Y1 analysis under examples/DESI_data_setup for runs on data,
+and under examples/DESI_mock_setup for runs on mocks.
+
 0.6.3 (2023-12-10)
 ------------------
 
