@@ -72,6 +72,7 @@ class BuildConfig:
         self.options['use_metal_autos'] = options.get('use_metal_autos', True)
         self.options['new_metals'] = options.get('new_metals', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
+        self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
 
         metals = options.get('metals', None)
         if metals is not None:
@@ -664,7 +665,10 @@ class BuildConfig:
         # Metals
         if self.options['metals'] is not None:
             for name in self.options['metals']:
-                new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
+                if self.options['use_metal_bias_eta']:
+                    new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
+                else:
+                    new_params['bias_{}'.format(name)] = get_par('bias_{}'.format(name))
                 new_params['beta_{}'.format(name)] = get_par('beta_{}'.format(name))
                 new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
 
