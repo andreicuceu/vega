@@ -26,6 +26,8 @@ class FitResults:
         hdul = fits.open(find_file(path))
 
         self.chisq = hdul[2].header['FVAL']
+        self.valid = hdul[2].header['VALID']
+        self.accurate = hdul[2].header['ACCURATE']
         self.names = hdul[2].data['names']
         self.mean = hdul[2].data['values']
         self.cov = hdul[2].data['covariance']
