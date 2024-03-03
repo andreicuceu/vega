@@ -159,8 +159,9 @@ class VegaInterface:
                         f'Prior specified for a parameter that is not sampled: {param}')
 
         # Read the global covariance
+        cov_scale = self.main_config['control'].getfloat('cov_scale', None)
         if global_cov_file is not None:
-            self.read_global_cov(global_cov_file)
+            self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
         # Initialize the minimizer and the analysis objects
@@ -189,7 +190,6 @@ class VegaInterface:
         self.plots = None
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
-
 
     def compute_model(self, params=None, run_init=True, direct_pk=None):
         """Compute correlation function model using input parameters.
@@ -669,7 +669,7 @@ class VegaInterface:
 
         return prior_dict
 
-    def read_global_cov(self, global_cov_file):
+    def read_global_cov(self, global_cov_file, scale=None):
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             self.global_cov = hdul[1].data['COV']
@@ -698,6 +698,10 @@ class VegaInterface:
                 self.global_cov, self.full_data_mask)
             self.masked_global_log_cov_det = utils.compute_log_cov_det(
                 self.global_cov, self.full_data_mask)
+
+        if scale is not None:
+            self.masked_global_invcov /= scale
+            self.masked_global_log_cov_det += np.log(scale)
 
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.
