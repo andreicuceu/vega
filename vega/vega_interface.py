@@ -674,6 +674,9 @@ class VegaInterface:
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             self.global_cov = hdul[1].data['COV']
 
+        if scale is not None:
+            print('Rescaling covariance by a factor of: ', scale)
+            self.global_cov *= scale
         self._use_global_cov = True
 
         self.full_data_mask = []
@@ -698,10 +701,6 @@ class VegaInterface:
                 self.global_cov, self.full_data_mask)
             self.masked_global_log_cov_det = utils.compute_log_cov_det(
                 self.global_cov, self.full_data_mask)
-
-        if scale is not None:
-            self.masked_global_invcov /= scale
-            self.masked_global_log_cov_det += np.log(scale)
 
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.
