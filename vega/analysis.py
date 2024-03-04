@@ -205,7 +205,7 @@ class Analysis:
         masked_fiducial = np.concatenate(masked_fiducial)
 
         if forecast:
-            mc_mock = masked_fiducial
+            mc_mock = masked_fiducial[full_data_mask]
         else:
             ran_vec = np.random.randn(full_data_mask.sum())
             mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(ran_vec)
