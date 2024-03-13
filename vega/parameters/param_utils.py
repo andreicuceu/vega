@@ -1,6 +1,6 @@
 from vega.utils import find_file
 
-composites = {'bias': r'b_{\delta,',
+composites = {'bias': r'b_{',
               'bias_eta': r'b_{\eta,',
               'beta': r'\beta_{',
               'alpha': r'\alpha_{'}
