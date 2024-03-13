@@ -4,8 +4,8 @@
 LYA \alpha
 LYB \beta
 QSO Q
-SiII(1190) SiII(1190)
-SiII(1193) SiII(1193)
-SiIII(1207) SiIII(1207)
-SiII(1260) SiII(1260)
-CIV(eff) CIV(eff)
+SiII(1190) {\rm SiII(1190)}
+SiII(1193) {\rm SiII(1193)}
+SiIII(1207) {\rm SiIII(1207)}
+SiII(1260) {\rm SiII(1260)}
+CIV(eff) {\rm CIV(eff)}

@@ -14,31 +14,31 @@ alpha_full \alpha_f
 growth_rate f
 bias_gamma b_\gamma
 bias_prim b'
-lambda_uv \lambda_{UV}
-bias_hcd b_{HCD}
-beta_hcd \beta_{HCD}
-L0_hcd L_0
-sigmaNL_par \Sigma_{||}
-sigmaNL_per \Sigma_\bot
+lambda_uv \lambda_{\rm UV}\;[{\rm Mpc/h}]
+bias_hcd b_{\rm HCD}
+beta_hcd \beta_{\rm HCD}
+L0_hcd L_{\rm HCD}\;[{\rm Mpc/h}]
+sigmaNL_par \Sigma_{||}\;[{\rm Mpc/h}]
+sigmaNL_per \Sigma_\bot\;[{\rm Mpc/h}]
 dnl_arinyo_q1 q_1
 dnl_arinyo_kv k_v
 dnl_arinyo_av a_v
 dnl_arinyo_bv b_v
 dnl_arinyo_kp k_p
-par_sigma_smooth \sigma_{||,sm}^{full}
-per_sigma_smooth \sigma_{\bot,sm}^{full}
-par_exp_smooth e_{||,sm}^{full}
-per_exp_smooth e_{\bot,sm}^{full}
-sigma_velo_disp_gauss_QSO \sigma_v
-sigma_velo_disp_lorentz_QSO \sigma_v
+par_sigma_smooth \sigma_{||,sm}^{full}\;[{\rm Mpc/h}]
+per_sigma_smooth \sigma_{\bot,sm}^{full}\;[{\rm Mpc/h}]
+par_exp_smooth e_{||,sm}^{full}\;[{\rm Mpc/h}]
+per_exp_smooth e_{\bot,sm}^{full}\;[{\rm Mpc/h}]
+sigma_velo_disp_gauss_QSO \sigma_z\;[{\rm Mpc/h}]
+sigma_velo_disp_lorentz_QSO \sigma_z\;[{\rm Mpc/h}]
 Arel1 A_{rel,1}
 Arel3 A_{rel,3}
 Aasy0 A_{asy,0}
 Aasy2 A_{asy,2}
 Aasy3 A_{asy,3}
-drp_QSO \Delta r_{||}
-qso_rad_strength \xi_0^{TP}
-desi_inst_sys_amp A_{DESI}^{sys}
+drp_QSO \Delta r_{||}\;[{\rm Mpc/h}]
+qso_rad_strength \xi_0^{\rm TP}
+desi_inst_sys_amp A_{\rm noise}
 BB-lyaxlya-0-broadband_sky-scale-sky A_{sky,lya}
 BB-lyaxlya-0-broadband_sky-sigma-sky \sigma_{sky,lya}
 BB-lyaxlyb-0-broadband_sky-scale-sky A_{sky,lyb}
