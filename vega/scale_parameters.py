@@ -29,8 +29,10 @@ class ScaleParameters:
             if 'phi_smooth' not in blind_pars:
                 raise ValueError('Only phi_smooth blinding implemented.')
 
-            blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
-            blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
+            # blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
+            blind_dir = '/global/cfs/cdirs/desicollab/users/acuceu/notebooks_perl/vega/blinding/'
+            # blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
+            blinding_file = Path(blind_dir) / 'test.npz'
             if not blinding_file.exists():
                 raise ValueError(f'Blinding file not found: {blinding_file}.'
                                  'Full-shape analyses must be run at NERSC.')
