@@ -128,16 +128,16 @@ class ScaleParameters:
                              'Set full-shape-alpha to True for other parametrisations.')
 
         if self.parametrisation == 'ap_at':
-            assert not self.blind_phi_smooth
+            assert self._rnsps is None
             return params['ap_full'], params['at_full']
 
         elif self.parametrisation == 'aiso_epsilon':
-            assert not self.blind_phi_smooth
+            assert self._rnsps is None
             return self.aiso_epsilon(params, name_addon='_full')
 
         elif self.parametrisation == 'phi_alpha':
             if self.full_shape:
-                assert not self.blind_phi_smooth
+                assert self._rnsps is None
                 name_addon = '_full'
             else:
                 assert self.smooth_scaling
