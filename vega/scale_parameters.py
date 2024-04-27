@@ -23,23 +23,19 @@ class ScaleParameters:
         self.smooth_scaling = config.getboolean('smooth-scaling', False)
         self.metal_scaling = config.getboolean('metal-scaling', False)
 
-        self._rnsps = 0.
-        self.blind_phi_smooth = False
+        self._rnsps = None
         if blind_pars is not None and len(blind_pars) > 0:
             if 'phi_smooth' not in blind_pars:
                 raise ValueError('Only phi_smooth blinding implemented.')
 
-            # blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
-            blind_dir = '/global/cfs/cdirs/desicollab/users/acuceu/notebooks_perl/vega/blinding/'
-            # blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
-            blinding_file = Path(blind_dir) / 'test.npz'
+            blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
+            blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
             if not blinding_file.exists():
                 raise ValueError(f'Blinding file not found: {blinding_file}.'
                                  'Full-shape analyses must be run at NERSC.')
 
             with np.load(blinding_file) as file:
                 self._rnsps = float(file['phi_smooth'])
-            self.blind_phi_smooth = True
 
         elif self.full_shape or self.smooth_scaling:
             print('Warning! Running full-shape without blinding.')
@@ -147,8 +143,7 @@ class ScaleParameters:
                 assert self.smooth_scaling
                 name_addon = '_smooth'
 
-            return self.phi_alpha(params, name_addon, self.full_shape_alpha,
-                                  self.blind_phi_smooth, self._rnsps)
+            return self.phi_alpha(params, name_addon, self.full_shape_alpha, self._rnsps)
 
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
@@ -177,7 +172,7 @@ class ScaleParameters:
         return ap, at
 
     @staticmethod
-    def phi_alpha(params, name_addon='', fullshape_alpha=False, blind_phi_smooth=False, rnsps=None):
+    def phi_alpha(params, name_addon='', fullshape_alpha=False, rnsps=None):
         """Compute phi / alpha parametrisation, and return ap/at.
         See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
 
@@ -197,7 +192,7 @@ class ScaleParameters:
         """
         phi = params['phi' + name_addon]
 
-        if blind_phi_smooth:
+        if rnsps is not None:
             phi += (np.pi - np.exp(rnsps**2))
 
         if name_addon == '_full' and not fullshape_alpha:
