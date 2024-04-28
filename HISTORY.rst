@@ -2,6 +2,13 @@
 History
 =======
 
+1.1.0 (2024-04-27)
+------------------
+
+* Added AP blinding for DESI DR1 (can only be run at NERSC)
+* Updated some variable names to reflect the DESI BAO paper
+* Added option to run Monte Carlo mocks from the global covariance
+
 1.0.0 (2024-02-09)
 ------------------
 
