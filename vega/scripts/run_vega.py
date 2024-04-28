@@ -26,8 +26,8 @@ def run_vega(config_path):
             raise ValueError('You asked to run over a Monte Carlo simulation,'
                              ' but no "[monte carlo]" section provided.')
 
-    # # run compute_model once to initialize all the caches
-    # _ = vega.compute_model(run_init=False)
+    # run compute_model once to initialize all the caches
+    _ = vega.compute_model(run_init=False)
 
     # Run minimizer
     vega.minimize()
