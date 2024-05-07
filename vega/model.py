@@ -212,6 +212,9 @@ class Model:
         if self.save_components:
             self.xi_distorted[component]['core'] = xi_model.copy()
 
+        #add dg g
+        if self.
+
         return xi_model
 
     def compute(self, pars, pk_full, pk_smooth):

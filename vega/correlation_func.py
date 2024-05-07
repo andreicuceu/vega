@@ -103,6 +103,8 @@ class CorrelationFunction:
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
 
+        #if for gamma dg model stuff
+
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
 
@@ -687,3 +689,13 @@ class CorrelationFunction:
         correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
         return correction
+    
+
+    def delta_gamma_model(rp, rt, zs, lrest, input_wave, input_gamma,llya
+            ,r_QSO_X_LYA, xi_QSO_X_LYA_pos, xi_QSO_X_LYA_neg, P_vec, input_zpix, input_zpix_pdf,ZLIST,DLIST,dz):
+
+
+
+    def gamma_model():
+
+
