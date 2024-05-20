@@ -144,7 +144,7 @@ class P3DModel:
                 sph_kernels[ell] = (1.0j)**ell * special.spherical_jn(
                     ell, np.outer(k_centers, r_grid))
         else:
-            for ell in sph_kernels:
+            for ell in self.multipoles:
                 this_kernel = []
                 for k_low, k_high in k_edges:
                     kr_low = k_low * r_grid
