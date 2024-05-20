@@ -215,7 +215,7 @@ class Data:
             self.pk_norm = float(lines[1].split('=')[-1].strip())
 
         k_edges = data[:, :2]
-        pk_ell = (data[:, 2:] * self.pk_norm).flatten()
+        pk_ell = (data[:, 2:].T * self.pk_norm).flatten()
 
         # Initialize the data coordinates and mask
         self._blind = False

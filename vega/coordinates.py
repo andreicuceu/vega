@@ -191,9 +191,9 @@ class PkCoordinates:
                 raise ValueError(
                     f'Invalid multipole in cuts. Valid multipoles are {self.data_multipoles}')
 
-        mask = np.full((self.num_bins, self.num_ells), True, dtype=bool)
+        mask = np.full((self.num_ells, self.num_bins), True, dtype=bool)
         for i, ell in enumerate(self.data_multipoles):
-            mask[:, i] = (ell in self.model_multipoles) \
+            mask[i, :] = (ell in self.model_multipoles) \
                             & (self.k_centers > k_min_cut) \
                             & (self.k_centers < k_max_cut)
 
