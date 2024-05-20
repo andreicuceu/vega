@@ -226,7 +226,7 @@ class Data:
         assert self.data_mask.shape == pk_ell.shape
         self._masked_data_vec = pk_ell[self.data_mask]
         self._data_vec = pk_ell
-        self.data_size = len(self.data_mask.sum())
+        self.data_size = self.data_mask.sum()
         self.full_data_size = pk_ell.size
 
         # Read distortion matrix and initialize coordinate grids for the model
