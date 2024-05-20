@@ -63,7 +63,7 @@ class P3DModel:
         # TODO Implement alternative with mcfit or hankl
         pkell = []
         for ell in self.multipoles:
-            pkell_integrand = np.outer(r2xiell_windowed[ell], self.sph_kernels[ell])
+            pkell_integrand = r2xiell_windowed[ell][:, None] * self.sph_kernels[ell]
             pkell.append(np.sum(pkell_integrand, axis=0))
 
         return np.array(pkell)
