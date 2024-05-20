@@ -5,7 +5,7 @@ from scipy import sparse
 from scipy.sparse import csr_matrix
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
-from vega.coordinates import Coordinates
+from vega.coordinates import Coordinates, PkCoordinates
 
 BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
 
@@ -15,6 +15,7 @@ class Data:
 
     An instance of this is required for each cf component
     """
+    _mode = None
     _data_vec = None
     _masked_data_vec = None
     _cov_mat = None
@@ -48,7 +49,11 @@ class Data:
         cov_path = corr_item.config['data'].get('covariance-file', None)
         cov_rescale = corr_item.config['data'].getfloat('cov_rescale', None)
 
-        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
+        if corr_item.mode == 'xi_rprt':
+            self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
+        elif corr_item.mode == 'pk_ell':
+            self._read_pk_ell(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
+
         self.corr_item.init_coordinates(
             self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
@@ -197,6 +202,49 @@ class Data:
             Distortion matrix flag
         """
         return self._distortion_mat is not None
+
+    def _read_pk_ell(self, data_path, cuts_config, dmat_path, cov_path, cov_rescale=None):
+        print(f'Reading data file {data_path}\n')
+        data = np.loadtxt(data_path)
+
+        # Get normalization factor
+        with open(data_path) as f:
+            lines = f.readlines()
+            assert 'norm = ' in lines[1]
+            self.pk_norm = float(lines[1].split('=')[-1].strip())
+
+        k_edges = data[:, :2]
+        pk_ell = (data[:, 2:] * self.pk_norm).flatten()
+
+        # Initialize the data coordinates and mask
+        self._blind = False
+        self.data_coordinates = PkCoordinates(k_edges, num_ells=pk_ell.shape[1])
+        self.data_mask = self.data_coordinates.get_mask_scale_cuts(cuts_config).flatten()
+        self.model_mask = self.data_mask
+
+        # Save data and compute data size
+        assert self.data_mask.shape == pk_ell.shape
+        self._masked_data_vec = pk_ell[self.data_mask]
+        self._data_vec = pk_ell
+        self.data_size = len(self.data_mask.sum())
+        self.full_data_size = pk_ell.size
+
+        # Read distortion matrix and initialize coordinate grids for the model
+        assert dmat_path is not None, 'Distortion matrix file is required for P(k) data'
+        self._read_dmat(dmat_path)
+        assert self.cosmo_params is not None, 'Fiducial cosmo parameters in dmat file are required.'
+
+        # Compute the model mask
+        # self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
+
+        # Read the covariance matrix
+        assert cov_path is not None, 'Covariance matrix file is required for P(k) data'
+        print(f'Reading covariance matrix file {cov_path}\n')
+        self._cov_mat = np.loadtxt(cov_path)
+        assert self._cov_mat.shape == (self.full_data_size, self.full_data_size)
+
+        if cov_rescale is not None:
+            self._cov_mat *= cov_rescale
 
     def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.
@@ -361,6 +409,14 @@ class Data:
 
         self.dist_model_coordinates = Coordinates(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
+
+        # Get the cosmological parameters
+        if self.cosmo_params is None and "OMEGAM" in header:
+            self.cosmo_params = {}
+            self.cosmo_params['Omega_m'] = header['OMEGAM']
+            self.cosmo_params['Omega_k'] = header.get('OMEGAK', 0.)
+            self.cosmo_params['Omega_r'] = header.get('OMEGAR', 0.)
+            self.cosmo_params['wl'] = header.get('WL', -1.)
 
         hdul.close()
 

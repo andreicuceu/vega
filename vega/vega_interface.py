@@ -220,21 +220,18 @@ class VegaInterface:
                 local_params[par] = val
 
         # Go through each component and compute the model cf
-        model_cf = {}
+        model = {}
         if run_init:
             self.models = {}
         for name, corr_item in self.corr_items.items():
             if run_init:
-                self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
-                                          self.data[name])
+                self.models[name] = Model(
+                    corr_item, self.fiducial, self.scale_params, self.data[name])
 
-            if direct_pk is None:
-                model_cf[name] = self.models[name].compute(local_params, self.fiducial['pk_full'],
-                                                           self.fiducial['pk_smooth'])
-            else:
-                model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
+            model[name] = self.models[name].compute(
+                local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'], direct_pk)
 
-        return model_cf
+        return model
 
     def chi2(self, params=None, direct_pk=None):
         """Compute full chi2 for all components.
@@ -277,19 +274,19 @@ class VegaInterface:
         full_model = []
         full_masked_data = []
         for name in self.corr_items:
+            # Compute model
             try:
-                if direct_pk is None:
-                    model_cf = self.models[name].compute(
-                        local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'])
-                else:
-                    model_cf = self.models[name].compute_direct(local_params, direct_pk)
+                model_cf = self.models[name].compute(
+                    local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'], direct_pk)
             except utils.VegaBoundsError:
                 self.models[name].PktoXi.cache_pars = None
                 return 1e100
 
+            # Build full model vector
             if self._use_global_cov:
                 full_model.append(model_cf)
 
+            # Compute chi2 for individual components
             if self.monte_carlo:
                 if not self._use_global_cov:
                     diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
@@ -301,6 +298,7 @@ class VegaInterface:
                     diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
                     chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
+        # Compute chi2 for full data vector
         if self._use_global_cov:
             full_model = np.concatenate(full_model)
             if self.monte_carlo:

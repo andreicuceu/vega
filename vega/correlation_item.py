@@ -27,6 +27,13 @@ class CorrelationItem:
         self.tracer2['name'] = config['data'].get('tracer2', self.tracer1['name'])
         self.tracer2['type'] = config['data'].get('tracer2-type', self.tracer1['type'])
 
+        if 'mode' in config['data']:
+            self.mode = config['data'].get('mode', 'xi_rprt')
+
+        if self.mode not in ['xi_rprt', 'pk_ell']:
+            raise ValueError(
+                f"Unknown mode {self.mode}. Recognized modes are 'xi_rprt' and 'pk_ell'")
+
         self.cov_rescale = config['data'].getfloat('cov_rescale', None)
         self.has_distortion = config['data'].getboolean('distortion', True)
         self.old_fftlog = config['model'].getboolean('old_fftlog', False)

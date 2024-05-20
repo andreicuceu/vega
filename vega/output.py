@@ -33,33 +33,33 @@ class Output:
         self.output_pk = config.getboolean('write_pk', False)
         self.mc_output = config.get('mc_output', None)
 
-    def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
+    def write_results(self, params, minimizer, corr_funcs=None, scan_results=None, models=None):
         """Write results in the fits or hdf format
 
         Parameters
         ----------
-        corr_funcs : dict
-            Model correlation functions to write to file.
-            This should be the output of vega.compute_model()
         params : dict
             Parameters to write to file. These should be the
             parameters vega.compute_model() was called with.
-        minimizer : Minimizer, optional
-            Minimizer object after minimization was done, by default None
+        minimizer : Minimizer
+            Minimizer object after minimization was done
+        corr_funcs : dict, optional
+            Model correlation functions to write to file.
+            This should be the output of vega.compute_model(), by default None
         scan_results : list, optional
             List of scan results, by default None
         models : dict, optional
             Dictionary with the Vega Model objects, by default None
         """
         if self.type == 'fits':
-            self.write_results_fits(corr_funcs, params, minimizer, scan_results, models)
+            self.write_results_fits(params, minimizer, corr_funcs, scan_results, models)
         elif self.type == 'hdf' or self.type == 'h5':
             self.write_results_hdf(minimizer, scan_results)
         else:
             raise ValueError('Unknown output type. Set type = fits'
                              ' or type = hdf')
 
-    def write_results_fits(self, corr_funcs, params, minimizer=None, scan_results=None,
+    def write_results_fits(self, params, minimizer, corr_funcs=None, scan_results=None,
                            models=None):
         """Write output in the fits format
 
@@ -83,12 +83,13 @@ class Output:
                              ' Reinitialize with a valid vega.data object.')
 
         primary_hdu = fits.PrimaryHDU()
-        model_hdu = self._model_hdu(corr_funcs, params)
-        hdu_list = [primary_hdu, model_hdu]
+        hdu_list = [primary_hdu]
+        if corr_funcs is not None:
+            model_hdu = self._model_hdu(corr_funcs, params)
+            hdu_list.append(model_hdu)
 
-        if minimizer is not None:
-            bestfit_hdu = self._bestfit_hdu(minimizer)
-            hdu_list.append(bestfit_hdu)
+        bestfit_hdu = self._bestfit_hdu(minimizer)
+        hdu_list.append(bestfit_hdu)
 
         if self.output_pk:
             assert models is not None

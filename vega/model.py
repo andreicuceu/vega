@@ -2,6 +2,8 @@ from . import power_spectrum
 from . import pktoxi
 from . import correlation_func as corr_func
 from . import metals
+from . import coordinates
+from . import p3d_model
 
 
 class Model:
@@ -25,6 +27,7 @@ class Model:
         """
         self._corr_item = corr_item
         self._model_pk = corr_item.model_pk
+        self._mode = corr_item.mode
 
         assert corr_item.model_coordinates is not None
 
@@ -34,8 +37,17 @@ class Model:
             data_has_distortion = self._data.has_distortion
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
 
-        self._corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
-        self._corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
+        if isinstance(corr_item.data_coordinates, coordinates.Coordinates):
+            self._corr_item.config['model']['bin_size_rp'] = str(
+                corr_item.data_coordinates.rp_binsize)
+            self._corr_item.config['model']['bin_size_rt'] = str(
+                corr_item.data_coordinates.rt_binsize)
+            bin_size_rp_data = corr_item.data_coordinates.rp_binsize
+        else:
+            self._corr_item.config['model']['model binning'] = 'False'
+            self._corr_item.config['model']['bin_size_rp'] = '1e-100'
+            self._corr_item.config['model']['bin_size_rt'] = '1e-100'
+            bin_size_rp_data = corr_item.model_coordinates.rp_binsize
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -44,7 +56,6 @@ class Model:
             self.xi_distorted = {'peak': {}, 'smooth': {}, 'full': {}}
 
         # Initialize Broadband
-        bin_size_rp_data = corr_item.data_coordinates.rp_binsize
         bin_size_rp_model = corr_item.model_coordinates.rp_binsize
         self.bb_config = None
         if 'broadband' in self._corr_item.config:
@@ -81,6 +92,11 @@ class Model:
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
+
+        if self._mode == 'pk_ell':
+            window_path = corr_item.config['data'].get('window_matrices')
+            self.P3D = p3d_model.P3DModel(
+                corr_item.config['model'], corr_item.data_coordinates, window_path)
 
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp_data, bin_size_rp_model):
@@ -214,9 +230,9 @@ class Model:
 
         return xi_model
 
-    def compute(self, pars, pk_full, pk_smooth):
-        """Compute correlation function model using the peak/smooth
-        (wiggles/no-wiggles) decomposition.
+    def compute(self, pars, pk_full, pk_smooth, direct_pk=None):
+        """Compute model for the 2D correlation function or the 3D power spectrum multipoles
+        If direct_pk is passed, it uses that as the full P(k) and ignores pk_full and pk_smooth.
 
         Parameters
         ----------
@@ -226,38 +242,28 @@ class Model:
             Full fiducial linear power spectrum
         pk_smooth : 1D Array
             Smooth component of the fiducial linear power spectrum
+        direct_pk : 1D Array, optional
+            Directly use the full power spectrum, by default None
 
         Returns
         -------
         1D Array
             Full correlation function
         """
-        pars['peak'] = True
-        xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
+        if direct_pk is None:
+            pars['peak'] = True
+            xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
 
-        pars['peak'] = False
-        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
+            pars['peak'] = False
+            xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
 
-        xi_full = pars['bao_amp'] * xi_peak + xi_smooth
-        return xi_full
+            xi_full = pars['bao_amp'] * xi_peak + xi_smooth
+        else:
+            pars['peak'] = False
+            xi_full = self._compute_model(pars, direct_pk, 'full')
 
-    def compute_direct(self, pars, pk_full):
-        """Compute full correlation function model directly from the full
-        power spectrum.
-
-        Parameters
-        ----------
-        pars : dict
-            Computation parameters
-        pk_full : 1D Array
-            Full fiducial linear power spectrum
-
-        Returns
-        -------
-        1D Array
-            Full correlation function
-        """
-        pars['peak'] = False
-        xi_full = self._compute_model(pars, pk_full, 'full')
-
-        return xi_full
+        if self._mode == 'xi_rprt':
+            return xi_full
+        elif self._mode == 'pk_ell':
+            pkell = self.P3D.compute(xi_full, self._corr_item.dist_model_coordinates)
+            return pkell.flatten()

@@ -37,18 +37,19 @@ class Coordinates:
         self.rp_binsize = (rp_max - rp_min) / rp_nbins
         self.rt_binsize = rt_max / rt_nbins
 
-        rp_regular_grid = np.arange(rp_min + self.rp_binsize / 2, rp_max, self.rp_binsize)
-        rt_regular_grid = np.arange(self.rt_binsize / 2, rt_max, self.rt_binsize)
+        self.rp_regular_grid = np.arange(rp_min + self.rp_binsize / 2, rp_max, self.rp_binsize)
+        self.rt_regular_grid = np.arange(self.rt_binsize / 2, rt_max, self.rt_binsize)
 
-        rt_regular_grid, rp_regular_grid = np.meshgrid(rt_regular_grid, rp_regular_grid)
-        self.rp_regular_grid = rp_regular_grid.flatten()
-        self.rt_regular_grid = rt_regular_grid.flatten()
+        rt_regular_meshgrid, rp_regular_meshgrid = np.meshgrid(
+            self.rt_regular_grid, self.rp_regular_grid)
+        self.rp_regular_meshgrid = rp_regular_meshgrid.flatten()
+        self.rt_regular_meshgrid = rt_regular_meshgrid.flatten()
 
-        self.rp_grid = self.rp_regular_grid if rp_grid is None else rp_grid
-        self.rt_grid = self.rt_regular_grid if rt_grid is None else rt_grid
+        self.rp_grid = self.rp_regular_meshgrid if rp_grid is None else rp_grid
+        self.rt_grid = self.rt_regular_meshgrid if rt_grid is None else rt_grid
 
         self.r_grid = np.sqrt(self.rp_grid**2 + self.rt_grid**2)
-        self.r_regular_grid = np.sqrt(self.rp_regular_grid**2 + self.rt_regular_grid**2)
+        self.r_regular_grid = np.sqrt(self.rp_regular_meshgrid**2 + self.rt_regular_meshgrid**2)
 
         self.mu_grid = np.zeros_like(self.r_grid)
         w = self.r_grid > 0.
@@ -56,7 +57,7 @@ class Coordinates:
 
         self.mu_regular_grid = np.zeros_like(self.r_regular_grid)
         w = self.r_regular_grid > 0.
-        self.mu_regular_grid[w] = self.rp_regular_grid[w] / self.r_regular_grid[w]
+        self.mu_regular_grid[w] = self.rp_regular_meshgrid[w] / self.r_regular_grid[w]
 
         if z_grid is None and z_eff is None:
             self.z_grid = None
@@ -133,9 +134,63 @@ class Coordinates:
         mu_min_cut = cuts_config.getfloat('mu-min', -1.)
         mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
-        mask = (self.rp_regular_grid > rp_min_cut) & (self.rp_regular_grid < rp_max_cut)
-        mask &= (self.rt_regular_grid > rt_min_cut) & (self.rt_regular_grid < rt_max_cut)
+        mask = (self.rp_regular_meshgrid > rp_min_cut) & (self.rp_regular_meshgrid < rp_max_cut)
+        mask &= (self.rt_regular_meshgrid > rt_min_cut) & (self.rt_regular_meshgrid < rt_max_cut)
         mask &= (self.r_regular_grid > r_min_cut) & (self.r_regular_grid < r_max_cut)
         mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
+
+        return mask
+
+
+class PkCoordinates:
+    '''Class to handle P(k) coordinate grids
+    '''
+    def __init__(self, k_edges, num_ells=3):
+        '''Initialize the coordinate grids.
+
+        Parameters
+        ----------
+        k_edges : Array
+            k edges
+        num_ells : int, optional
+            Number of multipoles, by default 3
+        '''
+        self.k_edges = k_edges
+        self.k_centers = self.k_edges.mean(1)
+        self.k_binsizes = k_edges[:, 1] - k_edges[:, 0]
+        self.num_bins = len(self.k_centers)
+        self.num_ells = num_ells
+        self.k_min = self.k_edges.min()
+        self.k_max = self.k_edges.max()
+        self.data_ells = np.arange(0, 2*num_ells, 2)
+
+    def get_mask_scale_cuts(self, cuts_config):
+        '''Build mask to apply scale cuts
+
+        Parameters
+        ----------
+        cuts_config : ConfigParser
+            Cuts section from config
+
+        Returns
+        -------
+        Array
+            Mask
+        '''
+        # Read the cuts
+        k_min_cut = cuts_config.getfloat('k-min', 0.)
+        k_max_cut = cuts_config.getfloat('k-max', 0.2)
+        self.model_ells = np.array(cuts_config.get('use_multipoles', '0,2,4').split(',')).astype(int)
+
+        for ell in self.model_ells:
+            if ell not in self.data_ells:
+                raise ValueError(
+                    f'Invalid multipole in cuts. Valid multipoles are {self.data_ells}')
+
+        mask = np.full((self.num_bins, self.num_ells), True, dtype=bool)
+        for ell in self.data_ells:
+            mask[:, ell] = (ell in self.model_ells) \
+                            & (self.k_centers > k_min_cut) \
+                            & (self.k_centers < k_max_cut)
 
         return mask

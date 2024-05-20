@@ -41,8 +41,19 @@ def run_vega(config_path):
     if vega.minimizer is not None:
         for par, val in vega.bestfit.values.items():
             vega.params[par] = val
-    corr_funcs = vega.compute_model(vega.params, run_init=False)
-    vega.output.write_results(corr_funcs, vega.params, vega.minimizer, scan_results, vega.models)
+
+    mode = 'xi_rprt'
+    for corr_item in vega.corr_items.values():
+        if corr_item.mode != 'xi_rprt':
+            mode = corr_item.mode
+
+    if mode == 'xi_rprt':
+        corr_funcs = vega.compute_model(vega.params, run_init=False)
+        vega.output.write_results(
+            vega.params, vega.minimizer, corr_funcs, scan_results, vega.models)
+    else:
+        vega.output.write_results(vega.params, vega.minimizer, None, scan_results, vega.models)
+        return
 
     plt.rc('axes', labelsize=16)
     plt.rc('axes', titlesize=16)
