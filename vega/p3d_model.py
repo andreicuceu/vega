@@ -41,7 +41,6 @@ class P3DModel:
         self.rp_interp = r_grid * mu_grid
         self.rt_interp = r_grid * np.sqrt(1 - mu_grid**2)
 
-        self.fit_multipoles = pk_coordinates.model_multipoles
         self.model_multipoles = np.array([0, 2, 4])
         self.legendre_xi = {}
         for ell in self.model_multipoles:
@@ -67,7 +66,7 @@ class P3DModel:
         # FHT to get the 3D power spectrum multipoles
         # TODO Implement alternative with mcfit or hankl
         pkell = []
-        for ell in self.fit_multipoles:
+        for ell in self.model_multipoles:
             pkell_integrand = r2xiell_windowed[ell][:, None] * self.sph_kernels[ell]
             pkell.append(np.sum(pkell_integrand, axis=0))
 
@@ -97,7 +96,7 @@ class P3DModel:
             xi_r2phi[ell1] = {ell2: wxi * phi for ell2, phi in self.window_matrices.items()}
 
         r2xiell_windowed = {}
-        for ell in self.fit_multipoles:
+        for ell in self.model_multipoles:
             if ell == 0:
                 r2xiell_windowed[ell] = xi_r2phi[0][0] + xi_r2phi[2][2] / 5 + xi_r2phi[4][4] / 9
             elif ell == 2:
@@ -145,11 +144,11 @@ class P3DModel:
         These are i^ell j_ell(kr) optionally (analytically) integrated over each k-bin"""
         sph_kernels = {}
         if not k_integration:
-            for ell in self.fit_multipoles:
+            for ell in self.model_multipoles:
                 sph_kernels[ell] = (1.0j)**ell * special.spherical_jn(
                     ell, np.outer(k_centers, r_grid))
         else:
-            for ell in self.fit_multipoles:
+            for ell in self.model_multipoles:
                 this_kernel = []
                 for k_low, k_high in k_edges:
                     kr_low = k_low * r_grid
