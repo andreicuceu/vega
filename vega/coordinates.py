@@ -164,6 +164,9 @@ class PkCoordinates:
         self.k_max = self.k_edges.max()
         self.data_ells = np.arange(0, 2*num_ells, 2)
 
+        self.rp_binsize = 1e-100
+        self.rt_binsize = 1e-100
+
     def get_mask_scale_cuts(self, cuts_config):
         '''Build mask to apply scale cuts
 
