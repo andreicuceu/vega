@@ -41,9 +41,10 @@ class P3DModel:
         self.rp_interp = r_grid * mu_grid
         self.rt_interp = r_grid * np.sqrt(1 - mu_grid**2)
 
-        self.multipoles = pk_coordinates.model_multipoles
+        self.fit_multipoles = pk_coordinates.model_multipoles
+        self.model_multipoles = np.array([0, 2, 4])
         self.legendre_xi = {}
-        for ell in self.multipoles:
+        for ell in self.model_multipoles:
             self.legendre_xi[ell] = special.legendre(ell)
 
         self.window_rfunc = np.vectorize(self.scalar_window_rfunc)
@@ -53,7 +54,7 @@ class P3DModel:
         self.sph_kernels = self.compute_sph_kernels(
             pk_coordinates.k_edges, pk_coordinates.k_centers, self.r_window_grid)
 
-    def compute(self, xi2d_model, xi2d_coords):
+    def compute(self, xi2d_model, xi2d_coords, high_res=False):
         # Decompose the 2D correlation function into multipoles
         xiell = self.xi2d_to_xiell(xi2d_model, xi2d_coords)
 
@@ -66,7 +67,7 @@ class P3DModel:
         # FHT to get the 3D power spectrum multipoles
         # TODO Implement alternative with mcfit or hankl
         pkell = []
-        for ell in self.multipoles:
+        for ell in self.fit_multipoles:
             pkell_integrand = r2xiell_windowed[ell][:, None] * self.sph_kernels[ell]
             pkell.append(np.sum(pkell_integrand, axis=0))
 
@@ -80,8 +81,8 @@ class P3DModel:
             method='quintic', bounds_error=False, fill_value=None)
 
         xi2d_rmu = interp_xi2d((self.rp_interp, self.rt_interp))
-        xiell = np.zeros((self.multipoles.size, self.r_regular_grid.size))
-        for i, ell in enumerate(self.multipoles):
+        xiell = np.zeros((self.model_multipoles.size, self.r_regular_grid.size))
+        for i, ell in enumerate(self.model_multipoles):
             xiell[i] = np.sum(
                 self.dmu * self.legendre_xi[ell](self.mu_regular_grid) * xi2d_rmu.T, axis=1) \
                 * (2 * ell + 1)
@@ -91,12 +92,12 @@ class P3DModel:
     def add_window(self, xiell):
         # r^2 Xi_ell * Phi_ell products. First index is ell Xi and second is ell phi.
         xi_r2phi = {}
-        for i, ell1 in enumerate(self.multipoles):
+        for i, ell1 in enumerate(self.model_multipoles):
             wxi = xiell[i] * self.window_r
             xi_r2phi[ell1] = {ell2: wxi * phi for ell2, phi in self.window_matrices.items()}
 
         r2xiell_windowed = {}
-        for ell in self.multipoles:
+        for ell in self.fit_multipoles:
             if ell == 0:
                 r2xiell_windowed[ell] = xi_r2phi[0][0] + xi_r2phi[2][2] / 5 + xi_r2phi[4][4] / 9
             elif ell == 2:
@@ -144,11 +145,11 @@ class P3DModel:
         These are i^ell j_ell(kr) optionally (analytically) integrated over each k-bin"""
         sph_kernels = {}
         if not k_integration:
-            for ell in self.multipoles:
+            for ell in self.fit_multipoles:
                 sph_kernels[ell] = (1.0j)**ell * special.spherical_jn(
                     ell, np.outer(k_centers, r_grid))
         else:
-            for ell in self.multipoles:
+            for ell in self.fit_multipoles:
                 this_kernel = []
                 for k_low, k_high in k_edges:
                     kr_low = k_low * r_grid

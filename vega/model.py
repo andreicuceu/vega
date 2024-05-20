@@ -94,6 +94,7 @@ class Model:
             'desi-instrumental-systematics', False)
 
         if self._mode == 'pk_ell':
+            assert data is not None
             window_path = corr_item.config['data'].get('window_matrices')
             self.P3D = p3d_model.P3DModel(
                 corr_item.config['model'], corr_item.data_coordinates, window_path, data.pk_norm)
