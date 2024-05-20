@@ -13,8 +13,12 @@ class P3DModel:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, pk_coordinates, window_path):
+    def __init__(self, config, pk_coordinates, window_path, pk_norm):
         self.config = config
+        if pk_norm is None:
+            self.pk_norm = 1
+        else:
+            self.pk_norm = pk_norm
 
         window_matrices = np.loadtxt(window_path).T
         # TODO Check that the window matrices make sense
@@ -66,7 +70,7 @@ class P3DModel:
             pkell_integrand = r2xiell_windowed[ell][:, None] * self.sph_kernels[ell]
             pkell.append(np.sum(pkell_integrand, axis=0))
 
-        return np.array(pkell)
+        return np.array(pkell) * self.pk_norm
 
     def xi2d_to_xiell(self, xi2d_model, xi2d_coords):
         # TODO: This interpolation needs proper testing and validation

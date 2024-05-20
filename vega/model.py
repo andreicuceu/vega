@@ -96,7 +96,7 @@ class Model:
         if self._mode == 'pk_ell':
             window_path = corr_item.config['data'].get('window_matrices')
             self.P3D = p3d_model.P3DModel(
-                corr_item.config['model'], corr_item.data_coordinates, window_path)
+                corr_item.config['model'], corr_item.data_coordinates, window_path, data.pk_norm)
 
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp_data, bin_size_rp_model):

@@ -27,6 +27,7 @@ class Data:
     dist_model_coordinates = None
     model_coordinates = None
     data_coordinates = None
+    pk_norm = None
 
     def __init__(self, corr_item):
         """Read the data and initialize the coordinate grids.
