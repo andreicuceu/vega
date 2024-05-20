@@ -43,7 +43,7 @@ class P3DModel:
             self.legendre_xi[ell] = special.legendre(ell)
 
         self.window_rfunc = np.vectorize(self.scalar_window_rfunc)
-        self.window_r = self.window_rfunc(self.r_regular_grid / r_max_window)
+        self.window_r = self.window_rfunc(self.r_window_grid / r_max_window)
 
         # TODO add more options here
         self.sph_kernels = self.compute_sph_kernels(
