@@ -218,6 +218,7 @@ class Data:
 
         # Initialize the data coordinates and mask
         self._blind = False
+        self._blinding_strat = None
         self.data_coordinates = PkCoordinates(k_edges, num_ells=data[:, 2:].shape[1])
         self.data_mask = self.data_coordinates.get_mask_scale_cuts(cuts_config).flatten()
         self.model_mask = self.data_mask
