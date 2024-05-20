@@ -242,7 +242,7 @@ class Data:
         # Read the covariance matrix
         assert cov_path is not None, 'Covariance matrix file is required for P(k) data'
         print(f'Reading covariance matrix file {cov_path}\n')
-        self._cov_mat = np.loadtxt(cov_path)
+        self._cov_mat = np.loadtxt(cov_path) * self.pk_norm**2
         assert self._cov_mat.shape == (self.full_data_size, self.full_data_size)
 
         if cov_rescale is not None:
