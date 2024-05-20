@@ -53,11 +53,12 @@ class P3DModel:
         self.sph_kernels = self.compute_sph_kernels(
             pk_coordinates.k_edges, pk_coordinates.k_centers, self.r_window_grid)
 
-    def compute(self, xi2d_model, xi2d_coords, high_res=False):
+    def compute(self, xi2d_model, xi2d_coords):
         # Decompose the 2D correlation function into multipoles
         xiell = self.xi2d_to_xiell(xi2d_model, xi2d_coords)
 
         # Interpolate onto the window r grid
+        # TODO: This interpolation needs proper testing and validation
         xiell = np.array([np.interp(self.r_window_grid, self.r_regular_grid, xi) for xi in xiell])
 
         # Add window matrix and pair separation window function
