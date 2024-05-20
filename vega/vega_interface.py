@@ -190,10 +190,16 @@ class VegaInterface:
         # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
+        # Initialize mode
+        self.mode = 'xi_rprt'
+        for corr_item in self.corr_items.values():
+            if corr_item.mode != 'xi_rprt':
+                self.mode = corr_item.mode
+
         # Initialize vega plots
         self.monte_carlo = False
         self.plots = None
-        if self._has_data:
+        if self._has_data and self.mode == 'xi_rprt':
             self.plots = VegaPlots(vega_data=self.data)
 
     def compute_model(self, params=None, run_init=True, direct_pk=None):
