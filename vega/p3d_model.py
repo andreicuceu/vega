@@ -69,11 +69,10 @@ class P3DModel:
         return np.array(pkell)
 
     def xi2d_to_xiell(self, xi2d_model, xi2d_coords):
-        # TODO: xi2d_model needs to be reshaped
-
         # TODO: This interpolation needs proper testing and validation
         interp_xi2d = sp.interpolate.RegularGridInterpolator(
-            (xi2d_coords.rp_regular_grid, xi2d_coords.rt_regular_grid), xi2d_model,
+            (xi2d_coords.rp_regular_grid, xi2d_coords.rt_regular_grid),
+            xi2d_model.reshape(xi2d_coords.rp_nbins, xi2d_coords.rt_nbins),
             method='quintic', bounds_error=False, fill_value=None)
 
         xi2d_rmu = interp_xi2d((self.rp_interp, self.rt_interp))
