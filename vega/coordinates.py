@@ -162,7 +162,7 @@ class PkCoordinates:
         self.num_ells = num_ells
         self.k_min = self.k_edges.min()
         self.k_max = self.k_edges.max()
-        self.data_ells = np.arange(0, 2*num_ells, 2)
+        self.data_multipoles = np.arange(0, 2*num_ells, 2)
 
         self.rp_binsize = 1e-100
         self.rt_binsize = 1e-100
@@ -183,16 +183,17 @@ class PkCoordinates:
         # Read the cuts
         k_min_cut = cuts_config.getfloat('k-min', 0.)
         k_max_cut = cuts_config.getfloat('k-max', 0.2)
-        self.model_ells = np.array(cuts_config.get('use_multipoles', '0,2,4').split(',')).astype(int)
+        self.model_multipoles = np.array(
+            cuts_config.get('use_multipoles', '0,2,4').split(',')).astype(int)
 
-        for ell in self.model_ells:
-            if ell not in self.data_ells:
+        for ell in self.model_multipoles:
+            if ell not in self.model_multipoles:
                 raise ValueError(
-                    f'Invalid multipole in cuts. Valid multipoles are {self.data_ells}')
+                    f'Invalid multipole in cuts. Valid multipoles are {self.data_multipoles}')
 
         mask = np.full((self.num_bins, self.num_ells), True, dtype=bool)
-        for i, ell in enumerate(self.data_ells):
-            mask[:, i] = (ell in self.model_ells) \
+        for i, ell in enumerate(self.data_multipoles):
+            mask[:, i] = (ell in self.model_multipoles) \
                             & (self.k_centers > k_min_cut) \
                             & (self.k_centers < k_max_cut)
 
