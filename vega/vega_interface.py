@@ -398,7 +398,7 @@ class VegaInterface:
                 log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
 
             # Compute log lik
-            log_lik = log_norm - log_det - 0.5 * (chi2 + prior_chi2)
+            log_lik = log_norm - log_det - 0.5 * chi2
 
         # Add priors normalization
         for prior in self.priors.values():
