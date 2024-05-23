@@ -2,6 +2,7 @@
 import os.path
 import numpy as np
 import scipy.stats
+from scipy.special import loggamma
 from astropy.io import fits
 import configparser
 import copy
@@ -169,6 +170,26 @@ class VegaInterface:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
+        # Initialize the likelihood type
+        self.use_sellentin_likelihood = self.main_config['control'].getboolean(
+            'use_sellentin_likelihood', False)
+        self.use_hartlap_correction = self.main_config['control'].getboolean(
+            'use_hartlap_correction', False)
+
+        if self._use_global_cov:
+            self.num_dims = self.masked_global_invcov.shape[0]
+        else:
+            self.num_dims = np.sum([data_obj.data_size for data_obj in self.data.values()])
+
+        if self.use_sellentin_likelihood and self.use_hartlap_correction:
+            raise ValueError('Cannot use both Sellentin likelihood and Hartlap correction.')
+        elif self.use_hartlap_correction:
+            self.num_cov_simulations = self.main_config['control'].getint('num_cov_simulations')
+            for name in self.corr_items:
+                self.data[name].apply_hartlap_factor(self.num_cov_simulations, self.num_dims)
+        elif self.use_sellentin_likelihood:
+            self.num_cov_simulations = self.main_config['control'].getint('num_cov_simulations')
+
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
             self.minimizer = None
@@ -239,7 +260,7 @@ class VegaInterface:
 
         return model
 
-    def chi2(self, params=None, direct_pk=None):
+    def chi2(self, params=None, direct_pk=None, return_prior=False):
         """Compute full chi2 for all components.
 
         Parameters
@@ -248,11 +269,13 @@ class VegaInterface:
             Computation parameters, by default None
         direct_pk: 1D array or None, optional
             If not None, the full Pk (e.g. from CLASS/CAMB) to be used directly, by default None
+        return_prior : bool, optional
+            Whether to also return the prior chi^2, by default False
 
         Returns
         -------
-        float
-            chi^2
+        float if return_prior is False, tuple of float and float if return_prior is True
+            chi^2 if return_prior is False, chi^2 and prior chi^2 if return_prior is True
         """
         assert self._has_data
 
@@ -282,7 +305,7 @@ class VegaInterface:
         for name in self.corr_items:
             # Compute model
             try:
-                model_cf = self.models[name].compute(
+                model = self.models[name].compute(
                     local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'], direct_pk)
             except utils.VegaBoundsError:
                 self.models[name].PktoXi.cache_pars = None
@@ -290,18 +313,18 @@ class VegaInterface:
 
             # Build full model vector
             if self._use_global_cov:
-                full_model.append(model_cf)
+                full_model.append(model)
 
             # Compute chi2 for individual components
             if self.monte_carlo:
                 if not self._use_global_cov:
-                    diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
+                    diff = self.data[name].masked_mc_mock - model[self.data[name].model_mask]
                     chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
             else:
                 if self._use_global_cov:
                     full_masked_data.append(self.data[name].masked_data_vec)
                 else:
-                    diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
+                    diff = self.data[name].masked_data_vec - model[self.data[name].model_mask]
                     chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         # Compute chi2 for full data vector
@@ -311,19 +334,24 @@ class VegaInterface:
                 full_masked_data = self.analysis.current_mc_mock
             else:
                 full_masked_data = np.concatenate(full_masked_data)
+
             diff = full_masked_data - full_model[self.full_model_mask]
             chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
-        # Add priors
+        # Compute priors
+        prior_chi2 = 0
         for param, prior in self.priors.items():
             if param not in local_params:
                 err_msg = ("You have specified a prior for a parameter not in "
                            f"the model. Offending parameter: {param}")
                 assert param in local_params, err_msg
-            chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
+            prior_chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
 
         assert isinstance(chi2, float)
-        return chi2
+        if return_prior:
+            return chi2, prior_chi2
+
+        return chi2 + prior_chi2
 
     def log_lik(self, params=None, direct_pk=None):
         """Compute full log likelihood for all components.
@@ -343,28 +371,38 @@ class VegaInterface:
         assert self._has_data
 
         # Get the full chi2
-        chi2 = self.chi2(params, direct_pk)
+        chi2, prior_chi2 = self.chi2(params, direct_pk, return_prior=True)
 
-        # Compute the normalization for each component
-        log_norm = 0
-        for name in self.corr_items:
-            log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
-
-            if not self._use_global_cov:
-                if self.monte_carlo:
-                    log_norm -= 0.5 * self.data[name].scaled_log_cov_det
-                else:
-                    log_norm -= 0.5 * self.data[name].log_cov_det
-
+        # Compute the total log determinant term
+        log_det = 0
         if self._use_global_cov:
-            log_norm -= 0.5 * self.masked_global_log_cov_det
+            log_det += 0.5 * self.masked_global_log_cov_det
+        else:
+            for name in self.corr_items:
+                if self.monte_carlo:
+                    log_det += 0.5 * self.data[name].scaled_log_cov_det
+                else:
+                    log_det += 0.5 * self.data[name].log_cov_det
 
-        # Compute log lik
-        log_lik = log_norm - 0.5 * chi2
+        if self.use_sellentin_likelihood:
+            Cp = loggamma(0.5 * self.num_cov_simulations) 
+            Cp -= 0.5 * self.num_dims * np.log(np.pi * (self.num_cov_simulations - 1))
+            Cp -= loggamma(0.5 * (self.num_cov_simulations - self.num_dims))
+
+            log_lik = Cp - log_det
+            log_lik -= (0.5 * self.num_cov_simulations
+                        * np.log(1 + chi2 / (self.num_cov_simulations - 1)))
+        else:
+            log_norm = 0
+            for name in self.corr_items:
+                log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
+
+            # Compute log lik
+            log_lik = log_norm - log_det - 0.5 * (chi2 + prior_chi2)
 
         # Add priors normalization
-        for param, prior in self.priors.items():
-            log_lik += self._gaussian_lik_prior(prior[1])
+        for prior in self.priors.values():
+            log_lik += self._gaussian_lik_prior(prior[1]) - 0.5 * prior_chi2
 
         return log_lik
 

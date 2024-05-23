@@ -204,6 +204,13 @@ class Data:
         """
         return self._distortion_mat is not None
 
+    def apply_hartlap_factor(self, num_cov_simulations, num_dims):
+        """Apply the Hartlap factor to the covariance matrix."""
+        hartlap_factor = (num_cov_simulations - num_dims - 2) / (num_cov_simulations - 1)
+        self._cov_mat = self.cov_mat * 1 / hartlap_factor
+        self._inv_masked_cov = self.inv_masked_cov * hartlap_factor
+        self._log_cov_det = self.log_cov_det - np.log(hartlap_factor)
+
     def _read_pk_ell(self, data_path, cuts_config, dmat_path, cov_path, cov_rescale=None):
         print(f'Reading data file {data_path}\n')
         data = np.loadtxt(data_path)
