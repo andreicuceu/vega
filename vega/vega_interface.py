@@ -185,10 +185,12 @@ class VegaInterface:
             raise ValueError('Cannot use both Sellentin likelihood and Hartlap correction.')
         elif self.use_hartlap_correction:
             self.num_cov_simulations = self.main_config['control'].getint('num_cov_simulations')
+            assert self.num_cov_simulations is not None
             for name in self.corr_items:
                 self.data[name].apply_hartlap_factor(self.num_cov_simulations, self.num_dims)
         elif self.use_sellentin_likelihood:
             self.num_cov_simulations = self.main_config['control'].getint('num_cov_simulations')
+            assert self.num_cov_simulations is not None
 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
@@ -385,7 +387,7 @@ class VegaInterface:
                     log_det += 0.5 * self.data[name].log_cov_det
 
         if self.use_sellentin_likelihood:
-            Cp = loggamma(0.5 * self.num_cov_simulations) 
+            Cp = loggamma(0.5 * self.num_cov_simulations)
             Cp -= 0.5 * self.num_dims * np.log(np.pi * (self.num_cov_simulations - 1))
             Cp -= loggamma(0.5 * (self.num_cov_simulations - self.num_dims))
 
