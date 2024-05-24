@@ -10,6 +10,7 @@ from . import power_spectrum
 from . import correlation_func as corr_func
 from . import coordinates
 from . import utils
+from . import pktoxi
 
 
 class Metals:
@@ -24,7 +25,7 @@ class Metals:
     per_sigma_smooth = None
     fast_metals = False
 
-    def __init__(self, corr_item, fiducial, scale_params, PktoXi_obj, data=None):
+    def __init__(self, corr_item, fiducial, scale_params, data=None):
         """Initialize metals
 
         Parameters
@@ -42,9 +43,9 @@ class Metals:
         """
         self._corr_item = corr_item
         self._data = data
-        self.PktoXi = PktoXi_obj
+        # self.PktoXi = PktoXi_obj
         self.size = corr_item.model_coordinates.rp_grid.size
-        ell_max = self._corr_item.config['model'].getint('ell_max', 6)
+        # ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
 
@@ -73,9 +74,9 @@ class Metals:
                                 for (tracer1, tracer2) in corr_item.metal_correlations]
 
         # If in new metals mode, read the stacked delta files
-        self.new_metals = self._corr_item.new_metals
+        self.new_metals = corr_item.new_metals
         if self.new_metals:
-            self.metal_matrix_config = self._corr_item.config['metal-matrix']
+            self.metal_matrix_config = corr_item.config['metal-matrix']
             self.rp_nbins = self._coordinates.rp_nbins
             self.rt_nbins = self._coordinates.rt_nbins
 
@@ -86,14 +87,15 @@ class Metals:
             )
 
         # Initialize metals
-        self.Pk_metal = None
+        self.Pk_metal = {}
+        self.PktoXi = {}
         self.Xi_metal = {}
         self.rp_metal_dmats = {}
-        if self._corr_item.has_metals:
-            for name1, name2 in self._corr_item.metal_correlations:
+        if corr_item.has_metals:
+            for name1, name2 in corr_item.metal_correlations:
                 # Get the tracer info
-                tracer1 = self._corr_item.tracer_catalog[name1]
-                tracer2 = self._corr_item.tracer_catalog[name2]
+                tracer1 = corr_item.tracer_catalog[name1]
+                tracer2 = corr_item.tracer_catalog[name2]
 
                 if self.new_metals:
                     dmat, rp_grid, rt_grid, z_grid = self.compute_fast_metal_dmat(name1, name2)
@@ -107,41 +109,46 @@ class Metals:
 
                 # Get bin sizes
                 if self._data is not None:
-                    self._corr_item.config['metals']['bin_size_rp'] = \
-                        str(self._corr_item.data_coordinates.rp_binsize)
-                    self._corr_item.config['metals']['bin_size_rt'] = \
-                        str(self._corr_item.data_coordinates.rt_binsize)
+                    corr_item.config['metals']['bin_size_rp'] = \
+                        str(corr_item.data_coordinates.rp_binsize)
+                    corr_item.config['metals']['bin_size_rt'] = \
+                        str(corr_item.data_coordinates.rt_binsize)
+
+                # Assumes cross-corelations Lya x Metal and Metal x Lya are the same
+                corr_hash = tuple(set((name1, name2)))
 
                 # Initialize the metal correlation P(k)
-                if self.Pk_metal is None:
-                    self.Pk_metal = power_spectrum.PowerSpectrum(
+                self.Pk_metal[corr_hash] = power_spectrum.PowerSpectrum(
                         self._corr_item.config['metals'], fiducial,
                         tracer1, tracer2, self._corr_item.name
                     )
 
+                self.PktoXi[corr_hash] = pktoxi.PktoXi.init_from_Pk(
+                    self.Pk_metal[corr_hash], corr_item.config['model'])
+
                 # assert len(self.Pk_metal[(name1, name2)].muk_grid) == len(self.Pk_core.muk_grid)
-                assert self._corr_item.config['metals'].getint('ell_max', ell_max) == ell_max, \
-                       "Core and metals must have the same ell_max"
+                # assert self._corr_item.config['metals'].getint('ell_max', ell_max) == ell_max, \
+                #        "Core and metals must have the same ell_max"
 
                 # Initialize the metal correlation Xi
-                # Assumes cross-corelations Lya x Metal and Metal x Lya are the same
-                corr_hash = tuple(set((name1, name2)))
                 self.Xi_metal[corr_hash] = corr_func.CorrelationFunction(
                     self._corr_item.config['metals'], fiducial, metal_coordinates,
                     scale_params, tracer1, tracer2, metal_corr=True)
 
-    @cached(cache=cache_pk, key=lambda self, call_pars, *cache_pars: hashkey(*cache_pars))
-    def compute_pk(self, call_pars, *cache_pars):
-        return self.Pk_metal.compute(*call_pars, fast_metals=True)
+    @cached(cache=cache_pk, key=lambda self, call_pars,
+            name1, name2, *cache_pars: hashkey(name1, name2, *cache_pars))
+    def compute_pk(self, call_pars, name1, name2, *cache_pars):
+        corr_hash = tuple(set((name1, name2)))
+        return self.Pk_metal[corr_hash].compute(*call_pars, fast_metals=True)
 
     @cached(cache=cache_xi,
             key=lambda self, pk_lin, pars, name1, name2, component: hashkey(name1, name2, component))
     def compute_xi_metal_metal(self, pk_lin, pars, name1, name2, component):
-        pk = self.Pk_metal.compute(pk_lin, pars, fast_metals=True)
-
         corr_hash = tuple(set((name1, name2)))
-        self.PktoXi.cache_pars = None
-        xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, pars)
+
+        pk = self.Pk_metal[corr_hash].compute(pk_lin, pars, fast_metals=True)
+        self.PktoXi[corr_hash].cache_pars = None
+        xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], pars)
 
         # Apply the metal matrix
         if self.new_metals:
@@ -185,9 +192,8 @@ class Metals:
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
+            corr_hash = tuple(set((name1, name2)))
 
-            self.Pk_metal.tracer1_name = name1
-            self.Pk_metal.tracer2_name = name2
             if self.fast_metals and component != 'full':
                 # If its a metal x Lya or metal x QSO correlation we can only cache the Pk
                 if name1 in self.main_tracers or name2 in self.main_tracers:
@@ -206,12 +212,12 @@ class Metals:
                     if cache_pars is None:
                         cache_pars = (beta_main, component)
 
-                    pk = self.compute_pk((pk_lin, local_pars), *cache_pars)
+                    pk = self.compute_pk((pk_lin, local_pars), name1, name2, *cache_pars)
 
-                    corr_hash = tuple(set((name1, name2)))
-                    self.PktoXi.cache_pars = cache_pars
-                    xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, local_pars)
-                    self.PktoXi.cache_pars = None
+                    self.PktoXi[corr_hash].cache_pars = cache_pars
+                    xi = self.Xi_metal[corr_hash].compute(
+                        pk, pk_lin, self.PktoXi[corr_hash], local_pars)
+                    self.PktoXi[corr_hash].cache_pars = None
 
                     # Apply the metal matrix
                     if self.new_metals:
@@ -230,12 +236,11 @@ class Metals:
 
             # If not in fast metals mode, compute the usual way
             # Slow mode also allows the full save of components
-            pk = self.Pk_metal.compute(pk_lin, local_pars)
+            pk = self.Pk_metal[corr_hash].compute(pk_lin, local_pars)
             if self.save_components:
                 self.pk[component][(name1, name2)] = copy.deepcopy(pk)
 
-            corr_hash = tuple(set((name1, name2)))
-            xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi, local_pars)
+            xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], local_pars)
 
             # Save the components
             if self.save_components:

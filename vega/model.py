@@ -60,13 +60,7 @@ class Model:
         )
 
         # Initialize the Pk to Xi transform
-        ell_max = self._corr_item.config['model'].getint('ell_max', 6)
-        fht_lowring = self._corr_item.config['model'].getboolean('fht_lowring', True)
-        fht_extrap = self._corr_item.config['model'].getboolean('fht_extrap', False)
-        self.PktoXi = pktoxi.PktoXi(
-            self.Pk_core.k_grid, self.Pk_core.muk_grid, ell_max,
-            self._corr_item.old_fftlog, fht_lowring, fht_extrap
-        )
+        self.PktoXi = pktoxi.PktoXi.init_from_Pk(self.Pk_core, self._corr_item.config['model'])
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
@@ -77,7 +71,7 @@ class Model:
         # Initialize metals if needed
         self.metals = None
         if self._corr_item.has_metals:
-            self.metals = metals.Metals(corr_item, fiducial, scale_params, self.PktoXi, data)
+            self.metals = metals.Metals(corr_item, fiducial, scale_params, data)
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
