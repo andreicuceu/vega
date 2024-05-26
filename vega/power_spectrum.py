@@ -472,6 +472,13 @@ class PowerSpectrum:
 
             return np.exp(-gauss_smoothing / 2)
 
+        metal_check = self.tracer1_name not in ['LYA', 'QSO']
+        metal_check |= self.tracer2_name not in ['LYA', 'QSO']
+        metal_check &= 'par_sigma_smooth_metals' in params
+        if metal_check:
+            sigma_par = params.get('par_sigma_smooth_metals')
+            sigma_trans = params.get('per_sigma_smooth_metals', None)
+
         if sigma_par is None and sigma_trans is None:
             raise ValueError('Asked for fullshape gaussian smoothing without setting the'
                              ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).')
