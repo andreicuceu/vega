@@ -441,6 +441,20 @@ class PowerSpectrum:
             Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
         return Gk
 
+    def _gauss_smoothing(self, sigma_par, sigma_trans):
+        """Compute a Gaussian smoothing factor.
+
+        Parameters
+        ----------
+        sigma_par : float
+            Sigma for parallel direction
+        sigma_trans : float
+            Sigma for transverse direction
+        """
+        gauss_smoothing = self.k_par_grid**2 * sigma_par**2
+        gauss_smoothing += self.k_trans_grid**2 * sigma_trans**2
+        return np.exp(-gauss_smoothing / 2)
+
     def compute_fullshape_gauss_smoothing(self, params):
         """Compute a Gaussian smoothing for the full correlation function.
 
@@ -457,39 +471,34 @@ class PowerSpectrum:
         if ('par_sigma_smooth' in params) or ('per_sigma_smooth' in params):
             sigma_par = params.get('par_sigma_smooth', None)
             sigma_trans = params.get('per_sigma_smooth', None)
+
+            if sigma_par is None and sigma_trans is None:
+                raise ValueError(
+                    'Asked for fullshape gaussian smoothing without setting the'
+                    ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
+                )
+            elif sigma_par is None:
+                sigma_par = sigma_trans
+            elif sigma_trans is None:
+                sigma_trans = sigma_par
+
+            return self._gauss_smoothing(sigma_par, sigma_trans)**2
+
+        elif (self.tracer1_name in ['LYA', 'QSO']) and (self.tracer2_name in ['LYA', 'QSO']):
+            return (
+                self._gauss_smoothing(params[f'par_sigma_smooth_{self.tracer1_name}'],
+                                      params[f'per_sigma_smooth_{self.tracer1_name}'])
+                * self._gauss_smoothing(params[f'par_sigma_smooth_{self.tracer2_name}'],
+                                        params[f'per_sigma_smooth_{self.tracer2_name}'])
+            )
+        elif ('par_sigma_smooth_metals' in params) and ('per_sigma_smooth_metals' in params):
+            return self._gauss_smoothing(
+                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'])**2
         else:
-            sigma_par1 = params.get(f'par_sigma_smooth_{self.tracer1_name}')
-            sigma_trans1 = params.get(f'per_sigma_smooth_{self.tracer1_name}')
-
-            gauss_smoothing = self.k_par_grid**2 * sigma_par1**2
-            gauss_smoothing += self.k_trans_grid**2 * sigma_trans1**2
-
-            sigma_par2 = params.get(f'par_sigma_smooth_{self.tracer2_name}')
-            sigma_trans2 = params.get(f'per_sigma_smooth_{self.tracer2_name}')
-
-            gauss_smoothing += self.k_par_grid**2 * sigma_par2**2
-            gauss_smoothing += self.k_trans_grid**2 * sigma_trans2**2
-
-            return np.exp(-gauss_smoothing / 2)
-
-        metal_check = self.tracer1_name not in ['LYA', 'QSO']
-        metal_check |= self.tracer2_name not in ['LYA', 'QSO']
-        metal_check &= 'par_sigma_smooth_metals' in params
-        if metal_check:
-            sigma_par = params.get('par_sigma_smooth_metals')
-            sigma_trans = params.get('per_sigma_smooth_metals', None)
-
-        if sigma_par is None and sigma_trans is None:
-            raise ValueError('Asked for fullshape gaussian smoothing without setting the'
-                             ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).')
-        elif sigma_par is None:
-            sigma_par = sigma_trans
-        elif sigma_trans is None:
-            sigma_trans = sigma_par
-
-        gauss_smoothing = self.k_par_grid**2 * sigma_par**2
-        gauss_smoothing += self.k_trans_grid**2 * sigma_trans**2
-        return np.exp(-gauss_smoothing / 2)**2
+            raise ValueError(
+                'Asked for fullshape gaussian smoothing without correctly setting the'
+                ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
+            )
 
     def compute_fullshape_exp_smoothing(self, params):
         """ Compute a Gaussian and exp smoothing for the full
