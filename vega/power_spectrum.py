@@ -454,7 +454,7 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        if 'par_sigma_smooth' or 'per_sigma_smooth' in params:
+        if ('par_sigma_smooth' in params) or ('per_sigma_smooth' in params):
             sigma_par = params.get('par_sigma_smooth', None)
             sigma_trans = params.get('per_sigma_smooth', None)
         else:
