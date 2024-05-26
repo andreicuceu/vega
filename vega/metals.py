@@ -257,8 +257,6 @@ class Metals:
             if self.save_components:
                 self.xi_distorted[component][(name1, name2)] = copy.deepcopy(xi)
 
-            if name1 != name2:
-                xi *= 2
             xi_metals += xi
 
         return xi_metals

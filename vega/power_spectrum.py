@@ -454,8 +454,23 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        sigma_par = params.get('par_sigma_smooth', None)
-        sigma_trans = params.get('per_sigma_smooth', None)
+        if 'par_sigma_smooth' or 'per_sigma_smooth' in params:
+            sigma_par = params.get('par_sigma_smooth', None)
+            sigma_trans = params.get('per_sigma_smooth', None)
+        else:
+            sigma_par1 = params.get(f'par_sigma_smooth_{self.tracer1_name}')
+            sigma_trans1 = params.get(f'per_sigma_smooth_{self.tracer1_name}')
+
+            gauss_smoothing = self.k_par_grid**2 * sigma_par1**2
+            gauss_smoothing += self.k_trans_grid**2 * sigma_trans1**2
+
+            sigma_par2 = params.get(f'par_sigma_smooth_{self.tracer2_name}')
+            sigma_trans2 = params.get(f'per_sigma_smooth_{self.tracer2_name}')
+
+            gauss_smoothing += self.k_par_grid**2 * sigma_par2**2
+            gauss_smoothing += self.k_trans_grid**2 * sigma_trans2**2
+
+            return np.exp(-gauss_smoothing / 2)
 
         if sigma_par is None and sigma_trans is None:
             raise ValueError('Asked for fullshape gaussian smoothing without setting the'
