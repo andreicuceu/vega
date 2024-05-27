@@ -49,7 +49,7 @@ class Model:
         self.bb_config = None
         if 'broadband' in self._corr_item.config:
             self.bb_config = self.init_broadband(
-                self._corr_item.config['broadband'], self._corr_item.name, 
+                self._corr_item.config['broadband'], self._corr_item.name,
                 bin_size_rp_data, bin_size_rp_model
             )
 
@@ -72,6 +72,7 @@ class Model:
         self.metals = None
         if self._corr_item.has_metals:
             self.metals = metals.Metals(corr_item, fiducial, scale_params, data)
+            self.no_metal_decomp = corr_item.config['model'].getboolean('no-metal-decomp', False)
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
@@ -133,7 +134,7 @@ class Model:
 
         return bb_config
 
-    def _compute_model(self, pars, pk_lin, component='smooth'):
+    def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
 
@@ -149,6 +150,8 @@ class Model:
         component : str, optional
             Name of pk component, used as key for dictionary of saved
             components ('peak' or 'smooth' or 'full'), by default 'smooth'
+        xi_metals : 1D Array, optional
+            Metal correlation functions, by default None
 
         Returns
         -------
@@ -172,14 +175,17 @@ class Model:
 
         # Compute metal correlations
         if self._corr_item.has_metals:
-            xi_model += self.metals.compute(pars, pk_lin, component)
+            if self.no_metal_decomp and xi_metals is not None:
+                xi_model += xi_metals
+            elif not self.no_metal_decomp:
+                xi_model += self.metals.compute(pars, pk_lin, component)
 
-            # Merge saved metal components into the member dictionaries
-            if self.save_components:
-                self.pk[component] = {**self.pk[component], **self.metals.pk[component]}
-                self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
-                self.xi_distorted[component] = {**self.xi_distorted[component],
-                                                **self.metals.xi_distorted[component]}
+                # Merge saved metal components into the member dictionaries
+                if self.save_components:
+                    self.pk[component] = {**self.pk[component], **self.metals.pk[component]}
+                    self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
+                    self.xi_distorted[component] = {**self.xi_distorted[component],
+                                                    **self.metals.xi_distorted[component]}
 
         # Add DESI instrumental systematics model
         if self._instrumental_systematics_flag and component != 'peak':
@@ -226,11 +232,14 @@ class Model:
         1D Array
             Full correlation function
         """
+        if self._corr_item.has_metals and self.no_metal_decomp:
+            xi_metals = self.metals.compute(pars, pk_full, 'full')
+
         pars['peak'] = True
         xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
 
         pars['peak'] = False
-        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
+        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth', xi_metals=xi_metals)
 
         xi_full = pars['bao_amp'] * xi_peak + xi_smooth
         return xi_full
