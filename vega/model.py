@@ -232,14 +232,15 @@ class Model:
         1D Array
             Full correlation function
         """
-        xi_metals = None
-        if self._corr_item.has_metals and self.no_metal_decomp:
-            xi_metals = self.metals.compute(pars, pk_full, 'full')
 
         pars['peak'] = True
         xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
 
         pars['peak'] = False
+        xi_metals = None
+        if self._corr_item.has_metals and self.no_metal_decomp:
+            xi_metals = self.metals.compute(pars, pk_full, 'full')
+
         xi_smooth = self._compute_model(pars, pk_smooth, 'smooth', xi_metals=xi_metals)
 
         xi_full = pars['bao_amp'] * xi_peak + xi_smooth
