@@ -454,6 +454,9 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
+        check_tracer1 = self.tracer1_name in ['LYA', 'QSO']
+        check_tracer2 = self.tracer2_name in ['LYA', 'QSO']
+
         if ('par_sigma_smooth' in params) or ('per_sigma_smooth' in params):
             sigma_par = params.get('par_sigma_smooth', None)
             sigma_trans = params.get('per_sigma_smooth', None)
@@ -471,7 +474,13 @@ class PowerSpectrum:
             return utils.compute_gauss_smoothing(
                 sigma_par, sigma_trans, self.k_par_grid, self.k_trans_grid)**2
 
-        elif (self.tracer1_name in ['LYA', 'QSO']) and (self.tracer2_name in ['LYA', 'QSO']):
+        elif (('par_sigma_smooth_metals' in params) and ('per_sigma_smooth_metals' in params)
+              and not (check_tracer1 and check_tracer2)):
+            return utils.compute_gauss_smoothing(
+                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'],
+                self.k_par_grid, self.k_trans_grid)**2
+
+        else:
             return (
                 utils.compute_gauss_smoothing(
                     params[f'par_sigma_smooth_{self.tracer1_name}'],
@@ -482,15 +491,11 @@ class PowerSpectrum:
                     params[f'per_sigma_smooth_{self.tracer2_name}'],
                     self.k_par_grid, self.k_trans_grid)
             )
-        elif ('par_sigma_smooth_metals' in params) and ('per_sigma_smooth_metals' in params):
-            return utils.compute_gauss_smoothing(
-                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'],
-                self.k_par_grid, self.k_trans_grid)**2
-        else:
-            raise ValueError(
-                'Asked for fullshape gaussian smoothing without correctly setting the'
-                ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
-            )
+        # else:
+        #     raise ValueError(
+        #         'Asked for fullshape gaussian smoothing without correctly setting the'
+        #         ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
+        #     )
 
     def compute_fullshape_exp_smoothing(self, params):
         """ Compute a Gaussian and exp smoothing for the full
