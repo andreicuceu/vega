@@ -194,43 +194,44 @@ class Metals:
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
             corr_hash = tuple(set((name1, name2)))
 
-            if self.fast_metals and component != 'full':
+            # if self.fast_metals and component != 'full':
                 # If its a metal x Lya or metal x QSO correlation we can only cache the Pk
-                if name1 in self.main_tracers or name2 in self.main_tracers:
-                    # Get beta of main tracer
-                    beta_main = beta1 if name1 in self.main_tracers else beta2
+                # if name1 in self.main_tracers or name2 in self.main_tracers:
+                    # # Get beta of main tracer
+                    # beta_main = beta1 if name1 in self.main_tracers else beta2
 
-                    cache_pars = None
-                    # We need to separate Lya and QSO correlations
-                    # because they have different parameters
-                    if 'discrete' in self.main_tracer_types:
-                        for par in local_pars.keys():
-                            if 'sigma_velo_disp' in par:
-                                cache_pars = (beta_main, local_pars[par], component)
-                                break
+                    # cache_pars = None
+                    # # We need to separate Lya and QSO correlations
+                    # # because they have different parameters
+                    # if 'discrete' in self.main_tracer_types:
+                    #     for par in local_pars.keys():
+                    #         if 'sigma_velo_disp' in par:
+                    #             cache_pars = (beta_main, local_pars[par], component)
+                    #             break
 
-                    if cache_pars is None:
-                        cache_pars = (beta_main, component)
+                    # if cache_pars is None:
+                    #     cache_pars = (beta_main, component)
 
-                    pk = self.compute_pk((pk_lin, local_pars), name1, name2, *cache_pars)
+                    # pk = self.compute_pk((pk_lin, local_pars), name1, name2, *cache_pars)
 
-                    self.PktoXi[corr_hash].cache_pars = cache_pars
-                    xi = self.Xi_metal[corr_hash].compute(
-                        pk, pk_lin, self.PktoXi[corr_hash], local_pars)
-                    self.PktoXi[corr_hash].cache_pars = None
+                    # self.PktoXi[corr_hash].cache_pars = cache_pars
+                    # xi = self.Xi_metal[corr_hash].compute(
+                    #     pk, pk_lin, self.PktoXi[corr_hash], local_pars)
+                    # self.PktoXi[corr_hash].cache_pars = None
 
-                    # Apply the metal matrix
-                    if self.new_metals:
-                        xi = (self.rp_metal_dmats[(name1, name2)]
-                              @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
-                    else:
-                        xi = self._data.metal_mats[(name1, name2)].dot(xi)
+                    # # Apply the metal matrix
+                    # if self.new_metals:
+                    #     xi = (self.rp_metal_dmats[(name1, name2)]
+                    #           @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
+                    # else:
+                    #     xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
-                    xi_metals += bias1 * bias2 * xi
+                    # xi_metals += bias1 * bias2 * xi
 
-                else:
-                    xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
-                        pk_lin, local_pars, name1, name2, component)
+            if (self.fast_metals and (name1 not in self.main_tracers)
+                    and (name2 not in self.main_tracers)):
+                xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
+                    pk_lin, local_pars, name1, name2, component)
 
                 continue
 
