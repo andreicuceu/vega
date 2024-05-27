@@ -232,6 +232,7 @@ class Model:
         1D Array
             Full correlation function
         """
+        xi_metals = None
         if self._corr_item.has_metals and self.no_metal_decomp:
             xi_metals = self.metals.compute(pars, pk_full, 'full')
 
