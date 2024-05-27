@@ -278,5 +278,28 @@ def compute_log_cov_det(cov_mat, data_mask):
     return np.linalg.slogdet(masked_cov)[1]
 
 
+@njit
+def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
+    """Compute a Gaussian smoothing factor.
+
+    Parameters
+    ----------
+    sigma_par : float
+        Sigma for parallel direction
+    sigma_trans : float
+        Sigma for transverse direction
+    k_par_grid : array
+        Grid of k values for parallel direction
+    k_trans_grid : array
+        Grid of k values for transverse direction
+
+    Returns
+    -------
+    array
+        Smoothing factor
+    """
+    return np.exp(-(k_par_grid**2 * sigma_par**2) - (k_trans_grid**2 * sigma_trans**2) / 2)
+
+
 class VegaBoundsError(Exception):
     pass

@@ -441,20 +441,6 @@ class PowerSpectrum:
             Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
         return Gk
 
-    def _gauss_smoothing(self, sigma_par, sigma_trans):
-        """Compute a Gaussian smoothing factor.
-
-        Parameters
-        ----------
-        sigma_par : float
-            Sigma for parallel direction
-        sigma_trans : float
-            Sigma for transverse direction
-        """
-        gauss_smoothing = self.k_par_grid**2 * sigma_par**2
-        gauss_smoothing += self.k_trans_grid**2 * sigma_trans**2
-        return np.exp(-gauss_smoothing / 2)
-
     def compute_fullshape_gauss_smoothing(self, params):
         """Compute a Gaussian smoothing for the full correlation function.
 
@@ -482,18 +468,24 @@ class PowerSpectrum:
             elif sigma_trans is None:
                 sigma_trans = sigma_par
 
-            return self._gauss_smoothing(sigma_par, sigma_trans)**2
+            return utils.compute_gauss_smoothing(
+                sigma_par, sigma_trans, self.k_par_grid, self.k_trans_grid)**2
 
         elif (self.tracer1_name in ['LYA', 'QSO']) and (self.tracer2_name in ['LYA', 'QSO']):
             return (
-                self._gauss_smoothing(params[f'par_sigma_smooth_{self.tracer1_name}'],
-                                      params[f'per_sigma_smooth_{self.tracer1_name}'])
-                * self._gauss_smoothing(params[f'par_sigma_smooth_{self.tracer2_name}'],
-                                        params[f'per_sigma_smooth_{self.tracer2_name}'])
+                utils.compute_gauss_smoothing(
+                    params[f'par_sigma_smooth_{self.tracer1_name}'],
+                    params[f'per_sigma_smooth_{self.tracer1_name}'],
+                    self.k_par_grid, self.k_trans_grid)
+                * utils.compute_gauss_smoothing(
+                    params[f'par_sigma_smooth_{self.tracer2_name}'],
+                    params[f'per_sigma_smooth_{self.tracer2_name}'],
+                    self.k_par_grid, self.k_trans_grid)
             )
         elif ('par_sigma_smooth_metals' in params) and ('per_sigma_smooth_metals' in params):
-            return self._gauss_smoothing(
-                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'])**2
+            return utils.compute_gauss_smoothing(
+                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'],
+                self.k_par_grid, self.k_trans_grid)**2
         else:
             raise ValueError(
                 'Asked for fullshape gaussian smoothing without correctly setting the'
