@@ -72,7 +72,7 @@ class Model:
         self.metals = None
         if self._corr_item.has_metals:
             self.metals = metals.Metals(corr_item, fiducial, scale_params, data)
-            self.no_metal_decomp = corr_item.config['model'].getboolean('no-metal-decomp', False)
+            self.no_metal_decomp = corr_item.config['model'].getboolean('no-metal-decomp', True)
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
