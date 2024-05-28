@@ -26,7 +26,7 @@ class CorrelationItem:
         self.tracer1['type'] = config['data'].get('tracer1-type')
         self.tracer2['name'] = config['data'].get('tracer2', self.tracer1['name'])
         self.tracer2['type'] = config['data'].get('tracer2-type', self.tracer1['type'])
-
+        
         self.cov_rescale = config['data'].getfloat('cov_rescale', None)
         self.has_distortion = config['data'].getboolean('distortion', True)
         self.old_fftlog = config['model'].getboolean('old_fftlog', False)
@@ -41,6 +41,19 @@ class CorrelationItem:
             self.tracer2['weights-path'] = config['data'].get('weights-tracer2', None)
             if self.tracer2['weights-path'] is None:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
+
+        self.cont_dist_cross =  config['model'].getboolean('cont_dist_cross', False)
+        if self.cont_dist_cross:
+            self.tracer2['weights-path'] = config['data'].get('weights-tracer2')
+            if self.tracer2['weights-path'] is None:
+                self.tracer2['weights-path'] = config['data'].get('weights-tracer1')
+
+        self.cont_dist_auto =  config['model'].getboolean('cont_dist_auto', False)
+        if self.cont_dist_auto:
+            self.tracer1['weights-path'] = config['data'].get('weights-tracer1')
+            self.tracer2['weights-path'] = config['data'].get('weights-tracer2')
+
+
 
         self.test_flag = config['data'].getboolean('test', False)
 

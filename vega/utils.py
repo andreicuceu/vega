@@ -5,26 +5,20 @@ import os.path
 from pathlib import Path
 from functools import lru_cache
 from scipy.interpolate import interp1d
+from astropy.table import Table
+
 
 import vega
-
 
 @njit
 def sinc(x):
     return np.sin(x)/x
 
-def P_QSO():
+@njit
+def _line_prof(A,mu,sig,wave):
+    return A*np.exp(-0.5*(wave-mu)**2/sig**2) * (1/(2*np.sqrt(np.pi)*sig))
 
-
-def delta_gamma():
-
-
-
-
-
-def line_prof(A,mu,sig,wave):
-    return A*(1/(2*np.sqrt(np.pi)*sig))*np.exp(-0.5*(wave-mu)**2/sig**2)
-    
+#@njit    
 def gen_cont(x,dv=1):
     #tuning the amplitudes of peaks by fitting mocks with 250km/s error
     amps=[30,1.5,1.5,0.5,1.5,1,1.5,5,25]
@@ -33,8 +27,10 @@ def gen_cont(x,dv=1):
     #emission line default widths (annoying because of velocity to wavelength)
     cs=[10,5.5,3.5,5,5,4,4,7,15]
     
-    fdv = np.exp(dv/3e5)    
-    cs = [np.sqrt(c**2+(b*(fdv-1))**2) for b,c in zip(bs,cs)]
+    #fdv = np.exp(dv/3e5)    
+    #cs = [np.sqrt(c**2+(b*(fdv-1))**2) for b,c in zip(bs,cs)]
+
+    cs = [np.sqrt(c**2+(b*(dv/3e5))**2) for b,c in zip(bs,cs)]
     line_props = Table({'amp':amps,'lambda_line':bs,'width':cs})
           
     #flux of smooth component
@@ -44,20 +40,21 @@ def gen_cont(x,dv=1):
     #gaussian peaks of emission lines onto smooth components
     continuum = smooth_level
     #lyb
-    continuum += line_prof(*list(line_props)[0],x)
-    continuum += line_prof(*list(line_props)[1],x)
-    continuum += line_prof(*list(line_props)[2],x)
-    continuum += line_prof(*list(line_props)[3],x)
-    continuum += line_prof(*list(line_props)[4],x)
-    continuum += line_prof(*list(line_props)[5],x)
-    continuum += line_prof(*list(line_props)[6],x)
+    continuum += _line_prof(*list(line_props)[0],x)
+    continuum += _line_prof(*list(line_props)[1],x)
+    continuum += _line_prof(*list(line_props)[2],x)
+    continuum += _line_prof(*list(line_props)[3],x)
+    continuum += _line_prof(*list(line_props)[4],x)
+    continuum += _line_prof(*list(line_props)[5],x)
+    continuum += _line_prof(*list(line_props)[6],x)
     #CIII]
-    continuum += line_prof(*list(line_props)[7],x)
+    continuum += _line_prof(*list(line_props)[7],x)
     #lya
-    continuum += line_prof(*list(line_props)[8],x)
+    continuum += _line_prof(*list(line_props)[8],x)
     
     return continuum/scale_factor
 
+#@njit
 def gen_gamma(lrest,sigma_v):
     gamma_fun = gen_cont(lrest,sigma_v)/gen_cont(lrest,0) - 1
     return gamma_fun

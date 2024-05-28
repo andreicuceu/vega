@@ -169,6 +169,8 @@ class VegaInterface:
             self.minimizer = None
         else:
             self.minimizer = Minimizer(self.chi2, self.sample_params)
+
+        
         self.analysis = Analysis(
             self.chi2, self.sample_params, self.main_config,
             self.corr_items, self.data, self.mc_config, self.global_cov
@@ -214,7 +216,7 @@ class VegaInterface:
             for par, val in params.items():
                 local_params[par] = val
 
-        # Go through each component and compute the model cf
+                # Go through each component and compute the model cf
         model_cf = {}
         if run_init:
             self.models = {}
@@ -271,6 +273,7 @@ class VegaInterface:
         chi2 = 0
         full_model = []
         full_masked_data = []
+        
         for name in self.corr_items:
             try:
                 if direct_pk is None:

@@ -2,9 +2,13 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from astropy.table import Table
+from scipy.stats import gaussian_kde
+import picca.constants
+from astropy.io import fits
+from numba import njit
 
 from . import utils
-
+from .utils import gen_gamma
 
 class CorrelationFunction:
     """Correlation function computation and handling.
@@ -50,6 +54,7 @@ class CorrelationFunction:
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
         self._scale_params = scale_params
         self._metal_corr = metal_corr
+        self._names = [tracer1['name'], tracer2['name']]
 
         # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
@@ -81,8 +86,7 @@ class CorrelationFunction:
         if 'radiation effects' in self._config:
             self.radiation_flag = self._config.getboolean('radiation effects')
             if self.radiation_flag:
-                names = [self._tracer1['name'], self._tracer2['name']]
-                if not ('QSO' in names and 'LYA' in names):
+                if not ('QSO' in self._names and 'LYA' in self._names):
                     raise ValueError('You asked for QSO radiation effects, but it'
                                      ' can only be applied to the cross (QSOxLya)')
 
@@ -103,7 +107,114 @@ class CorrelationFunction:
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
 
-        #if for gamma dg model stuff
+        #initialise cont dist models (maybe a seperate function?)
+        if 'cont_dist_cross' in self._config:
+            self.cont_dist_flag = self._config.getboolean('cont_dist_cross')
+            if self.cont_dist_flag:
+                if not ('QSO' in self._names and 'LYA' in self._names):
+                    raise ValueError('The continuum distortion cross model can'
+                                    'only be applied to the cross (QSOxLya)')
+                
+                if not ('weights-path' in self._tracer2 and 'qso-auto-corr' in self._config):
+                    raise ValueError('The continuum distortion cross model requires'
+                                    'both a qso. cat. in tracer2 weights and '
+                                    'qso-auto-corr (.dat) in model config')
+                
+                
+                qso_cat_path = self._tracer2['weights-path']
+                qso_auto_path = self._config.get('qso-auto-corr')
+
+                #set up P_QSO
+                hdul = fits.open(qso_cat_path)
+                self.p_qso_full = gaussian_kde(hdul[1].data['Z'])
+
+                #read qso auto
+                qso_auto_hdul = np.loadtxt(qso_auto_path)
+                self.r_qso_auto = qso_auto_hdul[0]
+                self.xi_qso_auto = qso_auto_hdul[1]
+
+                #define cosmology class for co-ords conversion
+                self.CosmoClass = self._get_cosmo()
+
+                self.zlist = np.linspace(self.p_qso_full.dataset.min(),
+                                  self.p_qso_full.dataset.max(), 2)
+                self.dz = self.zlist[1] - self.zlist[0]
+                self.llya = 1215.67
+
+                self.rp = self._r * self._mu
+                self.rt = np.sqrt(self._r**2 * (1 - self._mu**2)) 
+                # Initialise interpolators
+                self.r_A = self._r #np.sqrt(self.rp**2 + self.rt**2)
+
+                self.D_M = self.CosmoClass.get_dist_m(self.zlist)
+                self.D_c = self.CosmoClass.get_r_comov(self.zlist)
+
+                rpix = np.abs(np.add.outer(self.D_c, self.rp))
+                self.zpix = self.CosmoClass.distance_to_redshift(rpix)
+
+                # rpix = np.abs(COSMO.get_r_comov(zs) + rp_A)
+
+                self.p_qso = self.p_qso_full(self.zlist)**2
+
+
+
+                #initialise cont dist models (maybe a seperate function?)
+        elif 'cont_dist_auto' in self._config:
+            self.cont_dist_flag = self._config.getboolean('cont_dist_auto')
+            if self.cont_dist_flag:
+                if not ('LYA' in self._names and 'LYA' in self._names):
+                    raise ValueError('The continuum distortion auto model can'
+                                    'only be applied to the Lya auto (LyaxLya)')
+                
+                #if not 
+
+                if not ('weights-path' in self._tracer1 and 'weights-path' in self._tracer2):
+                    raise ValueError('The continuum distortion auto model requires'
+                                    'both qso. cat. in tracer2 weights and delta-attr in tracer 1 weights')
+            
+
+    def _get_cosmo(self):
+        return picca.constants.Cosmo(Om=self._Omega_m)
+
+
+   #@njit
+    def get_qso_auto(self,r_Q):
+        return np.interp(r_Q, self.r_qso_auto, self.xi_qso_auto)
+
+    #@njit
+    def compute_gamma_model(self,params):
+        p0 = params['cont_dist_amp']
+        p1 = params['cont_sigma_velo']
+        mean_gamma = np.zeros_like(self.rp)
+        for k, (rp_A, rt_A) in enumerate(zip(self.rp, self.rt)):
+            mean_gamma_A = 0
+            for i in range(self.zlist.size):
+                for j, zq2 in enumerate(self.zlist):
+                    #RF wavelength of pixel
+                    if not (zq2 > self.zpix[i,k]):
+                        continue
+
+                    lrest_pix = ((1 + self.zpix[i,k]) / (1 + zq2)) * self.llya
+
+                    if not (1040 <= lrest_pix <= 1200):
+                        continue
+
+                    #calculate r_Q
+                    dtheta = 2 * np.arcsin(rp_A / (self.D_M[j] + self.D_M[i]))
+                    rp_Q = (self.D_c[j] - self.D_c[i]) * np.cos(dtheta / 2)
+
+                    #rt_Q = rt_A
+                    r_Q = np.sqrt(rp_Q**2 + rt_A**2)
+
+                    #add to integral
+                    mean_gamma_A += self.p_qso[i] * self.p_qso[j] * (1 + self.get_qso_auto(r_Q)) \
+                                     * self.dz**2 * gen_gamma(lrest_pix,p1)
+
+            mean_gamma[k] += mean_gamma_A
+
+        cont_correction = p0 * mean_gamma 
+
+        return cont_correction
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -689,13 +800,3 @@ class CorrelationFunction:
         correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
         return correction
-    
-
-    def delta_gamma_model(rp, rt, zs, lrest, input_wave, input_gamma,llya
-            ,r_QSO_X_LYA, xi_QSO_X_LYA_pos, xi_QSO_X_LYA_neg, P_vec, input_zpix, input_zpix_pdf,ZLIST,DLIST,dz):
-
-
-
-    def gamma_model():
-
-

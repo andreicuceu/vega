@@ -52,7 +52,7 @@ class Model:
                 self._corr_item.config['broadband'], self._corr_item.name, 
                 bin_size_rp_data, bin_size_rp_model
             )
-
+    
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
             self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
@@ -74,6 +74,8 @@ class Model:
             scale_params, self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config
         )
 
+
+
         # Initialize metals if needed
         self.metals = None
         if self._corr_item.has_metals:
@@ -81,6 +83,17 @@ class Model:
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
+        
+        self._gamma_model_flag = corr_item.config['model'].getboolean(
+            'cont_dist_cross',False)
+        
+        self._delta_gamma_model_flag = corr_item.config['model'].getboolean(
+            'cont_dist_auto',False)
+        
+            
+        
+
+
 
     @staticmethod
     def init_broadband(bb_input, cf_name, bin_size_rp_data, bin_size_rp_model):
@@ -212,8 +225,13 @@ class Model:
         if self.save_components:
             self.xi_distorted[component]['core'] = xi_model.copy()
 
-        #add dg g
-        if self.
+        # Apply gamma correction for cross
+        if self._gamma_model_flag:
+            xi_model += self.Xi_core.compute_gamma_model(pars)
+
+        # Apply delta gamma correction for auto
+        #if self._delta_gamma_model_flag:
+        #    xi_model += self.Xi_core.compute_delta_gamma_model()
 
         return xi_model
 
