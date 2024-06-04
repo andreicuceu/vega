@@ -2,6 +2,14 @@
 History
 =======
 
+1.2.0 (2024-06-04)
+------------------
+
+* Added blinding for DESI Y3
+* BAO blinding still done through a blinding template
+* AP blinding done at the parameter level in Vega
+* Added two AP blinding files for DESI Y1 and DESI Y3
+
 1.1.0 (2024-04-27)
 ------------------
 
