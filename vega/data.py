@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
 
-BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
+BLINDING_STRATEGIES = ['desi_m2', 'desi_y1', 'desi_y3']
 
 
 class Data:
@@ -22,6 +22,7 @@ class Data:
     _inv_masked_cov = None
     _log_cov_det = None
     _blind = None
+    _blinding_strat = None
     cosmo_params = None
     dist_model_coordinates = None
     model_coordinates = None
@@ -91,6 +92,17 @@ class Data:
             Blinding flag
         """
         return self._blind
+
+    @property
+    def blinding_strat(self):
+        """Blinding strategy property
+
+        Returns
+        -------
+        string
+            Blinding strategy
+        """
+        return self._blinding_strat
 
     @property
     def data_vec(self):
@@ -224,6 +236,9 @@ class Data:
             print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
 
             self._blind = True
+            if self._blinding_strat == 'desi_y3':
+                assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
+
             if 'DA_BLIND' in hdul[1].columns.names:
                 print(f'Warning! Running on blinded data {data_path}')
                 print('Using DA_BLIND column')
@@ -233,10 +248,6 @@ class Data:
                 self._data_vec = hdul[1].data['DA']
             else:
                 raise ValueError('No DA or DA_BLIND column found in data file.')
-
-        elif self._blinding_strat == 'desi_y3':
-            raise ValueError('Fits are forbidden on Y3 data as we do not have'
-                             ' a coherent blinding strategy yet.')
 
         elif self._blinding_strat is None:
             self._blind = False

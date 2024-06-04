@@ -110,10 +110,16 @@ class VegaInterface:
 
         # Check blinding
         self._blind = False
+        _blinding_strat = None
         if self._has_data:
             for data_obj in self.data.values():
                 if data_obj.blind:
                     self._blind = True
+
+                    if _blinding_strat is None:
+                        _blinding_strat = data_obj.blinding_strat
+                    elif _blinding_strat != data_obj.blinding_strat:
+                        raise ValueError('Different blinding strategies found in the data sets.')
 
         # Apply blinding
         blind_pars = []
@@ -129,7 +135,8 @@ class VegaInterface:
                 print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
 
         # Initialize scale parameters
-        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'], blind_pars)
+        self.scale_params = ScaleParameters(
+            self.main_config['cosmo-fit type'], blind_pars, _blinding_strat)
 
         # initialize the models
         self.models = {}

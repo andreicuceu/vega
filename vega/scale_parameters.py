@@ -10,7 +10,7 @@ class ScaleParameters:
     Lya AP: phi = at/ap, alpha = sqrt(ap * at)
     See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
     """
-    def __init__(self, config, blind_pars=None):
+    def __init__(self, config, blind_pars=None, blinding_strat=None):
         """Initialize scale parameters from the cosmo-fit type config
 
         Parameters
@@ -25,11 +25,18 @@ class ScaleParameters:
 
         self._rnsps = None
         if blind_pars is not None and len(blind_pars) > 0:
+            assert blinding_strat is not None, 'Blinding failed, do not run!!!'
             if 'phi_smooth' not in blind_pars:
                 raise ValueError('Only phi_smooth blinding implemented.')
 
             blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
-            blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
+            if blinding_strat == 'desi_y1':
+                blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
+            elif blinding_strat == 'desi_y3':
+                blinding_file = Path(blind_dir) / 'dr2_ap_blinding_04_06_2024.npz'
+            else:
+                raise ValueError(f'Unknown blinding version: {blinding_strat}.')
+
             if not blinding_file.exists():
                 raise ValueError(f'Blinding file not found: {blinding_file}.'
                                  'Full-shape analyses must be run at NERSC.')
