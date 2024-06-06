@@ -278,6 +278,7 @@ def compute_log_cov_det(cov_mat, data_mask):
     return np.linalg.slogdet(masked_cov)[1]
 
 
+@lru_cache
 @njit
 def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
     """Compute a Gaussian smoothing factor.
