@@ -4,9 +4,13 @@ from numba import njit, float64
 import os.path
 from pathlib import Path
 from functools import lru_cache
+from cachetools import cached, LRUCache
+from cachetools.keys import hashkey
 from scipy.interpolate import interp1d
 
 import vega
+
+CACHE_SMOOTHING = LRUCache(128)
 
 
 @njit
@@ -278,7 +282,10 @@ def compute_log_cov_det(cov_mat, data_mask):
     return np.linalg.slogdet(masked_cov)[1]
 
 
-@lru_cache
+@cached(
+    cache=CACHE_SMOOTHING,
+    key=lambda sigma_par, sigma_trans, k_par_grid, k_trans_grid: hashkey(sigma_par, sigma_trans)
+)
 @njit
 def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
     """Compute a Gaussian smoothing factor.
