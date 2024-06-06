@@ -206,10 +206,10 @@ class Metals:
         if self.fast_metals:
             if 'growth_rate' in local_pars and self.growth_rate is not None:
                 local_pars['growth_rate'] = self.growth_rate
-            if 'par_sigma_smooth' in local_pars and self.par_sigma_smooth is not None:
-                local_pars['par_sigma_smooth'] = self.par_sigma_smooth
-            if 'per_sigma_smooth' in local_pars and self.per_sigma_smooth is not None:
-                local_pars['per_sigma_smooth'] = self.per_sigma_smooth
+            # if 'par_sigma_smooth' in local_pars and self.par_sigma_smooth is not None:
+            #     local_pars['par_sigma_smooth'] = self.par_sigma_smooth
+            # if 'per_sigma_smooth' in local_pars and self.per_sigma_smooth is not None:
+                # local_pars['per_sigma_smooth'] = self.per_sigma_smooth
 
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
@@ -259,7 +259,7 @@ class Metals:
 
             # If not in fast metals mode, compute the usual way
             # Slow mode also allows the full save of components
-            pk = self.Pk_metal[corr_hash].compute(pk_lin, local_pars)
+            pk = self.Pk_metal[corr_hash].compute(pk_lin, local_pars, fast_metals=True)
             if self.save_components:
                 self.pk[component][(name1, name2)] = copy.deepcopy(pk)
 
@@ -280,7 +280,7 @@ class Metals:
             if self.save_components:
                 self.xi_distorted[component][(name1, name2)] = copy.deepcopy(xi)
 
-            xi_metals += xi
+            xi_metals += bias1 * bias2 * xi
 
         return xi_metals
 
