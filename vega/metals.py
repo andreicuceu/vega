@@ -17,8 +17,9 @@ class Metals:
     """
     Class for computing metal correlations
     """
-    cache_pk = LRUCache(128)
-    cache_xi = LRUCache(128)
+    # cache_pk = LRUCache(128)
+    # cache_xi = LRUCache(128)
+    cache_xi = {}
 
     growth_rate = None
     par_sigma_smooth = None
@@ -135,16 +136,35 @@ class Metals:
                     self._corr_item.config['metals'], fiducial, metal_coordinates,
                     scale_params, tracer1, tracer2, metal_corr=True)
 
-    @cached(cache=cache_pk, key=lambda self, call_pars,
-            name1, name2, *cache_pars: hashkey(name1, name2, *cache_pars))
-    def compute_pk(self, call_pars, name1, name2, *cache_pars):
-        corr_hash = tuple(set((name1, name2)))
-        return self.Pk_metal[corr_hash].compute(*call_pars, fast_metals=True)
+    # @cached(cache=cache_pk, key=lambda self, call_pars,
+    #         name1, name2, *cache_pars: hashkey(name1, name2, *cache_pars))
+    # def compute_pk(self, call_pars, name1, name2, *cache_pars):
+    #     corr_hash = tuple(set((name1, name2)))
+    #     return self.Pk_metal[corr_hash].compute(*call_pars, fast_metals=True)
 
-    @cached(cache=cache_xi,
-            key=lambda self, pk_lin, pars, name1, name2, component: hashkey(name1, name2, component))
-    def compute_xi_metal_metal(self, pk_lin, pars, name1, name2, component):
+    # @cached(cache=cache_xi,
+    #         key=lambda self, pk_lin, pars, name1, name2, component: hashkey(name1, name2, component))
+    # def compute_xi_metal_metal(self, pk_lin, pars, name1, name2, component):
+    #     corr_hash = tuple(set((name1, name2)))
+
+    #     pk = self.Pk_metal[corr_hash].compute(pk_lin, pars, fast_metals=True)
+    #     self.PktoXi[corr_hash].cache_pars = None
+    #     xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], pars)
+
+    #     # Apply the metal matrix
+    #     if self.new_metals:
+    #         xi = (self.rp_metal_dmats[(name1, name2)]
+    #               @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
+    #     else:
+    #         xi = self._data.metal_mats[(name1, name2)].dot(xi)
+
+    #     return xi
+
+    def compute_xi_metal_metal(self, pk_lin, pars, name1, name2):
         corr_hash = tuple(set((name1, name2)))
+
+        if corr_hash in self.cache_xi:
+            return self.cache_xi[corr_hash]
 
         pk = self.Pk_metal[corr_hash].compute(pk_lin, pars, fast_metals=True)
         self.PktoXi[corr_hash].cache_pars = None
@@ -156,6 +176,8 @@ class Metals:
                   @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
         else:
             xi = self._data.metal_mats[(name1, name2)].dot(xi)
+
+        self.cache_xi[corr_hash] = xi
 
         return xi
 
@@ -231,7 +253,7 @@ class Metals:
             if (self.fast_metals and (name1 not in self.main_tracers)
                     and (name2 not in self.main_tracers)):
                 xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
-                    pk_lin, local_pars, name1, name2, component)
+                    pk_lin, local_pars, name1, name2)
 
                 continue
 
