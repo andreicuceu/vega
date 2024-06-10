@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import numpy as np
-import pocomc as pc
+import pocomc
 from mpi4py import MPI
 from mpi4py.futures import MPIPoolExecutor
 from scipy.stats import uniform
@@ -25,7 +25,7 @@ class PocoMC(Sampler):
         self.n_evidence = sampler_config.getint('n_evidence', 0)
         self.save_every = sampler_config.getint('save_every', 3)
 
-        self.prior = pc.Prior(
+        self.prior = pocomc.Prior(
             [uniform(self.limits[par][0], self.limits[par][1]-self.limits[par][0])
              for par in self.limits]
         )
@@ -35,13 +35,12 @@ class PocoMC(Sampler):
         mpi_comm = MPI.COMM_WORLD
         num_mpi_threads = mpi_comm.Get_size()
         with MPIPoolExecutor(num_mpi_threads) as pool:
-            self.pocomc_sampler = pc.Sampler(
-                self.prior, self.log_lik, pool=pool,
-                output_dir=self.path, save_every=self.save_every,
+            self.pocomc_sampler = pocomc.Sampler(
+                self.prior, self.log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
-            self.pocomc_sampler.run(self.n_total, self.n_evidence)
+            self.pocomc_sampler.run(self.n_total, self.n_evidence, save_every=self.save_every)
 
     def write_chain(self):
         # Get the weighted posterior samples
