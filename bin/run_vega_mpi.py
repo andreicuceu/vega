@@ -22,13 +22,13 @@ if __name__ == '__main__':
         from vega.samplers.polychord import Polychord
 
         print('Running Polychord')
-        sampler = Polychord(args.config)
+        sampler = Polychord(args)
         sampler.run()
     elif args.sampler == 'PocoMC':
         from vega.samplers.pocomc import PocoMC
 
         print('Running PocoMC')
-        sampler = PocoMC(args.config)
+        sampler = PocoMC(args)
         sampler.run()
 
     # mpi_comm = MPI.COMM_WORLD
