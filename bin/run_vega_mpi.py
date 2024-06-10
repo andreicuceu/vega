@@ -4,7 +4,7 @@ import argparse
 
 # from mpi4py import MPI
 
-# from vega import VegaInterface
+from vega import VegaInterface
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
