@@ -14,8 +14,8 @@ from vega.samplers.sampler_interface import Sampler
 class PocoMC(Sampler):
     """ Interface between Vega and the PocoMC sampler """
 
-    def __init__(self, pocomc_setup, limits):
-        super().__init__(pocomc_setup, limits)
+    def __init__(self, args):
+        super().__init__(args)
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         # Initialize the pocomc settings
@@ -35,34 +35,33 @@ class PocoMC(Sampler):
              for par in self.limits]
         )
 
-    def vec_log_lik(self, theta, log_lik_func):
+    def vec_log_lik(self, theta):
         params = {name: val for name, val in zip(self.names, theta)}
-        return log_lik_func(params)
+        return self.vega.log_lik(params)
 
-    def run(self, log_lik_func):
+    def run(self):
         if self.use_mpi:
-            self._run_mpi(log_lik_func)
+            self._run_mpi()
         else:
-            self._run_multiprocessing(log_lik_func)
+            self._run_multiprocessing()
 
-    def _run_mpi(self, log_lik_func):
+        self.print_func('Finished running sampler')
+
+    def _run_mpi(self):
         """ Run the PocoMC sampler """
-        mpi_comm = MPI.COMM_WORLD
-        with MPIPool(mpi_comm) as pool:
+        with MPIPool(self.mpi_comm) as pool:
             self.pocomc_sampler = pocomc.Sampler(
-                self.prior, self.vec_log_lik, likelihood_args=(log_lik_func),
-                pool=pool, output_dir=self.path,
+                self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
             self.pocomc_sampler.run(self.n_total, self.n_evidence, save_every=self.save_every)
 
-    def _run_multiprocessing(self, log_lik_func):
+    def _run_multiprocessing(self):
         """ Run the PocoMC sampler """
         with Pool(self.num_cpu) as pool:
             self.pocomc_sampler = pocomc.Sampler(
-                self.prior, self.vec_log_lik, likelihood_args=(log_lik_func),
-                pool=pool, output_dir=self.path,
+                self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
