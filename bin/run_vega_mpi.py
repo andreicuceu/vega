@@ -71,19 +71,29 @@ if __name__ == '__main__':
         from vega.samplers.pocomc import PocoMC
         import pocomc
         from multiprocessing import Pool
+        from schwimmbad import MPIPool
 
         print_func('Running PocoMC')
         sampler = PocoMC(vega.main_config['PocoMC'], sampling_params)
-        sampler.run(vega.log_lik)
+        # sampler.run(vega.log_lik)
 
-        # if sampler.use_mpi:
-        #     assert False
+        if not sampler.use_mpi:
+            assert False
 
-        # def log_lik(theta):
-        #     params = {name: val for name, val in zip(sampler.names, theta)}
-        #     return vega.log_lik(params)
+        def log_lik(theta):
+            params = {name: val for name, val in zip(sampler.names, theta)}
+            return vega.log_lik(params)
 
-        # mpi_comm.barrier()
+        mpi_comm.barrier()
+        with MPIPool(mpi_comm) as pool:
+            sampler.pocomc_sampler = pocomc.Sampler(
+                sampler.prior, log_lik,
+                pool=pool, output_dir=sampler.path,
+                dynamic=sampler.dynamic, precondition=sampler.precondition,
+                n_effective=sampler.n_effective, n_active=sampler.n_active,
+            )
+            sampler.pocomc_sampler.run(sampler.n_total, sampler.n_evidence, save_every=sampler.save_every)
+
         # with Pool(sampler.num_cpu) as pool:
         #     sampler.pocomc_sampler = pocomc.Sampler(
         #         sampler.prior, log_lik,
