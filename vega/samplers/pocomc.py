@@ -26,7 +26,7 @@ class PocoMC(Sampler):
 
         self.use_mpi = sampler_config.getboolean('use_mpi', False)
         self.num_cpu = sampler_config.getint('num_cpu', 64)
-        self.pocomc_output = self.path / f'{self.name}_states'
+        self.pocomc_output = Path(self.path) / f'{self.name}_states'
 
         self.prior = pocomc.Prior(
             [uniform(self.limits[par][0], self.limits[par][1]-self.limits[par][0])
