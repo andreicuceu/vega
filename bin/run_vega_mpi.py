@@ -6,7 +6,8 @@ import argparse
 
 from vega import VegaInterface
 
-if __name__ == '__main__':
+
+def main():
     pars = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description='Run Vega in parallel.')
@@ -30,6 +31,34 @@ if __name__ == '__main__':
         print('Running PocoMC')
         sampler = PocoMC(args)
         sampler.run()
+
+
+if __name__ == '__main__':
+    main()
+
+    # pars = argparse.ArgumentParser(
+    #     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    #     description='Run Vega in parallel.')
+
+    # pars.add_argument('config', type=str, help='Config file')
+    # pars.add_argument(
+    #     '-s', '--sampler', type=str, default='Polychord', required=False,
+    #     choices=['Polychord', 'PocoMC'], help='Sampler to use'
+    # )
+    # args = pars.parse_args()
+
+    # if args.sampler == 'Polychord':
+    #     from vega.samplers.polychord import Polychord
+
+    #     print('Running Polychord')
+    #     sampler = Polychord(args)
+    #     sampler.run()
+    # elif args.sampler == 'PocoMC':
+    #     from vega.samplers.pocomc import PocoMC
+
+    #     print('Running PocoMC')
+    #     sampler = PocoMC(args)
+    #     sampler.run()
 
     # mpi_comm = MPI.COMM_WORLD
     # cpu_rank = mpi_comm.Get_rank()

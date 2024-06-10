@@ -10,7 +10,7 @@ from schwimmbad import MPIPool
 from multiprocessing import Pool
 from scipy.stats import uniform
 
-from vega import VegaInterface
+# from vega import VegaInterface
 # from vega.samplers.sampler_interface import Sampler
 from vega.parameters.param_utils import build_names
 
@@ -36,6 +36,7 @@ class PocoMC:
 
         self.print_func('Initializing Vega')
 
+        from vega import VegaInterface
         # Initialize Vega and get the sampling parameters
         self.vega = VegaInterface(args.config)
         sampling_params = self.vega.sample_params['limits']
