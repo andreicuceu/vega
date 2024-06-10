@@ -26,13 +26,13 @@ class Sampler:
         self.mpi_comm = MPI.COMM_WORLD
         self.cpu_rank = self.mpi_comm.Get_rank()
 
-        print_func('Initializing Vega', self.cpu_rank)
+        self.print_func('Initializing Vega')
 
         # Initialize Vega and get the sampling parameters
         self.vega = VegaInterface(args.config)
         sampling_params = self.vega.sample_params['limits']
 
-        print_func('Finished initializing Vega', self.cpu_rank)
+        self.print_func('Finished initializing Vega')
 
         # Check if we need to run over a Monte Carlo mock
         run_montecarlo = self.vega.main_config['control'].getboolean('run_montecarlo', False)
@@ -46,7 +46,7 @@ class Sampler:
 
             # Set to sample the MC params
             sampling_params = self.vega.mc_config['sample']['limits']
-            print_func('Created Monte Carlo realization of the correlation', self.cpu_rank)
+            self.print_func('Created Monte Carlo realization of the correlation')
         elif run_montecarlo:
             raise ValueError('You asked to run over a Monte Carlo simulation,'
                              ' but no "[monte carlo]" section provided.')
