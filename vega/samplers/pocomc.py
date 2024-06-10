@@ -34,6 +34,10 @@ class PocoMC(Sampler):
              for par in self.limits]
         )
 
+    def vec_log_lik(self, theta):
+        params = {name: val for name, val in zip(self.names, theta)}
+        return self.log_lik(params)
+
     def run(self):
         if self.use_mpi:
             self._run_mpi()
@@ -46,7 +50,7 @@ class PocoMC(Sampler):
         num_mpi_threads = mpi_comm.Get_size()
         with MPIPoolExecutor(num_mpi_threads) as pool:
             self.pocomc_sampler = pocomc.Sampler(
-                self.prior, self.log_lik, pool=pool, output_dir=self.path,
+                self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
@@ -56,11 +60,11 @@ class PocoMC(Sampler):
         """ Run the PocoMC sampler """
         with Pool(self.num_cpu) as pool:
             self.pocomc_sampler = pocomc.Sampler(
-                self.prior, self.log_lik, pool=pool, output_dir=self.path,
+                self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
-            self.pocomc_sampler.run(self.n_total, self.n_evidence)#, save_every=self.save_every)
+            self.pocomc_sampler.run(self.n_total, self.n_evidence, save_every=self.save_every)
 
     def write_chain(self):
         # Get the weighted posterior samples
