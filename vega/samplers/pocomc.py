@@ -60,7 +60,7 @@ class PocoMC(Sampler):
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
-            self.pocomc_sampler.run(self.n_total, self.n_evidence, save_every=self.save_every)
+            self.pocomc_sampler.run(self.n_total, self.n_evidence)#, save_every=self.save_every)
 
     def write_chain(self):
         # Get the weighted posterior samples
