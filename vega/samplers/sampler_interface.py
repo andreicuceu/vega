@@ -23,7 +23,7 @@ class Sampler:
             Log Likelihood function to be passed to Polychord
         """
         self.limits = limits
-        self.names = limits.keys()
+        self.names = list(limits.keys())
         self.num_params = len(limits)
         self.num_derived = 0
         self.log_lik = log_lik_func
