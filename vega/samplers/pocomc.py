@@ -18,7 +18,7 @@ class PocoMC(Sampler):
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         # Initialize the pocomc settings
         self.precondition = sampler_config.getboolean('precondition', True)
-        self.dynamic = sampler_config.getboolean('dynamic', True)
+        self.dynamic = sampler_config.getboolean('dynamic', False)
         self.n_effective = sampler_config.getint('n_effective', 512)
         self.n_active = sampler_config.getint('n_active', 256)
         self.n_total = sampler_config.getint('n_total', 1024)
