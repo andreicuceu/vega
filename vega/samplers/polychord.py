@@ -8,8 +8,8 @@ from vega.samplers.sampler_interface import Sampler
 class Polychord(Sampler):
     ''' Interface between Vega and the nested sampler PolyChord '''
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, sampler_config, limits, log_lik_func):
+        super().__init__(sampler_config, limits, log_lik_func)
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         """Extract polychord settings and create the settings object.
@@ -96,7 +96,7 @@ class Polychord(Sampler):
             for i, name in enumerate(self.names):
                 params[name] = theta[i]
 
-            log_lik = self.vega.log_lik(params)
+            log_lik = self.log_lik(params)
             return log_lik, []
 
         def prior(hypercube):
