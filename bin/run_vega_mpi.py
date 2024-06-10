@@ -110,4 +110,4 @@ if __name__ == '__main__':
             sampler.write_chain()
         # mpi_comm.barrier()
 
-    print_func('Finished running sampler')
+    print(f'CPU #{cpu_rank}: Finished running sampler')
