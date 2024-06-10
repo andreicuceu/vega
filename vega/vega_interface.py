@@ -110,10 +110,16 @@ class VegaInterface:
 
         # Check blinding
         self._blind = False
+        _blinding_strat = None
         if self._has_data:
             for data_obj in self.data.values():
                 if data_obj.blind:
                     self._blind = True
+
+                    if _blinding_strat is None:
+                        _blinding_strat = data_obj.blinding_strat
+                    elif _blinding_strat != data_obj.blinding_strat:
+                        raise ValueError('Different blinding strategies found in the data sets.')
 
         # Apply blinding
         blind_pars = []
@@ -129,7 +135,8 @@ class VegaInterface:
                 print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
 
         # Initialize scale parameters
-        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'], blind_pars)
+        self.scale_params = ScaleParameters(
+            self.main_config['cosmo-fit type'], blind_pars, _blinding_strat)
 
         # initialize the models
         self.models = {}
@@ -180,12 +187,15 @@ class VegaInterface:
         )
 
         # Check for sampler
-        self.has_sampler = False
+        self.run_sampler = False
         if 'control' in self.main_config:
-            self.has_sampler = self.main_config['control'].getboolean('sampler', False)
-            if self.has_sampler:
-                if 'Polychord' not in self.main_config:
-                    raise RuntimeError('run_sampler called, but no sampler initialized')
+            self.run_sampler = self.main_config['control'].getboolean('run_sampler', False)
+            self.sampler = self.main_config['control'].get('sampler', None)
+            if self.run_sampler:
+                if self.sampler not in ['Polychord', 'PocoMC']:
+                    raise ValueError('Sampler not recognized. Please use Polychord or PocoMC.')
+                if self.sampler not in self.main_config:
+                    raise RuntimeError('run_sampler called, but no sampler config found')
 
         # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)

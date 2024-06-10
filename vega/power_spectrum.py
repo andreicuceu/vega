@@ -1,6 +1,5 @@
 import numpy as np
 import copy
-from pkg_resources import resource_filename
 from numba import njit, float64
 from . import utils
 
@@ -54,8 +53,7 @@ class PowerSpectrum:
 
             fvoigt_model = self._config.get('fvoigt_model')
             if '/' not in fvoigt_model:
-                path = f"{resource_filename('vega', 'models')}/fvoigt_models/"
-                path += f"Fvoigt_{fvoigt_model}.txt"
+                path = utils.find_file(f'fvoigt_models/Fvoigt_{fvoigt_model}.txt')
             else:
                 path = fvoigt_model
             self._Fvoigt_data = np.loadtxt(path)

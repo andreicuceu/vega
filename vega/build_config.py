@@ -132,7 +132,7 @@ class BuildConfig:
 
         # Check if we need sampler or fitter or both
         self.fitter = fit_info.get('fitter', True)
-        self.sampler = fit_info.get('sampler', False)
+        self.run_sampler = fit_info.get('run_sampler', False)
 
         # get the relevant paths
         self.config_path = Path(os.path.expandvars(out_path))
@@ -141,7 +141,8 @@ class BuildConfig:
             self.fitter_out_path = self.config_path / 'output_fitter'
             if not self.fitter_out_path.exists():
                 os.mkdir(self.fitter_out_path)
-        if self.sampler:
+        if self.run_sampler:
+            self.sampler = fit_info.get('sampler', 'Polychord')
             self.sampler_out_path = self.config_path / 'output_sampler'
             if not self.sampler_out_path.exists():
                 os.mkdir(self.sampler_out_path)
@@ -482,22 +483,42 @@ class BuildConfig:
                                  'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
-        if self.sampler:
+        if self.run_sampler:
             config['control'] = {}
-            config['control']['sampler'] = 'True'
+            config['control']['run_sampler'] = 'True'
+            config['control']['sampler'] = self.sampler
 
-            config['Polychord'] = {}
-            config['Polychord']['path'] = str(self.sampler_out_path)
+            if self.sampler == 'Polychord':
+                config['Polychord'] = {}
+                config['Polychord']['path'] = str(self.sampler_out_path)
+                config['Polychord']['name'] = run_name
 
-            config['Polychord']['name'] = run_name
-            config['Polychord']['num_live'] = fit_info['Polychord'].get('num_live',
-                                                                        str(25*len(sample_params)))
-            config['Polychord']['num_repeats'] = fit_info['Polychord'].get('num_repeats',
-                                                                           str(len(sample_params)))
-            config['Polychord']['do_clustering'] = fit_info['Polychord'].get('do_clustering',
-                                                                             'True')
-            config['Polychord']['boost_posterior'] = fit_info['Polychord'].get('boost_posterior',
-                                                                               str(0))
+                config['Polychord']['num_live'] = fit_info['Polychord'].get(
+                    'num_live', str(25*len(sample_params)))
+                config['Polychord']['num_repeats'] = fit_info['Polychord'].get(
+                    'num_repeats', str(len(sample_params)))
+                config['Polychord']['do_clustering'] = fit_info['Polychord'].get(
+                    'do_clustering', 'True')
+                config['Polychord']['boost_posterior'] = fit_info['Polychord'].get(
+                    'boost_posterior', str(0))
+            elif self.sampler == 'PocoMC':
+                config['PocoMC'] = {}
+                config['PocoMC']['path'] = str(self.sampler_out_path)
+                config['PocoMC']['name'] = run_name
+
+                config['PocoMC']['precondition'] = fit_info['PocoMC'].get('precondition', 'True')
+                config['PocoMC']['dynamic'] = fit_info['PocoMC'].get('dynamic', 'False')
+                config['PocoMC']['n_effective'] = fit_info['PocoMC'].get('n_effective', '512')
+                config['PocoMC']['n_active'] = fit_info['PocoMC'].get('n_active', '256')
+                config['PocoMC']['n_total'] = fit_info['PocoMC'].get('n_total', '1024')
+                config['PocoMC']['n_evidence'] = fit_info['PocoMC'].get('n_evidence', '0')
+                config['PocoMC']['save_every'] = fit_info['PocoMC'].get('save_every', '3')
+                config['PocoMC']['use_mpi'] = fit_info['PocoMC'].get('use_mpi', 'True')
+                config['PocoMC']['num_cpu'] = fit_info['PocoMC'].get('num_cpu', '64')
+            else:
+                raise ValueError(
+                    f'Sampler {self.sampler} is not supported. '
+                    'Please choose from ["Polychord", "PocoMC"].')
 
         # Write main config
         if self.name_extension is None:
