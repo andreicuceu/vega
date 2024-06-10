@@ -187,12 +187,15 @@ class VegaInterface:
         )
 
         # Check for sampler
-        self.has_sampler = False
+        self.run_sampler = False
         if 'control' in self.main_config:
-            self.has_sampler = self.main_config['control'].getboolean('sampler', False)
-            if self.has_sampler:
-                if 'Polychord' not in self.main_config:
-                    raise RuntimeError('run_sampler called, but no sampler initialized')
+            self.run_sampler = self.main_config['control'].getboolean('run_sampler', False)
+            self.sampler = self.main_config['control'].get('sampler', None)
+            if self.run_sampler:
+                if self.sampler not in ['Polychord', 'PocoMC']:
+                    raise ValueError('Sampler not recognized. Please use Polychord or PocoMC.')
+                if self.sampler not in self.main_config:
+                    raise RuntimeError('run_sampler called, but no sampler config found')
 
         # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
