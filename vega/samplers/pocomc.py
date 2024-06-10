@@ -3,7 +3,8 @@ from pathlib import Path
 import numpy as np
 import pocomc
 from mpi4py import MPI
-from mpi4py.futures import MPIPoolExecutor
+from schwimmbad import MPIPool
+# from mpi4py.futures import MPIPoolExecutor
 from multiprocessing import Pool
 from scipy.stats import uniform
 
@@ -47,8 +48,7 @@ class PocoMC(Sampler):
     def _run_mpi(self, log_lik_func):
         """ Run the PocoMC sampler """
         mpi_comm = MPI.COMM_WORLD
-        num_mpi_threads = mpi_comm.Get_size()
-        with MPIPoolExecutor(num_mpi_threads) as pool:
+        with MPIPool(mpi_comm) as pool:
             self.pocomc_sampler = pocomc.Sampler(
                 self.prior, self.vec_log_lik, likelihood_args=(log_lik_func),
                 pool=pool, output_dir=self.path,

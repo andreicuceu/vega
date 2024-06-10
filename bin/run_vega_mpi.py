@@ -74,22 +74,24 @@ if __name__ == '__main__':
 
         print_func('Running PocoMC')
         sampler = PocoMC(vega.main_config['PocoMC'], sampling_params)
-        if sampler.use_mpi:
-            assert False
+        sampler.run(vega.log_lik)
 
-        def log_lik(theta):
-            params = {name: val for name, val in zip(sampler.names, theta)}
-            return vega.log_lik(params)
+        # if sampler.use_mpi:
+        #     assert False
 
-        mpi_comm.barrier()
-        with Pool(sampler.num_cpu) as pool:
-            sampler.pocomc_sampler = pocomc.Sampler(
-                sampler.prior, log_lik,
-                pool=pool, output_dir=sampler.path,
-                dynamic=sampler.dynamic, precondition=sampler.precondition,
-                n_effective=sampler.n_effective, n_active=sampler.n_active,
-            )
-            sampler.pocomc_sampler.run(sampler.n_total, sampler.n_evidence, save_every=sampler.save_every)
+        # def log_lik(theta):
+        #     params = {name: val for name, val in zip(sampler.names, theta)}
+        #     return vega.log_lik(params)
+
+        # mpi_comm.barrier()
+        # with Pool(sampler.num_cpu) as pool:
+        #     sampler.pocomc_sampler = pocomc.Sampler(
+        #         sampler.prior, log_lik,
+        #         pool=pool, output_dir=sampler.path,
+        #         dynamic=sampler.dynamic, precondition=sampler.precondition,
+        #         n_effective=sampler.n_effective, n_active=sampler.n_active,
+        #     )
+        #     sampler.pocomc_sampler.run(sampler.n_total, sampler.n_evidence, save_every=sampler.save_every)
 
         # sampler.run(vega.log_lik)
         mpi_comm.barrier()
