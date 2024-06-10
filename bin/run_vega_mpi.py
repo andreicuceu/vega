@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-from vega import VegaInterface
-from vega.sampler_interface import Sampler
-from mpi4py import MPI
 import argparse
 import sys
 
+from mpi4py import MPI
+
+from vega import VegaInterface
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
@@ -56,12 +56,27 @@ if __name__ == '__main__':
                          ' but no "[monte carlo]" section provided.')
 
     # Run sampler
-    if vega.has_sampler:
-        print_func('Running the sampler')
-        sampler = Sampler(vega.main_config['Polychord'],
-                          sampling_params, vega.log_lik)
-
-        sampler.run()
-    else:
+    if not vega.run_sampler:
         raise ValueError('Warning: You called "run_vega_mpi.py" without asking'
-                         ' for the sampler. Add "sampler = True" to the "[control]" section.')
+                         ' for the sampler. Add "run_sampler = True" to the "[control]" section.')
+
+    if vega.sampler == 'Polychord':
+        from vega.samplers.polychord import Polychord
+
+        print_func('Running Polychord')
+        sampler = Polychord(vega.main_config['Polychord'], sampling_params, vega.log_lik)
+        sampler.run()
+    elif vega.sampler == 'PocoMC':
+        from vega.samplers.pocomc import PocoMC
+
+        print_func('Running PocoMC')
+        sampler = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik)
+        mpi_comm.barrier()
+        sampler.run()
+        mpi_comm.barrier()
+
+        if cpu_rank == 0:
+            sampler.write_chain()
+        mpi_comm.barrier()
+
+    print_func('Finished running sampler')
