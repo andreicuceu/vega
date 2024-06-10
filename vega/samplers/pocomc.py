@@ -34,33 +34,35 @@ class PocoMC(Sampler):
              for par in self.limits]
         )
 
-    def vec_log_lik(self, theta):
+    def vec_log_lik(self, theta, log_lik_func):
         params = {name: val for name, val in zip(self.names, theta)}
-        return self.log_lik(params)
+        return log_lik_func(params)
 
-    def run(self):
+    def run(self, log_lik_func):
         if self.use_mpi:
-            self._run_mpi()
+            self._run_mpi(log_lik_func)
         else:
-            self._run_multiprocessing()
+            self._run_multiprocessing(log_lik_func)
 
-    def _run_mpi(self):
+    def _run_mpi(self, log_lik_func):
         """ Run the PocoMC sampler """
         mpi_comm = MPI.COMM_WORLD
         num_mpi_threads = mpi_comm.Get_size()
         with MPIPoolExecutor(num_mpi_threads) as pool:
             self.pocomc_sampler = pocomc.Sampler(
-                self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
+                self.prior, self.vec_log_lik, likelihood_args=(log_lik_func),
+                pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )
             self.pocomc_sampler.run(self.n_total, self.n_evidence, save_every=self.save_every)
 
-    def _run_multiprocessing(self):
+    def _run_multiprocessing(self, log_lik_func):
         """ Run the PocoMC sampler """
         with Pool(self.num_cpu) as pool:
             self.pocomc_sampler = pocomc.Sampler(
-                self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
+                self.prior, self.vec_log_lik, likelihood_args=(log_lik_func),
+                pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
                 n_effective=self.n_effective, n_active=self.n_active,
             )

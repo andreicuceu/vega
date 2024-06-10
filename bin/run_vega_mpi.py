@@ -64,15 +64,15 @@ if __name__ == '__main__':
         from vega.samplers.polychord import Polychord
 
         print_func('Running Polychord')
-        sampler = Polychord(vega.main_config['Polychord'], sampling_params, vega.log_lik)
-        sampler.run()
+        sampler = Polychord(vega.main_config['Polychord'], sampling_params)
+        sampler.run(vega.log_lik)
     elif vega.sampler == 'PocoMC':
         from vega.samplers.pocomc import PocoMC
 
         print_func('Running PocoMC')
-        sampler = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik)
+        sampler = PocoMC(vega.main_config['PocoMC'], sampling_params)
         mpi_comm.barrier()
-        sampler.run()
+        sampler.run(vega.log_lik)
         mpi_comm.barrier()
 
         if cpu_rank == 0:

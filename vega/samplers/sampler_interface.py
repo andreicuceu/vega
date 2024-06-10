@@ -10,7 +10,7 @@ from vega.parameters.param_utils import build_names
 class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
-    def __init__(self, sampler_config, limits, log_lik_func):
+    def __init__(self, sampler_config, limits):
         """
 
         Parameters
@@ -26,7 +26,7 @@ class Sampler:
         self.names = list(limits.keys())
         self.num_params = len(limits)
         self.num_derived = 0
-        self.log_lik = log_lik_func
+        # self.log_lik = log_lik_func
         self.getdist_latex = sampler_config.getboolean('getdist_latex', True)
 
         # Check limits are well defined
@@ -74,5 +74,5 @@ class Sampler:
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         raise NotImplementedError('This method should be implemented in the child class')
 
-    def run(self):
+    def run(self, log_lik_func):
         raise NotImplementedError('This method should be implemented in the child class')

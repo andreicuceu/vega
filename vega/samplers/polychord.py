@@ -96,7 +96,7 @@ class Polychord(Sampler):
             for i, name in enumerate(self.names):
                 params[name] = theta[i]
 
-            log_lik = self.log_lik(params)
+            log_lik = log_lik_func(params)
             return log_lik, []
 
         def prior(hypercube):
