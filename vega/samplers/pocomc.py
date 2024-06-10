@@ -31,8 +31,8 @@ class PocoMC:
         log_lik_func : f(params)
             Log Likelihood function to be passed to Polychord
         """
-        self.mpi_comm = MPI.COMM_WORLD
-        self.cpu_rank = self.mpi_comm.Get_rank()
+        mpi_comm = MPI.COMM_WORLD
+        self.cpu_rank = mpi_comm.Get_rank()
 
         self.print_func('Initializing Vega')
 
@@ -134,7 +134,8 @@ class PocoMC:
 
     def _run_mpi(self):
         """ Run the PocoMC sampler """
-        with MPIPool(self.mpi_comm) as pool:
+        mpi_comm = MPI.COMM_WORLD
+        with MPIPool(mpi_comm) as pool:
             self.pocomc_sampler = pocomc.Sampler(
                 self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
@@ -194,4 +195,3 @@ class PocoMC:
             sys.stdout.flush()
 
         mpi_comm.barrier()
-
