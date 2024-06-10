@@ -135,7 +135,7 @@ class PocoMC:
     def _run_mpi(self):
         """ Run the PocoMC sampler """
         mpi_comm = MPI.COMM_WORLD
-        with MPIPool(mpi_comm) as pool:
+        with MPIPool(mpi_comm, use_dill=True) as pool:
             self.pocomc_sampler = pocomc.Sampler(
                 self.prior, self.vec_log_lik, pool=pool, output_dir=self.path,
                 dynamic=self.dynamic, precondition=self.precondition,
