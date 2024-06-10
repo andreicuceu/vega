@@ -11,7 +11,7 @@ if __name__ == '__main__':
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description='Run Vega in parallel.')
 
-    pars.add_argument('config', type=str, required=True, help='Config file')
+    pars.add_argument('config', type=str, help='Config file')
     pars.add_argument(
         '-s', '--sampler', type=str, default='Polychord', required=False,
         choices=['Polychord', 'PocoMC'], help='Sampler to use'
