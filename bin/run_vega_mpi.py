@@ -104,10 +104,10 @@ if __name__ == '__main__':
         #     sampler.pocomc_sampler.run(sampler.n_total, sampler.n_evidence, save_every=sampler.save_every)
 
         # sampler.run(vega.log_lik)
-        mpi_comm.barrier()
+        # mpi_comm.barrier()
 
         if cpu_rank == 0:
             sampler.write_chain()
-        mpi_comm.barrier()
+        # mpi_comm.barrier()
 
     print_func('Finished running sampler')
