@@ -70,8 +70,9 @@ if __name__ == '__main__':
     elif vega.sampler == 'PocoMC':
         from vega.samplers.pocomc import PocoMC
         import pocomc
+        from pocomc.parallel import MPIPool
         from multiprocessing import Pool
-        from schwimmbad import MPIPool
+        # from schwimmbad import MPIPool
 
         print_func('Running PocoMC')
         sampler = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik)
@@ -84,7 +85,7 @@ if __name__ == '__main__':
 
         if sampler.use_mpi:
             mpi_comm.barrier()
-            with MPIPool(mpi_comm) as pool:
+            with MPIPool(mpi_comm, use_dill=False) as pool:
                 pocomc_sampler = pocomc.Sampler(
                     sampler.prior, log_lik, pool=pool, output_dir=sampler.pocomc_output,
                     dynamic=sampler.dynamic, precondition=sampler.precondition,
