@@ -487,6 +487,8 @@ class BuildConfig:
             config['control'] = {}
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
+            if 'use_template_growth_rate' in fit_info:
+                config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
 
             if self.sampler == 'Polychord':
                 config['Polychord'] = {}
