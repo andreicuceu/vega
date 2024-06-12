@@ -15,12 +15,6 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 
-BLIND_FIXED_PARS = [
-    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full', 'alpha_full', 'growth_rate'
-]
-
-VEGA_BLINDED_PARS = ['phi_smooth']
-
 
 class VegaInterface:
     """Main Vega class.
@@ -110,33 +104,34 @@ class VegaInterface:
 
         # Check blinding
         self._blind = False
-        _blinding_strat = None
+        blinding_strat = None
         if self._has_data:
             for data_obj in self.data.values():
                 if data_obj.blind:
                     self._blind = True
 
-                    if _blinding_strat is None:
-                        _blinding_strat = data_obj.blinding_strat
-                    elif _blinding_strat != data_obj.blinding_strat:
+                    if blinding_strat is None:
+                        blinding_strat = data_obj.blinding_strat
+                    elif blinding_strat != data_obj.blinding_strat:
                         raise ValueError('Different blinding strategies found in the data sets.')
 
         # Apply blinding
         blind_pars = []
+        self._rnsps = None
         if self._blind:
             for par in self.sample_params['limits'].keys():
-                if par in BLIND_FIXED_PARS:
+                if par in utils.BLIND_FIXED_PARS:
                     raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
-                elif par in VEGA_BLINDED_PARS:
+                elif par in utils.VEGA_BLINDED_PARS:
                     blind_pars += [par]
+            self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
 
             if ('bias_QSO' in self.sample_params['limits']) and (
                     'beta_QSO' in self.sample_params['limits']):
-                print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
+                raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
         # Initialize scale parameters
-        self.scale_params = ScaleParameters(
-            self.main_config['cosmo-fit type'], blind_pars, _blinding_strat)
+        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
 
         # initialize the models
         self.models = {}
@@ -229,6 +224,11 @@ class VegaInterface:
             for par, val in params.items():
                 local_params[par] = val
 
+        assert self._blind is not None
+        if self._rnsps is not None:
+            assert self._blind
+            local_params = utils.apply_blinding(local_params, self._rnsps)
+
         # Go through each component and compute the model cf
         model_cf = {}
         if run_init:
@@ -263,23 +263,20 @@ class VegaInterface:
         """
         assert self._has_data
 
-        # Check if blinding is initialized
-        if self._blind is None:
-            self._blind = False
-            for data_obj in self.data.values():
-                if data_obj.blind:
-                    self._blind = True
-
         # Overwrite computation parameters
         local_params = copy.deepcopy(self.params)
         if params is not None:
             for par, val in params.items():
                 local_params[par] = val
 
-        # Enforce blinding
-        if self._blind:
+        assert self._blind is not None
+        if self._rnsps is not None:
+            assert self._blind
+            local_params = utils.apply_blinding(local_params, self._rnsps)
+
+            # Enforce blinding
             for par, val in local_params.items():
-                if par in BLIND_FIXED_PARS:
+                if par in utils.BLIND_FIXED_PARS:
                     local_params[par] = 1.
 
         # Compute chisq
