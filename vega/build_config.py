@@ -483,8 +483,8 @@ class BuildConfig:
                                  'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
+        config['control'] = {'fitter': 'True', 'run_sampler': 'False'}
         if self.run_sampler:
-            config['control'] = {}
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
             if 'use_template_growth_rate' in fit_info:
