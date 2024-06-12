@@ -293,9 +293,9 @@ def get_blinding(blind_pars, blinding_strat):
 
     blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
     if blinding_strat == 'desi_y1':
-        blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
+        blinding_file = Path(blind_dir) / 'dr1_fs_blinding_11_06_2024.npz'
     elif blinding_strat == 'desi_y3':
-        blinding_file = Path(blind_dir) / 'dr2_ap_blinding_04_06_2024.npz'
+        blinding_file = Path(blind_dir) / 'dr2_fs_blinding_11_06_2024.npz'
     else:
         raise ValueError(f'Unknown blinding version: {blinding_strat}.')
 
