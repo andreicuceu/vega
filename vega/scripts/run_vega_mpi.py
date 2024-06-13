@@ -64,7 +64,7 @@ def run_vega_mpi(config, mpi=False):
         import pocomc
 
         print_func('Running PocoMC')
-        sampler_config = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik)
+        sampler_config = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik, mpi=mpi)
         if cpu_rank == 0:
             sampler_config.pocomc_output.mkdir(exist_ok=True)
         if sampler_config.resume_state_path is not None:

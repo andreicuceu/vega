@@ -10,8 +10,8 @@ from vega.samplers.sampler_interface import Sampler
 class PocoMC(Sampler):
     """ Interface between Vega and the PocoMC sampler """
 
-    def __init__(self, sampler_config, limits, log_lik_func):
-        super().__init__(sampler_config, limits, log_lik_func)
+    def __init__(self, sampler_config, limits, log_lik_func, mpi=False):
+        super().__init__(sampler_config, limits, log_lik_func, mpi=mpi)
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         # Initialize the pocomc settings

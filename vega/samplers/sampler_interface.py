@@ -2,21 +2,19 @@ import os.path
 import sys
 from pathlib import Path
 
-from mpi4py import MPI
-
-from vega import VegaInterface
 from vega.parameters.param_utils import build_names
 
 
 class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
-    def __init__(self, sampler_config, limits, log_lik_func):
+    def __init__(self, sampler_config, limits, log_lik_func, mpi=False):
         self.limits = limits
         self.names = list(limits.keys())
         self.num_params = len(limits)
         self.num_derived = 0
         self.log_lik = log_lik_func
+        self.mpi = mpi
 
         self.getdist_latex = sampler_config.getboolean('getdist_latex', True)
 
@@ -44,8 +42,11 @@ class Sampler:
         self.get_sampler_settings(sampler_config, self.num_params, self.num_derived)
 
     def write_parnames(self, parnames_path):
-        mpi_comm = MPI.COMM_WORLD
-        cpu_rank = mpi_comm.Get_rank()
+        cpu_rank = 0
+        if self.mpi:
+            from mpi4py import MPI
+            mpi_comm = MPI.COMM_WORLD
+            cpu_rank = mpi_comm.Get_rank()
 
         if cpu_rank == 0:
             print('Writing parameter names')
@@ -60,7 +61,8 @@ class Sampler:
             print('Finished writing parameter names')
             sys.stdout.flush()
 
-        mpi_comm.barrier()
+        if self.mpi:
+            mpi_comm.barrier()
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         raise NotImplementedError('This method should be implemented in the child class')
