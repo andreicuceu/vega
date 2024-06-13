@@ -29,7 +29,9 @@ class PocoMC(Sampler):
 
         # Find last state file
         self.resume_state_path = None
-        state_files = list(self.pocomc_output.glob('pmc_*.state'))
+        state_files = []
+        if self.pocomc_output.exists():
+            state_files = list(self.pocomc_output.glob('pmc_*.state'))
         if len(state_files) > 0:
             for file in state_files:
                 state = file.stem.split('_')[-1]

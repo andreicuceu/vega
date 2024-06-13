@@ -68,7 +68,7 @@ def main(config, mpi=False):
         print_func('Running PocoMC')
         sampler_config = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik)
         if cpu_rank == 0:
-            sampler_config.pocomc_output.mkdir()
+            sampler_config.pocomc_output.mkdir(exist_ok=True)
         if sampler_config.resume_state_path is not None:
             print_func(f'Resuming from state file {sampler_config.resume_state_path}.')
 
