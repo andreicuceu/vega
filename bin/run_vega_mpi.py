@@ -119,7 +119,7 @@ if __name__ == '__main__':
     pars.add_argument('config', type=str, help='Config file')
     args = pars.parse_args()
 
-    main(args.config)
+    main(args.config, mpi=True)
 
     # mpi_comm = MPI.COMM_WORLD
     # cpu_rank = mpi_comm.Get_rank()
