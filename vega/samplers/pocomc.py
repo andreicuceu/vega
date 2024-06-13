@@ -1,8 +1,7 @@
 from pathlib import Path
 
 import numpy as np
-import pocomc
-from multiprocessing import Pool
+from pocomc import Prior as pmcPrior
 from scipy.stats import uniform
 
 from vega.samplers.sampler_interface import Sampler
@@ -24,11 +23,28 @@ class PocoMC(Sampler):
         self.n_evidence = sampler_config.getint('n_evidence', 0)
         self.save_every = sampler_config.getint('save_every', 3)
 
-        self.use_mpi = sampler_config.getboolean('use_mpi', False)
-        self.num_cpu = sampler_config.getint('num_cpu', 64)
+        self.use_mpi = sampler_config.getboolean('use_mpi', True)
+        # self.num_cpu = sampler_config.getint('num_cpu', 64)
         self.pocomc_output = Path(self.path) / f'{self.name}_states'
 
-        self.prior = pocomc.Prior(
+        # Find last state file
+        self.resume_state_path = None
+        state_files = list(self.pocomc_output.glob('pmc_*.state'))
+        if len(state_files) > 0:
+            for file in state_files:
+                state = file.stem.split('_')[-1]
+                if state == 'final':
+                    self.resume_state_path = file
+                    break
+
+            if self.resume_state_path is None:
+                last_state = max([int(file.stem.split('_')[-1]) for file in state_files])
+                self.resume_state_path = self.pocomc_output / f'pmc_{last_state}.state'
+
+            if not self.resume_state_path.exists():
+                raise FileNotFoundError(f'Resume state file {self.resume_state_path} not found')
+
+        self.prior = pmcPrior(
             [uniform(self.limits[par][0], self.limits[par][1]-self.limits[par][0])
              for par in self.limits]
         )
