@@ -23,8 +23,6 @@ class PocoMC(Sampler):
         self.n_evidence = sampler_config.getint('n_evidence', 0)
         self.save_every = sampler_config.getint('save_every', 3)
 
-        self.use_mpi = sampler_config.getboolean('use_mpi', True)
-        # self.num_cpu = sampler_config.getint('num_cpu', 64)
         self.pocomc_output = Path(self.path) / f'{self.name}_states'
 
         # Find last state file
