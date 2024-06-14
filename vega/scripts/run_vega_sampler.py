@@ -5,7 +5,18 @@ import sys
 from vega import VegaInterface
 
 
-def run_vega_sampler(config, mpi=False):
+def run_vega_sampler(config=None, mpi=False):
+    if config is None:
+        pars = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+            description='Run Vega in parallel.'
+        )
+
+        pars.add_argument('config', type=str, help='Config file')
+        args = pars.parse_args()
+        config = args.config
+        mpi = True
+
     cpu_rank = 0
     if mpi:
         from mpi4py import MPI
@@ -109,20 +120,9 @@ def run_vega_sampler(config, mpi=False):
 
         if mpi:
             print_func('Finished running sampler')
+
         return sampler, sampler_config
 
 
-def main():
-    pars = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description='Run Vega in parallel.'
-    )
-
-    pars.add_argument('config', type=str, help='Config file')
-    args = pars.parse_args()
-
-    _ = run_vega_sampler(args.config, mpi=True)
-
-
 if __name__ == '__main__':
-    main()
+    _ = run_vega_sampler()
