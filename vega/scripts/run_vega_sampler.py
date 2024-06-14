@@ -121,7 +121,7 @@ def main():
     pars.add_argument('config', type=str, help='Config file')
     args = pars.parse_args()
 
-    _ = run_vega_mpi(args.config, mpi=True)
+    _ = run_vega_sampler(args.config, mpi=True)
 
 
 if __name__ == '__main__':
