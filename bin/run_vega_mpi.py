@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import argparse
 
-from vega.scripts.run_vega_mpi import run_vega_mpi
+from vega.scripts.run_vega_sampler import run_vega_mpi
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(

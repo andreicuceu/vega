@@ -1,7 +1,10 @@
 #!/usr/bin/env python
+import argparse
+
+import matplotlib.pyplot as plt
+
 from vega import VegaInterface
 from vega.minimizer import Minimizer
-import matplotlib.pyplot as plt
 
 
 def run_vega(config_path):
@@ -64,3 +67,19 @@ def run_vega(config_path):
         vega.plots.fig.suptitle(bestfit_legend, fontsize=18, y=1.03)
         vega.plots.fig.savefig(f'{vega.output.outfile[:-5]}_{name}.png', dpi='figure',
                                bbox_inches='tight', facecolor='white')
+
+
+def main():
+    pars = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Run Vega.'
+    )
+
+    pars.add_argument('config', type=str, default=None, help='Config file')
+    args = pars.parse_args()
+
+    run_vega(args.config)
+
+
+if __name__ == '__main__':
+    main()
