@@ -130,12 +130,12 @@ class Metals:
                     self._corr_item.config['metals'], fiducial, metal_coordinates,
                     scale_params, tracer1, tracer2, metal_corr=True)
 
-    @cached(cache=cache_pk, key=lambda self, call_pars, *cache_pars: hashkey(*cache_pars))
+    # @cached(cache=cache_pk, key=lambda self, call_pars, *cache_pars: hashkey(*cache_pars))
     def compute_pk(self, call_pars, *cache_pars):
         return self.Pk_metal.compute(*call_pars, fast_metals=True)
 
-    @cached(cache=cache_xi,
-            key=lambda self, pk_lin, pars, name1, name2, component: hashkey(name1, name2, component))
+    # @cached(cache=cache_xi,
+            # key=lambda self, pk_lin, pars, name1, name2, component: hashkey(name1, name2, component))
     def compute_xi_metal_metal(self, pk_lin, pars, name1, name2, component):
         pk = self.Pk_metal.compute(pk_lin, pars, fast_metals=True)
 

@@ -45,7 +45,7 @@ class VegaInterface:
         """
         # Read the main config file
         self.main_config = configparser.ConfigParser()
-        self.main_config.optionxform = lambda option: option
+        self.main_config.optionxform = str
         self.main_config.read(utils.find_file(main_path))
 
         # Read the fiducial pk file
@@ -67,7 +67,7 @@ class VegaInterface:
         self.corr_items = {}
         for path in ini_files:
             config = configparser.ConfigParser()
-            config.optionxform = lambda option: option
+            config.optionxform = str
             config.read(utils.find_file(os.path.expandvars(path)))
 
             name = config['data'].get('name')
