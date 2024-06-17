@@ -131,7 +131,7 @@ class PktoXi:
         full_xi = np.sum(xi_ell_arr, axis=0)
         return full_xi
 
-    # @cached(cache=cache, key=lambda self, pk, ell_vals, *cache_pars: hashkey(ell_vals, *cache_pars))
+    @cached(cache=cache, key=lambda self, pk, ell_vals, *cache_pars: hashkey(ell_vals, *cache_pars))
     def compute_xi_ell(self, pk, ell_vals, *cache_pars):
         xi_ell_interp = {}
         for ell in ell_vals:
