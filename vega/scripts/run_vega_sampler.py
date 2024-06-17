@@ -10,17 +10,18 @@ def log_lik(theta, par_names, vega):
     return vega.log_lik(params)
 
 
-def run_vega_sampler(config=None, mpi=False):
-    if config is None:
-        pars = argparse.ArgumentParser(
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-            description='Run Vega in parallel.'
-        )
+if __name__ == '__main__':
+# def run_vega_sampler(config=None, mpi=False):
+    # if config is None:
+    pars = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='Run Vega in parallel.'
+    )
 
-        pars.add_argument('config', type=str, help='Config file')
-        args = pars.parse_args()
-        config = args.config
-        mpi = True
+    pars.add_argument('config', type=str, help='Config file')
+    args = pars.parse_args()
+    config = args.config
+    mpi = True
 
     cpu_rank = 0
     if mpi:
@@ -75,7 +76,7 @@ def run_vega_sampler(config=None, mpi=False):
         sampler.run()
 
         print_func('Finished running sampler')
-        return sampler
+        # return sampler
 
     elif vega.sampler == 'PocoMC':
         import pocomc
@@ -127,8 +128,8 @@ def run_vega_sampler(config=None, mpi=False):
         if mpi:
             print_func('Finished running sampler')
 
-        return sampler, sampler_config
+        # return sampler, sampler_config
 
 
-if __name__ == '__main__':
-    _ = run_vega_sampler()
+# if __name__ == '__main__':
+    # _ = run_vega_sampler()
