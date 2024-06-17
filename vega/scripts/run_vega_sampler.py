@@ -5,6 +5,11 @@ import sys
 from vega import VegaInterface
 
 
+def log_lik(theta, par_names, vega):
+    params = {name: val for name, val in zip(par_names, theta)}
+    return vega.log_lik(params)
+
+
 def run_vega_sampler(config=None, mpi=False):
     if config is None:
         pars = argparse.ArgumentParser(
@@ -84,17 +89,17 @@ def run_vega_sampler(config=None, mpi=False):
         if sampler_config.resume_state_path is not None:
             print_func(f'Resuming from state file {sampler_config.resume_state_path}.')
 
-        def log_lik(theta):
-            params = {name: val for name, val in zip(sampler_config.names, theta)}
-            return vega.log_lik(params)
+        # def log_lik(theta):
+        #     params = {name: val for name, val in zip(sampler_config.names, theta)}
+        #     return vega.log_lik(params)
 
         if mpi:
             from pocomc.parallel import MPIPool
             mpi_comm.barrier()
             with MPIPool(mpi_comm, use_dill=False) as pool:
                 sampler = pocomc.Sampler(
-                    sampler_config.prior, log_lik, pool=pool,
-                    output_dir=sampler_config.pocomc_output,
+                    sampler_config.prior, log_lik, likelihood_args=(sampler_config.names, vega),
+                    pool=pool, output_dir=sampler_config.pocomc_output,
                     dynamic=sampler_config.dynamic, precondition=sampler_config.precondition,
                     n_effective=sampler_config.n_effective, n_active=sampler_config.n_active,
                 )
@@ -105,7 +110,8 @@ def run_vega_sampler(config=None, mpi=False):
                 )
         else:
             sampler = pocomc.Sampler(
-                sampler_config.prior, log_lik, output_dir=sampler_config.pocomc_output,
+                sampler_config.prior, log_lik, likelihood_args=(sampler_config.names, vega),
+                output_dir=sampler_config.pocomc_output,
                 dynamic=sampler_config.dynamic, precondition=sampler_config.precondition,
                 n_effective=sampler_config.n_effective, n_active=sampler_config.n_active,
             )
