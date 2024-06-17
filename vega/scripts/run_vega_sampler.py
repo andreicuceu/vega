@@ -10,7 +10,8 @@ def log_lik(theta, par_names, vega):
     return vega.log_lik(params)
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
+def main():
 # def run_vega_sampler(config=None, mpi=False):
     # if config is None:
     pars = argparse.ArgumentParser(
@@ -131,5 +132,6 @@ if __name__ == '__main__':
         # return sampler, sampler_config
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
+    main()
     # _ = run_vega_sampler()
