@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
 
-BLINDING_STRATEGIES = ['desi_m2', 'desi_y1', 'desi_y3']
+BLINDING_STRATEGIES = ['desi_y3']
 
 
 class Data:
@@ -250,6 +250,10 @@ class Data:
                 raise ValueError('No DA or DA_BLIND column found in data file.')
 
         elif self._blinding_strat is None:
+            self._blind = False
+            self._data_vec = hdul[1].data['DA']
+
+        elif self._blinding_strat in ['desi_m2', 'desi_y1']:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
 
