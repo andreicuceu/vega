@@ -98,7 +98,7 @@ class Coordinates:
         )
 
     @classmethod
-    def init_from_r_mu_grids(cls, r_grid, mu_grid):
+    def init_from_r_mu_grids(cls, r_grid, mu_grid, z_eff=None):
         """Initialize from r and mu grids
 
         Parameters
@@ -118,7 +118,7 @@ class Coordinates:
         return cls(
             rp_min=rp_grid.min(), rp_max=rp_grid.max(),
             rt_max=rt_grid.max(), rp_nbins=len(rp_grid), rt_nbins=len(rt_grid),
-            r_grid=r_grid, mu_grid=mu_grid
+            r_grid=r_grid, mu_grid=mu_grid, z_eff=z_eff,
         )
 
     def get_mask_to_other(self, other):
