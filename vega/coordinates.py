@@ -113,11 +113,11 @@ class Coordinates:
         Coordinates
             New coordinates
         """
-        rp_grid = r_grid * mu_grid
-        rt_grid = r_grid * np.sqrt(1 - mu_grid**2)
+        rp_grid = np.outer(r_grid, mu_grid)
+        rt_grid = np.outer(r_grid, np.sqrt(1 - mu_grid**2))
         return cls(
             rp_min=rp_grid.min(), rp_max=rp_grid.max(),
-            rt_max=rt_grid.max(), rp_nbins=len(rp_grid), rt_nbins=len(rt_grid),
+            rt_max=rt_grid.max(), rp_nbins=len(r_grid), rt_nbins=len(r_grid),
             r_grid=r_grid, mu_grid=mu_grid, z_eff=z_eff,
         )
 
