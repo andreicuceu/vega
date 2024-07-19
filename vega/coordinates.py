@@ -113,11 +113,14 @@ class Coordinates:
         Coordinates
             New coordinates
         """
-        rp_grid = np.outer(r_grid, mu_grid)
-        rt_grid = np.outer(r_grid, np.sqrt(1 - mu_grid**2))
+        if len(r_grid) != len(mu_grid):
+            raise ValueError(
+                'r_grid and mu_grid must either be on a meshgrid or have the same size')
+        rp_grid = r_grid * mu_grid
+        rt_grid = r_grid * np.sqrt(1 - mu_grid**2)
         return cls(
-            rp_min=rp_grid.min(), rp_max=rp_grid.max(),
-            rt_max=rt_grid.max(), rp_nbins=len(r_grid), rt_nbins=len(r_grid),
+            rp_min=rp_grid.min(), rp_max=rp_grid.max(), rt_max=rt_grid.max(),
+            rp_nbins=len(r_grid), rt_nbins=len(r_grid), rp_grid=rp_grid, rt_grid=rt_grid,
             r_grid=r_grid, mu_grid=mu_grid, z_eff=z_eff,
         )
 
