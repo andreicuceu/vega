@@ -227,7 +227,7 @@ class Model:
 
         # Apply gamma correction for cross
         if self._gamma_model_flag:
-            xi_model += self.Xi_core.compute_gamma_model(pars)
+            xi_model += self.Xi_core.compute_gamma_model_vectorised(pars)
 
         # Apply delta gamma correction for auto
         #if self._delta_gamma_model_flag:

@@ -21,11 +21,11 @@ def _line_prof(A,mu,sig,wave):
 #@njit    
 def gen_cont(x,dv=1):
     #tuning the amplitudes of peaks by fitting mocks with 250km/s error
-    amps=[30,1.5,1.5,0.5,1.5,1,1.5,5,25]
+    amps=[30,1.5,1.5,0.5,1.5,1,1.5,5,7,25] #25
     #emission line means
-    bs=[1025.7,1063,1073,1082,1084,1118,1128,1175,1215.6]
-    #emission line default widths (annoying because of velocity to wavelength)
-    cs=[10,5.5,3.5,5,5,4,4,7,15]
+    bs=[1025.7,1063,1073,1082,1084,1118,1128,1175,1205,1215.6]
+    #emission line default widths
+    cs=[10,5.5,3.5,5,5,4,4,7,8.5,15] #15
     
     #fdv = np.exp(dv/3e5)    
     #cs = [np.sqrt(c**2+(b*(fdv-1))**2) for b,c in zip(bs,cs)]
@@ -51,12 +51,14 @@ def gen_cont(x,dv=1):
     continuum += _line_prof(*list(line_props)[7],x)
     #lya
     continuum += _line_prof(*list(line_props)[8],x)
+
+    continuum += _line_prof(*list(line_props)[9],x)
     
     return continuum/scale_factor
 
 #@njit
 def gen_gamma(lrest,sigma_v):
-    gamma_fun = gen_cont(lrest,sigma_v)/gen_cont(lrest,0) - 1
+    gamma_fun = (gen_cont(lrest,sigma_v)/gen_cont(lrest,0)) - 1
     return gamma_fun
 
 

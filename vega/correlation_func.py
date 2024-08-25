@@ -137,8 +137,8 @@ class CorrelationFunction:
                 self.CosmoClass = self._get_cosmo()
 
                 self.zlist = np.linspace(self.p_qso_full.dataset.min(),
-                                  self.p_qso_full.dataset.max(), 2)
-                self.dz = self.zlist[1] - self.zlist[0]
+                                  self.p_qso_full.dataset.max(), 10)
+                self.dz = np.zeros_like(self.zlist) + (self.zlist[1] - self.zlist[0])
                 self.llya = 1215.67
 
                 self.rp = self._r * self._mu
@@ -149,7 +149,7 @@ class CorrelationFunction:
                 self.D_M = self.CosmoClass.get_dist_m(self.zlist)
                 self.D_c = self.CosmoClass.get_r_comov(self.zlist)
 
-                rpix = np.abs(np.add.outer(self.D_c, self.rp))
+                rpix = np.abs(np.add.outer(self.D_c, self.rp)).T
                 self.zpix = self.CosmoClass.distance_to_redshift(rpix)
 
                 # rpix = np.abs(COSMO.get_r_comov(zs) + rp_A)
@@ -181,7 +181,42 @@ class CorrelationFunction:
     def get_qso_auto(self,r_Q):
         return np.interp(r_Q, self.r_qso_auto, self.xi_qso_auto)
 
-    #@njit
+
+    def compute_gamma_model_vectorised(self,params):
+        p0 = params['cont_dist_amp']
+        p1 = params['cont_sigma_velo']
+        mean_gamma = np.zeros_like(self.rp)
+        for k, (rp_A, rt_A) in enumerate(zip(self.rp, self.rt)):        
+            lrest_pix_M = np.divide.outer((1+self.zpix[k,:])*self.llya,(1+self.zlist))
+            #make sure the pixels are in lya forest
+            #w_lr_M = (1040<=lrest_pix_M)&(lrest_pix_M<=1205)            
+            #within observing limits
+            #lobs_pix_M=(lrest_pix_M.T*(1+zs)).T
+            
+            #w_lo_M=(3600<lobs_pix_M)&(lobs_pix_M<5772)                
+                
+            #w = w_lr_M&w_lo_M
+            
+            #calculate r_Q
+            dtheta_M = 2*np.arcsin(rp_A/np.add.outer(self.D_M,self.D_M))
+            rp_Q_M=(np.subtract.outer(self.D_c,self.D_c)*np.cos(dtheta_M/2)).T
+
+            #rt_Q = rt_A
+            r_Q_M = np.sqrt(rp_Q_M**2 + rt_A**2)
+
+            xi_Q_M = self.get_qso_auto(r_Q_M)
+            
+            gamma_M = gen_gamma(lrest_pix_M,p1)
+
+            #import pdb; pdb.set_trace()
+            
+            #add to integral
+            mean_gamma[k] += np.sum(self.p_qso**2 * self.dz**2 * gamma_M * xi_Q_M) / np.sqrt(rt_A)
+
+        cont_correction = p0 * mean_gamma
+        
+        return cont_correction
+
     def compute_gamma_model(self,params):
         p0 = params['cont_dist_amp']
         p1 = params['cont_sigma_velo']
@@ -196,7 +231,7 @@ class CorrelationFunction:
 
                     lrest_pix = ((1 + self.zpix[i,k]) / (1 + zq2)) * self.llya
 
-                    if not (1040 <= lrest_pix <= 1200):
+                    if not (1040 <= lrest_pix <= 1205):
                         continue
 
                     #calculate r_Q
