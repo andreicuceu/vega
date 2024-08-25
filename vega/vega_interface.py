@@ -15,9 +15,11 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 
-BLIND_FIXED_PARS = ['ap_full', 'at_full', 'aiso_full', 'epsilon_full',
-                    'phi_smooth', 'alpha_smooth', 'phi_full', 'alpha_full',
-                    'growth_rate']
+BLIND_FIXED_PARS = [
+    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full', 'alpha_full', 'growth_rate'
+]
+
+VEGA_BLINDED_PARS = ['phi_smooth']
 
 
 class VegaInterface:
@@ -106,16 +108,6 @@ class VegaInterface:
             else:
                 self.data[name] = None
 
-        # Initialize scale parameters
-        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
-
-        # initialize the models
-        self.models = {}
-        if self._has_data:
-            for name, corr_item in self.corr_items.items():
-                self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
-                                          self.data[name])
-
         # Check blinding
         self._blind = False
         if self._has_data:
@@ -124,14 +116,27 @@ class VegaInterface:
                     self._blind = True
 
         # Apply blinding
+        blind_pars = []
         if self._blind:
             for par in self.sample_params['limits'].keys():
                 if par in BLIND_FIXED_PARS:
                     raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
+                elif par in VEGA_BLINDED_PARS:
+                    blind_pars += [par]
 
             if ('bias_QSO' in self.sample_params['limits']) and (
                     'beta_QSO' in self.sample_params['limits']):
                 print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
+
+        # Initialize scale parameters
+        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'], blind_pars)
+
+        # initialize the models
+        self.models = {}
+        if self._has_data:
+            for name, corr_item in self.corr_items.items():
+                self.models[name] = Model(
+                    corr_item, self.fiducial, self.scale_params, self.data[name])
 
         # Read the monte carlo parameters
         self.mc_config = None

@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 
 
 class ScaleParameters:
@@ -9,7 +10,7 @@ class ScaleParameters:
     Lya AP: phi = at/ap, alpha = sqrt(ap * at)
     See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
     """
-    def __init__(self, config):
+    def __init__(self, config, blind_pars=None):
         """Initialize scale parameters from the cosmo-fit type config
 
         Parameters
@@ -22,19 +23,26 @@ class ScaleParameters:
         self.smooth_scaling = config.getboolean('smooth-scaling', False)
         self.metal_scaling = config.getboolean('metal-scaling', False)
 
-        self.blind_phi_smooth = config.getboolean('blind-phi_smooth', False)
         self._rnsps = None
-        if self.blind_phi_smooth:
-            seed = config.getint('seed')
-            size = config.getfloat('size')
-            rng = np.random.default_rng(seed)
-            self._rnsps = np.sqrt(np.log(np.pi - rng.uniform(-size/2, size/2)))
+        if blind_pars is not None and len(blind_pars) > 0:
+            if 'phi_smooth' not in blind_pars:
+                raise ValueError('Only phi_smooth blinding implemented.')
+
+            blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
+            blinding_file = Path(blind_dir) / 'dr1_ap_blinding_27_04_2024.npz'
+            if not blinding_file.exists():
+                raise ValueError(f'Blinding file not found: {blinding_file}.'
+                                 'Full-shape analyses must be run at NERSC.')
+
+            with np.load(blinding_file) as file:
+                self._rnsps = float(file['phi_smooth'])
+
         elif self.full_shape or self.smooth_scaling:
             print('Warning! Running full-shape without blinding.')
 
-        if self.full_shape or self.smooth_scaling:
-            print('WARNING!!!: Using full-shape fit or scaling of the smooth cf component. '
-                  'Sailor you are reaching unexplored territories, precede at your own risk.')
+        # if self.full_shape or self.smooth_scaling:
+            # print('WARNING!!!: Using full-shape fit or scaling of the smooth cf component. '
+                #   'Sailor you are reaching unexplored territories, precede at your own risk.')
 
         self.parametrisation = config.get('cosmo fit func', 'ap_at')
         if self.parametrisation not in ['ap_at', 'aiso_epsilon', 'phi_alpha']:
@@ -120,23 +128,22 @@ class ScaleParameters:
                              'Set full-shape-alpha to True for other parametrisations.')
 
         if self.parametrisation == 'ap_at':
-            assert not self.blind_phi_smooth
+            assert self._rnsps is None
             return params['ap_full'], params['at_full']
 
         elif self.parametrisation == 'aiso_epsilon':
-            assert not self.blind_phi_smooth
+            assert self._rnsps is None
             return self.aiso_epsilon(params, name_addon='_full')
 
         elif self.parametrisation == 'phi_alpha':
             if self.full_shape:
-                assert not self.blind_phi_smooth
+                assert self._rnsps is None
                 name_addon = '_full'
             else:
                 assert self.smooth_scaling
                 name_addon = '_smooth'
 
-            return self.phi_alpha(params, name_addon, self.full_shape_alpha,
-                                  self.blind_phi_smooth, self._rnsps)
+            return self.phi_alpha(params, name_addon, self.full_shape_alpha, self._rnsps)
 
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
@@ -165,7 +172,7 @@ class ScaleParameters:
         return ap, at
 
     @staticmethod
-    def phi_alpha(params, name_addon='', fullshape_alpha=False, blind_phi_smooth=False, rnsps=None):
+    def phi_alpha(params, name_addon='', fullshape_alpha=False, rnsps=None):
         """Compute phi / alpha parametrisation, and return ap/at.
         See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
 
@@ -185,7 +192,7 @@ class ScaleParameters:
         """
         phi = params['phi' + name_addon]
 
-        if blind_phi_smooth:
+        if rnsps is not None:
             phi += (np.pi - np.exp(rnsps**2))
 
         if name_addon == '_full' and not fullshape_alpha:
