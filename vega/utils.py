@@ -6,9 +6,11 @@ from pathlib import Path
 from functools import lru_cache
 from scipy.interpolate import interp1d
 from astropy.table import Table
-
-
 import vega
+
+@njit
+def jitted_interp(z, input_z, data):
+    return np.interp(z, input_z, data)
 
 @njit
 def sinc(x):
