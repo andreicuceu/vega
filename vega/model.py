@@ -45,18 +45,12 @@ class Model:
             self.xi_distorted = {'peak': {}, 'smooth': {}, 'full': {}}
 
         # Initialize Broadband
-        # bin_size_rp_data = corr_item.data_coordinates.rp_binsize
-        # bin_size_rp_model = corr_item.model_coordinates.rp_binsize
         self.broadband = None
         if 'broadband' in self._corr_item.config:
             self.broadband = broadband_poly.BroadbandPolynomials(
                 self._corr_item.config['broadband'], self._corr_item.name,
                 corr_item.model_coordinates, corr_item.dist_model_coordinates
             )
-            # self.init_broadband(
-            #     self._corr_item.config['broadband'], self._corr_item.name,
-            #     bin_size_rp_data, bin_size_rp_model
-            # )
 
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
@@ -86,63 +80,6 @@ class Model:
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
-
-    # @staticmethod
-    # def init_broadband(bb_input, cf_name, bin_size_rp_data, bin_size_rp_model):
-    #     """Read the broadband config and initialize what we need.
-
-    #     Parameters
-    #     ----------
-    #     bb_input : ConfigParser
-    #         broadband section from the config file
-    #     cf_name : string
-    #         Name of corr item
-    #     bin_size_rp_data : float
-    #         Size of data r parallel bins
-    #     bin_size_rp_model : float
-    #         Size of model r parallel bins
-
-    #     Returns
-    #     -------
-    #     list
-    #         list with configs of broadband terms
-    #     """
-    #     bb_config = []
-    #     for item, value in bb_input.items():
-    #         value = value.split()
-    #         config = {}
-    #         # Check if it's additive or multiplicative
-    #         assert value[0] == 'add' or value[0] == 'mul'
-    #         config['type'] = value[0]
-
-    #         # Check if it's pre distortion or post distortion
-    #         assert value[1] == 'pre' or value[1] == 'post'
-    #         config['pre'] = value[1]
-
-    #         # Check if it's over rp/rt or r/mu
-    #         assert value[2] == 'rp,rt' or value[2] == 'r,mu'
-    #         config['rp_rt'] = value[2]
-
-    #         # Check if it's normal or sky
-    #         if len(value) == 6:
-    #             config['func'] = value[5]
-    #         else:
-    #             config['func'] = 'broadband'
-
-    #         # Get the coordinate configs
-    #         r_min, r_max, dr = value[3].split(':')
-    #         mu_min, mu_max, dmu = value[4].split(':')
-    #         config['r_config'] = (int(r_min), int(r_max), int(dr))
-    #         config['mu_config'] = (int(mu_min), int(mu_max), int(dmu))
-    #         if config['pre'] == 'pre':
-    #             config['bin_size_rp'] = bin_size_rp_model
-    #         else:
-    #             config['bin_size_rp'] = bin_size_rp_data
-
-    #         config['cf_name'] = cf_name
-    #         bb_config.append(config)
-
-    #     return bb_config
 
     def _compute_model(self, pars, pk_lin, component='smooth'):
         """Compute a model correlation function given the input pars
