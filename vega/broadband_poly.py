@@ -56,7 +56,7 @@ class BroadbandPolynomials:
                 'r1_config': (int(r1_min), int(r1_max), int(dr1)),
                 'r2_config': (int(r2_min), int(r2_max), int(dr2))
             }
-            self.bb_terms[f'{bb[0]}-{bb[1]}'] += [bb_term]
+            self.bb_terms[f'{bb[1]}-{bb[0]}'] += [bb_term]
 
     def compute(self, params, pos_type):
         assert pos_type in list(self.bb_terms.keys())

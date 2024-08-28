@@ -17,7 +17,7 @@ class CorrelationFunction:
     'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, coordinates, scale_params,
-                 tracer1, tracer2, bb_config=None, metal_corr=False):
+                 tracer1, tracer2, metal_corr=False):
         """
 
         Parameters
@@ -34,8 +34,6 @@ class CorrelationFunction:
             Config of tracer 1
         tracer2 : dict
             Config of tracer 2
-        bb_config : list, optional
-            list with configs of broadband terms, by default None
         metal_corr : bool, optional
             Whether this is a metal correlation, by default False
         """

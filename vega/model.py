@@ -76,7 +76,7 @@ class Model:
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
             self._corr_item.config['model'], fiducial, corr_item.model_coordinates,
-            scale_params, self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config
+            scale_params, self._corr_item.tracer1, self._corr_item.tracer2
         )
 
         # Initialize metals if needed
