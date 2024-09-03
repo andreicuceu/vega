@@ -5,8 +5,11 @@ class Coordinates:
     """Class to handle Vega coordinate grids
     """
 
-    def __init__(self, rp_min, rp_max, rt_max, rp_nbins, rt_nbins,
-                 rp_grid=None, rt_grid=None, z_grid=None, z_eff=None):
+    def __init__(
+        self, rp_min, rp_max, rt_max, rp_nbins, rt_nbins,
+        rp_grid=None, rt_grid=None, z_grid=None, z_eff=None,
+        r_grid=None, mu_grid=None
+    ):
         """Initialize the coordinate grids.
 
         Parameters
@@ -47,12 +50,18 @@ class Coordinates:
         self.rp_grid = self.rp_regular_grid if rp_grid is None else rp_grid
         self.rt_grid = self.rt_regular_grid if rt_grid is None else rt_grid
 
-        self.r_grid = np.sqrt(self.rp_grid**2 + self.rt_grid**2)
+        if r_grid is None:
+            self.r_grid = np.sqrt(self.rp_grid**2 + self.rt_grid**2)
+        else:
+            self.r_grid = r_grid
         self.r_regular_grid = np.sqrt(self.rp_regular_grid**2 + self.rt_regular_grid**2)
 
-        self.mu_grid = np.zeros_like(self.r_grid)
-        w = self.r_grid > 0.
-        self.mu_grid[w] = self.rp_grid[w] / self.r_grid[w]
+        if mu_grid is None:
+            self.mu_grid = np.zeros_like(self.r_grid)
+            w = self.r_grid > 0.
+            self.mu_grid[w] = self.rp_grid[w] / self.r_grid[w]
+        else:
+            self.mu_grid = mu_grid
 
         self.mu_regular_grid = np.zeros_like(self.r_regular_grid)
         w = self.r_regular_grid > 0.
@@ -86,6 +95,33 @@ class Coordinates:
         return cls(
             other.rp_min, other.rp_max, other.rt_max, other.rp_nbins, other.rt_nbins,
             rp_grid=rp_grid, rt_grid=rt_grid, z_grid=z_grid
+        )
+
+    @classmethod
+    def init_from_r_mu_grids(cls, r_grid, mu_grid, z_eff=None):
+        """Initialize from r and mu grids
+
+        Parameters
+        ----------
+        r_grid : Array
+            r grid
+        mu_grid : Array
+            mu grid
+
+        Returns
+        -------
+        Coordinates
+            New coordinates
+        """
+        if len(r_grid) != len(mu_grid):
+            raise ValueError(
+                'r_grid and mu_grid must either be on a meshgrid or have the same size')
+        rp_grid = r_grid * mu_grid
+        rt_grid = r_grid * np.sqrt(1 - mu_grid**2)
+        return cls(
+            rp_min=rp_grid.min(), rp_max=rp_grid.max(), rt_max=rt_grid.max(),
+            rp_nbins=len(r_grid), rt_nbins=len(r_grid), rp_grid=rp_grid, rt_grid=rt_grid,
+            r_grid=r_grid, mu_grid=mu_grid, z_eff=z_eff,
         )
 
     def get_mask_to_other(self, other):

@@ -1,27 +1,27 @@
 #!/usr/bin/env python
-from vega import VegaInterface
-from vega.sampler_interface import Sampler
-from mpi4py import MPI
 import argparse
 import sys
 
+from mpi4py import MPI
+
+from vega import VegaInterface
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description='Run Vega in parallel.')
 
-    pars.add_argument('config', type=str, default=None, help='Config file')
+    pars.add_argument('config', type=str, help='Config file')
     args = pars.parse_args()
 
     mpi_comm = MPI.COMM_WORLD
     cpu_rank = mpi_comm.Get_rank()
+    num_cpus = mpi_comm.Get_size()
 
     def print_func(message):
         if cpu_rank == 0:
             print(message)
         sys.stdout.flush()
-        mpi_comm.barrier()
 
     print_func('Initializing Vega')
 
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
     if run_montecarlo and vega.mc_config is not None:
         # Get the MC seed and forecast flag
-        seed = vega.main_config['control'].getfloat('mc_seed', 0)
+        seed = vega.main_config['control'].getint('mc_seed', 0)
         forecast = vega.main_config['control'].getboolean('forecast', False)
 
         # Create the mocks
@@ -56,12 +56,58 @@ if __name__ == '__main__':
                          ' but no "[monte carlo]" section provided.')
 
     # Run sampler
-    if vega.has_sampler:
-        print_func('Running the sampler')
-        sampler = Sampler(vega.main_config['Polychord'],
-                          sampling_params, vega.log_lik)
-
-        sampler.run()
-    else:
+    if not vega.run_sampler:
         raise ValueError('Warning: You called "run_vega_mpi.py" without asking'
-                         ' for the sampler. Add "sampler = True" to the "[control]" section.')
+                         ' for the sampler. Add "run_sampler = True" to the "[control]" section.')
+
+    if vega.sampler == 'Polychord':
+        from vega.samplers.polychord import Polychord
+
+        print_func('Running Polychord')
+        sampler = Polychord(vega.main_config['Polychord'], sampling_params, vega.log_lik)
+        sampler.run()
+
+    elif vega.sampler == 'PocoMC':
+        from vega.samplers.pocomc import PocoMC
+        import pocomc
+        from multiprocessing import Pool
+        from schwimmbad import MPIPool
+
+        print_func('Running PocoMC')
+        sampler = PocoMC(vega.main_config['PocoMC'], sampling_params, vega.log_lik)
+        if cpu_rank == 0:
+            sampler.pocomc_output.mkdir()
+
+        def log_lik(theta):
+            params = {name: val for name, val in zip(sampler.names, theta)}
+            return vega.log_lik(params)
+
+        if sampler.use_mpi:
+            mpi_comm.barrier()
+            with MPIPool(mpi_comm) as pool:
+                pocomc_sampler = pocomc.Sampler(
+                    sampler.prior, log_lik, pool=pool, output_dir=sampler.pocomc_output,
+                    dynamic=sampler.dynamic, precondition=sampler.precondition,
+                    n_effective=sampler.n_effective, n_active=sampler.n_active,
+                )
+                pocomc_sampler.run(
+                    sampler.n_total, sampler.n_evidence, save_every=sampler.save_every)
+        else:
+            if num_cpus > 1:
+                raise ValueError(
+                    'You asked to run PocoMC without MPI, '
+                    'but you are using more than one MPI thread.'
+                )
+            with Pool(sampler.num_cpu) as pool:
+                pocomc_sampler = pocomc.Sampler(
+                    sampler.prior, log_lik, pool=pool, output_dir=sampler.pocomc_output,
+                    dynamic=sampler.dynamic, precondition=sampler.precondition,
+                    n_effective=sampler.n_effective, n_active=sampler.n_active,
+                )
+                pocomc_sampler.run(
+                    sampler.n_total, sampler.n_evidence, save_every=sampler.save_every)
+
+        if cpu_rank == 0:
+            sampler.write_chain(pocomc_sampler)
+
+    print_func('Finished running sampler')
