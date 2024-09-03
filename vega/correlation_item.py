@@ -44,10 +44,8 @@ class CorrelationItem:
 
         self.cont_dist_cross =  config['model'].getboolean('cont_dist_cross', False)
         if self.cont_dist_cross:
+            self.tracer1['weights-path'] = config['data'].get('weights-tracer1')
             self.tracer2['qso-cat-path'] = config['data'].get('qso-cat')
-            # if self.tracer2['qso-cat-path'] is None:
-            #     raise ValueError('The lyaxqso continuum distortion model requires a qso catalogue'
-            #                     'in "qso-cat"')
 
         self.cont_dist_auto =  config['model'].getboolean('cont_dist_auto', False)
         if self.cont_dist_auto:
