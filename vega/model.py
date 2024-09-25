@@ -76,7 +76,7 @@ class Model:
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
 
-    def _compute_model(self, pars, pk_lin, component='smooth'):
+    def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
 
