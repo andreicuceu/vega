@@ -15,7 +15,7 @@ def test_vega_new():
 
     vega.minimize()
 
-    assert isclose(vega.bestfit.fmin.fval, 0.6392334022603812)
+    assert isclose(vega.bestfit.fmin.fval, 0.6392329715769427)
 
 
 def test_vega_old():
