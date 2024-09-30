@@ -29,7 +29,6 @@ class CorrelationItem:
 
         self.cov_rescale = config['data'].getfloat('cov_rescale', None)
         self.has_distortion = config['data'].getboolean('distortion', True)
-        self.old_fftlog = config['model'].getboolean('old_fftlog', False)
 
         self.has_data = config['data'].getboolean('has_datafile', True)
         if 'filename' not in config['data']:

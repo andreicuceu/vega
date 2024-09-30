@@ -105,8 +105,7 @@ class BuildConfig:
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
             List of options:
-                fitter: bool, default True
-                sampler: bool, default False
+                run_sampler: bool, default False
                 bias_beta_config: dict with 'tracer': 'bias_beta', 'bias_eta_beta', 'bias_bias_eta'
                 zeff: float, default None
                 zeff_rmin: float, default 0
@@ -483,10 +482,12 @@ class BuildConfig:
                                  'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
+        config['control'] = {'run_sampler': 'False'}
         if self.run_sampler:
-            config['control'] = {}
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
+            if 'use_template_growth_rate' in fit_info:
+                config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
 
             if self.sampler == 'Polychord':
                 config['Polychord'] = {}
