@@ -16,23 +16,23 @@ def jitted_interp(z, input_z, data):
 def sinc(x):
     return np.sin(x)/x
 
-@njit
+#@njit
 def _line_prof(A,mu,sig,wave):
     return A*np.exp(-0.5*(wave-mu)**2/sig**2) * (1/(2*np.sqrt(np.pi)*sig))
 
 #@njit    
 def gen_cont(x,dv=1):
     #tuning the amplitudes of peaks by fitting mocks with 250km/s error
-    amps=[30,1.5,1.5,0.5,1.5,1,1.5,5,7,25] #25
+    amps=[30,1.5,1.5,0.5,1.5,1,1.5,5,25,25] #25
     #emission line means
-    bs=[1025.7,1063,1073,1082,1084,1118,1128,1175,1205,1215.6]
+    bs=[1025.7,1063,1073,1082,1084,1118,1128,1175,1216.31,1216.77]
     #emission line default widths
-    cs=[10,5.5,3.5,5,5,4,4,7,8.5,15] #15
+    cs=[10,5.5,3.5,5,5,4,4,7,15,20] #15
     
     #fdv = np.exp(dv/3e5)    
     #cs = [np.sqrt(c**2+(b*(fdv-1))**2) for b,c in zip(bs,cs)]
 
-    cs = [np.sqrt(c**2+(b*(dv/3e5))**2) for b,c in zip(bs,cs)]
+    cs = [np.sqrt(c**2+(b*(np.exp(dv)/3e5))**2) for b,c in zip(bs,cs)]
     line_props = Table({'amp':amps,'lambda_line':bs,'width':cs})
           
     #flux of smooth component
@@ -49,11 +49,12 @@ def gen_cont(x,dv=1):
     continuum += _line_prof(*list(line_props)[4],x)
     continuum += _line_prof(*list(line_props)[5],x)
     continuum += _line_prof(*list(line_props)[6],x)
+    
     #CIII]
     continuum += _line_prof(*list(line_props)[7],x)
+
     #lya
     continuum += _line_prof(*list(line_props)[8],x)
-
     continuum += _line_prof(*list(line_props)[9],x)
     
     return continuum/scale_factor
@@ -62,6 +63,26 @@ def gen_cont(x,dv=1):
 def gen_gamma(lrest,sigma_v):
     gamma_fun = (gen_cont(lrest,sigma_v)/gen_cont(lrest,0)) - 1
     return gamma_fun
+
+def get_gamma_QQ(x, dv, spec):
+    # x = np.linspace(1040, 1200, 500)
+
+    # Extract columns of spec into separate arrays
+    lam = spec[:8, 0]  # Wavelength
+    A = spec[:8, 1]    # Amplitude
+    LW = spec[:8, 2]   # Linewidth (Lorentzian width)
+
+    # Calculate LW500 for all lines at once using NumPy's broadcasting
+    LW500 = np.sqrt(LW**2 + (lam * ((dv) / 3e5))**2)
+
+    # Compute the line profile for all lines in one go for both cont0 and cont500
+    cont0 = np.ones_like(x) + np.sum(_line_prof(A[:, None], lam[:, None], LW[:, None], x), axis=0)
+    cont500 = np.ones_like(x) + np.sum(_line_prof(A[:, None], lam[:, None], LW500[:, None], x), axis=0)
+
+    # Calculate gamma_QQ
+    gamma_QQ = (cont500 / cont0) - 1
+
+    return gamma_QQ
 
 
 def _tracer_bias_beta(params, name):

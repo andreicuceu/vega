@@ -137,13 +137,25 @@ class VegaInterface:
         # Initialize scale parameters
         self.scale_params = ScaleParameters(
             self.main_config['cosmo-fit type'], blind_pars, _blinding_strat)
+        
 
         # initialize the models
         self.models = {}
+        last_models = {}
         if self._has_data:
             for name, corr_item in self.corr_items.items():
+                if corr_item.read_last:
+                    last_models[name] = corr_item
+                    continue
+                
                 self.models[name] = Model(
-                    corr_item, self.fiducial, self.scale_params, self.data[name])
+                    corr_item, self.fiducial, self.scale_params, self.data[name], xcf_obj=None)
+                
+            for name,corr_item in last_models.items():
+                self.models[name] = Model(
+                    corr_item, self.fiducial, self.scale_params, 
+                        self.data[name], xcf_obj = self.models.get('lyaxqso'))
+
 
         # Read the monte carlo parameters
         self.mc_config = None
@@ -225,13 +237,14 @@ class VegaInterface:
         dict
             Dictionary of cf models for each component
         """
+
         # Overwrite computation parameters
         local_params = copy.deepcopy(self.params)
         if params is not None:
             for par, val in params.items():
                 local_params[par] = val
 
-                # Go through each component and compute the model cf
+        # Go through each component and compute the model cf
         model_cf = {}
         if run_init:
             self.models = {}

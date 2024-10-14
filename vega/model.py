@@ -10,7 +10,7 @@ class Model:
     Class for computing Lyman-alpha forest correlation function models.
     """
 
-    def __init__(self, corr_item, fiducial, scale_params, data=None):
+    def __init__(self, corr_item, fiducial, scale_params, data=None, xcf_obj=None):
         """
 
         Parameters
@@ -70,9 +70,8 @@ class Model:
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
             self._corr_item.config['model'], fiducial, corr_item.model_coordinates,
-            scale_params, self._corr_item.tracer1, self._corr_item.tracer2
+            scale_params, self._corr_item.tracer1, self._corr_item.tracer2, xcf_obj, metal_corr=False
         )
-
 
 
         # Initialize metals if needed
@@ -152,6 +151,14 @@ class Model:
             xi_model *= self.broadband.compute(pars, 'pre-mul')
             xi_model += self.broadband.compute(pars, 'pre-add')
 
+        # Apply delta gamma correction for auto
+        if self._delta_gamma_model_flag:
+            xi_model += self.Xi_core.compute_delta_gamma_model(pars)
+
+        # Apply gamma correction for cross
+        if self._gamma_model_flag:
+            xi_model += self.Xi_core.compute_gamma_model(pars)
+            
         # Apply the distortion matrix
         if self._has_distortion_mat:
             xi_model = self._data.distortion_mat.dot(xi_model)
@@ -164,14 +171,6 @@ class Model:
         # Save final xi
         if self.save_components:
             self.xi_distorted[component]['core'] = xi_model.copy()
-
-        # Apply gamma correction for cross
-        if self._gamma_model_flag:
-            xi_model += self.Xi_core.compute_gamma_model(pars)
-
-        # Apply delta gamma correction for auto
-        if self._delta_gamma_model_flag:
-            xi_model += self.Xi_core.compute_delta_gamma_model(pars)
 
         return xi_model
 

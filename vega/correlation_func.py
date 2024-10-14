@@ -9,7 +9,7 @@ from numba import njit
 import fitsio
 
 from . import utils
-from .utils import gen_gamma, jitted_interp
+from .utils import gen_gamma, jitted_interp, get_gamma_QQ
 
 class CorrelationFunction:
     """Correlation function computation and handling.
@@ -22,7 +22,7 @@ class CorrelationFunction:
     'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, coordinates, scale_params,
-                 tracer1, tracer2, metal_corr=False):
+                 tracer1, tracer2, xcf_obj, metal_corr=False):
         """
 
         Parameters
@@ -140,22 +140,35 @@ class CorrelationFunction:
                 self._init_zerr_auto(
                     self._tracer2['qso-cat-path'], 
                     self._tracer1['weights-path'], 
-                    self._config.get('qso-lya-cross')
+                    self._config.get('qso-lya-cross'),
+                    xcf_obj
                         )
                 
                 self._prep_delta_gamma_model()
 
     def _init_zerr_cross(self, qso_cat, delta_attr, qso_auto_corr):
 
-        self.CosmoClass = self._get_cosmo()
-        self._nbins_z = 50
-        self._zlist = np.linspace(1.8, 3.5, self._nbins_z)
-        self._dz = self._zlist[1] - self._zlist[0]
+        self.cosmo_class = self._get_cosmo()
+        #self._nbins_z = 50
+        #self._zlist = np.linspace(2, 2.8, self._nbins_z)
+        #self._dz = self._zlist[1] - self._zlist[0]
         self.lya_wave = 1215.67
+        self._gamma_wave = None
+        self._gamma = None
 
         #get zqso hist from qso cat
         with fitsio.FITS(qso_cat) as hdul:
-            kde = gaussian_kde(hdul[1]['Z'][:])
+            zcat = hdul[1]['Z'][:]
+            kde = gaussian_kde(zcat)
+        #self._p_qso = kde(zcat)**2
+            self._nbins_z = 200
+            idx_step=np.floor(len(zcat)/self._nbins_z).astype(int)
+            idx=np.arange(self._nbins_z)*idx_step
+            self._zlist = zcat[idx]
+
+        self._dz=np.zeros(self._nbins_z)
+        self._dz[1:]=self._zlist[1:] - self._zlist[:-1]
+
         self._p_qso = kde(self._zlist)**2
 
         #just for rf limits
@@ -169,11 +182,11 @@ class CorrelationFunction:
         self._r_qso_auto = qso_auto_hdul[0]
         self._xi_qso_auto = qso_auto_hdul[1]
 
-        self._dist_m = self.CosmoClass.get_dist_m(self._zlist)
-        self._dist_comov = self.CosmoClass.get_r_comov(self._zlist)
+        self._dist_m = self.cosmo_class.get_dist_m(self._zlist)
+        self._dist_comov = self.cosmo_class.get_r_comov(self._zlist)
 
         self._rpix = np.abs(np.add.outer(self._dist_comov, self._rp_grid)).T
-        self._zpix = self.CosmoClass.distance_to_redshift(self._rpix)
+        self._zpix = self.cosmo_class.distance_to_redshift(self._rpix)
 
         self._dist_trans_sum_M = np.add.outer(self._dist_m,self._dist_m)
         self._dist_comov_diff_M = np.subtract.outer(self._dist_comov,self._dist_comov)
@@ -189,26 +202,30 @@ class CorrelationFunction:
         if measured_gamma_file is not None:
             self._gamma_wave = np.load(measured_gamma_file)['restwave']
             self._gamma = np.load(measured_gamma_file)['gamma']
+        else:
+            spec_path = ('/global/cfs/projectdirs/desi/mocks/lya_forest/develop/london/qq_desi_all/v5.9.4/mock-0/desi-4.0-4/spectra-16/0/1/truth-16-1.fits')
+            self._spec = fitsio.FITS(spec_path)[2]['EMLINES'][:][5]
 
 
-    def _init_zerr_auto(self, qso_cat, delta_attr, cross_corr):
+
+    def _init_zerr_auto(self, qso_cat, delta_attr, cross_corr, xcf_obj=None):
         
         self._gamma_wave = None
         self._gamma = None
-        self.CosmoClass = self._get_cosmo()
+        self.cosmo_class = self._get_cosmo()
         self.lya_wave = 1215.67
-        self._nbins_wave = 100
+        self._nbins_wave = 400
         self._nbins_z = 50
 
         # data for distance/redshift interpolator that is numba friendly
         self._z_interp_list = np.linspace(1.5, 5, 1000)
-        self._dist_interp_list = self.CosmoClass.get_r_comov(self._z_interp_list)
+        self._dist_interp_list = self.cosmo_class.get_r_comov(self._z_interp_list)
 
         #define list of redshifts to evaluate model over 
         # It's roughly the range of the quasar sample but it's not that important
         #50 bins is enough for convergence
-        self._zlist = np.linspace(1.8, 3.5, self._nbins_z)
-        self._dz = abs((3.5 - 1.8) / self._nbins_z)
+        self._zlist = np.linspace(2, 3.5, self._nbins_z)
+        self._dz = abs((3.5 - 2) / self._nbins_z)
         #get zqso hist from qso cat
         with fitsio.FITS(qso_cat) as hdul:
             kde = gaussian_kde(hdul[1]['Z'][:])
@@ -227,22 +244,28 @@ class CorrelationFunction:
             #number of bins for _rf_wave is being tested now but will be fixed at convergence point
             self._rf_wave = np.linspace(self._min_rf_pix, self._max_rf_pix, self._nbins_wave)
 
-        if cross_corr is None:
-            raise ValueError('The continuum distortion auto model requires'
-                                    'the lyaxqso correlation in model : qso-lya-cross')
-        #Define cross-corr "model"
-        with fitsio.FITS(cross_corr) as hdul:
-            data = Table(hdul[1].read())
-            rp_x = data['RP'].reshape(100, 50).T[0]
-            rt_x = data['RT'].reshape(100, 50)[0]
-            da_x = data['DA'].reshape(100, 50)
+        self._cross_interp = None
+        if cross_corr is not None:
+            with fitsio.FITS(cross_corr) as hdul:
+                data = Table(hdul[1].read())
+                rp_x = data['RP'].reshape(100, 50).T[0]
+                rt_x = data['RT'].reshape(100, 50)[0]
+                da_x = data['DA'].reshape(100, 50)
+                self._cross_interp = RectBivariateSpline(rp_x, rt_x, da_x)
 
-            self._cross_interp = RectBivariateSpline(rp_x, rt_x, da_x)
+        # else:
+        #     raise ValueError('The continuum distortion auto model requires either'
+        #                         'a measured cross-correlation ["model"]["qso-lya-cross"] or '
+        #                        'a cross-correlation model.')
 
         measured_gamma_file = self._config.get('measured-gamma', None)
         if measured_gamma_file is not None:
             self._gamma_wave = np.load(measured_gamma_file)['restwave']
             self._gamma = np.load(measured_gamma_file)['gamma']
+        else:
+            spec_path = ('/global/cfs/projectdirs/desi/mocks/lya_forest/develop/london/qq_desi_all/v5.9.4/mock-0/desi-4.0-4/spectra-16/0/1/truth-16-1.fits')
+            self._spec = fitsio.FITS(spec_path)[2]['EMLINES'][:][5]
+
 
 
 
@@ -250,7 +273,7 @@ class CorrelationFunction:
         rf_mask = np.zeros((self._nbins_z, self._nbins_wave), dtype=bool)
         for i, zq2  in enumerate(self._zlist):
             wave_obs2 = (1 + zq2) * self._rf_wave
-            w2 = (3600 < wave_obs2) & (wave_obs2 < 5500)
+            w2 = (3600 < wave_obs2) & (wave_obs2 < 5772)
 
             rf_mask[i, :] = w2
 
@@ -293,7 +316,7 @@ class CorrelationFunction:
 
             #observed frame mask
             lobs_pix_M= (lrest_pix_M.T * (1 + self._zlist)).T
-            mask_obs= (3600 < lobs_pix_M) & (lobs_pix_M < 5500)                
+            mask_obs= (3600 < lobs_pix_M) & (lobs_pix_M < 5772)                
             
             #total mask
             mask =  mask_rf & mask_obs
@@ -336,32 +359,49 @@ class CorrelationFunction:
 
     def _compute_gamma_extension(self, g_rf_wave, params):
 
-        L1,L2,L3=1205.7,1211.5,1215.67
-        
-        dL1 = g_rf_wave - L1
-        dL2 = g_rf_wave - L2
-        dL3 = g_rf_wave - L3
-        
-        p1, p2, p3 = params['Ca1'], params['Ca2'], params['Ca3']
+        L1,L2 = 1205.1, 1213
+        p1, p2 = params['Ca1'], params['Ca2']
 
         #this may be a lot slower
         if self._gamma is None:
-            mean_gamma = gen_gamma(g_rf_wave, params['cont_sigma_velo'])
+            mean_gamma = get_gamma_QQ(g_rf_wave, params['cont_sigma_velo'],self._spec)
 
             if max(g_rf_wave)<L1:
-                mean_gamma += p1 * gen_gamma(L1, params['cont_sigma_velo']) / dL1
-            mean_gamma += p2 * gen_gamma(L2, params['cont_sigma_velo']) / dL2
-            mean_gamma += p3 * gen_gamma(L3, params['cont_sigma_velo']) / dL3
+                mean_gamma += p1 / (g_rf_wave - L1)**2
+            mean_gamma += p2 / (g_rf_wave - L2)**2
 
-            return mean_gamma
+            return params['cont_dist_amp'] * mean_gamma
 
         else:
             mean_gamma = jitted_interp(g_rf_wave,self._gamma_wave,self._gamma) 
             
             if max(g_rf_wave)<L1:
-                mean_gamma += p1 * jitted_interp(L1,self._gamma_wave,self._gamma) / dL1
-            mean_gamma += p2 * jitted_interp(L2,self._gamma_wave,self._gamma) / dL2
-            mean_gamma += p3 * jitted_interp(L3,self._gamma_wave,self._gamma) / dL3
+                mean_gamma += p1 * jitted_interp(L1,self._gamma_wave,self._gamma) / (g_rf_wave - L1)**2
+            mean_gamma += p2 * jitted_interp(L2,self._gamma_wave,self._gamma) / (g_rf_wave - L2)**2
+
+            return mean_gamma
+
+    def _compute_gamma_extension_QSO(self, g_rf_wave, params):
+
+        L1,L2 = 1205.1, 1213
+        p1, p2 = params['Ca1'], params['Ca2']
+
+        #this may be a lot slower
+        if self._gamma is None:
+            mean_gamma = get_gamma_QQ(g_rf_wave, params['cont_sigma_velo'],self._spec)
+
+            if max(g_rf_wave)<L1:
+                mean_gamma += p1 / (g_rf_wave - L1)**2
+            mean_gamma += p2 / (g_rf_wave - L2)**2
+
+            return params['cont_dist_amp'] * mean_gamma
+
+        else:
+            mean_gamma = jitted_interp(g_rf_wave,self._gamma_wave,self._gamma) 
+            
+            if max(g_rf_wave)<L1:
+                mean_gamma += p1 * jitted_interp(L1,self._gamma_wave,self._gamma) / (g_rf_wave - L1)**2
+            mean_gamma += p2 * jitted_interp(L2,self._gamma_wave,self._gamma) / (g_rf_wave - L2)**2
 
             return mean_gamma
 
@@ -369,7 +409,7 @@ class CorrelationFunction:
         #need to have two options for using model or measured
         gamma_zs = np.zeros((self._run_rf.sum(), self._nbins_wave), dtype=float)
         for i, _ in enumerate(self._zlist[self._run_rf]):
-            gamma_zs[i][self._rf_mask[i]] = params['cont_dist_amp'] * self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
+            gamma_zs[i][self._rf_mask[i]] = self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
         return gamma_zs
 
     def compute_delta_gamma_model(self, params):
@@ -381,7 +421,7 @@ class CorrelationFunction:
     def compute_gamma_model(self,params):
         gamma_mod = np.zeros_like(self._rt_grid)
         for k, rt_A in enumerate(self._rt_grid):         
-            gamma_M_k = params['cont_dist_amp'] * self._compute_gamma_extension(self._rf_wave_M[k][self._mask_M[k]], params)
+            gamma_M_k = self._compute_gamma_extension_QSO(self._rf_wave_M[k][self._mask_M[k]], params)
             gamma_mod[k] =  np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M_k) 
         return gamma_mod
 

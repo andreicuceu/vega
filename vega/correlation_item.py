@@ -26,6 +26,7 @@ class CorrelationItem:
         self.tracer1['type'] = config['data'].get('tracer1-type')
         self.tracer2['name'] = config['data'].get('tracer2', self.tracer1['name'])
         self.tracer2['type'] = config['data'].get('tracer2-type', self.tracer1['type'])
+        self.read_last = False
         
         self.cov_rescale = config['data'].getfloat('cov_rescale', None)
         self.has_distortion = config['data'].getboolean('distortion', True)
@@ -51,6 +52,7 @@ class CorrelationItem:
         if self.cont_dist_auto:
             self.tracer1['weights-path'] = config['data'].get('weights-tracer1')
             self.tracer2['qso-cat-path'] = config['data'].get('qso-cat')
+            self.read_last = True
 
 
 

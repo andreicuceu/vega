@@ -128,7 +128,7 @@ class Metals:
                 corr_hash = tuple(set((name1, name2)))
                 self.Xi_metal[corr_hash] = corr_func.CorrelationFunction(
                     self._corr_item.config['metals'], fiducial, metal_coordinates,
-                    scale_params, tracer1, tracer2, metal_corr=True)
+                    scale_params, tracer1, tracer2, xcf_obj=None, metal_corr=True)
 
     @cached(cache=cache_pk, key=lambda self, call_pars, *cache_pars: hashkey(*cache_pars))
     def compute_pk(self, call_pars, *cache_pars):
