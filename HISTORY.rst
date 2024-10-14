@@ -2,6 +2,11 @@
 History
 =======
 
+1.2.1 (2024-10-14)
+------------------
+* Fixed metal caching bug. Only metal autos are cached now.
+* Updated blinding for Y1 and Y3 full-shape analyses
+
 1.2.0 (2024-06-04)
 ------------------
 
