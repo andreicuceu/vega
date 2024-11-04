@@ -307,7 +307,7 @@ class Metals:
     def get_forest_weights(self, main_tracer):
         assert main_tracer['type'] == 'continuous'
         with fits.open(main_tracer['weights-path']) as hdul:
-            stack_table = hdul[1].data
+            stack_table = hdul['STACK_DELTAS'].data
 
         wave = 10**stack_table["LOGLAM"]
         weights = stack_table["WEIGHT"]
