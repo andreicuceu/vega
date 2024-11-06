@@ -30,7 +30,26 @@ if __name__ == '__main__':
     vega = VegaInterface(args.config)
     sampling_params = vega.sample_params['limits']
 
+    # Run monte carlo
+    run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
+    if not run_montecarlo or (vega.mc_config is None):
+        raise ValueError('Warning: You called "run_vega_mc_mpi.py" without asking'
+                         ' for monte carlo. Add "run_montecarlo = True" to the "[control]" section.')
+
     print_func('Finished initializing Vega')
+
+    mc_params = vega.mc_config['params']
+    if sampling_params:
+        print_func('Running initial fit')
+        # run compute_model once to initialize all the caches
+        _ = vega.compute_model(run_init=False)
+
+        # Run minimizer
+        vega.minimize()
+
+        mc_params = vega.bestfit.values | mc_params
+
+        print_func(f'Set template parameters to {mc_params}.')
 
     # Check if we need the distortion
     use_distortion = vega.main_config['control'].getboolean('use_distortion', True)
@@ -38,12 +57,6 @@ if __name__ == '__main__':
         for key, data in vega.data.items():
             data._distortion_mat = None
         test_model = vega.compute_model(vega.params, run_init=True)
-
-    # Run monte carlo
-    run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
-    if not run_montecarlo or (vega.mc_config is None):
-        raise ValueError('Warning: You called "run_vega_mc_mpi.py" without asking'
-                         ' for monte carlo. Add "run_montecarlo = True" to the "[control]" section.')
 
     # Activate monte carlo mode
     vega.monte_carlo = True
@@ -70,7 +83,7 @@ if __name__ == '__main__':
             with fits.open(fiducial_path) as hdul:
                 fiducial_model[name] = hdul[1].data['DA']
     else:
-        fiducial_model = vega.compute_model(vega.mc_config['params'], run_init=False)
+        fiducial_model = vega.compute_model(mc_params, run_init=False)
 
     # Run the mocks
     run_mc_fits = vega.main_config['control'].getboolean('run_mc_fits', True)
