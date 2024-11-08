@@ -146,7 +146,7 @@ class VegaInterface:
             self.mc_config = {}
             config = self.main_config['monte carlo']
 
-            self.mc_config['params'] = copy.deepcopy(self.params)
+            self.mc_config['params'] = {}
             mc_params = self.main_config['mc parameters']
             for param, value in mc_params.items():
                 self.mc_config['params'][param] = float(value)
