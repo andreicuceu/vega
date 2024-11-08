@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-from vega import VegaInterface
-from mpi4py import MPI
-from astropy.io import fits
 import argparse
 import sys
 
+from astropy.io import fits
+from mpi4py import MPI
+
+from vega import FitResults, VegaInterface
+from vega.utils import find_file
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
@@ -39,7 +41,17 @@ if __name__ == '__main__':
     print_func('Finished initializing Vega')
 
     mc_params = vega.mc_config['params']
-    if sampling_params:
+    mc_start_from_fit = vega.main_config['control'].get('mc_start_from_fit', None)
+    # Read existing fit and use the bestfit values for the MC template
+    if mc_start_from_fit is not None:
+        print_func(f'Reading input fit {mc_start_from_fit}')
+        existing_fit = FitResults(find_file(mc_start_from_fit))
+        mc_params = existing_fit.params | mc_params
+
+        print_func(f'Set template parameters to {mc_params}.')
+
+    # Do fit on input data and use the bestfit values for the MC template
+    elif sampling_params:
         print_func('Running initial fit')
         # run compute_model once to initialize all the caches
         _ = vega.compute_model(run_init=False)
