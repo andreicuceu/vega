@@ -751,7 +751,8 @@ class VegaInterface:
         # Define vector model function to be used by the Gradient function
         def vector_model(theta):
             params = {par: theta[i] for i, par in enumerate(compress_params_names)}
-            return self.compute_model(params=params, run_init=False)[self.full_data_mask]
+            model_cf = self.compute_model(params=params, run_init=False)
+            return np.concatenate([cf for cf in model_cf.values()])[self.full_model_mask]
 
         # Compute the compression matrix and Fisher information matrix
         gradient = nd.Gradient(vector_model)(list(compress_params.values()))
@@ -775,7 +776,7 @@ class VegaInterface:
             self.compressed_log_cov_det = np.linalg.slogdet(self.fisher_matrix)[1]
 
         # Compute the likelihood normalization term
-        self.likelihood_type = config.get('lik_type', 'gaussian')
+        self.likelihood_type = config.get('likelihood_type', 'gaussian')
         self.num_compressed_dims = self.compressed_invcov.shape[0]
         self.num_sims = config.getint('num_sims', None)
 
