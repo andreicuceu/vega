@@ -728,6 +728,7 @@ class VegaInterface:
             return masked_global_invcov, masked_global_log_cov_det, global_cov
 
     def _init_compression(self, config, cov_scale):
+        print('INFO: Initializing compression')
         # Get parameters for for compression
         compress_params_names = config.get('compress_params', None)
         if compress_params_names is None:
@@ -737,6 +738,7 @@ class VegaInterface:
 
         compress_params = {par: self.params[par] for par in compress_params_names}
         if 'fiducial_file' in config:
+            print(f'INFO: Using fiducial values from {config.get("fiducial_file")} for compression')
             fiducial_fit = FitResults(utils.find_file(config.get('fiducial_file')))
 
             for par in compress_params_names:
@@ -760,6 +762,7 @@ class VegaInterface:
         self.fisher_matrix = self.compression_matrix @ gradient
 
         # Compute the compressed data vector
+        print('INFO: Computing compressed data vector')
         self.compressed_data = self.compress(self.full_masked_data_vec)
 
         # Initialize the compressed global covariance
@@ -788,9 +791,11 @@ class VegaInterface:
         if (self.likelihood_type == 't-distribution') and self.num_sims is None:
             raise ValueError('Number of simulations must be specified for t-distribution')
 
+        print('INFO: Compression initialized')
+
     def compress(self, input_vector):
         return self.compression_matrix @ (input_vector - self.fiducial_model)
-    
+
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.
 
