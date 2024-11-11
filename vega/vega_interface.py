@@ -186,8 +186,8 @@ class VegaInterface:
                 self.get_global_cov(global_cov_file, cov_scale)
 
         # Initialize the compression
-        if 'compress' in self.main_config:
-            self._init_compression(self.main_config['compress'], cov_scale)
+        if 'compression' in self.main_config:
+            self._init_compression(self.main_config['compression'], cov_scale)
             self.use_compression = True
 
         # Initialize the minimizer and the analysis objects
@@ -732,6 +732,8 @@ class VegaInterface:
         compress_params_names = config.get('compress_params', None)
         if compress_params_names is None:
             compress_params_names = list(self.sample_params['values'].keys())
+        else:
+            compress_params_names = compress_params_names.split(' ')
 
         compress_params = {par: self.params[par] for par in compress_params_names}
         if 'fiducial_file' in config:
