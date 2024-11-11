@@ -15,7 +15,7 @@ from vega.analysis import Analysis
 from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
-from vega import FitResults
+from vega.postprocess.fit_results import FitResults
 
 
 class VegaInterface:
