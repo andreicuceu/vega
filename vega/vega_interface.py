@@ -1,21 +1,24 @@
 """Main module."""
+import configparser
+import copy
 import os.path
+
+import numdifftools as nd
 import numpy as np
 import scipy.stats
 from astropy.io import fits
-import numdifftools as nd
-import configparser
-import copy
+from scipy.special import loggamma
 
-from . import correlation_item, data, utils
-from vega.scale_parameters import ScaleParameters
-from vega.model import Model
-from vega.minimizer import Minimizer
 from vega.analysis import Analysis
+from vega.minimizer import Minimizer
+from vega.model import Model
 from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
+from vega.scale_parameters import ScaleParameters
+
+from . import correlation_item, data, utils
 
 
 class VegaInterface:
@@ -29,6 +32,7 @@ class VegaInterface:
     """
     _blind = None
     global_cov = None
+    use_compression = False
 
     def __init__(self, main_path):
         """
@@ -166,10 +170,25 @@ class VegaInterface:
                     raise ValueError(
                         f'Prior specified for a parameter that is not sampled: {param}')
 
+        # Initialize the full data and model masks
+        if self._has_data:
+            self.full_masked_data_vec = np.concatenate(
+                [data.masked_data_vec for data in self.data.values()]
+            )
+
+            self.full_data_mask = np.concatenate([data.data_mask for data in self.data.values()])
+            self.full_model_mask = np.concatenate([data.model_mask for data in self.data.values()])
+
         # Read the global covariance
         cov_scale = self.main_config['control'].getfloat('cov_scale', None)
         if self._has_data:
-            self.get_global_cov(global_cov_file, cov_scale)
+            self.masked_global_invcov, self.masked_global_log_cov_det, self.global_cov = \
+                self.get_global_cov(global_cov_file, cov_scale)
+
+        # Initialize the compression
+        if 'compress' in self.main_config:
+            self._init_compression(self.main_config['compress'], cov_scale)
+            self.use_compression = True
 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
@@ -295,17 +314,20 @@ class VegaInterface:
                 self.models[name].PktoXi.cache_pars = None
             return 1e100
 
-        full_model = np.concatenate([cf for cf in model_cf.values()])
+        full_masked_model = np.concatenate([cf for cf in model_cf.values()])[self.full_model_mask]
 
         # Get the masked data vector
-        if self.monte_carlo:
-            full_masked_data = self.analysis.current_mc_mock
-        else:
-            full_masked_data = np.concatenate([data.masked_data_vec for data in self.data.values()])
+        full_masked_data = (
+            self.analysis.current_mc_mock if self.monte_carlo else self.full_masked_data_vec
+        )
 
         # Compute chisq
-        diff = full_masked_data - full_model[self.full_model_mask]
-        chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
+        if self.use_compression:
+            diff = self.compress(full_masked_data) - self.compress(full_masked_model)
+            chi2 = diff.T.dot(self.compressed_invcov.dot(diff))
+        else:
+            diff = full_masked_data - full_masked_model
+            chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
         # Add priors
         chi2 += self.compute_nonflat_priors(params)
@@ -335,9 +357,26 @@ class VegaInterface:
 
         # Compute the normalization for each component
         log_norm = 0
-        for name in self.corr_items:
-            log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
-        log_norm -= 0.5 * self.masked_global_log_cov_det
+        if self.use_compression:
+            if self.likelihood_type == 'gaussian':
+                log_norm -= 0.5 * self.num_compressed_dims * np.log(2 * np.pi)
+                log_norm -= 0.5 * self.compressed_log_cov_det
+            elif self.likelihood_type == 't-distribution':
+                Cp = loggamma(0.5 * self.num_sims)
+                Cp -= 0.5 * self.num_compressed_dims * np.log(np.pi * (self.num_sims - 1))
+                Cp -= loggamma(0.5 * (self.num_sims - self.num_compressed_dims))
+
+                log_lik = Cp - 0.5 * self.compressed_log_cov_det
+                log_lik -= 0.5 * self.num_sims * np.log(1 + chi2 / (self.num_sims - 1))
+            else:
+                raise ValueError(
+                    f'Unknown likelihood type {self.likelihood_type}.'
+                    ' Choose from ["gaussian", "t-distribution"].'
+                )
+        else:
+            for name in self.corr_items:
+                log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
+            log_norm -= 0.5 * self.masked_global_log_cov_det
 
         # Compute log lik
         log_lik = log_norm - 0.5 * chi2
@@ -661,70 +700,94 @@ class VegaInterface:
     def get_global_cov(self, global_cov_file=None, scale=None):
         assert self._has_data
 
-        # Initialize the full data and model masks
-        self.full_data_mask = []
-        self.full_model_mask = []
-        for name in self.corr_items:
-            self.full_data_mask.append(self.data[name].data_mask)
-            self.full_model_mask.append(self.data[name].model_mask)
-
-        self.full_data_mask = np.concatenate(self.full_data_mask)
-        self.full_model_mask = np.concatenate(self.full_model_mask)
-
         if global_cov_file is None:
             print('INFO: No global covariance file specified. Using block diagonal covariance.')
-            self.global_cov = np.zeros((len(self.full_data_mask), len(self.full_data_mask)))
+            global_cov = np.zeros((len(self.full_data_mask), len(self.full_data_mask)))
 
             start = int(0)
             for name in self.corr_items:
                 cov = self.data[name].cov_mat
                 end = int(start + cov.shape[0])
-                self.global_cov[start:end, start:end] += cov
+                global_cov[start:end, start:end] += cov
                 start = end
         else:
             print(f'INFO: Reading global covariance from {global_cov_file}')
             with fits.open(utils.find_file(global_cov_file)) as hdul:
-                self.global_cov = hdul[1].data['COV']
+                global_cov = hdul[1].data['COV']
 
         if scale is not None:
             print('Rescaling covariance by a factor of: ', scale)
-            self.global_cov *= scale
+            global_cov *= scale
+
+        masked_global_invcov = utils.compute_masked_invcov(global_cov, self.full_data_mask)
+        masked_global_log_cov_det = utils.compute_log_cov_det(global_cov, self.full_data_mask)
 
         if self.low_mem_mode:
-            masked_cov = self.global_cov[:, self.full_data_mask]
-            masked_cov = masked_cov[self.full_data_mask, :]
-            del self.global_cov
-
-            self.masked_global_log_cov_det = np.linalg.slogdet(masked_cov)[1]
-            self.masked_global_invcov = np.linalg.inv(masked_cov)
-            del masked_cov
+            return masked_global_invcov, masked_global_log_cov_det, None
         else:
-            self.masked_global_invcov = utils.compute_masked_invcov(
-                self.global_cov, self.full_data_mask)
-            self.masked_global_log_cov_det = utils.compute_log_cov_det(
-                self.global_cov, self.full_data_mask)
+            return masked_global_invcov, masked_global_log_cov_det, global_cov
 
-    # def _init_compression(self, config):
-    #     compress_params_names = config.get('compress_params', None)
-    #     if compress_params_names is None:
-    #         compress_params_names = list(self.sample_params['values'].keys())
+    def _init_compression(self, config, cov_scale):
+        # Get parameters for for compression
+        compress_params_names = config.get('compress_params', None)
+        if compress_params_names is None:
+            compress_params_names = list(self.sample_params['values'].keys())
 
-    #     compress_params = {par: self.params[par] for par in compress_params_names}
-    #     if 'fiducial_file' in config:
-    #         fiducial_fit = FitResults(utils.find_file(config.get('fiducial_file')))
+        compress_params = {par: self.params[par] for par in compress_params_names}
+        if 'fiducial_file' in config:
+            fiducial_fit = FitResults(utils.find_file(config.get('fiducial_file')))
 
-    #         for par in compress_params_names:
-    #             if par in fiducial_fit.params:
-    #                 compress_params[par] = fiducial_fit.params[par]
+            for par in compress_params_names:
+                if par in fiducial_fit.params:
+                    compress_params[par] = fiducial_fit.params[par]
 
-    #     fid_model = self.compute_model()[name][vega.data[name].model_mask]
-    #     def _model2(y):
-    #         pars = {par: y[i] for i, par in enumerate(vega.sample_params['values'].keys())}
-    #         return vega.compute_model(params=pars, run_init=False)[name][vega.data[name].model_mask]
+        # Compute fiducial model
+        fiducial_model = self.compute_model(compress_params)
+        self.fiducial_model = np.concatenate(
+            [cf for cf in fiducial_model.values()])[self.full_model_mask]
 
-    #     grad = nd.Gradient(_model2)(list(vega.sample_params['values'].values()))
-    #     t = grad.T @ vega.data[name].inv_masked_cov
+        # Define vector model function to be used by the Gradient function
+        def vector_model(theta):
+            params = {par: theta[i] for i, par in enumerate(compress_params_names)}
+            return self.compute_model(params=params, run_init=False)[self.full_data_mask]
 
+        # Compute the compression matrix and Fisher information matrix
+        gradient = nd.Gradient(vector_model)(list(compress_params.values()))
+        self.compression_matrix = gradient.T @ self.masked_global_invcov
+        self.fisher_matrix = self.compression_matrix @ gradient
+
+        # Compute the compressed data vector
+        self.compressed_data = self.compress(self.full_masked_data_vec)
+
+        # Initialize the compressed global covariance
+        if 'compressed_cov_path' in config:
+            compressed_cov_path = config.get('compressed_cov_path')
+            print(f'INFO: Using input compressed covariance {compressed_cov_path}')
+
+            self.compressed_invcov, self.compressed_log_cov_det, self.compressed_cov = \
+                self.get_global_cov(compressed_cov_path, cov_scale)
+        else:
+            print('INFO: Computing compressed covariance from Fisher information')
+            self.compressed_cov = self.fisher_matrix
+            self.compressed_invcov = np.linalg.inv(self.fisher_matrix)
+            self.compressed_log_cov_det = np.linalg.slogdet(self.fisher_matrix)[1]
+
+        # Compute the likelihood normalization term
+        self.likelihood_type = config.get('lik_type', 'gaussian')
+        self.num_compressed_dims = self.compressed_invcov.shape[0]
+        self.num_sims = config.getint('num_sims', None)
+
+        if self.likelihood_type not in ['gaussian', 't-distribution']:
+            raise ValueError(
+                f'Unknown likelihood type {self.likelihood_type}. '
+                'Choose from ["gaussian", "t-distribution"].'
+            )
+        if (self.likelihood_type == 't-distribution') and self.num_sims is None:
+            raise ValueError('Number of simulations must be specified for t-distribution')
+
+    def compress(self, input_vector):
+        return self.compression_matrix @ (input_vector - self.fiducial_model)
+    
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.
 
