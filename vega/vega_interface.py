@@ -736,17 +736,17 @@ class VegaInterface:
         else:
             compress_params_names = compress_params_names.split(' ')
 
-        compress_params = {par: self.params[par] for par in compress_params_names}
+        self.compress_params = {par: self.params[par] for par in compress_params_names}
         if 'fiducial_file' in config:
             print(f'INFO: Using fiducial values from {config.get("fiducial_file")} for compression')
             fiducial_fit = FitResults(utils.find_file(config.get('fiducial_file')))
 
             for par in compress_params_names:
                 if par in fiducial_fit.params:
-                    compress_params[par] = fiducial_fit.params[par]
+                    self.compress_params[par] = fiducial_fit.params[par]
 
         # Compute fiducial model
-        fiducial_model = self.compute_model(compress_params)
+        fiducial_model = self.compute_model(self.compress_params)
         self.fiducial_model = np.concatenate(
             [cf for cf in fiducial_model.values()])[self.full_model_mask]
 
@@ -757,7 +757,7 @@ class VegaInterface:
             return np.concatenate([cf for cf in model_cf.values()])[self.full_model_mask]
 
         # Compute the compression matrix and Fisher information matrix
-        gradient = nd.Gradient(vector_model)(list(compress_params.values()))
+        gradient = nd.Gradient(vector_model)(list(self.compress_params.values()))
         self.compression_matrix = gradient.T @ self.masked_global_invcov
         self.fisher_matrix = self.compression_matrix @ gradient
 
