@@ -136,30 +136,6 @@ class Metals:
                     self._corr_item.config['metals'], fiducial, metal_coordinates,
                     scale_params, tracer1, tracer2, metal_corr=True)
 
-    # @cached(cache=cache_pk, key=lambda self, call_pars,
-    #         name1, name2, *cache_pars: hashkey(name1, name2, *cache_pars))
-    # def compute_pk(self, call_pars, name1, name2, *cache_pars):
-    #     corr_hash = tuple(set((name1, name2)))
-    #     return self.Pk_metal[corr_hash].compute(*call_pars, fast_metals=True)
-
-    # @cached(cache=cache_xi,
-    #         key=lambda self, pk_lin, pars, name1, name2, component: hashkey(name1, name2, component))
-    # def compute_xi_metal_metal(self, pk_lin, pars, name1, name2, component):
-    #     corr_hash = tuple(set((name1, name2)))
-
-    #     pk = self.Pk_metal[corr_hash].compute(pk_lin, pars, fast_metals=True)
-    #     self.PktoXi[corr_hash].cache_pars = None
-    #     xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], pars)
-
-    #     # Apply the metal matrix
-    #     if self.new_metals:
-    #         xi = (self.rp_metal_dmats[(name1, name2)]
-    #               @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
-    #     else:
-    #         xi = self._data.metal_mats[(name1, name2)].dot(xi)
-
-    #     return xi
-
     def compute_xi_metal_metal(self, pk_lin, pars, name1, name2):
         corr_hash = tuple(set((name1, name2)))
 
@@ -206,49 +182,10 @@ class Metals:
         if self.fast_metals:
             if 'growth_rate' in local_pars and self.growth_rate is not None:
                 local_pars['growth_rate'] = self.growth_rate
-            # if 'par_sigma_smooth' in local_pars and self.par_sigma_smooth is not None:
-            #     local_pars['par_sigma_smooth'] = self.par_sigma_smooth
-            # if 'per_sigma_smooth' in local_pars and self.per_sigma_smooth is not None:
-                # local_pars['per_sigma_smooth'] = self.per_sigma_smooth
-
         xi_metals = np.zeros(self.size)
         for name1, name2, in self._corr_item.metal_correlations:
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
             corr_hash = tuple(set((name1, name2)))
-
-            # if self.fast_metals and component != 'full':
-                # If its a metal x Lya or metal x QSO correlation we can only cache the Pk
-                # if name1 in self.main_tracers or name2 in self.main_tracers:
-                    # # Get beta of main tracer
-                    # beta_main = beta1 if name1 in self.main_tracers else beta2
-
-                    # cache_pars = None
-                    # # We need to separate Lya and QSO correlations
-                    # # because they have different parameters
-                    # if 'discrete' in self.main_tracer_types:
-                    #     for par in local_pars.keys():
-                    #         if 'sigma_velo_disp' in par:
-                    #             cache_pars = (beta_main, local_pars[par], component)
-                    #             break
-
-                    # if cache_pars is None:
-                    #     cache_pars = (beta_main, component)
-
-                    # pk = self.compute_pk((pk_lin, local_pars), name1, name2, *cache_pars)
-
-                    # self.PktoXi[corr_hash].cache_pars = cache_pars
-                    # xi = self.Xi_metal[corr_hash].compute(
-                    #     pk, pk_lin, self.PktoXi[corr_hash], local_pars)
-                    # self.PktoXi[corr_hash].cache_pars = None
-
-                    # # Apply the metal matrix
-                    # if self.new_metals:
-                    #     xi = (self.rp_metal_dmats[(name1, name2)]
-                    #           @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
-                    # else:
-                    #     xi = self._data.metal_mats[(name1, name2)].dot(xi)
-
-                    # xi_metals += bias1 * bias2 * xi
 
             if (self.fast_metals and (name1 not in self.main_tracers)
                     and (name2 not in self.main_tracers)):
