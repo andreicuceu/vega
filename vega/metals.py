@@ -253,15 +253,15 @@ class Metals:
         with fits.open(main_tracer['weights-path']) as hdul:
             stack_table = hdul[1].data
 
-        logwave = stack_table["LOGLAM"]
+        wave = 10**stack_table["LOGLAM"]
         weights = stack_table["WEIGHT"]
 
         rebin_factor = self.metal_matrix_config.getint('rebin_factor', None)
         if rebin_factor is not None:
-            logwave = self.rebin(logwave, rebin_factor)
+            wave = self.rebin(wave, rebin_factor)
             weights = self.rebin(weights, rebin_factor)
 
-        return logwave, weights
+        return wave, weights
 
     def get_qso_weights(self, tracer):
         assert tracer['type'] == 'discrete'
@@ -303,9 +303,9 @@ class Metals:
     def compute_metal_dmat(self, true_abs_1, true_abs_2):
         # Initialize tracer 1 redshift and weights
         if self.main_tracer_types[0] == 'continuous':
-            logwave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
-            true_z1 = 10**logwave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
-            assumed_z1 = 10**logwave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
+            wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
+            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
+            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
             scaling_1 = self.get_forest_weight_scaling(true_z1, true_abs_1, self.main_tracers[0])
         else:
             true_z1, weights1 = self.get_qso_weights(self._corr_item.tracer1)
@@ -314,9 +314,9 @@ class Metals:
 
         # Initialize tracer 2 redshift and weights
         if self.main_tracer_types[1] == 'continuous':
-            logwave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
-            true_z2 = 10**logwave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
-            assumed_z2 = 10**logwave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
+            wave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
+            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
+            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
             scaling_2 = self.get_forest_weight_scaling(true_z2, true_abs_2, self.main_tracers[1])
         else:
             true_z2, weights2 = self.get_qso_weights(self._corr_item.tracer2)
@@ -437,9 +437,9 @@ class Metals:
     def compute_metal_rp_dmat(self, true_abs_1, true_abs_2):
         # Initialize tracer 1 redshift and weights
         if self.main_tracer_types[0] == 'continuous':
-            logwave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
-            true_z1 = logwave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
-            assumed_z1 = logwave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
+            wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
+            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
+            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
             scaling_1 = self.get_forest_weight_scaling(true_z1, true_abs_1, self.main_tracers[0])
         else:
             true_z1, weights1 = self.get_qso_weights(self._corr_item.tracer1)
@@ -448,9 +448,9 @@ class Metals:
 
         # Initialize tracer 2 redshift and weights
         if self.main_tracer_types[1] == 'continuous':
-            logwave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
-            true_z2 = logwave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
-            assumed_z2 = logwave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
+            wave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
+            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
+            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
             scaling_2 = self.get_forest_weight_scaling(true_z2, true_abs_2, self.main_tracers[1])
         else:
             true_z2, weights2 = self.get_qso_weights(self._corr_item.tracer2)
