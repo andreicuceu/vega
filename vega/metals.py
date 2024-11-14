@@ -145,8 +145,7 @@ class Metals:
 
         # Apply the metal matrix
         if self.new_metals:
-            xi = (self.rp_metal_dmats[(name1, name2)]
-                  @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
+            xi = self.rp_metal_dmats[(name1, name2)] @ xi
         else:
             xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
