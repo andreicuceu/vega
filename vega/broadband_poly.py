@@ -76,9 +76,9 @@ class BroadbandPolynomials:
                 raise ValueError(f'Broadband function {bb_term["func"]} not supported')
 
             if bb_poly_total is None:
-                bb_poly_total = 1 + bb_poly if 'mul' in pos_type else bb_poly
+                bb_poly_total = 1 + np.exp(bb_poly) if 'mul' in pos_type else bb_poly
             elif 'mul' in pos_type:
-                bb_poly_total *= 1 + bb_poly
+                bb_poly_total *= (1 + np.exp(bb_poly))
             else:
                 bb_poly_total += bb_poly
 
