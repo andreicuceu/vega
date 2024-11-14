@@ -46,6 +46,7 @@ class Metals:
         # ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
+        self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
 
         # Read the growth rate and sigma_smooth from the fiducial config
         if 'growth_rate' in fiducial:
@@ -96,7 +97,10 @@ class Metals:
                 tracer2 = corr_item.tracer_catalog[name2]
 
                 if self.new_metals:
-                    dmat, rp_grid, rt_grid, z_grid = self.compute_fast_metal_dmat(name1, name2)
+                    if self.rp_only_metal_mats:
+                        dmat, rp_grid, rt_grid, z_grid = self.compute_metal_rp_dmat(name1, name2)
+                    else:
+                        dmat, rp_grid, rt_grid, z_grid = self.compute_metal_dmat(name1, name2)
 
                     self.rp_metal_dmats[(name1, name2)] = dmat
                     metal_coordinates = coordinates.Coordinates.init_from_grids(
@@ -145,7 +149,11 @@ class Metals:
 
         # Apply the metal matrix
         if self.new_metals:
-            xi = self.rp_metal_dmats[(name1, name2)] @ xi
+            if self.rp_only_metal_mats:
+                xi = (self.rp_metal_dmats[(name1, name2)]
+                      @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
+            else:
+                xi = self.rp_metal_dmats[(name1, name2)] @ xi
         else:
             xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -205,7 +213,11 @@ class Metals:
 
             # Apply the metal matrix
             if self.new_metals:
-                xi = self.rp_metal_dmats[(name1, name2)] @ xi
+                if self.rp_only_metal_mats:
+                    xi = (self.rp_metal_dmats[(name1, name2)]
+                        @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
+                else:
+                    xi = self.rp_metal_dmats[(name1, name2)] @ xi
             else:
                 xi = self._data.metal_mats[(name1, name2)].dot(xi)
 
@@ -288,7 +300,7 @@ class Metals:
         scaling = (1 + z)**(true_alpha + assumed_alpha - 2)
         return scaling
 
-    def compute_fast_metal_dmat(self, true_abs_1, true_abs_2):
+    def compute_metal_dmat(self, true_abs_1, true_abs_2):
         # Initialize tracer 1 redshift and weights
         if self.main_tracer_types[0] == 'continuous':
             logwave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
@@ -419,5 +431,83 @@ class Metals:
         full_rp_eff = r_par_eff_1d[rp_index]
         full_rt_eff = r_trans_eff_1d[rt_index]
         full_z_eff = z_eff_1d[rp_index]
+
+        return dmat, full_rp_eff, full_rt_eff, full_z_eff
+
+    def compute_metal_rp_dmat(self, true_abs_1, true_abs_2):
+        # Initialize tracer 1 redshift and weights
+        if self.main_tracer_types[0] == 'continuous':
+            logwave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
+            true_z1 = logwave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
+            assumed_z1 = logwave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
+            scaling_1 = self.get_forest_weight_scaling(true_z1, true_abs_1, self.main_tracers[0])
+        else:
+            true_z1, weights1 = self.get_qso_weights(self._corr_item.tracer1)
+            assumed_z1 = true_z1
+            scaling_1 = 1.
+
+        # Initialize tracer 2 redshift and weights
+        if self.main_tracer_types[1] == 'continuous':
+            logwave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
+            true_z2 = logwave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
+            assumed_z2 = logwave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
+            scaling_2 = self.get_forest_weight_scaling(true_z2, true_abs_2, self.main_tracers[1])
+        else:
+            true_z2, weights2 = self.get_qso_weights(self._corr_item.tracer2)
+            assumed_z2 = true_z2
+            scaling_2 = 1.
+
+        # Compute rp pairs
+        true_rp_pairs, _ = self.get_rp_pairs(true_z1, true_z2)
+        assumed_rp_pairs, _ = self.get_rp_pairs(assumed_z1, assumed_z2)
+
+        # Compute weights
+        weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+
+        # Distortion matrix grid
+        rp_bin_edges = np.linspace(
+            self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1)
+
+        # Compute the distortion matrix
+        dmat, _, __ = np.histogram2d(
+            assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights)
+
+        # Normalize (sum of weights should be one for each input rp,rt)
+        sum_true_weight, _ = np.histogram(true_rp_pairs, bins=rp_bin_edges, weights=weights)
+        dmat *= ((sum_true_weight > 0) / (sum_true_weight + (sum_true_weight == 0)))[None, :]
+
+        # Mean assumed weights
+        sum_assumed_weight, _ = np.histogram(assumed_rp_pairs, bins=rp_bin_edges, weights=weights)
+        sum_assumed_weight_rp, _ = np.histogram(
+            assumed_rp_pairs, bins=rp_bin_edges,
+            weights=weights * (assumed_rp_pairs[None, :].ravel())
+        )
+
+        # Return the redshift of the actual absorber, which is the average of true_z1 and true_z2
+        sum_weight_z, _ = np.histogram(
+            assumed_rp_pairs, bins=rp_bin_edges,
+            weights=weights * ((true_z1[:, None] + true_z2[None, :]) / 2.).ravel()
+        )
+
+        rp_eff = sum_assumed_weight_rp / (sum_assumed_weight + (sum_assumed_weight == 0))
+        z_eff = sum_weight_z / (sum_assumed_weight + (sum_assumed_weight == 0))
+
+        num_bins_total = self.rp_nbins * self.rt_nbins
+        full_rp_eff = np.zeros(num_bins_total)
+        full_rt_eff = np.zeros(num_bins_total)
+        full_z_eff = np.zeros(num_bins_total)
+
+        rp_indices = np.arange(self.rp_nbins)
+        rt_bins = np.arange(
+            self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
+            self._coordinates.rt_binsize
+        )
+
+        for j in range(self.rt_nbins):
+            indices = j + self.rt_nbins * rp_indices
+
+            full_rp_eff[indices] = rp_eff
+            full_rt_eff[indices] = rt_bins[j]
+            full_z_eff[indices] = z_eff
 
         return dmat, full_rp_eff, full_rt_eff, full_z_eff
