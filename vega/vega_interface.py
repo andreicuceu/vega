@@ -140,6 +140,7 @@ class VegaInterface:
         
 
         # initialize the models
+        #read xcf last
         self.models = {}
         last_models = {}
         if self._has_data:

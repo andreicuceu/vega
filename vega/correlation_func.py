@@ -6,6 +6,7 @@ from scipy.stats import gaussian_kde
 import picca.constants
 from astropy.io import fits
 from numba import njit
+import matplotlib.pyplot as plt
 import fitsio
 
 from . import utils
@@ -146,30 +147,19 @@ class CorrelationFunction:
                 
                 self._prep_delta_gamma_model()
 
+    def P_ZQSO(self,z,zqso,P_zqso):
+        return np.interp(z,zqso,P_zqso)
+
     def _init_zerr_cross(self, qso_cat, delta_attr, qso_auto_corr):
 
         self.cosmo_class = self._get_cosmo()
-        #self._nbins_z = 50
-        #self._zlist = np.linspace(2, 2.8, self._nbins_z)
-        #self._dz = self._zlist[1] - self._zlist[0]
+        self._nbins_z = 20
+        z0, z1 = 2.1,3
+        self._zq1 = np.linspace(z0, z1, self._nbins_z)
+        self._dzq1 = self._zq1[1]-self._zq1[0] 
         self.lya_wave = 1215.67
         self._gamma_wave = None
         self._gamma = None
-
-        #get zqso hist from qso cat
-        with fitsio.FITS(qso_cat) as hdul:
-            zcat = hdul[1]['Z'][:]
-            kde = gaussian_kde(zcat)
-        #self._p_qso = kde(zcat)**2
-            self._nbins_z = 200
-            idx_step=np.floor(len(zcat)/self._nbins_z).astype(int)
-            idx=np.arange(self._nbins_z)*idx_step
-            self._zlist = zcat[idx]
-
-        self._dz=np.zeros(self._nbins_z)
-        self._dz[1:]=self._zlist[1:] - self._zlist[:-1]
-
-        self._p_qso = kde(self._zlist)**2
 
         #just for rf limits
         with fitsio.FITS(delta_attr) as hdul:
@@ -177,26 +167,47 @@ class CorrelationFunction:
             self._min_rf_pix = min(10**hdul[3]['LOGLAM_REST'][:])
             self._max_rf_pix = max(10**hdul[3]['LOGLAM_REST'][:])
 
+
+        self._nbins_wave = 50
+        self._rf_wave = np.linspace(1150, self._max_rf_pix, self._nbins_wave)
+        
+        #get zqso hist from qso cat
+        with fitsio.FITS(qso_cat) as hdul:
+            zcat = hdul[1]['Z'][:]
+            self._p_qso,bedges,_= plt.hist(zcat,bins=100,density=True,cumulative=False);
+            self._zqso=(bedges[:-1]+bedges[1:])/2
+
         #read qso auto
         qso_auto_hdul = np.loadtxt(qso_auto_corr)
         self._r_qso_auto = qso_auto_hdul[0]
         self._xi_qso_auto = qso_auto_hdul[1]
 
-        self._dist_m = self.cosmo_class.get_dist_m(self._zlist)
-        self._dist_comov = self.cosmo_class.get_r_comov(self._zlist)
 
-        self._rpix = np.abs(np.add.outer(self._dist_comov, self._rp_grid)).T
+        self._rpix = np.abs(np.add.outer(self.cosmo_class.get_r_comov(self._zq1), self._rp_grid)).T
         self._zpix = self.cosmo_class.distance_to_redshift(self._rpix)
 
-        self._dist_trans_sum_M = np.add.outer(self._dist_m,self._dist_m)
-        self._dist_comov_diff_M = np.subtract.outer(self._dist_comov,self._dist_comov)
+        d_M_zq1 = self.cosmo_class.get_dist_m(self._zq1)
+        d_c_zq1 = self.cosmo_class.get_r_comov(self._zq1)
 
-        self._p_qso_M = self._p_qso[:,None] * np.ones(np.shape(self._p_qso)) 
+        #possible redshifts of quasars with correlating pixel, shape (nAxi,nzq1,nwave)
+        self._zq2 = (1+self._zpix[:,:,None]) * (self.lya_wave / self._rf_wave) - 1
+        #self._dzq2 = (self._zq2[0][:,1] - self._zq2[0][:,0])[:,None]
 
-        self._prep_matrix = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_z)).astype(float)
-        self._gamma_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_z)).astype(float)
-        self._rf_wave_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_z)).astype(float)
-        self._mask_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_z)).astype(bool)
+        D_M_zq2 = self.cosmo_class.get_dist_m(self._zq2)
+        D_c_zq2 = self.cosmo_class.get_r_comov(self._zq2)
+
+        self._diff_dc = (D_c_zq2 - d_c_zq1[:,None])
+        self._diff_dm = (D_M_zq2 + d_M_zq1[:,None])
+
+        self._obs_wave = (1 + self._zq2) * self._rf_wave
+
+        self._p_vec_q1 = np.interp(self._zq1,self._zqso,self._p_qso)[:,None]
+
+        self._prep_matrix = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
+        self._gamma_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
+        self._mask_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(bool)
+        rf_wave_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
+        self._rf_wave_M = rf_wave_M + self._rf_wave
 
         measured_gamma_file = self._config.get('measured-gamma', None)
         if measured_gamma_file is not None:
@@ -242,7 +253,7 @@ class CorrelationFunction:
             self._min_rf_pix = min(10**hdul[3]['LOGLAM_REST'][:])
             self._max_rf_pix = max(10**hdul[3]['LOGLAM_REST'][:])
             #number of bins for _rf_wave is being tested now but will be fixed at convergence point
-            self._rf_wave = np.linspace(self._min_rf_pix, self._max_rf_pix, self._nbins_wave)
+            self._rf_wave = np.linspace(1150, self._max_rf_pix, self._nbins_wave)
 
         self._cross_interp = None
         if cross_corr is not None:
@@ -250,7 +261,10 @@ class CorrelationFunction:
                 data = Table(hdul[1].read())
                 rp_x = data['RP'].reshape(100, 50).T[0]
                 rt_x = data['RT'].reshape(100, 50)[0]
-                da_x = data['DA'].reshape(100, 50)
+                try:
+                    da_x = data['DA'].reshape(100, 50)
+                except:
+                    da_x = data['DA_BLIND'].reshape(100, 50)
                 self._cross_interp = RectBivariateSpline(rp_x, rt_x, da_x)
 
         # else:
@@ -310,31 +324,28 @@ class CorrelationFunction:
 
     def _prep_gamma_model(self):
         for k, (rp_A, rt_A) in enumerate(zip(self._rp_grid, self._rt_grid)):   
-            #rf of pixels + mask 
-            lrest_pix_M = np.divide.outer((1+self._zpix[k,:])*self.lya_wave,(1+self._zlist))
-            mask_rf = (self._min_rf_pix < lrest_pix_M) & (lrest_pix_M < self._max_rf_pix)       
-
-            #observed frame mask
-            lobs_pix_M= (lrest_pix_M.T * (1 + self._zlist)).T
-            mask_obs= (3600 < lobs_pix_M) & (lobs_pix_M < 5772)                
-            
-            #total mask
-            mask =  mask_rf & mask_obs
+            mask = (3600<self._obs_wave[k])&(self._obs_wave[k]<5772)                
             
             #calculate r_Q
-            dtheta_M = 2 * np.arcsin(rp_A / self._dist_trans_sum_M)
-            rp_Q_M= (self._dist_comov_diff_M * np.cos(dtheta_M/2)).T
+            rp_Q_M = self._diff_dc[k]
 
+            #rt_Q = rt_A
             r_Q_M = np.sqrt(rp_Q_M**2 + rt_A**2)        
+            
+            #GET R, MU, INTERPOLATE
+            #mus = (rp_Q_M / r_Q_M)
+            
+            #return r_Q_M, mus
+            xi_Q_M = jitted_interp(r_Q_M, self._r_qso_auto, self._xi_qso_auto)  
+            
+            p_vec_q2 = jitted_interp(self._zq2[k],self._zqso,self._p_qso)
+            
+            dzq2 = (self._zq2[k][:,1] - self._zq2[k][:,0])[:,None]
 
-            xi_Q_M = jitted_interp(r_Q_M, self._r_qso_auto, self._xi_qso_auto)       
-                    
             #add to integral
-            self._prep_matrix[k] += (self._p_qso_M**2 * self._dz**2 * xi_Q_M)
+            self._prep_matrix[k] += (self._p_vec_q1 * p_vec_q2 * abs(self._dzq1) * abs(dzq2) * xi_Q_M)
             
             self._mask_M[k] = mask
-            
-            self._rf_wave_M[k] = lrest_pix_M
 
     def _prep_delta_gamma_model(self):
         rf_mask, run_rf, dpix2, dzq2 = self._part1()
@@ -370,7 +381,7 @@ class CorrelationFunction:
                 mean_gamma += p1 / (g_rf_wave - L1)**2
             mean_gamma += p2 / (g_rf_wave - L2)**2
 
-            return params['cont_dist_amp'] * mean_gamma
+            return mean_gamma
 
         else:
             mean_gamma = jitted_interp(g_rf_wave,self._gamma_wave,self._gamma) 
@@ -394,7 +405,7 @@ class CorrelationFunction:
                 mean_gamma += p1 / (g_rf_wave - L1)**2
             mean_gamma += p2 / (g_rf_wave - L2)**2
 
-            return params['cont_dist_amp'] * mean_gamma
+            return mean_gamma
 
         else:
             mean_gamma = jitted_interp(g_rf_wave,self._gamma_wave,self._gamma) 
@@ -409,7 +420,7 @@ class CorrelationFunction:
         #need to have two options for using model or measured
         gamma_zs = np.zeros((self._run_rf.sum(), self._nbins_wave), dtype=float)
         for i, _ in enumerate(self._zlist[self._run_rf]):
-            gamma_zs[i][self._rf_mask[i]] = self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
+            gamma_zs[i][self._rf_mask[i]] = params['cont_dist_amp_auto'] * self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
         return gamma_zs
 
     def compute_delta_gamma_model(self, params):
@@ -421,7 +432,7 @@ class CorrelationFunction:
     def compute_gamma_model(self,params):
         gamma_mod = np.zeros_like(self._rt_grid)
         for k, rt_A in enumerate(self._rt_grid):         
-            gamma_M_k = self._compute_gamma_extension_QSO(self._rf_wave_M[k][self._mask_M[k]], params)
+            gamma_M_k = params['cont_dist_amp_cross'] * self._compute_gamma_extension_QSO(self._rf_wave_M[k][self._mask_M[k]], params)
             gamma_mod[k] =  np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M_k) 
         return gamma_mod
 
