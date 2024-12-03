@@ -336,14 +336,18 @@ class CorrelationFunction:
             #mus = (rp_Q_M / r_Q_M)
             
             #return r_Q_M, mus
-            xi_Q_M = jitted_interp(r_Q_M, self._r_qso_auto, self._xi_qso_auto)  
-            
+            #xi_Q_M = jitted_interp(r_Q_M, self._r_qso_auto, self._xi_qso_auto)  
+
+            #log interp
+            xi_Q_M = jitted_interp(np.log10(r_Q_M), np.log10(self._r_qso_auto), np.log10(self._xi_qso_auto))  
+            xi_Q_M_lin = 10**xi_Q_M
+
             p_vec_q2 = jitted_interp(self._zq2[k],self._zqso,self._p_qso)
             
             dzq2 = (self._zq2[k][:,1] - self._zq2[k][:,0])[:,None]
 
             #add to integral
-            self._prep_matrix[k] += (self._p_vec_q1 * p_vec_q2 * abs(self._dzq1) * abs(dzq2) * xi_Q_M)
+            self._prep_matrix[k] += (self._p_vec_q1 * p_vec_q2 * abs(self._dzq1) * abs(dzq2) * xi_Q_M_lin)
             
             self._mask_M[k] = mask
 
@@ -420,8 +424,8 @@ class CorrelationFunction:
         #need to have two options for using model or measured
         gamma_zs = np.zeros((self._run_rf.sum(), self._nbins_wave), dtype=float)
         for i, _ in enumerate(self._zlist[self._run_rf]):
-            gamma_zs[i][self._rf_mask[i]] = params['cont_dist_amp_auto'] * self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
-        return gamma_zs
+            gamma_zs[i][self._rf_mask[i]] = self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
+        return  params['cont_dist_amp_auto'] * gamma_zs
 
     def compute_delta_gamma_model(self, params):
         gamma_mod = self._compute_gamma_auto(params)
@@ -430,12 +434,15 @@ class CorrelationFunction:
         return auto_model.flatten()
 
     def compute_gamma_model(self,params):
-        gamma_mod = np.zeros_like(self._rt_grid)
-        for k, rt_A in enumerate(self._rt_grid):         
-            gamma_M_k = params['cont_dist_amp_cross'] * self._compute_gamma_extension_QSO(self._rf_wave_M[k][self._mask_M[k]], params)
-            gamma_mod[k] =  np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M_k) 
-        return gamma_mod
+        gamma_mod = np.zeros_like(self._rp_grid)
+        gamma_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
+        gamma_M += self._compute_gamma_extension_QSO(self._rf_wave, params)
 
+        for k, rp_A in enumerate(self._rp_grid):         
+            #gamma_M_k = params['cont_dist_amp_cross'] * self._compute_gamma_extension_QSO(self._rf_wave_M[k][self._mask_M[k]], params)
+            #gamma_mod[k] =  np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M_k) 
+            gamma_mod[k] = np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M[k][self._mask_M[k]])
+        return params['cont_dist_amp_cross'] * gamma_mod
 
     def _get_cosmo(self):
         return picca.constants.Cosmo(Om=self._Omega_m)
