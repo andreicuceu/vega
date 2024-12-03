@@ -5,7 +5,7 @@ import os
 import fnmatch
 
 import matplotlib.pyplot as plt
-from vega.vega_interface_mod import VegaInterface
+from vega.vega_interface import VegaInterface
 
 import scipy
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
@@ -18,9 +18,9 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         '''
         Set up initial parameters
         '''
-        self.vega = VegaInterface('simple_example/complex_main.ini') # Creates an instance of VegaInterface with a configuration file containing cosmological or model parameters
-        self.effective_redshift = 2.3
-        self.k_grid = np.logspace(-4,2,700) # grid of scales for power spectrum
+        self.vega = VegaInterface('cobaya_interface/configs/complex_main.ini') # Creates an instance of VegaInterface with a configuration file containing cosmological or model parameters
+        self.effective_redshift = 2.33
+        self.k_grid = np.logspace(-4,3.061640934061686,814) #np.logspace(-4,2,700) # grid of scales for power spectrum
         self.vega.fiducial['z_fiducial'] = self.effective_redshift   # fix z_eff z_fiducial
 
 
@@ -30,7 +30,7 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         '''
         return {'bias_LYA': None, 'beta_LYA': None,'D_M_fid': None, 'D_H_fid': None, 'or_photon':None, 'or_neutrino':None, \
                 'H0': None, 'ombh2': None , 'omch2': None, 'omnuh2': None, 'omk': None,'As': None, 'ns': None, \
-                'Pk_grid': {'z': [self.effective_redshift], 'k_max':100, 'nonlinear':[False]},
+                'Pk_grid': {'z': [self.effective_redshift], 'k_max':10**3.061640934061686, 'nonlinear':[False]},
                 'angular_diameter_distance':{'z': [self.effective_redshift]}, 'Hubble':{'z': [self.effective_redshift]},
                 }
 
@@ -61,4 +61,6 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         self.vega.fiducial['Omega_de'] = (1 - params_values['omk'] - params_values['or_photon'] - params_values['or_neutrino'] - omega_m) # computes Omega_de from Omega_m, flatness, photons, and relativistic neutrinos
         
         chi2 = self.vega.chi2(params_values, direct_pk = self.pk_full) # uses vega to compute chi2 from power spectrum and parameter values 
+        print('param values:', params_values)
+        print('chi2:', chi2)
         return -chi2 / 2 # returns log likelihood

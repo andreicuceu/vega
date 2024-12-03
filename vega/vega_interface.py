@@ -293,7 +293,6 @@ class VegaInterface:
             except utils.VegaBoundsError:
                 self.models[name].PktoXi.cache_pars = None
                 return 1e100
-
             if self._use_global_cov:
                 full_model.append(model_cf)
 
@@ -324,7 +323,6 @@ class VegaInterface:
                            f"the model. Offending parameter: {param}")
                 assert param in local_params, err_msg
             chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
-
         assert isinstance(chi2, float)
         return chi2
 
