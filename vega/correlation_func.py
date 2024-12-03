@@ -336,18 +336,18 @@ class CorrelationFunction:
             #mus = (rp_Q_M / r_Q_M)
             
             #return r_Q_M, mus
-            #xi_Q_M = jitted_interp(r_Q_M, self._r_qso_auto, self._xi_qso_auto)  
+            xi_Q_M = jitted_interp(r_Q_M, self._r_qso_auto, self._xi_qso_auto)  
 
             #log interp
-            xi_Q_M = jitted_interp(np.log10(r_Q_M), np.log10(self._r_qso_auto), np.log10(self._xi_qso_auto))  
-            xi_Q_M_lin = 10**xi_Q_M
+            #xi_Q_M = jitted_interp(np.log10(r_Q_M), np.log10(self._r_qso_auto), np.log10(self._xi_qso_auto))  
+            #xi_Q_M = 10**xi_Q_M
 
             p_vec_q2 = jitted_interp(self._zq2[k],self._zqso,self._p_qso)
             
             dzq2 = (self._zq2[k][:,1] - self._zq2[k][:,0])[:,None]
 
             #add to integral
-            self._prep_matrix[k] += (self._p_vec_q1 * p_vec_q2 * abs(self._dzq1) * abs(dzq2) * xi_Q_M_lin)
+            self._prep_matrix[k] += (self._p_vec_q1 * p_vec_q2 * abs(self._dzq1) * abs(dzq2) * xi_Q_M)
             
             self._mask_M[k] = mask
 
