@@ -124,7 +124,8 @@ class VegaInterface:
                     raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
                 elif par in utils.VEGA_BLINDED_PARS:
                     blind_pars += [par]
-            self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
+            if len(blind_pars) > 0:
+                self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
 
             if ('bias_QSO' in self.sample_params['limits']) and (
                     'beta_QSO' in self.sample_params['limits']):
