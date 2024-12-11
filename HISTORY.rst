@@ -2,6 +2,11 @@
 History
 =======
 
+1.3.1 (2024-12-11)
+------------------
+* Unblind Y3 BAO analysis
+* Some small improvements to FitResults and full-shape blinding
+
 1.3.0 (2024-11-14)
 ------------------
 * Some updates to MC mocks. Now it is possible to read a previous fit and use it to generate mocks.
