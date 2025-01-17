@@ -47,3 +47,8 @@ BB-lyalya_lyalya-0-broadband_sky-scale-sky A_{sky,lya}
 BB-lyalya_lyalya-0-broadband_sky-sigma-sky \sigma_{sky,lya}
 BB-lyalya_lyalyb-0-broadband_sky-scale-sky A_{sky,lyb}
 BB-lyalya_lyalyb-0-broadband_sky-sigma-sky \sigma_{sky,lyb}
+cont_sigma_velo \sigma_{\rm cont}
+cont_dist_amp_auto A_{\rm cont}^{\rm auto}
+cont_dist_amp_cross A_{\rm cont}^{\rm cross}
+Ca1 a_{\rm cont}^1
+Ca2 a_{\rm cont}^2

@@ -374,7 +374,8 @@ class CorrelationFunction:
 
     def _compute_gamma_extension(self, g_rf_wave, params):
 
-        L1,L2 = 1205.1, 1213
+        #L1,L2 = 1205.1, 1213
+        L1,L2 = 1207.6, 1213
         p1, p2 = params['Ca1'], params['Ca2']
 
         #this may be a lot slower
@@ -383,7 +384,7 @@ class CorrelationFunction:
 
             if max(g_rf_wave)<L1:
                 mean_gamma += p1 / (g_rf_wave - L1)**2
-            mean_gamma += p2 / (g_rf_wave - L2)**2
+            #mean_gamma += p2 / (g_rf_wave - L2)**2
 
             return mean_gamma
 
@@ -398,7 +399,8 @@ class CorrelationFunction:
 
     def _compute_gamma_extension_QSO(self, g_rf_wave, params):
 
-        L1,L2 = 1205.1, 1213
+        #L1,L2 = 1205.1, 1213
+        L1,L2 = 1207.6, 1213
         p1, p2 = params['Ca1'], params['Ca2']
 
         #this may be a lot slower
@@ -407,7 +409,7 @@ class CorrelationFunction:
 
             if max(g_rf_wave)<L1:
                 mean_gamma += p1 / (g_rf_wave - L1)**2
-            mean_gamma += p2 / (g_rf_wave - L2)**2
+            #mean_gamma += p2 / (g_rf_wave - L2)**2
 
             return mean_gamma
 
