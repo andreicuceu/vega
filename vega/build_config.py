@@ -71,6 +71,7 @@ class BuildConfig:
         self.options['test'] = options.get('test', False)
         self.options['use_metal_autos'] = options.get('use_metal_autos', True)
         self.options['new_metals'] = options.get('new_metals', False)
+        self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
 
@@ -105,8 +106,7 @@ class BuildConfig:
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
             List of options:
-                fitter: bool, default True
-                sampler: bool, default False
+                run_sampler: bool, default False
                 bias_beta_config: dict with 'tracer': 'bias_beta', 'bias_eta_beta', 'bias_bias_eta'
                 zeff: float, default None
                 zeff_rmin: float, default 0
@@ -276,6 +276,7 @@ class BuildConfig:
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
                     config['model']['new_metals'] = 'True'
+                    config['model']['rp_only_metal_mats'] = str(self.options['rp_only_metal_mats'])
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
                     config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
@@ -294,7 +295,7 @@ class BuildConfig:
                     config['metal-matrix']['alpha_SiII(1190)'] = self.options['metal-matrix'].get(
                         'alpha_SiII(1190)', '1.')
                     config['metal-matrix']['alpha_CIV(eff)'] = self.options['metal-matrix'].get(
-                        'alpha_CIV(eff)', '1.')
+                        'alpha_CIV(eff)', '0.')
 
                     config['metal-matrix']['z_ref_objects'] = self.options['metal-matrix'].get(
                         'z_ref_objects', '2.25')
@@ -483,10 +484,12 @@ class BuildConfig:
                                  'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
+        config['control'] = {'run_sampler': 'False'}
         if self.run_sampler:
-            config['control'] = {}
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
+            if 'use_template_growth_rate' in fit_info:
+                config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
 
             if self.sampler == 'Polychord':
                 config['Polychord'] = {}

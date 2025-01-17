@@ -14,8 +14,7 @@ class PktoXi:
     """
     cache = LRUCache(128)
 
-    def __init__(self, k_grid, muk_grid, ell_max=6, old_fftlog=False,
-                 fht_lowring=True, fht_extrap=False):
+    def __init__(self, k_grid, muk_grid, name1, name2, config):
         """Initialize the FFTLog and the Legendre polynomials
 
         Parameters
@@ -24,24 +23,20 @@ class PktoXi:
             Wavenumber grid of power spectrum
         muk_grid : ND Array
             k_parallel / k grid for input power spectrum
-        ell_max : int, optional
-            Maximum multipole to sum over, by default 6
-        old_fftlog : bool, optional
-            Maximum multipole to sum over, by default False
-        fht_lowring : bool, optional
-            Lowring option for mcfit, by default True
-        fht_extrap : bool, optional
-            Extrap option for mcfit, by default False
         """
+        self.name1 = name1
+        self.name2 = name2
         self.k_grid = k_grid
         self.muk_grid = muk_grid
         self.dmuk = 1 / len(muk_grid)
-        self.ell_max = ell_max
-        self._old_fftlog = old_fftlog
-        self._extrap = fht_extrap
+
+        self.ell_max = config.getint('ell_max', 6)
+        self._old_fftlog = config.getboolean('old_fftlog', False)
+        self._extrap = config.getboolean('fht_extrap', False)
+        fht_lowring = config.getboolean('fht_lowring', True)
 
         # Initialize the multipole values we will need (only even ells)
-        self.ell_vals = tuple(np.arange(0, ell_max + 1, 2))
+        self.ell_vals = tuple(np.arange(0, self.ell_max + 1, 2))
 
         # Initialize FFTLog objects and Legendre polynomials for each multipole
         self.fftlog_objects = {}
@@ -56,6 +51,10 @@ class PktoXi:
             self.legendre_xi[ell] = special.legendre(ell)
 
         self.cache_pars = None
+
+    @classmethod
+    def init_from_Pk(cls, pk, config):
+        return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config)
 
     def compute_pk_ells(self, pk):
         pk_ell_arr = np.zeros([len(self.ell_vals), len(self.k_grid)])

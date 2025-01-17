@@ -22,7 +22,7 @@ class CorrelationOutput:
 
 
 class FitResults:
-    def __init__(self, path):
+    def __init__(self, path, results_only=False):
         hdul = fits.open(find_file(path))
 
         self.chisq = hdul[2].header['FVAL']
@@ -33,12 +33,15 @@ class FitResults:
         self.cov = hdul[2].data['covariance']
         self.params = {name: value for name, value in zip(self.names, self.mean)}
         self.sigmas = {name: value for name, value in zip(self.names, hdul[2].data['errors'])}
-
         self.num_pars = len(self.names)
-        self.read_correlations(hdul[1])
+
+        if not results_only:
+            self.read_correlations(hdul[1])
+
         hdul.close()
 
-        self.chain = self.make_chain(self.names, self.mean, self.cov)
+        if not results_only:
+            self.chain = self.make_chain(self.names, self.mean, self.cov)
 
     @staticmethod
     def make_chain(names, mean, cov):

@@ -1,9 +1,13 @@
 from vega.utils import find_file
 
-composites = {'bias': r'b_{',
-              'bias_eta': r'b_{\eta,',
-              'beta': r'\beta_{',
-              'alpha': r'\alpha_{'}
+composites = {
+    'bias': r'b_{',
+    'bias_eta': r'b_{\eta,',
+    'beta': r'\beta_{',
+    'alpha': r'\alpha_{',
+    'par_sigma_smooth': r'\sigma^{full}_{||,',
+    'per_sigma_smooth': r'\sigma^{full}_{\bot,',
+}
 
 
 def build_names(params):
