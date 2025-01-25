@@ -121,7 +121,6 @@ class PowerSpectrum:
             elif 'mcdonald' in self._config.get('small scale nl'):
                 pk_full *= self.compute_dnl_mcdonald()
             else:
-                print('small scale nl: must be either mcdonald or arinyo')
                 raise ValueError('Incorrect \'small scale nl\' specified')
 
         # model the effect of binning
@@ -182,7 +181,7 @@ class PowerSpectrum:
         """
         pk = (1 + beta1 * self.muk_grid**2)
         pk = pk * (1 + beta2 * self.muk_grid**2)
-
+        
         if not fast_metals:
             pk *= bias1 * bias2
         return pk

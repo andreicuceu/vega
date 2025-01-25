@@ -172,7 +172,6 @@ class Model:
         1D Array
             Full correlation function
         """
-
         pars['peak'] = True
         xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
 

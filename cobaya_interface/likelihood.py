@@ -5,7 +5,7 @@ import os
 import fnmatch
 
 import matplotlib.pyplot as plt
-from vega.vega_interface import VegaInterface
+from vega.vega_interface import VegaInterface, Minimizer
 
 import scipy
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
@@ -19,6 +19,25 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         Set up initial parameters
         '''
         self.vega = VegaInterface('cobaya_interface/configs/complex_main.ini') # Creates an instance of VegaInterface with a configuration file containing cosmological or model parameters
+        
+        # Check if we need to run over a Monte Carlo mock
+        if 'control' in self.vega.main_config:
+            run_montecarlo = self.vega.main_config['control'].getboolean('run_montecarlo', False)
+            if run_montecarlo and self.vega.mc_config is not None:
+                # Get the MC seed and forecast flag
+                seed = self.vega.main_config['control'].getint('mc_seed', 0)
+                forecast = self.vega.main_config['control'].getboolean('forecast', False)
+
+                # Create the mocks
+                self.vega.monte_carlo_sim(self.vega.mc_config['params'], seed=seed, forecast=forecast)
+
+                # Set to sample the MC params
+                sampling_params = self.vega.mc_config['sample']
+                self.vega.minimizer = Minimizer(self.vega.chi2, sampling_params)
+            elif run_montecarlo:
+                raise ValueError('You asked to run over a Monte Carlo simulation,'
+                                 ' but no "[monte carlo]" section provided.')
+        
         self.effective_redshift = 2.33
         self.k_grid = np.logspace(-4,3.061640934061686,814) #np.logspace(-4,2,700) # grid of scales for power spectrum
         self.vega.fiducial['z_fiducial'] = self.effective_redshift   # fix z_eff z_fiducial
@@ -28,11 +47,16 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         '''
         Specifies what cosmological parameters are required by cobaya
         '''
-        return {'bias_LYA': None, 'beta_LYA': None,'D_M_fid': None, 'D_H_fid': None, 'or_photon':None, 'or_neutrino':None, \
+        reqs = {'bias_LYA': None, 'beta_LYA': None,'D_M_fid': None, 'D_H_fid': None, 'or_photon':None, 'or_neutrino':None, \
                 'H0': None, 'ombh2': None , 'omch2': None, 'omnuh2': None, 'omk': None,'As': None, 'ns': None, \
                 'Pk_grid': {'z': [self.effective_redshift], 'k_max':10**3.061640934061686, 'nonlinear':[False]},
                 'angular_diameter_distance':{'z': [self.effective_redshift]}, 'Hubble':{'z': [self.effective_redshift]},
                 }
+        
+        #reqs['log_biasLYA']=None
+        #reqs['logA']=None
+
+        return reqs
 
     def logp(self, **params_values):
         '''
