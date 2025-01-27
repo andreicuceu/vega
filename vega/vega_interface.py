@@ -132,8 +132,7 @@ class VegaInterface:
                 raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
         # Initialize scale parameters
-        self.scale_params = ScaleParameters(
-            self.main_config['cosmo-fit type'], blind_pars, _blinding_strat)
+        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
         
 
         # initialize the models

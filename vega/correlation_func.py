@@ -153,8 +153,8 @@ class CorrelationFunction:
     def _init_zerr_cross(self, qso_cat, delta_attr, qso_auto_corr):
 
         self.cosmo_class = self._get_cosmo()
-        self._nbins_z = 20
-        z0, z1 = 2.1,3
+        self._nbins_z = 50
+        z0, z1 = 2,3.5
         self._zq1 = np.linspace(z0, z1, self._nbins_z)
         self._dzq1 = self._zq1[1]-self._zq1[0] 
         self.lya_wave = 1215.67
@@ -169,13 +169,16 @@ class CorrelationFunction:
 
 
         self._nbins_wave = 50
-        self._rf_wave = np.linspace(1150, self._max_rf_pix, self._nbins_wave)
+        self._rf_wave = np.linspace(1100, self._max_rf_pix, self._nbins_wave)
         
         #get zqso hist from qso cat
         with fitsio.FITS(qso_cat) as hdul:
-            zcat = hdul[1]['Z'][:]
-            self._p_qso,bedges,_= plt.hist(zcat,bins=100,density=True,cumulative=False);
-            self._zqso=(bedges[:-1]+bedges[1:])/2
+            # zcat = hdul[1]['Z'][:]
+            # self._p_qso,bedges,_= plt.hist(zcat,bins=1000,density=True,cumulative=False)
+            # plt.clf()
+            # self._zqso=(bedges[:-1]+bedges[1:])/2
+            kde = gaussian_kde(hdul[1]['Z'][:])
+            self._p_qso = kde(self._zq1)
 
         #read qso auto
         qso_auto_hdul = np.loadtxt(qso_auto_corr)
@@ -201,7 +204,7 @@ class CorrelationFunction:
 
         self._obs_wave = (1 + self._zq2) * self._rf_wave
 
-        self._p_vec_q1 = np.interp(self._zq1,self._zqso,self._p_qso)[:,None]
+        self._p_vec_q1 = np.interp(self._zq1,self._zq1,self._p_qso)[:,None]
 
         self._prep_matrix = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
         self._gamma_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
@@ -229,7 +232,7 @@ class CorrelationFunction:
         self._nbins_z = 50
 
         # data for distance/redshift interpolator that is numba friendly
-        self._z_interp_list = np.linspace(1.5, 5, 1000)
+        self._z_interp_list = np.linspace(1.5, 5, 10000)
         self._dist_interp_list = self.cosmo_class.get_r_comov(self._z_interp_list)
 
         #define list of redshifts to evaluate model over 
@@ -253,7 +256,7 @@ class CorrelationFunction:
             self._min_rf_pix = min(10**hdul[3]['LOGLAM_REST'][:])
             self._max_rf_pix = max(10**hdul[3]['LOGLAM_REST'][:])
             #number of bins for _rf_wave is being tested now but will be fixed at convergence point
-            self._rf_wave = np.linspace(1150, self._max_rf_pix, self._nbins_wave)
+            self._rf_wave = np.linspace(1100, self._max_rf_pix, self._nbins_wave)
 
         self._cross_interp = None
         if cross_corr is not None:
@@ -342,7 +345,7 @@ class CorrelationFunction:
             #xi_Q_M = jitted_interp(np.log10(r_Q_M), np.log10(self._r_qso_auto), np.log10(self._xi_qso_auto))  
             #xi_Q_M = 10**xi_Q_M
 
-            p_vec_q2 = jitted_interp(self._zq2[k],self._zqso,self._p_qso)
+            p_vec_q2 = jitted_interp(self._zq2[k],self._zq1,self._p_qso)
             
             dzq2 = (self._zq2[k][:,1] - self._zq2[k][:,0])[:,None]
 
@@ -373,53 +376,26 @@ class CorrelationFunction:
         self._rf_mask = rf_mask
 
     def _compute_gamma_extension(self, g_rf_wave, params):
-
-        #L1,L2 = 1205.1, 1213
-        L1,L2 = 1207.6, 1213
+        
+        #p1 amplitude, p2 pivot wavelength of polynomial
         p1, p2 = params['Ca1'], params['Ca2']
 
         #this may be a lot slower
         if self._gamma is None:
             mean_gamma = get_gamma_QQ(g_rf_wave, params['cont_sigma_velo'],self._spec)
 
-            if max(g_rf_wave)<L1:
-                mean_gamma += p1 / (g_rf_wave - L1)**2
-            #mean_gamma += p2 / (g_rf_wave - L2)**2
+            if max(g_rf_wave)<p2:
+                mean_gamma += p1 / (g_rf_wave - p2)**2
+            mean_gamma[g_rf_wave>1195] = 0
 
             return mean_gamma
 
         else:
             mean_gamma = jitted_interp(g_rf_wave,self._gamma_wave,self._gamma) 
             
-            if max(g_rf_wave)<L1:
-                mean_gamma += p1 * jitted_interp(L1,self._gamma_wave,self._gamma) / (g_rf_wave - L1)**2
-            mean_gamma += p2 * jitted_interp(L2,self._gamma_wave,self._gamma) / (g_rf_wave - L2)**2
-
-            return mean_gamma
-
-    def _compute_gamma_extension_QSO(self, g_rf_wave, params):
-
-        #L1,L2 = 1205.1, 1213
-        L1,L2 = 1207.6, 1213
-        p1, p2 = params['Ca1'], params['Ca2']
-
-        #this may be a lot slower
-        if self._gamma is None:
-            mean_gamma = get_gamma_QQ(g_rf_wave, params['cont_sigma_velo'],self._spec)
-
-            if max(g_rf_wave)<L1:
-                mean_gamma += p1 / (g_rf_wave - L1)**2
-            #mean_gamma += p2 / (g_rf_wave - L2)**2
-
-            return mean_gamma
-
-        else:
-            mean_gamma = jitted_interp(g_rf_wave,self._gamma_wave,self._gamma) 
-            
-            if max(g_rf_wave)<L1:
-                mean_gamma += p1 * jitted_interp(L1,self._gamma_wave,self._gamma) / (g_rf_wave - L1)**2
-            mean_gamma += p2 * jitted_interp(L2,self._gamma_wave,self._gamma) / (g_rf_wave - L2)**2
-
+            if max(g_rf_wave)<p2:
+                mean_gamma += p1 / (g_rf_wave - p2)**2
+            mean_gamma[g_rf_wave>1195] = 0
             return mean_gamma
 
     def _compute_gamma_auto(self, params):
@@ -427,7 +403,7 @@ class CorrelationFunction:
         gamma_zs = np.zeros((self._run_rf.sum(), self._nbins_wave), dtype=float)
         for i, _ in enumerate(self._zlist[self._run_rf]):
             gamma_zs[i][self._rf_mask[i]] = self._compute_gamma_extension(self._rf_wave[self._rf_mask[i]], params)
-        return  params['cont_dist_amp_auto'] * gamma_zs
+        return params['cont_dist_amp_auto'] * gamma_zs
 
     def compute_delta_gamma_model(self, params):
         gamma_mod = self._compute_gamma_auto(params)
@@ -438,11 +414,9 @@ class CorrelationFunction:
     def compute_gamma_model(self,params):
         gamma_mod = np.zeros_like(self._rp_grid)
         gamma_M = np.zeros((len(self._rp_grid), self._nbins_z, self._nbins_wave)).astype(float)
-        gamma_M += self._compute_gamma_extension_QSO(self._rf_wave, params)
+        gamma_M += self._compute_gamma_extension(self._rf_wave, params)
 
         for k, rp_A in enumerate(self._rp_grid):         
-            #gamma_M_k = params['cont_dist_amp_cross'] * self._compute_gamma_extension_QSO(self._rf_wave_M[k][self._mask_M[k]], params)
-            #gamma_mod[k] =  np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M_k) 
             gamma_mod[k] = np.sum(self._prep_matrix[k][self._mask_M[k]] * gamma_M[k][self._mask_M[k]])
         return params['cont_dist_amp_cross'] * gamma_mod
 
