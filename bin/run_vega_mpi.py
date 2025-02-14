@@ -60,6 +60,9 @@ if __name__ == '__main__':
         raise ValueError('Warning: You called "run_vega_mpi.py" without asking'
                          ' for the sampler. Add "run_sampler = True" to the "[control]" section.')
 
+    # run compute_model once to initialize all the caches
+    _ = vega.compute_model(run_init=False)
+
     if vega.sampler == 'Polychord':
         from vega.samplers.polychord import Polychord
 
