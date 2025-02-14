@@ -263,9 +263,9 @@ class Data:
 
         if dmat_path is None:
             if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
             elif 'DM' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+                self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
 
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
@@ -361,9 +361,9 @@ class Data:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
         if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+            self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
         elif 'DM_BLIND' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
         else:
             raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
