@@ -26,9 +26,9 @@ def xi_to_pk(r, xi, ell=0, extrap=False):
 
 
 def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap):
-    minkh = 1.e-4
-    maxkh = 1.1525e3
-    npoints = 814
+    minkh = 1.e-3
+    maxkh = 10 #1.1525e3
+    npoints = 260 #814
 
     print(f'INFO: running CAMB on {ini}')
     pars = camb.read_ini(os.path.expandvars(ini))

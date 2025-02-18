@@ -2,21 +2,19 @@ theory:
    camb:
      extra_args:
        WantDerivedParameters: True
-output: /pscratch/sd/w/wmturner/LyA-directfit/mcmc/full/mcmc_full
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full-As/distortion/minimize_full-As_dist
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
 params:
-  logA:
-    prior:
-      min: 0.5
-      max: 6
-    ref: 3.05
-    proposal: 0.001
-    latex: \log(10^{10} A_\mathrm{s})
-    drop: true
+  D_H_fid:
+    latex: D_{H, fid}
+    value: 853.772277153506
+  D_M_fid:
+    latex: D_{M, fid}
+    value: 3882.64271129613
   As:
-    value: 'lambda logA: 1e-10*np.exp(logA)'
+    value: 2.1e-9
     latex: A_\mathrm{s}
   ns: 
     prior:
@@ -26,20 +24,27 @@ params:
       dist: norm
       loc: 0.9655
       scale: 0.05
-    proposal: 0.0001
-    #value: 0.9655
     latex: n_\mathrm{s}
 #################################    LYA   #############################################
-  log_biasLYA:
+#  log_biasLYA:
+#    prior:
+#      min: -2.
+#      max: 0
+#    ref: -0.93
+    #proposal: 0.001
+#    latex: log(bias_{LYA})
+#  bias_LYA:
+#    value: 'lambda log_biasLYA: -10**(log_biasLYA)'
+#    latex: bias_{LYA} 
+  bias_LYA: 
+    latex: bias
     prior:
-      min: -2.
       max: 0
-    ref: -0.93
-    proposal: 0.001
-    latex: log(bias_{LYA})
-  bias_LYA:
-    derived: 'lambda log_biasLYA: -10**(log_biasLYA)'
-    latex: bias_{LYA} 
+      min: -0.2
+    ref:
+      dist: norm
+      loc: -0.1171
+      scale: 0.01
   beta_LYA:
     latex: \beta_{LYA}
     prior:
@@ -49,16 +54,14 @@ params:
       dist: norm
       loc: 1.67
       scale: 0.02
-    proposal: 0.0001
 #########################################################################################
   H0:
     prior:
       min: 40
       max: 100
-    proposal: 0.0001
     ref: 
       dist: norm
-      loc:   70
+      loc: 67.36
       scale: 3
     latex: H_0
   rdrag:
@@ -70,7 +73,6 @@ params:
     prior:
       min: 0.01
       max: 0.05
-    proposal: 0.0001
     latex: \Omega_\mathrm{b} h^2
   omch2:
     value: 'lambda omegam, ombh2, mnu, H0: (omegam)*(H0/100)**2 - ombh2 -(mnu*(3.046/3)**0.75)/94.0708'
@@ -80,15 +82,21 @@ params:
       min: 0.01
       max: 0.99
     ref: 0.3
-    proposal: 0.0001
+    proposal: 0.1
     latex: \Omega_\mathrm{m}
   omegal:
     latex: \Omega_\Lambda
   mnu: 0.06
   tau: 0.055
+  or_photon:
+    value: 5.44985776336301e-05
+    latex: \Omega_{r,\gamma}
+  or_neutrino:
+    value: 2.5133613689346e-05
+    latex: \Omega_{r,\nu}
 sampler:
-  mcmc:
-    Rminus1_stop: 0.001
-    max_tries: 10000
-    learn_proposal: True
-    learn_proposal_Rminus1_max: 2.
+  minimize:
+    method: "iminuit"
+    max_evals: 1e6
+
+    

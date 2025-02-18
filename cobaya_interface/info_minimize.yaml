@@ -1,139 +1,60 @@
-output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/test_minimize
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/no-distortion/minimize_no_dist
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
 params:
-#  As:
-#    latex: A_s
-#    value: 2.1e-9
   As:
     latex: A_s
-    prior:
-      max: 3e-9
-      min: 1e-9
-    ref:
-      dist: norm
-      loc: 2.1e-9
-      scale: 4e-10
+    value: 2.1e-9
   D_H_fid:
     latex: D_{H, fid}
-    value: 853.77879638
+    value: 853.772277153506
   D_M_fid:
     latex: D_{M, fid}
-    value: 3882.65913925
-#  H0:
-#    latex: H_0
-#    value: 67.36
+    value: 3882.64271129613
   H0:
-    latex: H_0
     prior:
-      max: 73
-      min: 62
-    ref:
+      min: 40
+      max: 100
+    ref: 
       dist: norm
       loc: 67.36
-      scale: 5
-    proposal: 0.001
-#  beta_LYA: # TRY SAMPLING EVERYTHING INSTEAD with priors in Gerardi paper # what to use for fixed value if not sampling? need values for Planck18 model...
-#    latex: \beta
-#    value: 1.67
+      scale: 3
+    latex: H_0
+  rdrag:
+    latex: r_d
+  H0_rd:
+    derived: 'lambda H0, rdrag: H0*rdrag/299792'
   beta_LYA:
     latex: \beta
-    prior:
-      max: 2
-      min: 1
-    ref:
-      dist: norm
-      loc: 1.67
-      scale: 0.03
-#  bias_LYA:
-#    latex: bias
-#    value: -0.1171
+    value: 1.67
   bias_LYA: 
     latex: bias
-    prior:
-      max: 0
-      min: -0.2
-    proposal: 0.001
-    ref:
-      dist: norm
-      loc: -0.1171
-      scale: 0.01
+    value: -0.1171
   or_photon:
-    value: 5.45795742452308e-05
+    value: 5.44985776336301e-05
     latex: \Omega_{r,\gamma}
-#  or_photon:
-#    latex: \Omega_{r,\gamma}
-#    prior:
-#      max: 6e-5
-#      min: 5e-5
-#    ref:
-#      dist: norm
-#      loc: 5.45795742452308e-05
-#      scale: 5.5e-6
   or_neutrino:
-    value: 2.51709676467246e-05
+    value: 2.5133613689346e-05
     latex: \Omega_{r,\nu}
-#  or_neutrino:
-#    latex: \Omega_{r,\nu}
-#    prior:
-#      max: 3e-5
-#      min: 2e-5
-#    ref:
-#      dist: norm
-#      loc: 2.51709676467246e-05
-#      scale: 2.5e-6
-#  ns:
-#    latex: n_s
-#    value: 0.9649
   ns:
     latex: n_s
-    prior:
-      max: 1.1
-      min: 0.85
-    ref:
-      dist: norm
-      loc: 0.9649
-      scale: 0.03
-#  ombh2:
-#    latex: \Omega_\mathrm{b} h^2
-#    value: 0.02237
+    value: 0.9649
   ombh2:
     latex: \Omega_\mathrm{b} h^2
-    prior:
-      max: 0.04
-      min: 0.001
-    ref:
-      dist: norm
-      loc: 0.02237
-      scale: 0.005
+    value: 0.02237
   omch2:
-    latex: \Omega_\mathrm{C} h^2
-    value: 0.12
-#  omch2:
-#      latex: \Omega_\mathrm{C} h^2
-#      prior:
-#        max: 0.2
-#        min: 0.01
-#      ref:
-#        dist: norm
-#        loc: 0.12
-#        scale: 0.01
-  omk:
-    latex: \Omega_\mathrm{k}
-    value: 0
-  omnuh2:
-    latex: \Omega_\mathrm{\nu} h^2
-    value: 0.0006
-#  omnuh2:
-#    latex: \Omega_\mathrm{\nu} h^2
-#    prior:
-#      max: 0.001
-#      min: 0.0001
-#    ref:
-#      dist: norm
-#      loc: 0.0006
-#      scale: 0.00006
+    value: 'lambda omegam, ombh2, mnu, H0: (omegam)*(H0/100)**2 - ombh2 -(mnu*(3.046/3)**0.75)/94.0708'
+    latex: \Omega_\mathrm{c} h^2
+  omegam:
+    prior:
+      min: 0.01
+      max: 0.99
+    latex: \Omega_\mathrm{m}
+  omegal:
+    latex: \Omega_\Lambda
+  mnu: 0.06
+  tau: 0.055
 sampler:
   minimize:
     method: "iminuit"
@@ -141,26 +62,5 @@ sampler:
 theory:
   camb:
     extra_args:
-      #Accuracy.AccuratePolarization: false
-      #Accuracy.AccurateReionization: false
-      #DoLensing: false
-      #Reion.Reionization: false
-      #Reion.include_helium_fullreion: false
-      #SourceTerms.counts_ISW: false
-      #SourceTerms.counts_density: false
-      #SourceTerms.counts_potential: false
-      #SourceTerms.counts_timedelay: false
-      #SourceTerms.limber_windows: false
-      #SourceTerms.line_basic: false
-      #SourceTerms.line_distortions: false
-      #SourceTerms.use_21cm_mK: false
-      #WantCls: false
-      #WantDerivedParameters: false
-      #WantScalars: false
-      #Want_CMB: false
-      #Want_CMB_lensing: false
-      #Want_cl_2D_array: false
-      #max_eta_k_tensor: 0
-      #max_l: 2
-      #max_l_tensor: 0
       WantDerivedParameters: True
+      
