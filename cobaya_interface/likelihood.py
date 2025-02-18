@@ -55,11 +55,10 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
                 'angular_diameter_distance':{'z': [self.effective_redshift]}, 'Hubble':{'z': [self.effective_redshift]},
                 }
         
-        #reqs['log_biasLYA']=None
-        #reqs['logA']=None
         if self.correlation_type=='AUTO+CROSS':
             reqs['bias_QSO']=None
-            reqs['beta_QSO']=None
+            reqs['sigma8_z'] = {'z': [self.effective_redshift]} # needed?
+            reqs['fsigma8'] = {'z': [self.effective_redshift]}
 
         return reqs
 
@@ -73,6 +72,12 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         D_H = ((scipy.constants.c/1000)/self.provider.get_Hubble(self.effective_redshift))*h # computes Hubble distance
         params_values['ap_full'] = D_H[0]/params_values['D_H_fid'] # computes alpha_parallel 
         params_values['at_full'] = D_M[0]/params_values['D_M_fid'] # computes alpha_transverse
+
+        growth_rate = (self.provider.get_fsigma8(self.effective_redshift))/(self.provider.get_sigma8_z(self.effective_redshift))
+        #print('growth rate from CAMB:', growth_rate)
+        params_values["growth_rate"] = growth_rate[0]
+        params_values["_derived"]["growth_rate"] = growth_rate[0]
+        params_values["_derived"]["f_sigma8"] = self.provider.get_fsigma8(self.effective_redshift)[0]
         
         k_Mpc, z, pk_Mpc = self.provider.get_Pk_grid(nonlinear = False) # retrieves power spectrum
         #print('retrieved Pk grid:', k_Mpc[0], k_Mpc[-1], len(k_Mpc))

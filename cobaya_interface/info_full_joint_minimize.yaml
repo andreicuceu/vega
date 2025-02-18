@@ -7,13 +7,24 @@ likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
     correlation_type: 'AUTO+CROSS'
+    output_params:
+       growth_rate:
+         derived: True
+       f_sigma8:
+         derived: True
 params:
   D_H_fid:
     latex: D_{H, fid}
-    value: 853.772277153506
+    value: 853.772253428897
   D_M_fid:
     latex: D_{M, fid}
-    value: 3882.64271129613
+    value: 3882.64266625345
+  growth_rate:
+    latex: f
+    derived: True
+  f_sigma8:
+     latex: f\sigma_8
+     derived: True
   logA:
     prior:
       min: 0.5
@@ -43,13 +54,9 @@ params:
     #proposal: 0.0001
     latex: bias_{QSO}
   beta_QSO:
-    prior:
-      min: 0
-      max: 1
-    ref: 0.2
-#    proposal: 0.0001
     latex: \beta_{QSO}
-#    derived: 'lambda bias_QSO, growth_rate: growth_rate/bias_QSO'
+    derived: 'lambda bias_QSO, growth_rate: growth_rate/bias_QSO'
+
 #################################    LYA   #############################################
   log_biasLYA:
     prior:

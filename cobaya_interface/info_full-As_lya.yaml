@@ -2,10 +2,11 @@ theory:
    camb:
      extra_args:
        WantDerivedParameters: True
-output: /pscratch/sd/w/wmturner/LyA-directfit/mcmc/full-As/no-distortion/sample_full-As_no_dist
+output: /pscratch/sd/w/wmturner/LyA-directfit/mcmc/full-As_rmin15/no-distortion/sample_full-As_no_dist
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
+    correlation_type: 'AUTO'
 params:
   D_H_fid:
     latex: D_{H, fid}
@@ -34,10 +35,10 @@ params:
       max: 0
     ref: -0.93
    #proposal: 0.001
-    latex: log(bias_{LYA})
+    latex: log(b_{LYA})
   bias_LYA:
     value: 'lambda log_biasLYA: -10**(log_biasLYA)'
-    latex: bias_{LYA} 
+    latex: b_{LYA} 
 #  bias_LYA: 
 #    latex: bias
 #    prior:
