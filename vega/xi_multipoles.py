@@ -81,6 +81,7 @@ class XiMultipoles():
         
     def fit_mini(self, rdata, mudata, xi_data, cov_data, nmc=20, seed=1, return_mcs=False):
         """ Uses the minimizer. Slow """
+        from scipy.optimize import minimize
         w = (self.rmin < rdata) & (rdata < self.rmax)
         rr = rdata[w]
         mumu = mudata[w]
