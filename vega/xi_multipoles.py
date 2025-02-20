@@ -107,7 +107,7 @@ class XiMultipoles():
             np.zeros(rdata.size), cov=cov_data, size=nmc
         )[:, w]
 
-        for _ in tqdm(range(nmc)):
+        for _ in range(nmc):
             xi_in = xi_data_org + randoms[_]
             answer = minimize(_cost, x0=self.xi_knots_fit.ravel(),
                               method='L-BFGS-B')
