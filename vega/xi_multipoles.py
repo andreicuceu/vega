@@ -77,8 +77,10 @@ class XiMultipoles():
         self.std_xi_mc = np.sqrt(
             self.xi_knots_cov.diagonal()).reshape(self.nl, self.nr)
 
+        d = xi_in - self(rr, mumu)
+        chi2 = d.dot(invcov.dot(d)) / d.size
         if nmc <= 0:
-            return self.xi_knots_fit, self.std_xi_mc
+            return chi2
 
         rng = np.random.default_rng(seed)
         randoms = rng.multivariate_normal(
@@ -91,9 +93,9 @@ class XiMultipoles():
             self.nl, self.nr)
 
         if return_mcs:
-            return self.xi_knots_fit, self.std_xi_mc, xi_knots_mc
+            return chi2, xi_knots_mc
 
-        return self.xi_knots_fit, self.std_xi_mc
+        return chi2
         
     def fit_mini(self, rdata, mudata, xi_data, cov_data, nmc=20, seed=1, return_mcs=False):
         """ Uses the minimizer. Slow """
