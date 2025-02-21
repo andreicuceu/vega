@@ -3,6 +3,21 @@ from scipy.special import legendre
 
 
 class XiMultipoles():
+    @classmethod
+    def getOverfit(
+            cls, rdata, mudata, xi_data, cov_data, mumax=0.999, nlmin=6, nlmax=20, chi_c=0.8
+    ):
+        """ Find the nl that overfits the data such that chi2 < chi_c.
+        """
+        for nl in range(nlmin, nlmax):
+            xi_multipoles = cls(nl=nl)
+            chi2 = xi_multipoles.fit_WLS(rdata, mudata, xi_data, cov_data, mumax=mumax)
+            if chi2 < chi_c:
+                print("Converged for nl=", nl)
+                break
+
+        return xi_multipoles
+
     def __init__(self, r1=42.0, r2=178.0, nr=35, nl=6):
         self.rgrid, dr = np.linspace(r1, r2, nr, retstep=True)
         self.rmin, self.rmax = r1 - dr / 2, r2 + dr / 2
@@ -27,8 +42,9 @@ class XiMultipoles():
 
         return results
 
-    def fit(self, rdata, mudata, xi_data, cov_data, nmc=0, seed=0, return_mcs=False):
+    def fit(self, rdata, mudata, xi_data, cov_data, mumax=0.999, nmc=0, seed=0, return_mcs=False):
         w = (self.rmin < rdata) & (rdata < self.rmax)
+        w &= mudata < mumax
         rr = rdata[w]
         mumu = mudata[w]
         xi_in = xi_data[w].copy()
