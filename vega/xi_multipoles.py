@@ -11,7 +11,7 @@ class XiMultipoles():
         """
         for nl in range(nlmin, nlmax):
             xi_multipoles = cls(nl=nl)
-            chi2 = xi_multipoles.fit_WLS(rdata, mudata, xi_data, cov_data, mumax=mumax)
+            chi2 = xi_multipoles.fit(rdata, mudata, xi_data, cov_data, mumax=mumax)
             if chi2 < chi_c:
                 print("Converged for nl=", nl)
                 break
@@ -96,45 +96,3 @@ class XiMultipoles():
             return chi2, xi_knots_mc
 
         return chi2
-        
-    def fit_mini(self, rdata, mudata, xi_data, cov_data, nmc=20, seed=1, return_mcs=False):
-        """ Uses the minimizer. Slow """
-        from scipy.optimize import minimize
-        w = (self.rmin < rdata) & (rdata < self.rmax)
-        rr = rdata[w]
-        mumu = mudata[w]
-        xi_in = xi_data[w].copy()
-        invcov = np.linalg.inv(cov_data[w, :][:, w])
-
-        def _cost(xi_knots):
-            xi = self(rr, mumu, xi_knots.reshape(self.nl, self.nr))
-            diff = xi - xi_in
-            return diff.dot(invcov.dot(diff))
-
-        answer = minimize(_cost, x0=self.xi_knots_fit.ravel(),
-                          method='L-BFGS-B')
-        self.xi_knots_fit = answer.x.reshape(self.nl, self.nr)
-
-        if nmc <= 0:
-            return self.xi_knots_fit, np.zeros((self.nl, self.nr))
-
-        xi_knots_mc = np.zeros((nmc, self.xi_knots_fit.size))
-        xi_data_org = xi_in.copy()
-        rng = np.random.default_rng(seed)
-        randoms = rng.multivariate_normal(
-            np.zeros(rdata.size), cov=cov_data, size=nmc
-        )[:, w]
-
-        for _ in range(nmc):
-            xi_in = xi_data_org + randoms[_]
-            answer = minimize(_cost, x0=self.xi_knots_fit.ravel(),
-                              method='L-BFGS-B')
-            xi_knots_mc[_] = answer.x
-
-        self.std_xi_mc = np.std(xi_knots_mc, axis=0).reshape(
-            self.nl, self.nr)
-
-        if return_mcs:
-            return self.xi_knots_fit, self.std_xi_mc, xi_knots_mc
-
-        return self.xi_knots_fit, self.std_xi_mc
