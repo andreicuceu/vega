@@ -2,10 +2,11 @@ theory:
    camb:
      extra_args:
        WantDerivedParameters: True
-output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full-As/distortion/minimize_full-As_dist
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full-As/no-distortion/minimize_full-As_nodist_2
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
+    correlation_type: 'AUTO'
 params:
   D_H_fid:
     latex: D_{H, fid}
@@ -22,29 +23,20 @@ params:
       max: 1.2
     ref:
       dist: norm
-      loc: 0.9655
+      loc: 0.9649
       scale: 0.05
     latex: n_\mathrm{s}
 #################################    LYA   #############################################
-#  log_biasLYA:
-#    prior:
-#      min: -2.
-#      max: 0
-#    ref: -0.93
-    #proposal: 0.001
-#    latex: log(bias_{LYA})
-#  bias_LYA:
-#    value: 'lambda log_biasLYA: -10**(log_biasLYA)'
-#    latex: bias_{LYA} 
-  bias_LYA: 
-    latex: bias
+  log_biasLYA:
     prior:
+      min: -2.
       max: 0
-      min: -0.2
-    ref:
-      dist: norm
-      loc: -0.1171
-      scale: 0.01
+    ref: -0.8690233083943829
+    #proposal: 0.001
+    latex: log(bias_{LYA})
+  bias_LYA:
+    value: 'lambda log_biasLYA: -10**(log_biasLYA)' 
+    latex: b_{LYA}
   beta_LYA:
     latex: \beta_{LYA}
     prior:
@@ -52,7 +44,7 @@ params:
       max: 5
     ref:
       dist: norm
-      loc: 1.67
+      loc: 1.445
       scale: 0.02
 #########################################################################################
   H0:

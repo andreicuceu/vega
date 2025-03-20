@@ -21,6 +21,7 @@ class Minimizer:
         self._names = sample_params['limits'].keys()
         self._sample_params = sample_params
         self._config = {}
+        print('sample params:', sample_params)
 
         self._run_flag = False
 
@@ -85,6 +86,7 @@ class Minimizer:
                 params_init[param] = value
 
         # Do the actual minimization
+        print('params_init:', params_init)
         self._minuit = iminuit.Minuit(self.chi2, name=self._names, **params_init)
         for name in self._names:
             self._minuit.errors[name] = errors[name]
