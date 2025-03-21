@@ -203,11 +203,9 @@ class VegaInterface:
                 local_params[par] = val
 
         assert self._blind is not None
-        print(local_params)
         if self._rnsps is not None:
             assert self._blind
             local_params = utils.apply_blinding(local_params, self._rnsps)
-        print(local_params)
 
         # Go through each component and compute the model cf
         model_cf = {}

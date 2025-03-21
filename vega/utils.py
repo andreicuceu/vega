@@ -296,6 +296,7 @@ def compute_log_cov_det(cov_mat, data_mask):
 
 def get_blinding(blind_pars, blinding_strat):
     assert blinding_strat is not None, 'Blinding failed, do not run!!!'
+    print(f'Blinding parameters: {blind_pars}')
 
     if ('ap' in blind_pars) or ('at' in blind_pars):
         blinding_type = 'bao'
@@ -312,7 +313,7 @@ def get_blinding(blind_pars, blinding_strat):
         },
         'desi_y3': {
             'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_11_06_2024.npz',
-            'bao': Path('/global/cfs/projectdirs/desi/users/acuceu/notebooks_perl/vega/blinding/test_bao2.npz'),
+            'bao': Path(blind_dir) / 'bao-parameter-blinding' / 'dr2_bao_CIV_blinding_20_03_2025.npz',
         }
     }
 
