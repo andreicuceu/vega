@@ -91,3 +91,13 @@ class CorrelationItem:
         self.data_coordinates = model_coordinates if data_coordinates is None else data_coordinates
         self.dist_model_coordinates = (model_coordinates if dist_model_coordinates is None
                                        else dist_model_coordinates)
+
+    def check_if_blind_corr(self, blind_tracers):
+        if 'all' in blind_tracers:
+            return True
+
+        for tracer in blind_tracers:
+            if tracer in self.tracer1['name'] or tracer in self.tracer2['name']:
+                return True
+
+        return False
