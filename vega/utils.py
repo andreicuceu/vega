@@ -321,6 +321,8 @@ def get_blinding(blind_pars, blinding_strat):
         raise ValueError(f'Unknown blinding version: {blinding_strat}.')
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
+    if blinding_file is None:
+        return None
 
     if not blinding_file.exists():
         raise ValueError(
