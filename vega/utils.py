@@ -312,7 +312,7 @@ def get_blinding(blind_pars, blinding_strat):
         },
         'desi_y3': {
             'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_11_06_2024.npz',
-            'bao': '/global/cfs/projectdirs/desi/users/acuceu/notebooks_perl/vega/blinding/test_bao2.npz',
+            'bao': Path('/global/cfs/projectdirs/desi/users/acuceu/notebooks_perl/vega/blinding/test_bao2.npz'),
         }
     }
 
