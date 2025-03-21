@@ -630,7 +630,7 @@ class BuildConfig:
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if (name == 'LYA') or (name == 'LYB'):
+            if (name == 'LYA') or (name == 'LYB') or (name == 'CIV'):
                 bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
                 bias_eta = parameters.get(f'bias_eta_{name}', None)
                 beta = float(get_par(f'beta_{name}'))
