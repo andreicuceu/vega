@@ -686,7 +686,7 @@ class VegaInterface:
                 continue
 
             tracers = utils.VEGA_BLINDED_PARS[par]
-            if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items]):
+            if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items.values()]):
                 blind_pars += [par]
 
         if len(blind_pars) > 0:
