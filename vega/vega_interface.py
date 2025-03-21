@@ -104,32 +104,9 @@ class VegaInterface:
 
         # Check blinding
         self._blind = False
-        blinding_strat = None
-        if self._has_data:
-            for data_obj in self.data.values():
-                if data_obj.blind:
-                    self._blind = True
-
-                    if blinding_strat is None:
-                        blinding_strat = data_obj.blinding_strat
-                    elif blinding_strat != data_obj.blinding_strat:
-                        raise ValueError('Different blinding strategies found in the data sets.')
-
-        # Apply blinding
-        blind_pars = []
         self._rnsps = None
-        if self._blind:
-            for par in self.sample_params['limits'].keys():
-                if par in utils.BLIND_FIXED_PARS:
-                    raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
-                elif par in utils.VEGA_BLINDED_PARS:
-                    blind_pars += [par]
-            if len(blind_pars) > 0:
-                self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
-
-            if ('bias_QSO' in self.sample_params['limits']) and (
-                    'beta_QSO' in self.sample_params['limits']):
-                raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
+        if self._has_data:
+            self._init_blinding()
 
         # Initialize scale parameters
         self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
@@ -681,6 +658,41 @@ class VegaInterface:
             prior_dict[param] = np.array(prior_list[1:]).astype(float)
 
         return prior_dict
+    
+    def _init_blinding(self):
+        """Initialize blinding at the parameter level.
+        """
+        blinding_strat = None
+        for data_obj in self.data.values():
+            if data_obj.blind:
+                self._blind = True
+
+                if blinding_strat is None:
+                    blinding_strat = data_obj.blinding_strat
+                elif blinding_strat != data_obj.blinding_strat:
+                    raise ValueError('Different blinding strategies found in the data sets.')
+
+        if not self._blind:
+            return
+
+        blind_pars = []
+        for par in self.sample_params['limits'].keys():
+            if par in utils.BLIND_FIXED_PARS:
+                raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
+
+            if par not in utils.VEGA_BLINDED_PARS:
+                continue
+
+            tracers = utils.VEGA_BLINDED_PARS[par]
+            if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items.values()]):
+                blind_pars += [par]
+
+        if len(blind_pars) > 0:
+            self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
+
+        if ('bias_QSO' in self.sample_params['limits']) and (
+                'beta_QSO' in self.sample_params['limits']):
+            raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
     def read_global_cov(self, global_cov_file, scale=None):
         print(f'INFO: Reading global covariance from {global_cov_file}')

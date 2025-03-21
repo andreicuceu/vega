@@ -15,8 +15,11 @@ class BuildConfig:
     """
 
     _params_template = None
-    recognised_correlations = ['lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-                               'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla']
+    recognised_correlations = [
+        'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
+        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya'
+    ]
 
     def __init__(self, options={}, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
@@ -174,9 +177,9 @@ class BuildConfig:
                                  ' its configuration in the "correlations" dictionary.')
 
             # Build the config file for the correlation and save the path
-            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
-                                                                             correlations[name],
-                                                                             git_hash)
+            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(
+                name, correlations[name], git_hash)
+
             self.corr_paths.append(corr_path)
             self.data_paths.append(data_path)
             if tracer1 not in self.corr_names:
@@ -627,7 +630,7 @@ class BuildConfig:
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if (name == 'LYA') or (name == 'LYB'):
+            if (name == 'LYA') or (name == 'LYB') or (name == 'CIV'):
                 bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
                 bias_eta = parameters.get(f'bias_eta_{name}', None)
                 beta = float(get_par(f'beta_{name}'))
