@@ -240,7 +240,8 @@ class VegaInterface:
         try:
             model_cf = self.compute_model(params, run_init=False, direct_pk=direct_pk)
         except utils.VegaBoundsError:
-            self.models[name].PktoXi.cache_pars = None
+            for name in self.corr_items:
+                self.models[name].PktoXi.cache_pars = None
             return 1e100
 
         # Compute chisq for the case where we use the global covariance
