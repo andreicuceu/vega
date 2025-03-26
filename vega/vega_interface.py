@@ -346,7 +346,7 @@ class VegaInterface:
             chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
 
         return chi2
-    
+
     def get_fiducial_for_monte_carlo(self, print_func=print):
         mc_params = self.mc_config['params']
         mc_start_from_fit = self.main_config['control'].get('mc_start_from_fit', None)
@@ -388,7 +388,7 @@ class VegaInterface:
                 fiducial_model = self.compute_model(mc_params, run_init=False)
 
         return fiducial_model
-    
+
     def initialize_monte_carlo(self, scale=None, print_func=print):
         # Get the fiducial model
         fiducial_model = self.get_fiducial_for_monte_carlo(print_func)
@@ -402,70 +402,18 @@ class VegaInterface:
         seed = self.main_config['control'].getint('mc_seed', 0)
 
         if self._use_global_cov:
-            mocks = self.analysis.create_monte_carlo_sim(
-                fiducial_model, seed=seed, scale=scale, forecast=forecast)
-        else:
             if scale is None and 'global_cov_rescale' in self.main_config['control']:
                 scale = self.main_config['control'].getfloat('global_cov_rescale')
 
             mocks = self.analysis.create_global_monte_carlo(
                 fiducial_model, seed=seed, scale=scale, forecast=forecast)
+        else:
+            mocks = self.analysis.create_monte_carlo_sim(
+                fiducial_model, seed=seed, scale=scale, forecast=forecast)
 
         # Activate monte carlo mode
         self.monte_carlo = True
 
-        return mocks
-
-    def monte_carlo_sim(self, params=None, scale=None, seed=int(0), forecast=False):
-        """Compute Monte Carlo simulations for each Correlation item.
-
-        Parameters
-        ----------
-        params : dict, optional
-            Computation parameters, by default None
-        scale : float/dict, optional
-            Scaling for the covariance, by default 1.
-        seed : int, optional
-            Seed for the random number generator, by default 0
-        forecast : boolean, optional
-            Forecast option. If true, we don't add noise to the mock,
-            by default False
-
-        Returns
-        -------
-        dict
-            Dictionary with MC mocks for each item
-        """
-        assert self._has_data
-
-        # Overwrite computation parameters
-        local_params = copy.deepcopy(self.params)
-        if params is not None:
-            for par, val in params.items():
-                local_params[par] = val
-
-        mocks = {}
-        for name in self.corr_items:
-            # Compute fiducial model
-            fiducial_model = self.models[name].compute(
-                local_params, self.fiducial['pk_full'],
-                self.fiducial['pk_smooth'])
-
-            # Get scale
-            if scale is None:
-                item_scale = self.corr_items[name].cov_rescale
-            elif type(scale) is float or type(scale) is int:
-                item_scale = scale
-            elif name in scale:
-                item_scale = scale[name]
-            else:
-                item_scale = 1.
-
-            # Create the mock
-            mocks[name] = self.data[name].create_monte_carlo(
-                fiducial_model, item_scale, seed, forecast)
-
-        self.monte_carlo = True
         return mocks
 
     def minimize(self):
@@ -725,7 +673,7 @@ class VegaInterface:
             prior_dict[param] = np.array(prior_list[1:]).astype(float)
 
         return prior_dict
-    
+
     def _init_blinding(self):
         """Initialize blinding at the parameter level.
         """
