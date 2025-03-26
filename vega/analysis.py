@@ -159,7 +159,7 @@ class Analysis:
 
         return mocks
 
-    def create_global_monte_carlo(self, fiducial_model, scale=None, forecast=False):
+    def create_global_monte_carlo(self, fiducial_model, seed=None, scale=None, forecast=False):
         """Create Monte Carlo simulation using global covariance matrix
 
         Parameters
@@ -177,6 +177,9 @@ class Analysis:
             Global masked MC data vector
         """
         assert self._global_cov is not None
+
+        if seed is not None:
+            np.random.seed(seed)
 
         # TODO The corr items need to have an imposed order
         full_data_mask = []
@@ -205,12 +208,12 @@ class Analysis:
         masked_fiducial = np.concatenate(masked_fiducial)
 
         if forecast:
-            mc_mock = masked_fiducial[full_data_mask]
+            self.current_mc_mock = masked_fiducial[full_data_mask]
         else:
             ran_vec = np.random.randn(full_data_mask.sum())
-            mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(ran_vec)
+            self.current_mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(ran_vec)
 
-        return mc_mock
+        return self.current_mc_mock
 
     def run_monte_carlo(
             self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False, run_mc_fits=True
@@ -256,12 +259,12 @@ class Analysis:
                         self.mc_mocks[name] = []
                     self.mc_mocks[name].append(cf_mock)
             else:
-                self.current_mc_mock = self.create_global_monte_carlo(
-                    fiducial_model, scale=scale, forecast=forecast)
+                mocks = self.create_global_monte_carlo(
+                    fiducial_model, seed=None, scale=scale, forecast=forecast)
 
                 if 'global' not in self.mc_mocks:
                     self.mc_mocks['global'] = []
-                self.mc_mocks['global'].append(self.current_mc_mock)
+                self.mc_mocks['global'].append(mocks)
 
             if not run_mc_fits:
                 continue
