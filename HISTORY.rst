@@ -2,6 +2,17 @@
 History
 =======
 
+1.3.1 (2024-12-11)
+------------------
+* Unblind Y3 BAO analysis
+* Some small improvements to FitResults and full-shape blinding
+
+1.3.0 (2024-11-14)
+------------------
+* Some updates to MC mocks. Now it is possible to read a previous fit and use it to generate mocks.
+* Updated metal formatrix computation allowing for rt dependecy.
+Previous configuration can still be used, as the new one is quite slow to initialize.
+
 1.2.1 (2024-10-14)
 ------------------
 * Fixed metal caching bug. Only metal autos are cached now.

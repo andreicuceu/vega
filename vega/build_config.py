@@ -15,8 +15,11 @@ class BuildConfig:
     """
 
     _params_template = None
-    recognised_correlations = ['lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-                               'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla']
+    recognised_correlations = [
+        'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
+        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya'
+    ]
 
     def __init__(self, options={}, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
@@ -71,6 +74,7 @@ class BuildConfig:
         self.options['test'] = options.get('test', False)
         self.options['use_metal_autos'] = options.get('use_metal_autos', True)
         self.options['new_metals'] = options.get('new_metals', False)
+        self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
 
@@ -173,9 +177,9 @@ class BuildConfig:
                                  ' its configuration in the "correlations" dictionary.')
 
             # Build the config file for the correlation and save the path
-            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
-                                                                             correlations[name],
-                                                                             git_hash)
+            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(
+                name, correlations[name], git_hash)
+
             self.corr_paths.append(corr_path)
             self.data_paths.append(data_path)
             if tracer1 not in self.corr_names:
@@ -275,6 +279,7 @@ class BuildConfig:
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
                     config['model']['new_metals'] = 'True'
+                    config['model']['rp_only_metal_mats'] = str(self.options['rp_only_metal_mats'])
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
                     config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
@@ -293,7 +298,7 @@ class BuildConfig:
                     config['metal-matrix']['alpha_SiII(1190)'] = self.options['metal-matrix'].get(
                         'alpha_SiII(1190)', '1.')
                     config['metal-matrix']['alpha_CIV(eff)'] = self.options['metal-matrix'].get(
-                        'alpha_CIV(eff)', '1.')
+                        'alpha_CIV(eff)', '0.')
 
                     config['metal-matrix']['z_ref_objects'] = self.options['metal-matrix'].get(
                         'z_ref_objects', '2.25')
@@ -625,7 +630,7 @@ class BuildConfig:
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if (name == 'LYA') or (name == 'LYB'):
+            if (name == 'LYA') or (name == 'LYB') or (name == 'CIV'):
                 bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
                 bias_eta = parameters.get(f'bias_eta_{name}', None)
                 beta = float(get_par(f'beta_{name}'))

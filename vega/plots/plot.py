@@ -157,8 +157,12 @@ class VegaPlots:
         covariance = array_or_dict(cov_mat, corr_name)
 
         rd, dd, cd = wedge_obj(data_vec, covariance=covariance)
+        if 'alpha' in kwargs:
+            alpha = kwargs['alpha']
+        else:
+            alpha = 1.
         ax.errorbar(rd, dd * rd**scaling_power, yerr=np.sqrt(cd.diagonal()) * rd**scaling_power,
-                    fmt=data_fmt, color=data_color, label=label)
+                    fmt=data_fmt, color=data_color, label=label, alpha=alpha)
 
         return rd, dd, cd
 

@@ -16,7 +16,13 @@ BLIND_FIXED_PARS = [
     'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full', 'alpha_full'
 ]
 
-VEGA_BLINDED_PARS = ['phi_smooth', 'growth_rate']
+# Dictionary with blinded parameters and the tracers for which they are blinded
+VEGA_BLINDED_PARS = {
+    'phi_smooth': ['all'],
+    'growth_rate': ['all'],
+    'ap': ['CIV', 'civ'],
+    'at': ['CIV', 'civ']
+}
 
 
 @njit
@@ -290,18 +296,37 @@ def compute_log_cov_det(cov_mat, data_mask):
 
 def get_blinding(blind_pars, blinding_strat):
     assert blinding_strat is not None, 'Blinding failed, do not run!!!'
+    print(f'Blinding parameters: {blind_pars}')
 
-    blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/full-shape-blinding/'
-    if blinding_strat == 'desi_y1':
-        blinding_file = Path(blind_dir) / 'dr1_fs_blinding_11_06_2024.npz'
-    elif blinding_strat == 'desi_y3':
-        blinding_file = Path(blind_dir) / 'dr2_fs_blinding_11_06_2024.npz'
+    if ('ap' in blind_pars) or ('at' in blind_pars):
+        blinding_type = 'bao'
+    elif ('growth' in blind_pars) or ('phi_smooth' in blind_pars):
+        blinding_type = 'full-shape'
     else:
+        raise ValueError(f'No blinding implemented for parameters {blind_pars}')
+
+    blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/'
+    blinding_choices = {
+        'desi_y1': {
+            'full-shape': None,
+            'bao': None
+        },
+        'desi_y3': {
+            'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_11_06_2024.npz',
+            'bao': Path(blind_dir) / 'bao-parameter-blinding' / 'dr2_bao_CIV_blinding_20_03_2025.npz',
+        }
+    }
+
+    if blinding_strat not in blinding_choices:
         raise ValueError(f'Unknown blinding version: {blinding_strat}.')
 
+    blinding_file = blinding_choices[blinding_strat][blinding_type]
+    if blinding_file is None:
+        return None
+
     if not blinding_file.exists():
-        raise ValueError(f'Blinding file not found: {blinding_file}.'
-                         'Full-shape analyses must be run at NERSC.')
+        raise ValueError(
+            f'Blinding file not found: {blinding_file}. Full-shape analyses must be run at NERSC.')
 
     blinding = {}
     with np.load(blinding_file) as file:
