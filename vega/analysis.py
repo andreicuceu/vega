@@ -211,7 +211,8 @@ class Analysis:
             self.current_mc_mock = masked_fiducial[full_data_mask]
         else:
             ran_vec = np.random.randn(full_data_mask.sum())
-            self.current_mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(ran_vec)
+            self.current_mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(
+                ran_vec)
 
         return self.current_mc_mock
 

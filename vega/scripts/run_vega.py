@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-from vega import VegaInterface
-from vega.minimizer import Minimizer
 import matplotlib.pyplot as plt
+
+from vega import VegaInterface
 
 
 def run_vega(config_path):
@@ -17,7 +17,7 @@ def run_vega(config_path):
         _ = vega.initialize_monte_carlo()
     elif run_montecarlo:
         raise ValueError('You asked to run over a Monte Carlo simulation,'
-                            ' but no "[monte carlo]" section provided.')
+                         ' but no "[monte carlo]" section provided.')
 
     # Run minimizer
     vega.minimize()

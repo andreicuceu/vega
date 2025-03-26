@@ -41,13 +41,12 @@ if __name__ == '__main__':
         sampling_params = vega.mc_config['sample']['limits']
     elif run_montecarlo:
         raise ValueError('You asked to run over a Monte Carlo simulation,'
-                            ' but no "[monte carlo]" section provided.')
+                         ' but no "[monte carlo]" section provided.')
 
     # Run sampler
     if not vega.run_sampler:
         raise ValueError('Warning: You called "run_vega_mpi.py" without asking'
                          ' for the sampler. Add "run_sampler = True" to the "[control]" section.')
-
 
     if vega.sampler == 'Polychord':
         from vega.samplers.polychord import Polychord

@@ -2,11 +2,9 @@
 import argparse
 import sys
 
-from astropy.io import fits
 from mpi4py import MPI
 
-from vega import FitResults, VegaInterface
-from vega.utils import find_file
+from vega import VegaInterface
 
 if __name__ == '__main__':
     pars = argparse.ArgumentParser(
@@ -35,8 +33,8 @@ if __name__ == '__main__':
     # Run monte carlo
     run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
     if not run_montecarlo or (vega.mc_config is None):
-        raise ValueError('Warning: You called "run_vega_mc_mpi.py" without asking'
-                         ' for monte carlo. Add "run_montecarlo = True" to the "[control]" section.')
+        raise ValueError('Warning: You called "run_vega_mc_mpi.py" without asking '
+                         'for monte carlo. Add "run_montecarlo = True" to the "[control]" section.')
 
     print_func('Finished initializing Vega')
 
