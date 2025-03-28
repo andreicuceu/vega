@@ -438,7 +438,10 @@ class VegaInterface:
             data_size = self.data[name].data_size
             self.total_data_size += data_size
 
-            if self.monte_carlo:
+            if self.monte_carlo and self._use_global_cov:
+                # TODO Figure out a better way to handle this
+                chisq = 0
+            elif self.monte_carlo:
                 diff = self.data[name].masked_mc_mock \
                     - self.bestfit_model[name][self.data[name].model_mask]
                 chisq = diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
