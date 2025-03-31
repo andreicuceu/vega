@@ -2,7 +2,7 @@ theory:
    camb:
      extra_args:
        WantDerivedParameters: True
-output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full_2/distortion-As/minimize_full-As_dist
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full_joint/distortion-As/minimize_full_dist
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
@@ -25,15 +25,15 @@ params:
   f_sigma8:
      latex: f\sigma_8
      derived: True
-  #logA:
-  #  prior:
-  #    min: 0.5
-  #    max: 6
-  #  ref: 3.044522437723423
-  #  latex: \log(10^{10} A_\mathrm{s})
-  #  drop: true
+  logA:
+    prior:
+      min: 0.5
+      max: 6
+    ref: 3.044522437723423
+    latex: \log(10^{10} A_\mathrm{s})
+    drop: true
   As:
-    value: 2.1e-9 #'lambda logA: 1e-10*np.exp(logA)'
+    value: 'lambda logA: 1e-10*np.exp(logA)' # 2.1e-9
     latex: A_\mathrm{s}
   ns: 
     prior:
@@ -49,8 +49,8 @@ params:
 #################################    QSO   #############################################
   bias_QSO:
     prior:
-      min: 3.4
-      max: 4.2
+      min: 0.01
+      max: 20
     ref: 3.545
     latex: bias_{QSO}
   beta_QSO:
@@ -121,7 +121,7 @@ params:
     prior:
       min: 0.01
       max: 0.99
-    ref: 0.3
+    ref: 0.31509
     proposal: 0.1
     latex: \Omega_\mathrm{m}
   omegal:

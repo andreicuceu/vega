@@ -21,21 +21,23 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         Set up initial parameters
         '''
         self.vega = VegaInterface('cobaya_interface/configs/complex_main.ini') # Creates an instance of VegaInterface with a configuration file containing cosmological or model parameters
+        _ = self.vega.compute_model(run_init=False)
         
         # Check if we need to run over a Monte Carlo mock
         if 'control' in self.vega.main_config:
             run_montecarlo = self.vega.main_config['control'].getboolean('run_montecarlo', False)
             if run_montecarlo and self.vega.mc_config is not None:
+                _ = self.vega.initialize_monte_carlo()
                 # Get the MC seed and forecast flag
-                seed = self.vega.main_config['control'].getint('mc_seed', 0)
-                forecast = self.vega.main_config['control'].getboolean('forecast', False)
+                #seed = self.vega.main_config['control'].getint('mc_seed', 0)
+                #forecast = self.vega.main_config['control'].getboolean('forecast', False)
 
                 # Create the mocks
-                self.vega.monte_carlo_sim(self.vega.mc_config['params'], seed=seed, forecast=forecast)
+                #self.vega.monte_carlo_sim(self.vega.mc_config['params'], seed=seed, forecast=forecast)
 
                 # Set to sample the MC params
-                sampling_params = self.vega.mc_config['sample']
-                self.vega.minimizer = Minimizer(self.vega.chi2, sampling_params)
+                #sampling_params = self.vega.mc_config['sample']
+                #self.vega.minimizer = Minimizer(self.vega.chi2, sampling_params)
             elif run_montecarlo:
                 raise ValueError('You asked to run over a Monte Carlo simulation,'
                                  ' but no "[monte carlo]" section provided.')
