@@ -21,7 +21,8 @@ VEGA_BLINDED_PARS = {
     'phi_smooth': ['all'],
     'growth_rate': ['all'],
     'ap': ['CIV', 'civ'],
-    'at': ['CIV', 'civ']
+    'at': ['CIV', 'civ'],
+    'alpha': ['CIV', 'civ'],
 }
 
 
@@ -298,7 +299,7 @@ def get_blinding(blind_pars, blinding_strat):
     assert blinding_strat is not None, 'Blinding failed, do not run!!!'
     print(f'Blinding parameters: {blind_pars}')
 
-    if ('ap' in blind_pars) or ('at' in blind_pars):
+    if ('ap' in blind_pars) or ('at' in blind_pars) or ('alpha' in blind_pars):
         blinding_type = 'bao'
     elif ('growth' in blind_pars) or ('phi_smooth' in blind_pars):
         blinding_type = 'full-shape'
@@ -333,7 +334,14 @@ def get_blinding(blind_pars, blinding_strat):
         for par in blind_pars:
             if par not in VEGA_BLINDED_PARS:
                 raise ValueError(f'Blinding for parameter {par} not implemented.')
-            blinding[par] = float(file[par])
+            if par == 'alpha':
+                dap = float(file['ap'])
+                dat = float(file['at'])
+                blinding[par] = np.sqrt(np.log(
+                    np.pi - np.sqrt((1 + np.pi - np.exp(dap**2)) * (1 + np.pi - np.exp(dat**2))) + 1
+                    ))
+            else:
+                blinding[par] = float(file[par])
 
     return blinding
 

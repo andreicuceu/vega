@@ -658,7 +658,7 @@ class VegaInterface:
             prior_dict[param] = np.array(prior_list[1:]).astype(float)
 
         return prior_dict
-    
+
     def _init_blinding(self):
         """Initialize blinding at the parameter level.
         """
