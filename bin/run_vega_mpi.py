@@ -29,28 +29,16 @@ if __name__ == '__main__':
     vega = VegaInterface(args.config)
     sampling_params = vega.sample_params['limits']
 
-    print_func('Finished initializing Vega')
+    # run compute_model once to initialize all the caches
+    _ = vega.compute_model(run_init=False)
 
-    # Check if we need the distortion
-    use_distortion = vega.main_config['control'].getboolean('use_distortion', True)
-    if not use_distortion:
-        for key, data in vega.data.items():
-            data._distortion_mat = None
-        test_model = vega.compute_model(vega.params, run_init=True)
+    print_func('Finished initializing Vega')
 
     # Check if we need to run over a Monte Carlo mock
     run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
     if run_montecarlo and vega.mc_config is not None:
-        # Get the MC seed and forecast flag
-        seed = vega.main_config['control'].getint('mc_seed', 0)
-        forecast = vega.main_config['control'].getboolean('forecast', False)
-
-        # Create the mocks
-        vega.monte_carlo_sim(vega.mc_config['params'], seed=seed, forecast=forecast)
-
-        # Set to sample the MC params
+        _ = vega.initialize_monte_carlo(print_func=print_func)
         sampling_params = vega.mc_config['sample']['limits']
-        print_func('Created Monte Carlo realization of the correlation')
     elif run_montecarlo:
         raise ValueError('You asked to run over a Monte Carlo simulation,'
                          ' but no "[monte carlo]" section provided.')
@@ -59,9 +47,6 @@ if __name__ == '__main__':
     if not vega.run_sampler:
         raise ValueError('Warning: You called "run_vega_mpi.py" without asking'
                          ' for the sampler. Add "run_sampler = True" to the "[control]" section.')
-
-    # run compute_model once to initialize all the caches
-    _ = vega.compute_model(run_init=False)
 
     if vega.sampler == 'Polychord':
         from vega.samplers.polychord import Polychord
