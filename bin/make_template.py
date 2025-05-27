@@ -29,7 +29,7 @@ def xi_to_pk(r, xi, ell=0, extrap=False):
     return InterpolatedUnivariateSpline(kk, Pk)
 
 
-def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap, match_chain=None):
+def main(ini, output_path, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap, match_chain=None):
     minkh = 1.e-4
     maxkh = 1.1525e3
     npoints = 814
@@ -147,7 +147,7 @@ def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap, match_chain=None):
     pkSB = pkSB(k)
     pkSB *= pk[-1] / pkSB[-1]
 
-    out = fitsio.FITS(args.out, 'rw', clobber=True)
+    out = fitsio.FITS(output_path, 'rw', clobber=True)
     head = [{'name': k, 'value': float(v)} for k, v in cat.items()]
     out.write([k, pk, pkSB], names=['K', 'PK', 'PKSB'], header=head, extname='PK')
     out.close()
