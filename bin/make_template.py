@@ -8,6 +8,10 @@ import mcfit
 import fitsio
 import numpy as np
 
+from camb.dark_energy import DarkEnergyPPF
+from getdist import loadMCSamples
+from getdist.chains import ParamError
+
 from scipy import constants
 from scipy.optimize import curve_fit
 from scipy.interpolate import InterpolatedUnivariateSpline
@@ -25,7 +29,7 @@ def xi_to_pk(r, xi, ell=0, extrap=False):
     return InterpolatedUnivariateSpline(kk, Pk)
 
 
-def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap):
+def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap, match_chain=None):
     minkh = 1.e-4
     maxkh = 1.1525e3
     npoints = 814
@@ -33,14 +37,36 @@ def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap):
     print(f'INFO: running CAMB on {ini}')
     pars = camb.read_ini(os.path.expandvars(ini))
     pars.Transfer.kmax = maxkh
+
     if z_ref is not None:
         pars.Transfer.PK_redshifts[0] = z_ref
-    if fid_H0 is not None:
-        pars.H0 = fid_H0
-    if fid_Ok is not None:
-        pars.omk = fid_Ok
-    if fid_wl is not None:
-        pars.DarkEnergy.w = fid_wl
+
+    if match_chain is not None:
+        print(f'INFO: Reading fiducial cosmology from {match_chain}')
+        chain = loadMCSamples(match_chain, settings={'ignore_rows': 0.3})
+        try:
+            pars.ombh2 = chain.mean('ombh2')
+            pars.omch2 = chain.mean('omch2')
+            pars.InitPower.ns = chain.mean('ns')
+            pars.InitPower.As = chain.mean('As')
+            pars.H0 = chain.mean('H0')
+        except ParamError as e:
+            raise ValueError(
+                f'Chain does not contain all required parameters: {e}. '
+                'Cannot match fiducial cosmology.'
+            )
+        chain_pars = [par.name for par in chain.paramNames.names]
+        if 'wa' in chain_pars:
+            pars.DarkEnergy = DarkEnergyPPF(w=chain.mean('w'), wa=chain.mean('wa'))
+        if 'omk' in chain_pars:
+            pars.omk = chain.mean('omk')
+    else:
+        if fid_H0 is not None:
+            pars.H0 = fid_H0
+        if fid_Ok is not None:
+            pars.omk = fid_Ok
+        if fid_wl is not None:
+            pars.DarkEnergy.w = fid_wl
 
     results = camb.get_results(pars)
     k, z, pk = results.get_matter_power_spectrum(minkh=minkh, maxkh=pars.Transfer.kmax,
@@ -54,6 +80,8 @@ def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap):
     cat['ombh2'] = pars.ombh2
     cat['omch2'] = pars.omch2
     cat['omnuh2'] = pars.omnuh2
+    cat['As'] = pars.InitPower.As
+    cat['ns'] = pars.InitPower.ns
     cat['OK'] = pars.omk
     cat['OL'] = results.get_Omega('de')
     cat['ORPHOTON'] = results.get_Omega('photon')
@@ -61,8 +89,8 @@ def main(ini, out, fid_H0, fid_Ok, fid_wl, z_ref, no_extrap):
     cat['OR'] = cat['ORPHOTON'] + cat['ORNEUTRI']
     cat['OM'] = (cat['ombh2'] + cat['omch2'] + cat['omnuh2']) / (cat['H0'] / 100.)**2
     cat['W'] = pars.DarkEnergy.w
+    cat['WA'] = pars.DarkEnergy.w
     cat['TCMB'] = pars.TCMB
-    cat['NS'] = pars.InitPower.ns
     cat['ZREF'] = pars.Transfer.PK_redshifts[0]
     cat['SIGMA8_ZREF'] = results.get_sigma8()[0]
     cat['SIGMA8_Z0'] = results.get_sigma8()[1]
@@ -149,6 +177,12 @@ if __name__ == '__main__':
     parser.add_argument('--no-extrap', default=False, required=False, action='store_true',
                         help='Turn off extrapolation in xi to pk')
 
+    parser.add_argument('--match-chain', type=str, required=False, default=None,
+                        help='Use the fiducial cosmology from a chain')
+
     args = parser.parse_args()
 
-    main(args.ini, args.out, args.fid_H0, args.fid_Ok, args.fid_wl, args.z_ref, args.no_extrap)
+    main(
+        args.ini, args.out, args.fid_H0, args.fid_Ok, args.fid_wl,
+        args.z_ref, args.no_extrap, args.match_chain
+    )
