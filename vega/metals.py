@@ -40,6 +40,7 @@ class Metals:
             data object corresponding to the cf component, by default None
         """
         self._corr_item = corr_item
+        self.cosmo = corr_item.cosmo
         self._data = data
         # self.PktoXi = PktoXi_obj
         self.size = corr_item.model_coordinates.rp_grid.size
@@ -78,12 +79,6 @@ class Metals:
             self.metal_matrix_config = corr_item.config['metal-matrix']
             self.rp_nbins = self._coordinates.rp_nbins
             self.rt_nbins = self._coordinates.rt_nbins
-
-            self.cosmo = picca_constants.Cosmo(
-                Om=corr_item.cosmo_params['Omega_m'], Ok=corr_item.cosmo_params['Omega_k'],
-                Or=corr_item.cosmo_params['Omega_r'], wl=corr_item.cosmo_params['wl'],
-                blinding='none', verbose=False
-            )
 
         # Initialize metals
         self.Pk_metal = {}
@@ -135,7 +130,8 @@ class Metals:
                 # Initialize the metal correlation Xi
                 self.Xi_metal[corr_hash] = corr_func.CorrelationFunction(
                     self._corr_item.config['metals'], fiducial, metal_coordinates,
-                    scale_params, tracer1, tracer2, metal_corr=True)
+                    scale_params, tracer1, tracer2, metal_corr=True, cosmo=self.cosmo
+                )
 
     def compute_xi_metal_metal(self, pk_lin, pars, name1, name2):
         corr_hash = tuple(set((name1, name2)))

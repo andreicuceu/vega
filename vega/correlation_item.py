@@ -1,8 +1,11 @@
+from picca import constants as picca_constants
+
+
 class CorrelationItem:
     """Class for handling the info and config of
     each correlation function component.
     """
-    cosmo_params = None
+    cosmo = None
     model_coordinates = None
     dist_model_coordinates = None
     data_coordinates = None
@@ -91,6 +94,15 @@ class CorrelationItem:
         self.data_coordinates = model_coordinates if data_coordinates is None else data_coordinates
         self.dist_model_coordinates = (model_coordinates if dist_model_coordinates is None
                                        else dist_model_coordinates)
+
+    def init_cosmo(self, cosmo_params):
+        self.cosmo_params = cosmo_params
+
+        self.cosmo = picca_constants.Cosmo(
+                Om=cosmo_params['Omega_m'], Ok=cosmo_params['Omega_k'],
+                Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'],
+                blinding='none', verbose=False
+            )
 
     def check_if_blind_corr(self, blind_tracers):
         if 'all' in blind_tracers:

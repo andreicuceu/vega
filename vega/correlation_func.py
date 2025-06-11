@@ -17,7 +17,7 @@ class CorrelationFunction:
     'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, coordinates, scale_params,
-                 tracer1, tracer2, metal_corr=False):
+                 tracer1, tracer2, cosmo=None, metal_corr=False):
         """
 
         Parameters

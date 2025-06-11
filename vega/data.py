@@ -70,7 +70,7 @@ class Data:
             self.corr_item.init_broadband(self.coeff_binning_model)
 
         if self.cosmo_params is not None:
-            self.corr_item.cosmo_params = self.cosmo_params
+            self.corr_item.init_cosmo(self.cosmo_params)
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
