@@ -216,15 +216,14 @@ class CorrelationFunction:
 
     def init_bias_evol(self, type1, type2, cosmo=None):
         # For auto-correlations use mean redshift and return
+        self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
         if type1 == type2:
-            self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
             self._use_new_bias_evol = False
             return
 
         if cosmo is None:
             print("Warning: No cosmology found in xcf files, "
                   "using mean redshift evolution.")
-            self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
             self._use_new_bias_evol = False
             return
 
