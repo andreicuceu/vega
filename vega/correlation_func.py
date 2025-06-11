@@ -218,12 +218,14 @@ class CorrelationFunction:
         # For auto-correlations use mean redshift and return
         if type1 == type2:
             self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+            self._use_new_bias_evol = False
             return
 
         if cosmo is None:
             print("Warning: No cosmology found in xcf files, "
                   "using mean redshift evolution.")
             self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+            self._use_new_bias_evol = False
             return
 
         # For cross-correlation compute the separate redshifts
