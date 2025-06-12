@@ -146,9 +146,15 @@ class VegaInterface:
 
         # Read the global covariance
         cov_scale = self.main_config['control'].getfloat('cov_scale', None)
+        num_cov_samples = self.main_config['control'].getint('num_cov_samples', None)
         if global_cov_file is not None:
-            self.read_global_cov(global_cov_file, cov_scale)
+            self.read_global_cov(global_cov_file, cov_scale, num_cov_samples)
             self._use_global_cov = True
+
+        if num_cov_samples is not None:
+            for name in self.corr_items:
+                if self.data[name] is not None:
+                    self.data[name].add_hartlap_factor(num_cov_samples)
 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
@@ -712,7 +718,7 @@ class VegaInterface:
                 'beta_QSO' in self.sample_params['limits']):
             raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
-    def read_global_cov(self, global_cov_file, scale=None):
+    def read_global_cov(self, global_cov_file, scale=None, num_cov_samples=None):
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             self.global_cov = hdul[1].data['COV']
@@ -744,6 +750,16 @@ class VegaInterface:
                 self.global_cov, self.full_data_mask)
             self.masked_global_log_cov_det = utils.compute_log_cov_det(
                 self.global_cov, self.full_data_mask)
+
+        if num_cov_samples is not None:
+            num_data = self.full_data_mask.sum()
+            if num_cov_samples <= num_data + 1:
+                raise ValueError(
+                    f'Number of covariance samples {num_cov_samples} is not larger than '
+                    f'number of data points {num_data} + 1. Hartlap factor cannot be applied.'
+                )
+            hartlap = (num_cov_samples - num_data - 1) / num_cov_samples
+            self.masked_global_invcov *= hartlap
 
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.

@@ -210,6 +210,16 @@ class Data:
         """
         return self._distortion_mat is not None
 
+    def add_hartlap_factor(self, num_cov_samples):
+        num_data = self.data_mask.sum()
+        if num_cov_samples <= num_data + 1:
+            raise ValueError(
+                f'Number of covariance samples {num_cov_samples} is not larger than '
+                f'number of data points {num_data} + 1. Hartlap factor cannot be applied.'
+            )
+        hartlap = (num_cov_samples - num_data - 1) / num_cov_samples
+        self._inv_masked_cov = self.inv_masked_cov * hartlap
+
     def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.
 
