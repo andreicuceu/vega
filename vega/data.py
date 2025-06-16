@@ -233,7 +233,7 @@ class Data:
                 self._blinding_strat = None
 
         if self._blinding_strat in BLINDING_STRATEGIES:
-            print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
+            print(f'Strategy: {self._blinding_strat}')
 
             self._blind = True
             # if self._blinding_strat == 'desi_y3':
