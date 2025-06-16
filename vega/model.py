@@ -35,8 +35,8 @@ class Model:
             data_has_distortion = self._data.has_distortion
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
 
-        self._corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
-        self._corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
+        corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
+        corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -46,30 +46,30 @@ class Model:
 
         # Initialize Broadband
         self.broadband = None
-        if 'broadband' in self._corr_item.config:
+        if 'broadband' in corr_item.config:
             self.broadband = broadband_poly.BroadbandPolynomials(
-                self._corr_item.config['broadband'], self._corr_item.name,
+                corr_item.config['broadband'], corr_item.name,
                 corr_item.model_coordinates, corr_item.dist_model_coordinates
             )
 
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
-            self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
-            self._corr_item.tracer2, self._corr_item.name
+            corr_item.config['model'], fiducial,
+            corr_item.tracer1, corr_item.tracer2, corr_item.name
         )
 
         # Initialize the Pk to Xi transform
-        self.PktoXi = pktoxi.PktoXi.init_from_Pk(self.Pk_core, self._corr_item.config['model'])
+        self.PktoXi = pktoxi.PktoXi.init_from_Pk(self.Pk_core, corr_item.config['model'])
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
-            self._corr_item.config['model'], fiducial, corr_item.model_coordinates,
-            scale_params, self._corr_item.tracer1, self._corr_item.tracer2
+            corr_item.config['model'], fiducial, corr_item.model_coordinates,
+            scale_params, corr_item.tracer1, corr_item.tracer2, cosmo=corr_item.cosmo
         )
 
         # Initialize metals if needed
         self.metals = None
-        if self._corr_item.has_metals:
+        if corr_item.has_metals:
             self.metals = metals.Metals(corr_item, fiducial, scale_params, data)
             self.no_metal_decomp = corr_item.config['model'].getboolean('no-metal-decomp', True)
 

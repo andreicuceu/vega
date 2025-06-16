@@ -17,7 +17,7 @@ class CorrelationFunction:
     'compute_extension' that can be called from outside
     """
     def __init__(self, config, fiducial, coordinates, scale_params,
-                 tracer1, tracer2, metal_corr=False):
+                 tracer1, tracer2, cosmo=None, metal_corr=False):
         """
 
         Parameters
@@ -45,9 +45,12 @@ class CorrelationFunction:
         self._tracer1 = tracer1
         self._tracer2 = tracer2
         self._z_eff = fiducial['z_eff']
-        self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
         self._scale_params = scale_params
         self._metal_corr = metal_corr
+        self._use_new_bias_evol = config.getboolean('new-bias-evolution', False)
+
+        # Initialize the bias evolution
+        self.init_bias_evol(tracer1['type'], tracer2['type'], cosmo)
 
         # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
@@ -211,6 +214,32 @@ class CorrelationFunction:
 
         return rescaled_r, rescaled_mu
 
+    def init_bias_evol(self, type1, type2, cosmo=None):
+        # For auto-correlations use mean redshift and return
+        self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+        if type1 == type2:
+            self._use_new_bias_evol = False
+            return
+
+        if cosmo is None:
+            print("Warning: No cosmology found in xcf files, "
+                  "using mean redshift evolution.")
+            self._use_new_bias_evol = False
+            return
+
+        # For cross-correlation compute the separate redshifts
+        # Assumes rp ~ (z_F - z_Q) * D_H(z)
+        rp = self._r * self._mu
+        z_q = self._z - rp / (2 * cosmo.get_dist_hubble(self._z))
+        z_f = self._z + rp / (2 * cosmo.get_dist_hubble(self._z))
+
+        rel_z_evol_q = (1. + z_q) / (1 + self._z_eff)
+        rel_z_evol_f = (1. + z_f) / (1 + self._z_eff)
+
+        assert type1 != type2
+        self._rel_z_evol_1 = rel_z_evol_q if type1 == 'discrete' else rel_z_evol_f
+        self._rel_z_evol_2 = rel_z_evol_q if type2 == 'discrete' else rel_z_evol_f
+
     def compute_bias_evol(self, params):
         """Compute bias evolution for the correlation function.
 
@@ -224,13 +253,19 @@ class CorrelationFunction:
         ND Array
             Bias evolution for tracer
         """
+        # Get the relative redshift evolution
+        if self._use_new_bias_evol:
+            rel_z_evol_1, rel_z_evol_2 = self._rel_z_evol_1, self._rel_z_evol_2
+        else:
+            rel_z_evol_1, rel_z_evol_2 = self._rel_z_evol, self._rel_z_evol
+
         # Compute the bias evolution
-        bias_evol = self._get_tracer_evol(params, self._tracer1['name'])
-        bias_evol *= self._get_tracer_evol(params, self._tracer2['name'])
+        bias_evol = self._get_tracer_evol(params, self._tracer1['name'], rel_z_evol_1)
+        bias_evol *= self._get_tracer_evol(params, self._tracer2['name'], rel_z_evol_2)
 
         return bias_evol
 
-    def _get_tracer_evol(self, params, tracer_name):
+    def _get_tracer_evol(self, params, tracer_name, rel_z_evol):
         """Compute tracer bias evolution.
 
         Parameters
@@ -254,13 +289,15 @@ class CorrelationFunction:
 
         # Compute the bias evolution using the right model
         if 'croom' in evol_model:
+            assert not self._use_new_bias_evol, "Croom model is not supported with new bias evol"
             bias_evol = self._bias_evol_croom(params, tracer_name)
         else:
-            bias_evol = self._bias_evol_std(params, tracer_name)
+            bias_evol = self._bias_evol_std(params, tracer_name, rel_z_evol)
 
         return bias_evol
 
-    def _bias_evol_std(self, params, tracer_name):
+    @staticmethod
+    def _bias_evol_std(params, tracer_name, rel_z_evol):
         """Bias evolution standard model.
 
         Parameters
@@ -276,8 +313,7 @@ class CorrelationFunction:
             Bias evolution for tracer
         """
         p0 = params['alpha_{}'.format(tracer_name)]
-        bias_z = self._rel_z_evol**p0
-        return bias_z
+        return rel_z_evol**p0
 
     def _bias_evol_croom(self, params, tracer_name):
         """Bias evolution Croom model for QSO, see Croom et al. 2005.
