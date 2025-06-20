@@ -1,48 +1,123 @@
-output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/no-distortion/minimize_no_dist
+theory:
+   camb:
+     extra_args:
+       WantDerivedParameters: True
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/joint_full/no-distortion/minimize_nodist_globalcov
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
+    correlation_type: 'AUTO+CROSS'
+    output_params:
+       growth_rate:
+         derived: True
+       f_sigma8:
+         derived: True
 params:
-  As:
-    latex: A_s
-    value: 2.1e-9
   D_H_fid:
     latex: D_{H, fid}
-    value: 853.772277153506
+    value: 853.772253428897
   D_M_fid:
     latex: D_{M, fid}
-    value: 3882.64271129613
+    value: 3882.64266625345
+  growth_rate:
+    latex: f
+    derived: True
+  f_sigma8:
+     latex: f\sigma_8
+     derived: True
+  logA: # log(1e10 As)
+    prior:
+      min: 0.5
+      max: 6
+    ref: 3.044522437723423
+    proposal: 5e-10
+    latex: \log(10^{10} A_\mathrm{s})
+    drop: true
+  As:
+    value: 'lambda logA: 1e-10*np.exp(logA)' #2.1e-9
+    latex: A_\mathrm{s}
+  ns: 
+    prior:
+      min: 0.8
+      max: 1.2
+    proposal: 0.03
+    ref: 0.9649
+    #value: 0.9649
+    latex: n_\mathrm{s}
+#################################    QSO   #############################################
+  bias_QSO:
+    prior:
+      min: 0.01
+      max: 20
+    ref: 3.545
+    proposal: 0.5
+    latex: b_{QSO}
+#  log_biasQSO:
+#    prior:
+#      min: -2.
+#      max: 1.3
+#    ref: 0.57
+#    latex: log(bias_{QSO})
+#  bias_QSO:
+#    value: 'lambda log_biasQSO: 10**(log_biasQSO)'
+#    latex: bias_{QSO} 
+  beta_QSO:
+    latex: \beta_{QSO}
+    derived: 'lambda bias_QSO, growth_rate: growth_rate/bias_QSO'
+  sigma_velo_disp_lorentz_QSO:
+    prior:
+      min: 0
+      max: 15
+    ref: 3.18
+    proposal: 0.5
+    latex: \sigma_{Lorentz}
+#################################    LYA   #############################################
+  log_biasLYA:
+    prior:
+      min: -2.
+      max: 0
+    ref: -0.8690233083943829
+    proposal: 0.032
+    latex: log(bias_{LYA})
+  bias_LYA:
+    value: 'lambda log_biasLYA: -10**(log_biasLYA)' 
+    latex: b_{LYA} 
+#  bias_LYA: 
+#    latex: bias
+#    prior:
+#      max: 0
+#      min: -0.2
+#    ref:
+#      dist: norm
+#      loc: -0.1171
+#      scale: 0.01
+  beta_LYA:
+    latex: \beta_{LYA}
+    prior:
+      min: 0
+      max: 5
+    ref: 1.445
+      #dist: norm
+      #loc: 1.445
+      #scale: 0.02
+    proposal: 0.03
+#########################################################################################
   H0:
     prior:
       min: 40
       max: 100
-    ref: 
-      dist: norm
-      loc: 67.36
-      scale: 3
+    proposal: 4
+    ref: 67.36
+    #value: 67.36
     latex: H_0
   rdrag:
     latex: r_d
   H0_rd:
     derived: 'lambda H0, rdrag: H0*rdrag/299792'
-  beta_LYA:
-    latex: \beta
-    value: 1.67
-  bias_LYA: 
-    latex: bias
-    value: -0.1171
-  or_photon:
-    value: 5.44985776336301e-05
-    latex: \Omega_{r,\gamma}
-  or_neutrino:
-    value: 2.5133613689346e-05
-    latex: \Omega_{r,\nu}
-  ns:
-    latex: n_s
-    value: 0.9649
+    latex: H_{0}r_{d}/c
   ombh2:
-    latex: \Omega_\mathrm{b} h^2
     value: 0.02237
+    latex: \Omega_\mathrm{b} h^2
   omch2:
     value: 'lambda omegam, ombh2, mnu, H0: (omegam)*(H0/100)**2 - ombh2 -(mnu*(3.046/3)**0.75)/94.0708'
     latex: \Omega_\mathrm{c} h^2
@@ -50,17 +125,24 @@ params:
     prior:
       min: 0.01
       max: 0.99
+    ref: 0.31509
+    proposal: 0.01
+    #value: 0.31509
     latex: \Omega_\mathrm{m}
   omegal:
     latex: \Omega_\Lambda
   mnu: 0.06
   tau: 0.055
+  or_photon:
+    value: 5.44985776336301e-05
+    latex: \Omega_{r,\gamma}
+  or_neutrino:
+    value: 2.5133613689346e-05
+    latex: \Omega_{r,\nu}
 sampler:
   minimize:
     method: "iminuit"
     max_evals: 1e6
-theory:
-  camb:
-    extra_args:
-      WantDerivedParameters: True
+
+    
       

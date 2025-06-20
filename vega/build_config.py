@@ -56,6 +56,10 @@ class BuildConfig:
         self.options['full_shape'] = options.get('full_shape', False)
         self.options['full_shape_alpha'] = options.get('full_shape_alpha', False)
         self.options['smooth_scaling'] = options.get('smooth_scaling', False)
+        self.options['forecast'] = options.get('forecast', False)
+        self.options['run_montecarlo'] = options.get('run_montecarlo', False)
+        self.options['use_full_pk_for_mc'] = options.get('use_full_pk_for_mc', False)
+        self.options['num_cov_samples'] = options.get('num_cov_samples', 0)
 
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
@@ -227,9 +231,15 @@ class BuildConfig:
         if 'cov_rescale' in corr_info:
             config['data']['cov_rescale'] = corr_info.get('cov_rescale')
 
+        #print('Before:', config['cuts']['rp-min'])
+        ##print('rp-min from corr_info:', corr_info.get('rp-min', -200), str(corr_info.get('rp-min', -200)))
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
+        config['cuts']['rt-max'] = str(corr_info.get('rt-max', 200))
+        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -200))
+        config['cuts']['rp-max'] = str(corr_info.get('rp-max', 200))
+        #print('After:', config['cuts']['rp-min'])
         if self.options['test']:
             config['data']['test'] = 'True'
 
@@ -486,8 +496,19 @@ class BuildConfig:
                                  'not have a default value yet, please add it to the parameters '
                                  'dictionary when calling BuildConfig.')
 
+        # Write monte carlo block
+        if self.options['run_montecarlo']:
+            config['mc parameters'] = {}
+            config['monte carlo'] = fit_info['monte carlo'].copy()
+            
+
         # Check if we need the sampler
         config['control'] = {'run_sampler': 'False'}
+        config['control']['run_montecarlo'] = str(self.options['run_montecarlo'])
+        config['control']['forecast'] = str(self.options['forecast'])
+        config['control']['use_full_pk_for_mc'] = str(self.options['use_full_pk_for_mc'])
+        if self.options['num_cov_samples'] > 0:
+            config['control']['num_cov_samples'] = str(self.options['num_cov_samples'])
         if self.run_sampler:
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler

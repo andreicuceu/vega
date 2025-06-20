@@ -15,12 +15,13 @@ from typing import Optional
 class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
 
     correlation_type: Optional[str]
+    vega_ini: Optional[str]
 
     def initialize(self, **params_values):
         '''
         Set up initial parameters
         '''
-        self.vega = VegaInterface('cobaya_interface/configs/complex_main.ini') # Creates an instance of VegaInterface with a configuration file containing cosmological or model parameters
+        self.vega = VegaInterface(self.vega_ini) # Creates an instance of VegaInterface with a configuration file containing cosmological or model parameters
         _ = self.vega.compute_model(run_init=False)
         
         # Check if we need to run over a Monte Carlo mock

@@ -2,7 +2,7 @@ theory:
    camb:
      extra_args:
        WantDerivedParameters: True
-output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full_joint/distortion-As/minimize_full_dist
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/full_joint/no-distortion/minimize_full_nodist
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface

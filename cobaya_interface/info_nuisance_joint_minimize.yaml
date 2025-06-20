@@ -2,7 +2,7 @@ theory:
    camb:
      extra_args:
        WantDerivedParameters: True
-output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/nuisance_joint/no-distortion/minimize_nodist
+output: /pscratch/sd/w/wmturner/LyA-directfit/minimize/nuisance_omegam_joint/no-distortion/minimize_nodist_globalcov_2
 likelihood:
   likelihood.Likelihood: 
     python_path: /global/homes/w/wmturner/repos/vega/cobaya_interface
@@ -100,11 +100,11 @@ params:
     value: 'lambda omegam, ombh2, mnu, H0: (omegam)*(H0/100)**2 - ombh2 -(mnu*(3.046/3)**0.75)/94.0708'
     latex: \Omega_\mathrm{c} h^2
   omegam:
-    value: 0.31509
-    #prior:
-    #  min: 0.01
-    #  max: 0.99
-    #ref: 0.31509
+    #value: 0.31509
+    prior:
+      min: 0.01
+      max: 0.99
+    ref: 0.31509
     #proposal: 0.1
     latex: \Omega_\mathrm{m}
   omegal:
