@@ -266,15 +266,17 @@ class VegaPlots:
         """
         # Get the indices of the requested parameters.
         pnames = list(sensitivity['nominal'].keys())
-        try:
-            pidx = pnames.index(pname)
-        except ValueError:
+        if pname not in pnames:
             raise RuntimeError(f'Unknown floating parameter "{pname}".')
-        try:
-            pidx2 = pnames.index(pname2) if pname2 else pidx
-        except ValueError:
+        if not pname2:
+            pname2 = pname
+        elif pname2 not in pnames:
             raise RuntimeError(f'Unknown floating parameter "{pname2}".')
-        fidx = pidx * len(pnames) + pidx2
+
+        cname = list(sensitivity['fisher'].keys())[0]
+        ppair = (
+            (pname, pname2) if (pname, pname2) in sensitivity['fisher'][cname] else (pname2, pname)
+        )
 
         if comp not in ('peak', 'smooth', 'both'):
             raise ValueError(f'Invalid comp "{comp}" (expected peak/smooth/both)')
@@ -291,7 +293,7 @@ class VegaPlots:
         # Lookup the max value of the Fisher info over all datasets,
         # to normalize the Fisher info plots.
         max_info = np.max([
-            np.nanpercentile(sensitivity['fisher'][cname][fidx], pct)
+            np.nanpercentile(sensitivity['fisher'][cname][ppair], pct)
             for cname in sensitivity['fisher']
         ])
 
@@ -312,7 +314,7 @@ class VegaPlots:
             col = 0 if cname.endswith('lya') else 1
             y1, y2 = (0.92, 0.84) if cname.startswith('lya') else (0.96, 0.92)
 
-            P = r**rpow * sensitivity['partials'][cname][pidx][dist]
+            P = r**rpow * sensitivity['partials'][cname][pname][dist]
             if comp == 'both':
                 P = P.sum(axis=0)
             elif comp == 'peak':
@@ -336,7 +338,7 @@ class VegaPlots:
 
             # Lookup the Fisher distribution for this sample,
             # the specified params, and distortion option.
-            F = sensitivity['fisher'][cname][fidx][dist]
+            F = sensitivity['fisher'][cname][ppair][dist]
             ax = fig.add_subplot(gs[row, col + 2])
             ax.imshow(
                 F.reshape(nrp, nrt), origin='lower', interpolation='none', cmap=cmap,
