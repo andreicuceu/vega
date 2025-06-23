@@ -46,7 +46,7 @@ class CorrelationItem:
 
         self.use_multipoles = config['model'].getboolean('use_multipoles', False)
         if self.use_multipoles:
-            ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
+            ells_to_model = config['model'].get('model_multipoles', "0,2")
             ells_to_model = ells_to_model.split(',')
             self._ells_to_model = [int(_) for _ in ells_to_model]
 

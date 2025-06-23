@@ -148,7 +148,7 @@ class Model:
             xi_model *= self.broadband.compute(pars, 'post-mul')
             xi_model += self.broadband.compute(pars, 'post-add')
 
-        if self.use_multipoles:
+        if self._is_multipoles:
             xi_model = self._data._multipole_matrix.dot(
                 xi_model * self._data._org_data_mask)
 
