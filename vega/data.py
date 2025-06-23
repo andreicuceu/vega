@@ -300,9 +300,9 @@ class Data:
 
         # Initialize the data coordinates
         if 'RMU_BIN' in header and header['RMU_BIN']:
-            if self.use_multipoles:
-                raise Exception("Data must be in r,mu binning to use multipoles.")
             coordinates_cls = RMuCoordinates
+        elif self.use_multipoles:
+            raise Exception("Data must be in r,mu binning to use multipoles.")
         else:
             coordinates_cls = RtRpCoordinates
 
@@ -384,9 +384,9 @@ class Data:
 
         self.coeff_binning_model = header['COEFMOD']
         if 'RMU_BIN' in header and header['RMU_BIN']:
-            if self.use_multipoles:
-                raise Exception("Data must be in r,mu binning to use multipoles.")
             coordinates_cls = RMuCoordinates
+        elif self.use_multipoles:
+            raise Exception("Data must be in r,mu binning to use multipoles.")
         else:
             coordinates_cls = RtRpCoordinates
 
