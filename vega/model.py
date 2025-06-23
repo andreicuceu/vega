@@ -141,16 +141,15 @@ class Model:
 
         # Apply the distortion matrix
         if self._has_distortion_mat:
+            # multipole matrix included.
             xi_model = self._data.distortion_mat.dot(xi_model)
+        elif self._is_multipoles:
+            xi_model = self._data._multipole_matrix.dot(xi_model)
 
         # Apply post distortion broadband
         if self.broadband is not None:
             xi_model *= self.broadband.compute(pars, 'post-mul')
             xi_model += self.broadband.compute(pars, 'post-add')
-
-        if self._is_multipoles:
-            xi_model = self._data._multipole_matrix.dot(
-                xi_model * self._data._org_data_mask)
 
         # Save final xi
         if self.save_components:

@@ -674,8 +674,10 @@ class Data:
             ell, j1 = i // nr, i % nr
             mult_matrix[i, j1::nr] = leg_ells[ell]
 
+        mult_matrix = mult_matrix.dot(np.diag(self.data_mask))
+
         self._org_data_mask = self.data_mask.copy()
-        self._data_vec = mult_matrix.dot(self._data_vec * self.data_mask)
+        self._data_vec = mult_matrix.dot(self._data_vec)
         self._cov_mat = mult_matrix.dot(self._cov_mat.dot(mult_matrix.T))
         self._distortion_mat = self._distortion_mat.T.dot(mult_matrix.T).T
         self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, nells)
