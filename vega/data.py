@@ -5,7 +5,7 @@ from scipy import sparse
 from scipy.sparse import csr_matrix
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
-from vega.coordinates import Coordinates
+from vega.coordinates import RtRpCoordinates, RMuCoordinates
 
 BLINDING_STRATEGIES = ['desi_y3']
 
@@ -294,9 +294,14 @@ class Data:
             self.nb = None
 
         # Initialize the data coordinates
-        self.data_coordinates = Coordinates(
+        if 'RMU_BIN' in header and header['RMU_BIN']:
+            coordinates_cls = RMuCoordinates
+        else:
+            coordinates_cls = RtRpCoordinates
+
+        self.data_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
-            rp_grid=hdul[1].data['RP'], rt_grid=hdul[1].data['RT'], z_grid=hdul[1].data['Z'],
+            hdul[1].data['RP'], hdul[1].data['RT'], hdul[1].data['Z'],
         )
 
         if dmat_path is None:
@@ -306,9 +311,9 @@ class Data:
                 z_grid_model = hdul[2].data['DMZ']
 
                 # Initialize the model coordinates
-                self.model_coordinates = Coordinates(
+                self.model_coordinates = coordinates_cls(
                     header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
-                    rp_grid=rp_grid_model, rt_grid=rt_grid_model, z_grid=z_grid_model
+                    rp_grid_model, rt_grid_model, z_grid_model
                 )
 
             self.coeff_binning_model = 1
