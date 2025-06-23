@@ -43,6 +43,7 @@ class Data:
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
         self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
+        self._multipole_matrix = None
         if self.use_multipoles:
             ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
             ells_to_model = ells_to_model.split(',')
@@ -669,12 +670,14 @@ class Data:
 
         leg_ells = get_legendre_bins(self._ells_to_model, nmu, is_x_corr)
 
-        for i in range(self.data_vec.size):
+        for i in range(n_out):
             ell, j1 = i // nr, i % nr
             mult_matrix[i, j1::nr] = leg_ells[ell]
-        mult_matrix = csr_matrix(mult_matrix)
 
+        self._org_data_mask = self.data_mask.copy()
         self._data_vec = mult_matrix.dot(self._data_vec * self.data_mask)
-        self.cov_mat = mult_matrix.dot(self.cov_mat.dot(mult_matrix.T))
-        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
-        self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0)
+        self._cov_mat = mult_matrix.dot(self._cov_mat.dot(mult_matrix.T))
+        self._distortion_mat = self._distortion_mat.T.dot(mult_matrix.T).T
+        self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, nells)
+        self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, nells)
+        self._multipole_matrix = mult_matrix

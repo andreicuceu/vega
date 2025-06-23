@@ -30,10 +30,10 @@ class Model:
         assert corr_item.model_coordinates is not None
 
         self._data = data
-        data_has_distortion = False
-        if self._data is not None:
-            data_has_distortion = self._data.has_distortion
+        data_has_distortion = (self._data is not None) and self._data.has_distortion
+        data_is_multipoles = (self._data is not None) and self._data.use_multipoles
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
+        self._is_multipoles = corr_item.use_multipoles or data_is_multipoles
 
         # corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
         # corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
@@ -147,6 +147,10 @@ class Model:
         if self.broadband is not None:
             xi_model *= self.broadband.compute(pars, 'post-mul')
             xi_model += self.broadband.compute(pars, 'post-add')
+
+        if self.use_multipoles:
+            xi_model = self._data._multipole_matrix.dot(
+                xi_model * self._data._org_data_mask)
 
         # Save final xi
         if self.save_components:
