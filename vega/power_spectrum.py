@@ -38,9 +38,10 @@ class PowerSpectrum:
 
         self._name = dataset_name
         self.k_grid = fiducial['k']
-        self._bin_size_rp = config.getfloat('bin_size_rp')
-        self._bin_size_rt = config.getfloat('bin_size_rt')
-        self.use_Gk = self._config.getboolean('model binning', True)
+        # self._bin_size_rp = config.getfloat('bin_size_rp')
+        # self._bin_size_rt = config.getfloat('bin_size_rt')
+        # self.use_Gk = self._config.getboolean('model binning', True)
+        self.use_Gk = False
 
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)

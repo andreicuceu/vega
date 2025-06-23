@@ -35,8 +35,8 @@ class Model:
             data_has_distortion = self._data.has_distortion
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
 
-        corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
-        corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
+        # corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
+        # corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
