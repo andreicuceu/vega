@@ -221,6 +221,16 @@ class RMuCoordinates(Coordinates):
         self.mu_binsize = (mu_max - mu_min) / mu_nbins
         self.r_binsize = r_max / r_nbins
 
+        # Keep it for other parts of the code
+        self.rp_min = r_max * mu_min
+        self.rp_max = r_max * mu_max
+        self.rt_max = r_max
+        self.rp_nbins = r_nbins
+        self.rt_nbins = r_nbins
+
+        self.rp_binsize = (self.rp_max - self.rp_min) / self.rp_nbins
+        self.rt_binsize = self.rt_max / self.rt_nbins
+
         mu_regular_grid = (0.5 + np.arange(mu_nbins)) * self.mu_binsize
         r_regular_grid = (0.5 + np.arange(r_nbins)) * self.r_binsize
 
@@ -245,6 +255,10 @@ class RMuCoordinates(Coordinates):
             self.z_grid = None
         else:
             self.z_grid = z_eff if z_grid is None else z_grid
+
+        self.rp_regular_grid = self.r_regular_grid * self.mu_regular_grid
+        self.rt_regular_grid = self.r_regular_grid * np.sqrt(
+            1.0 - self.mu_regular_grid**2)
 
     @classmethod
     def init_from_grids(cls, other, rp_grid, rt_grid, z_grid):
