@@ -32,6 +32,33 @@ def sinc(x):
     return np.sin(x)/x
 
 
+def get_legendre_bins(ells, nmu, x_correlation):
+    """Return mu-bin averaged Legendre multipoles.
+    Args:
+        ells: list(int)
+            List of multipoles
+        nmu: int
+            Number of mu bins
+        x_correlation: bool
+            True if cross-correlations. mu's start from -1.
+
+    Returns:
+        leg_ells: list(np.ndarray)
+            Bin averaged Legendre multipoles. Array of size nmu.
+    """
+    mu1 = -1.0 if x_correlation else 0.0
+    mue = np.linspace(mu1, 1.0, nmu + 1)
+    f = 0.5 if x_correlation else 1.0
+
+    leg_ells = [
+        np.polynomial.legendre.Legendre.basis(ell).integ()(mue)
+        * f * (2 * ell + 1)
+        for ell in ells]
+    leg_ells = [le[1:] - le[:-1] for le in leg_ells]
+
+    return leg_ells
+
+
 def _tracer_bias_beta(params, name):
     """Get the bias and beta values for a tracer
 

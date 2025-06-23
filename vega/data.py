@@ -4,7 +4,7 @@ from scipy import linalg
 from scipy import sparse
 from scipy.sparse import csr_matrix
 
-from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
+from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
 from vega.coordinates import RtRpCoordinates, RMuCoordinates
 
 BLINDING_STRATEGIES = ['desi_y3']
@@ -42,6 +42,11 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
+        self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
+        if self.use_multipoles:
+            ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
+            ells_to_model = ells_to_model.split(',')
+            self._ells_to_model = [int(_) for _ in ells_to_model]
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -295,6 +300,8 @@ class Data:
 
         # Initialize the data coordinates
         if 'RMU_BIN' in header and header['RMU_BIN']:
+            if self.use_multipoles:
+                raise Exception("Data must be in r,mu binning to use multipoles.")
             coordinates_cls = RMuCoordinates
         else:
             coordinates_cls = RtRpCoordinates
@@ -336,6 +343,9 @@ class Data:
         # Compute the model mask
         self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
 
+        if self.use_multipoles:
+            self._convert_to_multipoles()
+
         # Compute data size
         self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
@@ -373,13 +383,20 @@ class Data:
             raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
         self.coeff_binning_model = header['COEFMOD']
-        self.model_coordinates = Coordinates(
+        if 'RMU_BIN' in header and header['RMU_BIN']:
+            if self.use_multipoles:
+                raise Exception("Data must be in r,mu binning to use multipoles.")
+            coordinates_cls = RMuCoordinates
+        else:
+            coordinates_cls = RtRpCoordinates
+
+        self.model_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'],
             header['NP']*self.coeff_binning_model, header['NT']*self.coeff_binning_model,
-            rp_grid=hdul[2].data['RP'], rt_grid=hdul[2].data['RT'], z_grid=hdul[2].data['Z']
+            hdul[2].data['RP'], hdul[2].data['RT'], hdul[2].data['Z']
         )
 
-        self.dist_model_coordinates = Coordinates(
+        self.dist_model_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
 
         hdul.close()
@@ -641,3 +658,23 @@ class Data:
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
+
+    def _convert_to_multipoles(self):
+        is_x_corr = self.data_coordinates.rp_min < 0
+        nmu, nr = self.data_coordinates.mu_nbins, self.data_coordinates.r_nbins
+        nells = len(self._ells_to_model)
+        n_out = nr * nells
+
+        mult_matrix = np.zeros((n_out, self.data_vec.size))
+
+        leg_ells = get_legendre_bins(self._ells_to_model, nmu, is_x_corr)
+
+        for i in range(self.data_vec.size):
+            ell, j1 = i // nr, i % nr
+            mult_matrix[i, j1::nr] = leg_ells[ell]
+        mult_matrix = csr_matrix(mult_matrix)
+
+        self._data_vec = mult_matrix.dot(self._data_vec * self.data_mask)
+        self.cov_mat = mult_matrix.dot(self.cov_mat.dot(mult_matrix.T))
+        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
+        self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0)
