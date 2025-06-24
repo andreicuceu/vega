@@ -10,6 +10,7 @@ from vega.vega_interface import VegaInterface, Minimizer
 import scipy
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 from typing import Optional
+from scipy.special import loggamma
 
 
 class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
@@ -106,5 +107,28 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         print('param values:', params_values)
         print('chi2:', chi2)
         print('Using SH correction')
-        return (-24358/2)*np.log(1+chi2/(24358-1)) # returns log likelihood using Sellentin & Heavens correction
+
+        num_samples = 24358
+        num_dims = np.sum([data.data_mask.sum() for data in self.vega.data])
+
+        # Normalization term
+        Cp = loggamma(0.5 * num_samples) - 0.5 * num_dims * np.log(np.pi * (num_samples - 1))
+        Cp -= loggamma(0.5 * (num_samples - num_dims))
+
+        # Get Cov mat determinant
+        log_cov_det = 1
+        if self.vega._use_global_cov:
+            log_cov_det = self.vega.masked_global_log_cov_det
+        else:
+            for name in self.vega.corr_items:
+                if self.vega.monte_carlo:
+                    log_cov_det *= self.vega.data[name].scaled_log_cov_det
+                else:
+                    log_cov_det *= self.vega.data[name].log_cov_det
+
+        log_lik = Cp - 0.5 * np.log(log_cov_det)
+        log_lik -= 0.5 * num_samples * np.log(1 + chi2 / (num_samples - 1))
+        return log_lik
+
+        # return (-24358/2)*np.log(1+chi2/(24358-1)) # returns log likelihood using Sellentin & Heavens correction
         #return -chi2 / 2 # returns log likelihood
