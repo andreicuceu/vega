@@ -47,7 +47,11 @@ class Data:
         if self.use_multipoles:
             ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
             ells_to_model = ells_to_model.split(',')
-            self._ells_to_model = [int(_) for _ in ells_to_model]
+            self.ells_to_model = [int(_) for _ in ells_to_model]
+            self.nells = len(self.ells_to_model)
+        else:
+            self.ells_to_model = None
+            self.nells = 0
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -663,12 +667,11 @@ class Data:
     def _convert_to_multipoles(self):
         is_x_corr = self.data_coordinates.rp_min < 0
         nmu, nr = self.data_coordinates.mu_nbins, self.data_coordinates.r_nbins
-        nells = len(self._ells_to_model)
-        n_out = nr * nells
+        n_out = nr * self.nells
 
         mult_matrix = np.zeros((n_out, self.data_vec.size))
 
-        leg_ells = get_legendre_bins(self._ells_to_model, nmu, is_x_corr)
+        leg_ells = get_legendre_bins(self.ells_to_model, nmu, is_x_corr)
 
         for i in range(n_out):
             ell, j1 = i // nr, i % nr
@@ -681,6 +684,6 @@ class Data:
         C1 = mult_matrix.dot(self._cov_mat).T
         self._cov_mat = mult_matrix.dot(C1).T
         self._distortion_mat = mult_matrix.dot(self._distortion_mat)
-        self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, nells)
-        self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, nells)
+        self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
         self._multipole_matrix = mult_matrix
