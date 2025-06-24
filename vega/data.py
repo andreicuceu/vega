@@ -2,7 +2,7 @@ import numpy as np
 from astropy.io import fits
 from scipy import linalg
 from scipy import sparse
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_array
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
 from vega.coordinates import RtRpCoordinates, RMuCoordinates
@@ -79,7 +79,7 @@ class Data:
             self.corr_item.init_cosmo(self.cosmo_params)
 
         if not self.has_distortion:
-            self._distortion_mat = np.eye(self.full_data_size)
+            self._distortion_mat = csr_array(np.eye(self.full_data_size))
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
@@ -269,9 +269,9 @@ class Data:
 
         if dmat_path is None:
             if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
+                self._distortion_mat = csr_array(hdul[1].data['DM_BLIND'].astype(float))
             elif 'DM' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
+                self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
 
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
@@ -377,9 +377,9 @@ class Data:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
         if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
+            self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
         elif 'DM_BLIND' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
+            self._distortion_mat = csr_array(hdul[1].data['DM_BLIND'].astype(float))
         else:
             raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
@@ -576,9 +576,9 @@ class Data:
 
         dm_name = dm_prefix + name
         if dm_name in metal_hdul[2].columns.names:
-            self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
+            self.metal_mats[tracers] = csr_array(metal_hdul[2].data[dm_name])
         elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:
-            self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
+            self.metal_mats[tracers] = csr_array(metal_hdul[3].data[dm_name])
         elif self.corr_item.test_flag:
             self.metal_mats[tracers] = sparse.eye(metal_mat_size)
         else:
@@ -672,14 +672,15 @@ class Data:
 
         for i in range(n_out):
             ell, j1 = i // nr, i % nr
-            mult_matrix[i, j1::nr] = leg_ells[ell]
-
-        mult_matrix = mult_matrix.dot(np.diag(self.data_mask))
+            mult_matrix[i, j1::nr] = leg_ells[ell] * self.data_mask[j1::nr]
+        mult_matrix = csr_array(mult_matrix)
+        # mult_matrix = mult_matrix.dot(np.diag(self.data_mask))
 
         self._org_data_mask = self.data_mask.copy()
         self._data_vec = mult_matrix.dot(self._data_vec)
-        self._cov_mat = mult_matrix.dot(self._cov_mat.dot(mult_matrix.T))
-        self._distortion_mat = self._distortion_mat.T.dot(mult_matrix.T).T
+        C1 = mult_matrix.dot(self._cov_mat).T
+        self._cov_mat = mult_matrix.dot(C1).T
+        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
         self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, nells)
         self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, nells)
         self._multipole_matrix = mult_matrix
