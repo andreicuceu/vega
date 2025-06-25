@@ -14,7 +14,10 @@ class PowerSpectrum:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, tracer1, tracer2, dataset_name=None):
+    def __init__(
+            self, config, fiducial, tracer1, tracer2, dataset_name=None,
+            rmu_binning=False
+    ):
         """
 
         Parameters
@@ -38,10 +41,14 @@ class PowerSpectrum:
 
         self._name = dataset_name
         self.k_grid = fiducial['k']
-        # self._bin_size_rp = config.getfloat('bin_size_rp')
-        # self._bin_size_rt = config.getfloat('bin_size_rt')
-        # self.use_Gk = self._config.getboolean('model binning', True)
-        self.use_Gk = False
+        self.rmu_binning = rmu_binning
+        self.use_Gk = self._config.getboolean('model binning', True)
+
+        if self.rmu_binning:
+            self._bin_size_r = config.getfloat('bin_size_r')
+        else:
+            self._bin_size_rp = config.getfloat('bin_size_rp')
+            self._bin_size_rt = config.getfloat('bin_size_rt')
 
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
@@ -430,14 +437,21 @@ class PowerSpectrum:
         ND Array
             G(k)
         """
-        bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
-        bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
-
         Gk = 1.
-        if bin_size_rp != 0:
-            Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
-        if bin_size_rt != 0:
-            Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+
+        if self.rmu_binning:
+            bin_size_r = params.get("par binsize {}".format(self._name), self._bin_size_r)
+            if bin_size_r != 0:
+                Gk = Gk * utils.sinc(self.k_grid * bin_size_r / 2)
+        else:
+            bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
+            bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
+
+            if bin_size_rp != 0:
+                Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
+            if bin_size_rt != 0:
+                Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):

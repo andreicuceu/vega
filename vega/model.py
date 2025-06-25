@@ -34,9 +34,13 @@ class Model:
         data_is_multipoles = (self._data is not None) and self._data.use_multipoles
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
         self._is_multipoles = corr_item.use_multipoles or data_is_multipoles
+        self._rmu_binning = self._data is not None and self._data._rmu_binning
 
-        # corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
-        # corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
+        if self._rmu_binning:
+            corr_item.config['model']['bin_size_r'] = str(corr_item.data_coordinates.r_binsize)
+        else:
+            corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
+            corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -55,7 +59,8 @@ class Model:
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
             corr_item.config['model'], fiducial,
-            corr_item.tracer1, corr_item.tracer2, corr_item.name
+            corr_item.tracer1, corr_item.tracer2, corr_item.name,
+            self._rmu_binning
         )
 
         # Initialize the Pk to Xi transform

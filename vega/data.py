@@ -44,6 +44,7 @@ class Data:
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
         self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
         self._multipole_matrix = None
+        self._rmu_binning = None
         if self.use_multipoles:
             ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
             ells_to_model = ells_to_model.split(',')
@@ -306,10 +307,12 @@ class Data:
         # Initialize the data coordinates
         if 'RMU_BIN' in header and header['RMU_BIN']:
             coordinates_cls = RMuCoordinates
+            self._rmu_binning = True
         elif self.use_multipoles:
             raise Exception("Data must be in r,mu binning to use multipoles.")
         else:
             coordinates_cls = RtRpCoordinates
+            self._rmu_binning = False
 
         self.data_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
