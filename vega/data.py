@@ -683,7 +683,22 @@ class Data:
         self._data_vec = mult_matrix.dot(self._data_vec)
         C1 = mult_matrix.dot(self._cov_mat).T
         self._cov_mat = mult_matrix.dot(C1).T
-        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
         self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
-        self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
         self._multipole_matrix = mult_matrix
+
+        if self.has_distortion:
+            # Calculate the multipole matrix for the distortion model coordinates 
+            nmu, nr = self.dist_model_coordinates.mu_nbins, self.dist_model_coordinates.r_nbins
+            n_out = nr * self.nells
+
+            mult_matrix = np.zeros((n_out, nr * nmu))
+
+            leg_ells = get_legendre_bins(self.ells_to_model, nmu, is_x_corr)
+
+            for i in range(n_out):
+                ell, j1 = i // nr, i % nr
+                mult_matrix[i, j1::nr] = leg_ells[ell] * self.model_mask[j1::nr]
+            mult_matrix = csr_array(mult_matrix)
+
+        self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
