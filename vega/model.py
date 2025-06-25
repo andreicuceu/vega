@@ -38,6 +38,7 @@ class Model:
 
         if self._rmu_binning:
             corr_item.config['model']['bin_size_r'] = str(corr_item.data_coordinates.r_binsize)
+            corr_item.config['model']['bin_size_mu'] = str(corr_item.data_coordinates.mu_binsize)
         else:
             corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
             corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)

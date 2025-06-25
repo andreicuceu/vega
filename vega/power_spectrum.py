@@ -46,6 +46,7 @@ class PowerSpectrum:
 
         if self.rmu_binning:
             self._bin_size_r = config.getfloat('bin_size_r')
+            self._bin_size_mu = config.getfloat('bin_size_mu')
         else:
             self._bin_size_rp = config.getfloat('bin_size_rp')
             self._bin_size_rt = config.getfloat('bin_size_rt')
@@ -440,9 +441,13 @@ class PowerSpectrum:
         Gk = 1.
 
         if self.rmu_binning:
-            bin_size_r = params.get("par binsize {}".format(self._name), self._bin_size_r)
+            bin_size_r = params.get(f"r binsize {self._name}", self._bin_size_r)
+            bin_size_mu = params.get(f"mu binsize {self._name}", self.bin_size_mu)
+
             if bin_size_r != 0:
                 Gk = Gk * utils.sinc(self.k_grid * bin_size_r / 2)
+            if bin_size_mu != 0:
+                Gk = Gk * utils.sinc(self.muk_grid * bin_size_mu / 2)
         else:
             bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
             bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
