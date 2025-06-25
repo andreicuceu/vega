@@ -41,7 +41,6 @@ class PowerSpectrum:
         self._bin_size_rp = config.getfloat('bin_size_rp')
         self._bin_size_rt = config.getfloat('bin_size_rt')
         self.use_Gk = self._config.getboolean('model binning', True)
-        self._Gk_rt_fix = self._config.getboolean('gk-rt-fix', False)
 
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
@@ -437,10 +436,7 @@ class PowerSpectrum:
         if bin_size_rp != 0:
             Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
         if bin_size_rt != 0:
-            if self._Gk_rt_fix:
-                Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt)
-            else:
-                Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+            Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):
