@@ -64,8 +64,8 @@ class PktoXi:
         self.cache_pars = None
 
     @classmethod
-    def init_from_Pk(cls, pk, config):
-        return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config)
+    def init_from_Pk(cls, pk, config, dmu_smooth_xiell):
+        return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config, dmu_smooth_xiell)
 
     def compute_pk_ells(self, pk):
         pk_ell_arr = np.zeros([len(self.ell_vals), len(self.k_grid)])
