@@ -65,8 +65,14 @@ class Model:
             self._rmu_binning
         )
 
+        if self._rmu_binning and self.Pk_core.use_Gk:
+            dmu_smooth_xiell = corr_item.data_coordinates.mu_binsize
+        else:
+            dmu_smooth_xiell = 0
+
         # Initialize the Pk to Xi transform
-        self.PktoXi = pktoxi.PktoXi.init_from_Pk(self.Pk_core, corr_item.config['model'])
+        self.PktoXi = pktoxi.PktoXi.init_from_Pk(
+            self.Pk_core, corr_item.config['model'], dmu_smooth_xiell=dmu_smooth_xiell)
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(

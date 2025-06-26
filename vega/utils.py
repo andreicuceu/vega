@@ -32,6 +32,13 @@ def sinc(x):
     return np.sin(x)/x
 
 
+def bin_averaged_legendre(mu, ell, dmu):
+    mu1 = np.clip(mu - dmu / 2., -1., 1.)
+    mu2 = np.clip(mu + dmu / 2., -1., 1.)
+    legint = np.polynomial.legendre.Legendre.basis(ell).integ()
+    return (legint(mu2) - legint(mu1)) / (mu2 - mu1)
+
+
 def get_legendre_bins(ells, nmu, x_correlation):
     """Return mu-bin averaged Legendre multipoles.
     Args:

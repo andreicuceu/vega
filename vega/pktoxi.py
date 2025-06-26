@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 from numpy import fft
 from scipy import special
@@ -6,7 +8,7 @@ from mcfit import P2xi
 from cachetools import cached, LRUCache
 from cachetools.keys import hashkey
 
-from vega.utils import VegaBoundsError
+from vega.utils import VegaBoundsError, bin_averaged_legendre
 
 
 class PktoXi:
@@ -14,7 +16,9 @@ class PktoXi:
     """
     cache = LRUCache(128)
 
-    def __init__(self, k_grid, muk_grid, name1, name2, config):
+    def __init__(
+            self, k_grid, muk_grid, name1, name2, config, dmu_smooth_xiell=0
+    ):
         """Initialize the FFTLog and the Legendre polynomials
 
         Parameters
@@ -23,6 +27,9 @@ class PktoXi:
             Wavenumber grid of power spectrum
         muk_grid : ND Array
             k_parallel / k grid for input power spectrum
+        dmu_smooth_xiell: float
+            Mu bin spacing that smooths Legendre polynomials. Might be useful
+            in r,mu grid.
         """
         self.name1 = name1
         self.name2 = name2
@@ -48,7 +55,11 @@ class PktoXi:
             # Precompute the Legendre polynomials used to decompose Pk into Pk_ell
             self.legendre_pk[ell] = special.legendre(ell)(self.muk_grid)
             # We don't know the mu grid for Xi in advance, so just initialize
-            self.legendre_xi[ell] = special.legendre(ell)
+            if dmu_smooth_xiell > 0:
+                self.legendre_xi[ell] = partial(
+                    bin_averaged_legendre, ell=ell, dmu=dmu_smooth_xiell)
+            else:
+                self.legendre_xi[ell] = special.legendre(ell)                
 
         self.cache_pars = None
 
