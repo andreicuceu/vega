@@ -54,6 +54,8 @@ class Data:
             self.ells_to_model = None
             self.nells = 0
 
+        self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
+
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
         dmat_path = corr_item.config['data'].get('distortion-file', None)
@@ -278,11 +280,15 @@ class Data:
             elif 'DM' in hdul[1].columns.names:
                 self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
 
+        if self._apply_hartlap:
+            nsamples = header['NSAMPLES']
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
             if cov_path is not None:
                 print(f'Reading covariance matrix file {cov_path}\n')
                 with fits.open(find_file(cov_path)) as cov_hdul:
+                    if self._apply_hartlap:
+                        nsamples = cov_hdul[1].header['NSAMPLES']
                     self._cov_mat = cov_hdul[1].data['CO']
             elif 'CO' in hdul[1].columns.names:
                 self._cov_mat = hdul[1].data['CO']
@@ -364,6 +370,17 @@ class Data:
 
         self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
         self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
+
+        if self._apply_hartlap:
+            hartlap = (nsamples - 1) / (nsamples - self.data_size - 2)
+            print(f"Applying the Hartlap factor: C x {hartlap:.2f}.")
+
+            if hartlap <= 0:
+                raise Exception("Hartlap factor is non-positive.")
+            if hartlap > 1.1:
+                print(f"Warning: Large Hartlap correction.")
+
+            self._cov_mat *= hartlap
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
         if self._blinding_strat is None:
