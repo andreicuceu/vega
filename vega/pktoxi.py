@@ -64,7 +64,7 @@ class PktoXi:
         self.cache_pars = None
 
     @classmethod
-    def init_from_Pk(cls, pk, config, dmu_smooth_xiell):
+    def init_from_Pk(cls, pk, config, dmu_smooth_xiell=0):
         return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config, dmu_smooth_xiell)
 
     def compute_pk_ells(self, pk):

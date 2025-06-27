@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 from picca import constants as picca_constants
 from scipy.sparse import csr_matrix
+from scipy.interpolate import RegularGridInterpolator
 
 from . import coordinates
 from . import correlation_func as corr_func
@@ -42,6 +43,8 @@ class Metals:
         self._corr_item = corr_item
         self.cosmo = corr_item.cosmo
         self._data = data
+        self._rmu_binning = self._data is not None and self._data._rmu_binning
+
         # self.PktoXi = PktoXi_obj
         self.size = corr_item.model_coordinates.rp_grid.size
         # ell_max = self._corr_item.config['model'].getint('ell_max', 6)
@@ -79,6 +82,19 @@ class Metals:
             self.metal_matrix_config = corr_item.config['metal-matrix']
             self.rp_nbins = self._coordinates.rp_nbins
             self.rt_nbins = self._coordinates.rt_nbins
+            if self._rmu_binning:
+                self.dist_model_coordinates = self._data.dist_model_coordinates
+                rpg = np.linspace(
+                    self._coordinates.rp_min, self._coordinates.rp_max,
+                    self.rp_nbins + 1)
+                rpg = (rpg[1:] + rpg[:-1]) / 2
+                rtg = np.arange(
+                    self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
+                    self._coordinates.rt_binsize
+                )
+                self._interp = RegularGridInterpolator(
+                    (rpg, rtg), np.zeros((rpg.size, rtg.size)),
+                    method='linear', bounds_error=False, fill_value=None)
 
         # Initialize metals
         self.Pk_metal = {}
@@ -98,7 +114,7 @@ class Metals:
                         dmat, rp_grid, rt_grid, z_grid = self.compute_metal_dmat(name1, name2)
 
                     self.rp_metal_dmats[(name1, name2)] = dmat
-                    metal_coordinates = coordinates.Coordinates.init_from_grids(
+                    metal_coordinates = coordinates.RtRpCoordinates.init_from_grids(
                         self._coordinates, rp_grid, rt_grid, z_grid)
                 else:
                     # Read rp and rt for the metal correlation
@@ -221,6 +237,11 @@ class Metals:
                 self.xi_distorted[component][(name1, name2)] = copy.deepcopy(xi)
 
             xi_metals += bias1 * bias2 * xi
+
+        if self._rmu_binning:
+            self._interp.values = xi_metals
+            xi_metals = self._interp(
+                [self._coordinates.rp_grid, self._coordinates.rt_grid])
 
         return xi_metals
 
