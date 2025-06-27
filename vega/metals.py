@@ -76,14 +76,17 @@ class Metals:
         self.main_cross_mask = [tracer1 in self.main_tracers or tracer2 in self.main_tracers
                                 for (tracer1, tracer2) in corr_item.metal_correlations]
 
+        self._interp_coords = None
+        self._interp = None
         # If in new metals mode, read the stacked delta files
         self.new_metals = corr_item.new_metals
         if self.new_metals:
             self.metal_matrix_config = corr_item.config['metal-matrix']
             self.rp_nbins = self._coordinates.rp_nbins
             self.rt_nbins = self._coordinates.rt_nbins
+            self.size = self.rp_nbins * self.rt_nbins
+
             if self._rmu_binning:
-                self.dist_model_coordinates = self._data.dist_model_coordinates
                 rpg = np.linspace(
                     self._coordinates.rp_min, self._coordinates.rp_max,
                     self.rp_nbins + 1)
@@ -92,6 +95,8 @@ class Metals:
                     self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
                     self._coordinates.rt_binsize
                 )
+                self._interp_coords = np.vstack(
+                    [self._coordinates.rp_grid, self._coordinates.rt_grid]).T
                 self._interp = RegularGridInterpolator(
                     (rpg, rtg), np.zeros((rpg.size, rtg.size)),
                     method='linear', bounds_error=False, fill_value=None)
@@ -239,9 +244,8 @@ class Metals:
             xi_metals += bias1 * bias2 * xi
 
         if self._rmu_binning:
-            self._interp.values = xi_metals
-            xi_metals = self._interp(
-                [self._coordinates.rp_grid, self._coordinates.rt_grid])
+            self._interp.values = xi_metals.reshape(self.rp_nbins, self.rt_nbins)
+            xi_metals = self._interp(self._interp_coords).ravel()
 
         return xi_metals
 
