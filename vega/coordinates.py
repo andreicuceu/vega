@@ -231,7 +231,7 @@ class RMuCoordinates(Coordinates):
         self.rp_binsize = (self.rp_max - self.rp_min) / self.rp_nbins
         self.rt_binsize = self.rt_max / self.rt_nbins
 
-        mu_regular_grid = (0.5 + np.arange(mu_nbins)) * self.mu_binsize
+        mu_regular_grid = (0.5 + np.arange(mu_nbins)) * self.mu_binsize + self.mu_min
         r_regular_grid = (0.5 + np.arange(r_nbins)) * self.r_binsize
 
         r_regular_grid, mu_regular_grid = np.meshgrid(r_regular_grid, mu_regular_grid)
