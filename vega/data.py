@@ -588,7 +588,7 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_coordinates[tracers] = Coordinates(
+        self.metal_coordinates[tracers] = RtRpCoordinates(
             metal_hdul[1].header['RPMIN'], metal_hdul[1].header['RPMAX'],
             metal_hdul[1].header['RTMAX'], metal_hdul[1].header['NP'], metal_hdul[1].header['NT'],
             rp_grid=metal_hdul[2].data['RP_' + name],
