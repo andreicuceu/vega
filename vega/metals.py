@@ -48,7 +48,16 @@ class Metals:
         # self.PktoXi = PktoXi_obj
         self.size = corr_item.model_coordinates.rp_grid.size
         # ell_max = self._corr_item.config['model'].getint('ell_max', 6)
-        self._coordinates = corr_item.model_coordinates
+        if self._rmu_binning:
+            ups = corr_item.config['model'].getint('rmu_metal_grid_factor', 2)
+            self._coordinates = copy.deepcopy(corr_item.model_coordinates)
+            self._coordinates.rp_binsize /= ups
+            self._coordinates.rt_binsize /= ups
+            self._coordinates.rp_nbins *= ups
+            self._coordinates.rt_nbins *= ups
+        else:
+            self._coordinates = corr_item.model_coordinates
+
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
 
@@ -95,8 +104,9 @@ class Metals:
                     self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
                     self._coordinates.rt_binsize
                 )
-                self._interp_coords = np.vstack(
-                    [self._coordinates.rp_grid, self._coordinates.rt_grid]).T
+                self._interp_coords = np.vstack([
+                    corr_item.model_coordinates.rp_grid,
+                    corr_item.model_coordinates.rt_grid]).T
                 self._interp = RegularGridInterpolator(
                     (rpg, rtg), np.zeros((rpg.size, rtg.size)),
                     method='linear', bounds_error=False, fill_value=None)
