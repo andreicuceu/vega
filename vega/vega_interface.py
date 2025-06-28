@@ -56,6 +56,7 @@ class VegaInterface:
         global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
         self.apply_global_hartlap = self.main_config['data sets'].getboolean(
             'apply-global-hartlap', False)
+        self._precival_corr = 1.0
 
         self.model_pk = self.main_config['control'].getboolean('model_pk', False)
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
@@ -468,10 +469,23 @@ class VegaInterface:
         self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
         print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
               f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
+        print("Note that the Percival correction has to be manually applied.")
         print('----------------------------------------------------\n')
 
         if not self.minimizer.fmin.is_valid:
             print('Invalid fit!!! Check data, covariance, model and priors.')
+
+    @property
+    def percival_correction(self):
+        """Percival correction for the estimated parameter covariance.
+        Calculated only if using a global covariance with Hartlap correction.
+        Otherwise it is one.
+
+        Returns
+        -------
+        float
+        """
+        return self._precival_corr
 
     @property
     def bestfit(self):
@@ -750,7 +764,11 @@ class VegaInterface:
         if self.apply_global_hartlap:
             ndata = np.sum(self.full_data_mask)
             hartlap = (nsamples - 1) / (nsamples - ndata - 2)
-            print(f"Applying global Hartlap factor: C x {hartlap:.2f}.")
+            self._precival_corr = utils.percival_correction(
+                nsamples, ndata, len(self.sample_params['limits']))
+            print(f"Applying global Hartlap factor: C x {hartlap:.2f}. "
+                  f"Percival correction is {self._precival_corr:.2f}. "
+                  "This needs to be manually applied to the parameter cov.!")
 
             if hartlap <= 0:
                 raise Exception("Hartlap factor is non-positive.")

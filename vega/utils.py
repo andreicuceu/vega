@@ -66,6 +66,16 @@ def get_legendre_bins(ells, nmu, x_correlation):
     return leg_ells
 
 
+def percival_correction(nsamples, nbins, nparams):
+    """Percival 2014 correction of the estimated parameter covariance.
+    MNRAS, Volume 439, Issue 3, p.2531-2541
+    """
+    a = nsamples - nbins
+    denom = (a - 1) * (a - 4)
+    A, B = 2.0 / denom, (a - 2.0) / denom
+    return (1.0 + B * (nbins - nparams)) / (1.0 + A + B * (nparams - 1))
+
+
 def _tracer_bias_beta(params, name):
     """Get the bias and beta values for a tracer
 
