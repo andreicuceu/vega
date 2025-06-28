@@ -2,6 +2,7 @@
 import os.path
 import numpy as np
 import scipy.stats
+from scipy.sparse import block_array, eye_array
 from astropy.io import fits
 import configparser
 import copy
@@ -53,6 +54,8 @@ class VegaInterface:
         self.fiducial['save-components'] = write_cf or write_pk
         ini_files = self.main_config['data sets'].get('ini files').split()
         global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
+        self.apply_global_hartlap = self.main_config['data sets'].getboolean(
+            'apply-global-hartlap', False)
 
         self.model_pk = self.main_config['control'].getboolean('model_pk', False)
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
@@ -715,6 +718,8 @@ class VegaInterface:
     def read_global_cov(self, global_cov_file, scale=None):
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
+            if self.apply_global_hartlap:
+                nsamples = hdul[1].header['NSAMPLES']
             self.global_cov = hdul[1].data['COV']
 
         if scale is not None:
@@ -728,8 +733,31 @@ class VegaInterface:
             self.full_data_mask.append(self.data[name].data_mask)
             self.full_model_mask.append(self.data[name].model_mask)
 
+        # Convert to multipoles
+        if any(self.data[name].use_multipoles for name in self.corr_items):
+            G = np.full((len(self.corr_items), len(self.corr_items)), None)
+            for i, name in enumerate(self.corr_items):
+                if self.data[name].use_multipoles:
+                    G[i, i] = self.data[name]._multipole_matrix
+                else:
+                    G[i, i] = eye_array(self.data[name].full_data_size)
+            G = block_array(G, format='csr')
+            self.global_cov = G.dot(G.dot(self.global_cov).T).T
+
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)
+
+        if self.apply_global_hartlap:
+            ndata = np.sum(self.full_data_mask)
+            hartlap = (nsamples - 1) / (nsamples - ndata - 2)
+            print(f"Applying global Hartlap factor: C x {hartlap:.2f}.")
+
+            if hartlap <= 0:
+                raise Exception("Hartlap factor is non-positive.")
+            if hartlap > 1.1:
+                print(f"Warning: Large Hartlap correction.")
+
+            self.global_cov *= hartlap
 
         if self.low_mem_mode:
             masked_cov = self.global_cov[:, self.full_data_mask]
