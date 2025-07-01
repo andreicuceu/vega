@@ -2,6 +2,14 @@
 History
 =======
 
+1.4.0 (2025-07-01)
+------------------
+* Overhaul of the Monte Carlo mocks functionality, now supports global covariances
+* Minor improvements to blinding functionality, and added blinding for DR2 full-shape
+* Update flat priors to have more realistic ranges
+* Added options to compute shell compression as a function of mu, mu^2, and theta
+* Fixed a bug in the plotting of the Fisher information as a function of rp and rt
+
 1.3.1 (2024-12-11)
 ------------------
 * Unblind Y3 BAO analysis
