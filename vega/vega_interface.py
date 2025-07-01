@@ -150,7 +150,7 @@ class VegaInterface:
 
         # Read the global covariance
         cov_scale = self.main_config['control'].getfloat('cov_scale', None)
-        if global_cov_file is not None:
+        if global_cov_file is not None and global_cov_file:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
