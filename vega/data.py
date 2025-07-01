@@ -43,6 +43,7 @@ class Data:
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
         self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
+        self.weighted_multipoles = corr_item.config['model'].getboolean('weighted_multipoles', False)
         self._multipole_matrix = None
         self._rmu_binning = None
         if self.use_multipoles:
@@ -693,9 +694,19 @@ class Data:
 
         leg_ells = get_legendre_bins(self.ells_to_model, nmu, is_x_corr)
 
+        if self.weighted_multipoles:
+            weights = self.cov_mat.diagonal().copy()
+            w = weights > 0
+            weights[w] = 1.0 / weights[w]
+            weights[~w] = 0
+        else:
+            weights = np.ones(self.data_vec.size)
+
         for i in range(n_out):
             ell, j1 = i // nr, i % nr
-            mult_matrix[i, j1::nr] = leg_ells[ell] * self.data_mask[j1::nr]
+            we = weights[j1::nr]
+            we *= we.size / we.sum()
+            mult_matrix[i, j1::nr] = leg_ells[ell] * self.data_mask[j1::nr] * we
         mult_matrix = csr_array(mult_matrix)
         # mult_matrix = mult_matrix.dot(np.diag(self.data_mask))
 
@@ -703,22 +714,23 @@ class Data:
         self._data_vec = mult_matrix.dot(self._data_vec)
         C1 = mult_matrix.dot(self._cov_mat).T
         self._cov_mat = mult_matrix.dot(C1).T
-        self.data_mask = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        data_mask_ell = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+
         self._multipole_matrix = mult_matrix
 
         if self.has_distortion:
             # Calculate the multipole matrix for the distortion model coordinates 
             nmu, nr = self.dist_model_coordinates.mu_nbins, self.dist_model_coordinates.r_nbins
             n_out = nr * self.nells
+            model_mask_ell = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+            mell = np.nonzero(model_mask_ell)[0]
+            M = self._multipole_matrix.toarray()
 
             mult_matrix = np.zeros((n_out, nr * nmu))
-
-            leg_ells = get_legendre_bins(self.ells_to_model, nmu, is_x_corr)
-
-            for i in range(n_out):
-                ell, j1 = i // nr, i % nr
-                mult_matrix[i, j1::nr] = leg_ells[ell] * self.model_mask[j1::nr]
+            for i, x in enumerate(np.nonzero(data_mask_ell)[0]):
+                mult_matrix[mell[i], self.model_mask] = M[x, self.data_mask]
             mult_matrix = csr_array(mult_matrix)
 
-        self.model_mask = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        self.data_mask = data_mask_ell
+        self.model_mask = model_mask_ell
         self._distortion_mat = mult_matrix.dot(self._distortion_mat)
