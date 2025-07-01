@@ -160,14 +160,31 @@ class Output:
                 array=self.pad_array(self.data[name].cov_mat.diagonal(), num_rows)
             ))
 
-            columns.append(fits.Column(
-                name=name+'_RP', format='D',
-                array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
-            ))
-            columns.append(fits.Column(
-                name=name+'_RT', format='D',
-                array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
-            ))
+            if not self.corr_items[name].use_multipoles:
+                columns.append(fits.Column(
+                    name=name+'_RP', format='D',
+                    array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_RT', format='D',
+                    array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
+                ))
+            else:
+                nmu = self.corr_items[name].dist_model_coordinates.mu_nbins
+                nr = self.corr_items[name].dist_model_coordinates.r_nbins
+                ells = np.repeat(self.corr_items[name].ells_to_model, nr)
+                rmodel = self.corr_items[name].dist_model_coordinates.r_grid.reshape(
+                    nmu, nr).mean(0)
+                rmodel = np.tile(rmodel, len(self.corr_items[name].ells_to_model))
+
+                columns.append(fits.Column(
+                    name=name+'_ELL', format='K',
+                    array=self.pad_array(ells, num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_R', format='D',
+                    array=self.pad_array(rmodel, num_rows)
+                ))
 
             if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
                 columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
@@ -177,7 +194,7 @@ class Output:
                     array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
                 ))
 
-            if self.data[name].nb is not None:
+            if not self.corr_items[name].use_multipoles and self.data[name].nb is not None:
                 columns.append(fits.Column(name=name+'_NB', format='K',
                                            array=self.pad_array(self.data[name].nb, num_rows)))
 
