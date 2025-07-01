@@ -176,7 +176,9 @@ class VegaInterface:
                     raise RuntimeError('run_sampler called, but no sampler config found')
 
         # Initialize the output object
-        self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
+        self.output = Output(
+            self.main_config['output'], self.data, self.corr_items, self.analysis,
+            self.percival_correction)
 
         # Initialize the monte carlo flag
         self.monte_carlo = False

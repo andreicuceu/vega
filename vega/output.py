@@ -9,7 +9,7 @@ class Output:
     """Class for handling the Vega output,
     and reading/writing output files.
     """
-    def __init__(self, config, data, corr_items, analysis=None):
+    def __init__(self, config, data, corr_items, analysis=None, percival=1):
         """
 
         Parameters
@@ -32,6 +32,7 @@ class Output:
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
         self.mc_output = config.get('mc_output', None)
+        self.percival = percival
 
     def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
         """Write results in the fits or hdf format
@@ -233,11 +234,11 @@ class Output:
 
         # Get parameter values and errors
         values = np.array([minimizer.values[name] for name in names])
-        errors = np.array([minimizer.errors[name] for name in names])
+        errors = np.sqrt(self.percival) * np.array([minimizer.errors[name] for name in names])
         num_pars = len(names)
 
         # Build the covariance matrix
-        cov_mat = np.array(minimizer.covariance)
+        cov_mat = self.percival * np.array(minimizer.covariance)
 
         cov_format = str(num_pars) + 'D'
         # Create the columns with the bestfit data
@@ -254,6 +255,7 @@ class Output:
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
         bestfit_hdu.header['VALID'] = minimizer.minuit.valid
         bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate
+        bestfit_hdu.header['PERCIVAL'] = self.percival
 
         bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
         bestfit_hdu.header.comments['TTYPE2'] = 'Bestfit values of sampled parameters'
@@ -262,6 +264,7 @@ class Output:
         bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
         bestfit_hdu.header.comments['VALID'] = 'Flag for valid fit'
         bestfit_hdu.header.comments['ACCURATE'] = 'Flag for accurate fit'
+        bestfit_hdu.header.comments['PERCIVAL'] = 'Applied to errors and covariance'
 
         return bestfit_hdu
 
