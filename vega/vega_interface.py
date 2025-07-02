@@ -469,6 +469,7 @@ class VegaInterface:
         self.chisq = self.minimizer.fmin.fval
         self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
         self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
+        self.minimizer.p_value = self.p_value
         print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
               f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
         print("Note that the Percival correction has to be manually applied.")

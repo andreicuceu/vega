@@ -23,6 +23,7 @@ class Minimizer:
         self._config = {}
 
         self._run_flag = False
+        self.p_value = -1.0
 
     def chi2(self, *pars):
         """Wrapper of chi2 function for iminuit.

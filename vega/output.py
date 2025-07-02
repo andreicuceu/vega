@@ -253,6 +253,7 @@ class Output:
 
         # Add all the attributes of the minimum to the header
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
+        bestfit_hdu.header['PVALUE'] = minimizer.p_value
         bestfit_hdu.header['VALID'] = minimizer.minuit.valid
         bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate
         bestfit_hdu.header['PERCIVAL'] = self.percival
@@ -264,6 +265,7 @@ class Output:
         bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
         bestfit_hdu.header.comments['VALID'] = 'Flag for valid fit'
         bestfit_hdu.header.comments['ACCURATE'] = 'Flag for accurate fit'
+        bestfit_hdu.header.comments['PVALUE'] = 'PTE as calculated by vega'
         bestfit_hdu.header.comments['PERCIVAL'] = 'Applied to errors and covariance'
 
         return bestfit_hdu
