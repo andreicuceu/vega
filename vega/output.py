@@ -116,7 +116,8 @@ class Output:
         hdul.writeto(Path(self.outfile), overwrite=self.overwrite)
 
     @staticmethod
-    def pad_array(array, size_to_match, pad_value=np.nan):
+    def pad_array(array, size_to_match, pad_value=-1):
+        # Nan cannot represented in integer arrays
         return np.pad(array, (0, size_to_match - len(array)), constant_values=pad_value)
 
     def _model_hdu(self, corr_funcs, params):
