@@ -715,6 +715,7 @@ class Data:
         C1 = mult_matrix.dot(self._cov_mat).T
         self._cov_mat = mult_matrix.dot(C1).T
         data_mask_ell = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        self.nb = np.tile(self.nb.reshape(nmu, nr).sum(0), self.nells)
 
         self._multipole_matrix = mult_matrix
 

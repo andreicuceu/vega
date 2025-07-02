@@ -179,11 +179,11 @@ class Output:
                 rmodel = np.tile(rmodel, len(self.corr_items[name].ells_to_model))
 
                 columns.append(fits.Column(
-                    name=name+'_ELL', format='K',
+                    name=name+'_RP', format='K',
                     array=self.pad_array(ells, num_rows)
                 ))
                 columns.append(fits.Column(
-                    name=name+'_R', format='D',
+                    name=name+'_RT', format='D',
                     array=self.pad_array(rmodel, num_rows)
                 ))
 
@@ -195,7 +195,7 @@ class Output:
                     array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
                 ))
 
-            if not self.corr_items[name].use_multipoles and self.data[name].nb is not None:
+            if self.data[name].nb is not None:
                 columns.append(fits.Column(name=name+'_NB', format='K',
                                            array=self.pad_array(self.data[name].nb, num_rows)))
 
