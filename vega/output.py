@@ -136,6 +136,7 @@ class Output:
             HDU with the model correlation
         """
         sizes = {name: len(cf) for name, cf in corr_funcs.items()}
+        sizes_data = {name: dat.full_data_size for name, dat in self.data.items()}
         num_rows = np.max(list(sizes.values()))
         columns = []
         for name, cf in corr_funcs.items():
@@ -205,6 +206,15 @@ class Output:
         for name, size in sizes.items():
             card_name = 'hierarch ' + name + '_size'
             model_hdu.header[card_name] = size
+
+        for name, size in sizes_data.items():
+            card_name = 'hierarch ' + name + '_datasize'
+            model_hdu.header[card_name] = size
+            if self.data[name].use_multipoles:
+                card_name = 'hierarch ' + name + '_multipoles'
+                model_hdu.header[card_name] = True
+                card_name = 'hierarch ' + name + '_nell'
+                model_hdu.header[card_name] = self.data[name].nells
 
         for par, val in params.items():
             card_name = 'hierarch ' + par
