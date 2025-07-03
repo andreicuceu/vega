@@ -1,5 +1,6 @@
 import os
 import git
+import copy
 import numpy as np
 from pathlib import Path
 from astropy.io import fits
@@ -397,9 +398,9 @@ class BuildConfig:
         ----------
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
-            tracers separated by a single underscore (e.g. lyalya_qso),
-            and different correlations separated by a double underscore
-            (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
+            tracers separated by an 'x' (e.g. lyaxqso),
+            and different correlations separated by an underscore
+            (e.g. lyaxlya_lyaxqso). If unsure check the templates
             folder to see all possibilities.
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
@@ -488,12 +489,11 @@ class BuildConfig:
 
         # Check if we need the sampler
         config['control'] = {'run_sampler': 'False'}
+        if 'use_template_growth_rate' in fit_info:
+            config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
         if self.run_sampler:
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
-            if 'use_template_growth_rate' in fit_info:
-                config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
-
             if self.sampler == 'Polychord':
                 config['Polychord'] = {}
                 config['Polychord']['path'] = str(self.sampler_out_path)
@@ -525,6 +525,25 @@ class BuildConfig:
                 raise ValueError(
                     f'Sampler {self.sampler} is not supported. '
                     'Please choose from ["Polychord", "PocoMC"].')
+
+        if 'monte_carlo' in fit_info:
+            config['mc parameters'] = {}
+            for key, value in fit_info['monte_carlo']['parameters'].items():
+                config['mc parameters'][key] = str(value)
+
+            config['control']['run_montecarlo'] = 'True'  
+            if 'forecast' in fit_info['monte_carlo']:
+                config['control']['forecast'] = str(fit_info['monte_carlo']['forecast'])
+
+            if 'global_cov_rescale' in fit_info['monte_carlo']:
+                config['control']['global_cov_rescale'] = str(
+                    fit_info['monte_carlo']['global_cov_rescale'])
+
+            if 'mc_output' in fit_info['monte_carlo']:
+                config['control']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+
+            config['monte carlo'] = copy.deepcopy(config['sample'])
+            config['sample'] = {}
 
         # Write main config
         if self.name_extension is None:
