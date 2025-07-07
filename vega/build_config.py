@@ -734,11 +734,11 @@ class BuildConfig:
                     new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
                     new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
                 elif 'par_sigma_smooth_QSO' in parameters:
-                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth_QSO')
-                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth_QSO')
+                    new_params['par_sigma_smooth_QSO'] = get_par('par_sigma_smooth_QSO')
+                    new_params['per_sigma_smooth_QSO'] = get_par('per_sigma_smooth_QSO')
                 elif 'par_sigma_smooth_LYA' in parameters:
-                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth_LYA')
-                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth_LYA')
+                    new_params['par_sigma_smooth_LYA'] = get_par('par_sigma_smooth_LYA')
+                    new_params['per_sigma_smooth_LYA'] = get_par('per_sigma_smooth_LYA')
                 else:
                     raise ValueError(
                         'You need to provide either par_sigma_smooth or '
