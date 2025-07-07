@@ -7,8 +7,12 @@ class ScaleParameters:
     Standard anisotropic BAO: ap = rp'/rp, at = rt'/rt
     Standard full-shape AP: aiso = at * cbrt(ap / at), 1 + epsilon = cbrt(ap / at)
     Lya AP: phi = at/ap, alpha = sqrt(ap * at)
+    DESI convenction: aiso = cbrt(ap * at**2), aap = ap / at
     See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
     """
+    _parametrisations = [
+        'ap_at', 'aiso_epsilon', 'phi_alpha', 'aiso_aap']
+
     def __init__(self, config):
         """Initialize scale parameters from the cosmo-fit type config
 
@@ -23,7 +27,7 @@ class ScaleParameters:
         self.metal_scaling = config.getboolean('metal-scaling', False)
 
         self.parametrisation = config.get('cosmo fit func', 'ap_at')
-        if self.parametrisation not in ['ap_at', 'aiso_epsilon', 'phi_alpha']:
+        if self.parametrisation not in ScaleParameters._parametrisations:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
     def get_ap_at(self, params, metal_corr=False):
@@ -84,6 +88,8 @@ class ScaleParameters:
             return self.aiso_epsilon(params)
         elif self.parametrisation == 'phi_alpha':
             return self.phi_alpha(params)
+        elif self.parametrisation == 'aiso_aap':
+            return self.aiso_aap(params)
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
@@ -143,6 +149,15 @@ class ScaleParameters:
         epsilon = params['epsilon' + name_addon]
         ap = aiso * (1 + epsilon)**2
         at = aiso / (1 + epsilon)
+
+        return ap, at
+
+    @staticmethod
+    def aiso_aap(params, name_addon=''):
+        aiso = params['aiso' + name_addon]
+        aap = params['aap' + name_addon]
+        at = aiso / np.cbrt(aap)
+        ap = at * aap
 
         return ap, at
 

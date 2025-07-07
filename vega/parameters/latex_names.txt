@@ -3,8 +3,9 @@
 # vega_name latex_name
 ap \alpha_{||}
 at \alpha_\bot
-aiso \alpha_{iso}
+aiso \alpha_{\rm iso}
 epsilon \epsilon
+aap \alpha_{\rm AP}
 phi \phi_p
 alpha \alpha_p
 phi_smooth \phi_s
