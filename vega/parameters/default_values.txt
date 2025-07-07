@@ -33,6 +33,10 @@ drp_QSO                        -3.0         3.0         0.1
 qso_rad_strength                0.0         2.0         0.1
 par_sigma_smooth                0.0        10.          0.1
 per_sigma_smooth                0.0        10.          0.1
+par_sigma_smooth_LYA            0.0        10.          0.1
+per_sigma_smooth_LYA            0.0        10.          0.1
+par_sigma_smooth_QSO            0.0        10.          0.1
+per_sigma_smooth_QSO            0.0        10.          0.1
 par_exp_smooth                  0.0        10.          0.1
 per_exp_smooth                  0.0        10.          0.1
 bias_eta_SiII(1190)            -0.5         0.          0.001
