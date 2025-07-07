@@ -720,12 +720,31 @@ class BuildConfig:
 
         # Full-shape smoothing
         if self.options['fullshape_smoothing'] is not None:
-            new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
-            if self.options['fullshape_smoothing'] in ['gauss', 'exp']:
-                new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
             if self.options['fullshape_smoothing'] == 'exp':
                 new_params['par_exp_smooth'] = get_par('par_exp_smooth')
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
+                new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+                new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
+
+            if self.options['fullshape_smoothing'] == 'gauss_iso':
+                new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+
+            if self.options['fullshape_smoothing'] == 'gauss':
+                if 'par_sigma_smooth' in parameters:
+                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
+                elif 'par_sigma_smooth_QSO' in parameters:
+                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth_QSO')
+                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth_QSO')
+                elif 'par_sigma_smooth_LYA' in parameters:
+                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth_LYA')
+                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth_LYA')
+                else:
+                    raise ValueError(
+                        'You need to provide either par_sigma_smooth or '
+                        'par_sigma_smooth_QSO or par_sigma_smooth_LYA '
+                        'in the parameters dictionary.'
+                        )
 
         # DESI instrumental systematics amplitude
         if self.options['desi-instrumental-systematics']:
