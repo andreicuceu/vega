@@ -582,10 +582,8 @@ class Data:
         1D Array
             Monte Carlo mock of the data
         """
-        if scale is None and self.corr_item.cov_rescale is None:
+        if scale is None:
             scale = 1
-        elif scale is None:
-            scale = self.corr_item.cov_rescale
 
         # Check if scale has changed and we need to recompute
         if np.isclose(scale, self._scale):
