@@ -65,10 +65,11 @@ class Model:
             self._rmu_binning
         )
 
-        if self._rmu_binning and self.Pk_core.use_Gk:
-            dmu_smooth_xiell = corr_item.data_coordinates.mu_binsize
-        else:
-            dmu_smooth_xiell = 0
+        # if self._rmu_binning and self.Pk_core.use_Gk:
+        #     dmu_smooth_xiell = corr_item.data_coordinates.mu_binsize
+        # else:
+        # Turn off mu smoothing as I think it is included in Legendre decomp.
+        dmu_smooth_xiell = 0
 
         # Initialize the Pk to Xi transform
         self.PktoXi = pktoxi.PktoXi.init_from_Pk(
