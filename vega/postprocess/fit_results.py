@@ -19,6 +19,9 @@ class CorrelationOutput:
     rp: ArrayLike
     rt: ArrayLike
     z: ArrayLike
+    ndata: int
+    is_multipoles: bool
+    nell: int
 
 
 class FitResults:
@@ -59,20 +62,35 @@ class FitResults:
             model_name = hdu.data.columns[i * 9].name
             assert model_name[-6:] == '_MODEL'
             corr_name = model_name[:-6]
+            size = hdu.header[corr_name + '_size']
+            hdu_data = hdu.data[:size]
 
-            model = hdu.data[model_name]
-            model_mask = hdu.data[corr_name + '_MODEL_MASK']
-            data = hdu.data[corr_name + '_DATA']
-            data_mask = hdu.data[corr_name + '_MASK']
+            model = hdu_data[model_name]
+            model_mask = hdu_data[corr_name + '_MODEL_MASK']
+            data = hdu_data[corr_name + '_DATA']
+            data_mask = hdu_data[corr_name + '_MASK']
             self.num_data_points += len(data[data_mask])
 
-            variance = hdu.data[corr_name + '_VAR']
-            rp = hdu.data[corr_name + '_RP']
-            rt = hdu.data[corr_name + '_RT']
-            z = hdu.data[corr_name + '_Z']
+            variance = hdu_data[corr_name + '_VAR']
+            rp = hdu_data[corr_name + '_RP']
+            rt = hdu_data[corr_name + '_RT']
+            z = hdu_data[corr_name + '_Z']
 
-            self.correlations[corr_name] = CorrelationOutput(model, model_mask, data, data_mask,
-                                                             variance, rp, rt, z)
+            if f"{corr_name}_datasize" in hdu.header:
+                ndata = hdu.header[f"{corr_name}_datasize"]
+            else:
+                ndata = data.size
+
+            if f"{corr_name}_multipoles" in hdu.header:
+                is_multipoles = hdu.header[f"{corr_name}_multipoles"]
+                nell = hdu.header[f"{corr_name}_nell"]
+            else:
+                is_multipoles = False
+                nell = -1
+
+            self.correlations[corr_name] = CorrelationOutput(
+                model, model_mask, data, data_mask, variance, rp, rt, z,
+                ndata, is_multipoles, nell)
 
         self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_data_points - self.num_pars)
         self.reduced_chisq = self.chisq / (self.num_data_points - self.num_pars)
