@@ -49,7 +49,7 @@ class Metals:
         self.size = corr_item.model_coordinates.rp_grid.size
         # ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         if self._rmu_binning:
-            ups = corr_item.config['model'].getint('rmu_metal_grid_factor', 2)
+            ups = corr_item.config['model'].getint('rmu_metal_grid_factor', 1)
             self._coordinates = copy.deepcopy(corr_item.model_coordinates)
             self._coordinates.rp_binsize /= ups
             self._coordinates.rt_binsize /= ups
