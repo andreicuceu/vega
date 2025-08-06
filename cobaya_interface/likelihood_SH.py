@@ -17,6 +17,7 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
 
     correlation_type: Optional[str]
     vega_ini: Optional[str]
+    num_samples: Optional[int]
 
     def initialize(self, **params_values):
         '''
@@ -106,28 +107,42 @@ class Likelihood(Likelihood): # class that inherits from cobaya.likelihood
         chi2 = self.vega.chi2(params_values, direct_pk = self.pk_full) # uses vega to compute chi2 from power spectrum and parameter values 
         print('param values:', params_values)
         print('chi2:', chi2)
-        print('Using SH correction')
+        if not np.isfinite(chi2) or chi2 < 0:
+            raise ValueError(f"chi2 is invalid: {chi2}")
+        print(f'Using SH correction with N_samples={self.num_samples}')
 
-        num_samples = 24358
-        num_dims = np.sum([data.data_mask.sum() for data in self.vega.data])
+        #num_samples = 24358
+        #num_dims = np.sum([data.data_mask.sum() for data in self.vega.data])
+        num_dims = np.sum([self.vega.data[name].data_mask.sum() for name in self.vega.data])
+        print('num_dims:', num_dims)
+        df = self.num_samples - num_dims
+        if df <= 0:
+            raise ValueError(f"Degrees of freedom invalid: N={self.num_samples}, dims={num_dims}")
+
 
         # Normalization term
-        Cp = loggamma(0.5 * num_samples) - 0.5 * num_dims * np.log(np.pi * (num_samples - 1))
-        Cp -= loggamma(0.5 * (num_samples - num_dims))
+        Cp = loggamma(0.5 * self.num_samples) - 0.5 * num_dims * np.log(np.pi * (self.num_samples - 1))
+        Cp -= loggamma(0.5 * (self.num_samples - num_dims))
 
         # Get Cov mat determinant
         log_cov_det = 1
+        print('self.vega._use_global_cov:', self.vega._use_global_cov)
         if self.vega._use_global_cov:
             log_cov_det = self.vega.masked_global_log_cov_det
+            print('masked global log cov det:', log_cov_det)
         else:
             for name in self.vega.corr_items:
                 if self.vega.monte_carlo:
                     log_cov_det *= self.vega.data[name].scaled_log_cov_det
                 else:
                     log_cov_det *= self.vega.data[name].log_cov_det
+        if not np.isfinite(log_cov_det):
+            raise ValueError("invalid log(det(C))")
 
-        log_lik = Cp - 0.5 * np.log(log_cov_det)
-        log_lik -= 0.5 * num_samples * np.log(1 + chi2 / (num_samples - 1))
+        #log_lik = Cp - 0.5 * np.log(log_cov_det)
+        log_lik = Cp - 0.5 * log_cov_det
+        log_lik -= 0.5 * self.num_samples * np.log(1 + chi2 / (self.num_samples - 1))
+        print(f'original loglik: {-chi2/2}, new loglik: {log_lik}')
         return log_lik
 
         # return (-24358/2)*np.log(1+chi2/(24358-1)) # returns log likelihood using Sellentin & Heavens correction

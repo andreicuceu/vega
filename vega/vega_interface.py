@@ -753,6 +753,7 @@ class VegaInterface:
 
         if num_cov_samples is not None:
             num_data = self.full_data_mask.sum()
+            print(f'Number of data bins (full) = {num_data}')
             if num_cov_samples <= num_data + 1:
                 raise ValueError(
                     f'Number of covariance samples {num_cov_samples} is not larger than '

@@ -212,6 +212,7 @@ class Data:
 
     def add_hartlap_factor(self, num_cov_samples):
         num_data = self.data_mask.sum()
+        print(f'Number of data bins (individual) = {num_data}')
         if num_cov_samples <= num_data + 1:
             raise ValueError(
                 f'Number of covariance samples {num_cov_samples} is not larger than '
