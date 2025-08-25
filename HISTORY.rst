@@ -2,6 +2,14 @@
 History
 =======
 
+1.4.1 (2025-08-25)
+------------------
+* Add support for shell plots in the plotting module
+* Automatic shell plots after fits when using run_vega.py
+* Add option to fit independent full-shape smoothing parameters for each tracer
+* Add MC functionality to the ConfigBuilder
+* Some minor bug fixes related to MC mocks
+
 1.4.0 (2025-07-01)
 ------------------
 * Overhaul of the Monte Carlo mocks functionality, now supports global covariances
