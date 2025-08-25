@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .wedges import Wedge
+from .shell import Shell
 from .utils import array_or_dict
 
 
@@ -39,7 +40,7 @@ class VegaPlots:
 
                 # Initialize data coordinates
                 self.rp_setup_data[name], self.rt_setup_data[name], self.r_setup_data[name] = \
-                    self.initialize_wedge_coordinates(data.data_coordinates)
+                    self.initialize_coordinates(data.data_coordinates)
 
                 self.cuts[name] = {'r_min': data.r_min_cut,
                                    'r_max': data.r_max_cut}
@@ -49,18 +50,20 @@ class VegaPlots:
 
                 # Initialize model coordinates
                 self.rp_setup_model[name], self.rt_setup_model[name], self.r_setup_model[name] = \
-                    self.initialize_wedge_coordinates(data.model_coordinates)
+                    self.initialize_coordinates(data.model_coordinates)
 
             self.has_data = True
 
-    def initialize_wedge_coordinates(self, coordinates):
+    def initialize_coordinates(self, coordinates):
         rp_setup = (coordinates.rp_min, coordinates.rp_max, coordinates.rp_nbins)
         rt_setup = (0., coordinates.rt_max, coordinates.rt_nbins)
         r_setup = rt_setup
         return rp_setup, rt_setup, r_setup
 
-    def initialize_wedge(self, mu_bin, corr_name=None, is_data=False, cross_flag=False,
-                         rp_setup=None, rt_setup=None, r_setup=None, abs_mu=True, **kwargs):
+    def initialize_wedge(
+        self, mu_bin, corr_name=None, is_data=False, cross_flag=False,
+        rp_setup=None, rt_setup=None, r_setup=None, abs_mu=True, **kwargs
+    ):
         """Initialize wedge object
 
         Parameters
@@ -69,6 +72,8 @@ class VegaPlots:
             Min and max mu value defining the wedge
         corr_name : str, optional
             Name of the correlation component, by default None
+        is_data : bool, optional
+            Whether the wedge is for data, by default False
         cross_flag : bool, optional
             Whether the wedge is for the cross-correlation, by default False
         rp_setup : (float, float, int), optional
@@ -109,19 +114,85 @@ class VegaPlots:
 
         return Wedge(mu=mu_bin, rp=rp, rt=rt, r=r, abs_mu=abs_mu)
 
-    def plot_data(self, ax, mu_bin, data=None, cov_mat=None, cross_flag=False, label=None,
-                  corr_name='lyaxlya', data_fmt='o', data_color=None,
-                  scaling_power=2, use_local_coordinates=True, **kwargs):
-        """Plot the data in the input ax object using the input wedge object
+    def initialize_shell(
+        self, r_bin, corr_name=None, is_data=False, cross_flag=False,
+        rp_setup=None, rt_setup=None, angle_var='theta', **kwargs
+    ):
+        """Initialize shell object
+
+        Parameters
+        ----------
+        r_bin : (float, float)
+            Min and max r value defining the shell
+        corr_name : str, optional
+            Name of the correlation component, by default None
+        is_data : bool, optional
+            Whether the shell is for data, by default False
+        cross_flag : bool, optional
+            Whether the shell is for the cross-correlation, by default False
+        rp_setup : (float, float, int), optional
+            (min, max, size) specification for input r_parallel, by default None
+        rt_setup : (float, float, int), optional
+            (min, max, size) specification for input r_transverse, by default None
+        angle_var : str, optional
+            Name of the angle variable, by default 'theta'
+
+        Returns
+        -------
+        vega.Shell
+            Vega shell object
+        """
+        if corr_name is not None:
+            if is_data:
+                rp = self.rp_setup_data[corr_name]
+                rt = self.rt_setup_data[corr_name]
+            else:
+                rp = self.rp_setup_model[corr_name]
+                rt = self.rt_setup_model[corr_name]
+        else:
+            if rp_setup is not None:
+                rp = rp_setup
+            elif cross_flag:
+                rp = (-200., 200., 100)
+            else:
+                rp = (0., 200., 50)
+
+            rt = rt_setup if rt_setup is not None else (0., 200., 50)
+
+        # Compute range of angles/mu for the shell
+        if angle_var == 'theta':
+            angle_range = (0, np.pi) if cross_flag else (0, np.pi/2)
+        else:
+            angle_range = (-1, 1) if cross_flag else (0, 1)
+
+        # Compute binning factor for the shell
+        # This was manually tuned to get a reasonable number of bins
+        binning_factor = np.mean(r_bin) * np.sqrt(r_bin[1] - r_bin[0]) * 3
+
+        return Shell(
+            r=r_bin, rp=rp, rt=rt, angle_var=angle_var, angle_range=angle_range,
+            num_bins_fraction=binning_factor
+        )
+
+    def plot_data(
+        self, ax, x_bin, is_shell=False, data=None, cov_mat=None, cross_flag=False, label=None,
+        corr_name='lyaxlya', data_fmt='o', data_color=None, scaling_power=2,
+        use_local_coordinates=True, alpha=1.0, **kwargs
+    ):
+        """Plot the data in the input ax object
 
         Parameters
         ----------
         ax : plt.axes
             Axes object to plot the data in
+        x_bin : (float, float)
+            Bin edges for the x-axis, mu for wedges and r for shells
         data : array or dict, optional
             Data vector as an array or a dictionary of components, by default None
         cov_mat : array or dict, optional
             Covariance matrix as an array or a dictionary of components, by default None
+        cross_flag : bool, optional
+            Whether the plot is for a cross-correlation, by default False
         label : str, optional
             Label for the data points, by default None
         corr_name : str, optional
@@ -135,11 +206,14 @@ class VegaPlots:
             by default None
         use_local_coordinates : bool, optional
             Whether to use the stored coordinate settings or defaul/input values, by default True
+        alpha: float, optional
+            The transparency level of the plotted data points, by default 1.0
         """
+        init_func = self.initialize_shell if is_shell else self.initialize_wedge
         if use_local_coordinates and self.has_data:
-            wedge_obj = self.initialize_wedge(mu_bin, corr_name, True, cross_flag, **kwargs)
+            compression_obj = init_func(x_bin, corr_name, True, cross_flag, **kwargs)
         else:
-            wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
+            compression_obj = init_func(x_bin, cross_flag=cross_flag, **kwargs)
 
         if data is None:
             if corr_name not in self.data:
@@ -156,31 +230,43 @@ class VegaPlots:
 
         covariance = array_or_dict(cov_mat, corr_name)
 
-        rd, dd, cd = wedge_obj(data_vec, covariance=covariance)
-        if 'alpha' in kwargs:
-            alpha = kwargs['alpha']
+        x_grid, x_data, x_cov = compression_obj(data_vec, covariance=covariance)
+
+        if is_shell:
+            ax.errorbar(
+                x_grid, x_data * 1e3, yerr=np.sqrt(x_cov.diagonal()) * 1e3,
+                fmt=data_fmt, color=data_color, label=label, alpha=alpha, capsize=2
+            )
         else:
-            alpha = 1.
-        ax.errorbar(rd, dd * rd**scaling_power, yerr=np.sqrt(cd.diagonal()) * rd**scaling_power,
-                    fmt=data_fmt, color=data_color, label=label, alpha=alpha)
+            ax.errorbar(
+                x_grid, x_data * x_grid**scaling_power,
+                yerr=np.sqrt(x_cov.diagonal()) * x_grid**scaling_power,
+                fmt=data_fmt, color=data_color, label=label, alpha=alpha
+            )
 
-        return rd, dd, cd
+        return x_grid, x_data, x_cov
 
-    def plot_model(self, ax, mu_bin, model=None, cov_mat=None, cross_flag=False,
-                   label=None, corr_name='lyaxlya', model_ls='-', model_color=None,
-                   scaling_power=2, use_local_coordinates=True, **kwargs):
+    def plot_model(
+        self, ax, x_bin, is_shell=False, model=None, cov_mat=None, cross_flag=False,
+        label=None, corr_name='lyaxlya', model_ls='-', model_color=None,
+        scaling_power=2, use_local_coordinates=True, **kwargs
+    ):
         """Plot the model in the input ax object using the input wedge object
 
         Parameters
         ----------
         ax : plt.axes
             Axes object to plot the model in
-        wedge_obj : vega.Wedge
-            Vega wedge object for computing the wedge
+        x_bin : (float, float)
+            Bin edges for the x-axis, mu for wedges and r for shells
+        is_shell : bool, optional
+            Whether the plot is for a shell, by default False
         model : array or dict, optional
             Model vector as an array or a dictionary of components, by default None
         cov_mat : array or dict, optional
             Covariance matrix as an array or a dictionary of components, by default None
+        cross_flag : bool, optional
+            Whether the plot is for a cross-correlation, by default False
         label : str, optional
             Label for the model, by default None
         corr_name : str, optional
@@ -210,148 +296,36 @@ class VegaPlots:
                 if len(masked_model) != len(self.data[corr_name]):
                     raise ValueError('Masked model array does not match data array.')
 
+        init_func = self.initialize_shell if is_shell else self.initialize_wedge
         if masked_model is not None:
-            wedge_obj = self.initialize_wedge(mu_bin, corr_name, True, cross_flag, **kwargs)
+            wedge_obj = init_func(x_bin, corr_name, True, cross_flag, **kwargs)
         elif use_local_coordinates and self.has_data:
-            wedge_obj = self.initialize_wedge(mu_bin, corr_name, False, cross_flag, **kwargs)
+            wedge_obj = init_func(x_bin, corr_name, False, cross_flag, **kwargs)
         else:
-            wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
+            wedge_obj = init_func(x_bin, cross_flag=cross_flag, **kwargs)
 
         if cov_mat is None or wedge_obj.weights.shape[1] != cov_mat.shape[0]:
-            r, d = wedge_obj(model_vec)
-            ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
+            x_grid, x_model = wedge_obj(model_vec)
         else:
             covariance = array_or_dict(cov_mat, corr_name)
-            if masked_model is None:
-                r, d, _ = wedge_obj(model_vec, covariance=covariance)
-            else:
-                r, d, _ = wedge_obj(masked_model, covariance=covariance)
-            ax.plot(r, d * r**scaling_power, ls=model_ls, color=model_color, label=label)
+            model_to_compress = masked_model if masked_model is not None else model_vec
+            x_grid, x_model, _ = wedge_obj(model_to_compress, covariance=covariance)
 
-        return r, d
-
-    def plot_sensitivity(self, sensitivity, pname='ap', pname2=None, pct=95,
-                         distorted=True, comp='both', rpow=0, save=None):
-        """Plot parameter sensitivities.
-
-        Plot the sensitivity to one parameter or the joint sensitivity to a pair of parameters.
-        The resulting plot shows the partial derivatives of `pname` on the left-hand side and
-        the distribution of the Fisher information for pname or, if pname2 is specified,
-        (pname, pname2) on the right-hand side.
-
-        Parameters
-        ----------
-        sensitivity - dict
-            Dictionary with keys `nominal`, `partials` and `fisher`, normally obtained by calling
-            `compute_sensitivity()` on a VegaInterface object, then passing its `sensitivity`
-            attribute here.
-        pname - str
-            Name of the first parameter to use. Partial derivatives are only displayed for this
-            parameter, even when pname2 is specified.
-        pname2 - str or None
-            Name of the second parameter to use. Displays the Fisher information associated with
-            the covariance of (pname,pname2) when specified. If None, then use (pname,pname).
-        pct - float
-            Clip the color map for values above this percentile value.
-        distorted - bool
-            Plot the sensitivity of the predicted correlation including the distortion matrix
-            when True.  Otherwise, use the undistorted correlation function model.
-        comp - str
-            Which component of the signal model to display. Select either `peak`, `smooth`
-            or `both`.
-        rpow - float
-            The power of the radial weight to use for plotting the partial derivatives of pname.
-        save - str or None
-            Save the produced plot a file with this name. When None, do not save the plot.
-        """
-        # Get the indices of the requested parameters.
-        pnames = list(sensitivity['nominal'].keys())
-        if pname not in pnames:
-            raise RuntimeError(f'Unknown floating parameter "{pname}".')
-        if not pname2:
-            pname2 = pname
-        elif pname2 not in pnames:
-            raise RuntimeError(f'Unknown floating parameter "{pname2}".')
-
-        cname = list(sensitivity['fisher'].keys())[0]
-        ppair = (
-            (pname, pname2) if (pname, pname2) in sensitivity['fisher'][cname] else (pname2, pname)
-        )
-
-        if comp not in ('peak', 'smooth', 'both'):
-            raise ValueError(f'Invalid comp "{comp}" (expected peak/smooth/both)')
-
-        fig = plt.figure(figsize=(12, 9), constrained_layout=True)
-        pvalue, perror = sensitivity['nominal'][pname]
-        title = f'{pname} = {pvalue:.4f} ± {perror:.3f}'
-        if pname2:
-            pvalue2, perror2 = sensitivity['nominal'][pname2]
-            title += f', {pname2} = {pvalue2:.4f} ± {perror2:.3f}'
-        fig.suptitle(title)
-        gs = fig.add_gridspec(3, 4)
-
-        # Lookup the max value of the Fisher info over all datasets,
-        # to normalize the Fisher info plots.
-        max_info = np.max([
-            np.nanpercentile(sensitivity['fisher'][cname][ppair], pct)
-            for cname in sensitivity['fisher']
-        ])
-
-        rtxt = '' if rpow == 0 else ('r ' if rpow == 1 else f'r**{rpow} ')
-        dist = 0 if distorted else 1
-
-        for cname in self.data:
-
-            rtgrid = np.linspace(*self.rt_setup_data[cname])
-            rpgrid = np.linspace(*self.rp_setup_data[cname])
-            rt, rp = np.meshgrid(rpgrid, rtgrid)
-            r = np.hypot(rp, rt).reshape(-1)
-            nrt = len(rtgrid)
-            nrp = len(rpgrid)
-            bbox = tuple(np.percentile(rp, (0, 100))) + tuple(np.percentile(rt, (0, 100)))
-
-            row = 0 if cname.startswith('lya') else slice(1, None)
-            col = 0 if cname.endswith('lya') else 1
-            y1, y2 = (0.92, 0.84) if cname.startswith('lya') else (0.96, 0.92)
-
-            P = r**rpow * sensitivity['partials'][cname][pname][dist]
-            if comp == 'both':
-                P = P.sum(axis=0)
-            elif comp == 'peak':
-                P = P[0]
-            elif comp == 'smooth':
-                P = P[1]
-            if np.all(P == 0):
-                continue
-
-            ax = fig.add_subplot(gs[row, col])
-            vlim = np.percentile(np.abs(P), pct)
-            ax.imshow(
-                P.reshape(nrp, nrt), origin='lower', interpolation='none', cmap='seismic',
-                vmin=-vlim, vmax=+vlim, extent=bbox, aspect='auto'
+        if is_shell:
+            ax.plot(
+                x_grid, x_model * 1e3, ls=model_ls, color=model_color, label=label)
+        else:
+            ax.plot(
+                x_grid, x_model * x_grid**scaling_power,
+                ls=model_ls, color=model_color, label=label
             )
-            ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
-            ax.text(0.95, y2, f'{rtxt}∂M(rp,rt)/∂p', ha='right', transform=ax.transAxes)
 
-            cmap = plt.get_cmap('afmhot_r').copy()
-            cmap.set_bad('lightgray')
+        return x_grid, x_model
 
-            # Lookup the Fisher distribution for this sample,
-            # the specified params, and distortion option.
-            F = sensitivity['fisher'][cname][ppair][dist]
-            ax = fig.add_subplot(gs[row, col + 2])
-            ax.imshow(
-                F.reshape(nrp, nrt), origin='lower', interpolation='none', cmap=cmap,
-                vmin=0, vmax=max_info, extent=bbox, aspect='auto'
-            )
-            ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
-            ax.text(0.95, y2, '∂$^2$F$_{pq}$(rt,rp)/∂rt∂rp', ha='right', transform=ax.transAxes)
-
-        if save:
-            plt.savefig(save)
-
-    def postprocess_plot(self, ax, mu_bin=None, xlim=(0, 180), ylim=None, no_legend=False,
-                         title='mu_bin', legend_loc='best', legend_ncol=1, **kwargs):
+    def postprocess_wedge_plot(
+        self, ax, mu_bin=None, xlim=(0, 180), ylim=None, no_legend=False,
+        title='mu_bin', legend_loc='best', legend_ncol=1, **kwargs
+    ):
         """Add postprocessing to the plot on input axes
 
         Parameters
@@ -401,17 +375,19 @@ class VegaPlots:
                 raise ValueError(f'ylim variable has unsupported ndim {ylim.ndim}, '
                                  'only 1D and 2D arrays/lists/tuples allowed')
 
-    def plot_wedge(self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
-                   cross_flag=False, corr_name='lyaxlya', models_only=False,
-                   data_only=False, data_label=None, no_postprocess=False, **kwargs):
+    def plot_wedge(
+        self, ax, mu_bin, models=None, cov_mat=None, labels=None, data=None,
+        cross_flag=False, corr_name='lyaxlya', models_only=False,
+        data_only=False, data_label=None, no_postprocess=False, **kwargs
+    ):
         """Plot a wedge into the input axes using the input mu_bin
 
         Parameters
         ----------
         ax : plt.axes
             Axes object to plot the wedge in
-        wedge_obj : vega.Wedge
-            Vega wedge object for computing the wedge
+        mu_bin : (float, float)
+            Min and max mu value defining the wedge
         models : List[array] or List[dict], optional
             List of models to plot, by default None
         cov_mat : array or dict, optional
@@ -430,16 +406,15 @@ class VegaPlots:
             Whether to only plot data and ignore the models, by default False
         data_label : str, optional
             Label for the data, by default None
+        no_postprocess : bool, optional
+            Whether to skip the postprocessing of the plot, by default False
         """
-        # if use_local_coordinates and self.has_data:
-        #     wedge_obj = self.initialize_wedge(mu_bin, corr_name, cross_flag, **kwargs)
-        # else:
-        #     wedge_obj = self.initialize_wedge(mu_bin, cross_flag=cross_flag, **kwargs)
-
         data_wedge = None
         if not models_only:
-            data_wedge = self.plot_data(ax, mu_bin, data, cov_mat, cross_flag, data_label,
-                                        corr_name, **kwargs)
+            data_wedge = self.plot_data(
+                ax, mu_bin, data=data, cov_mat=cov_mat, cross_flag=cross_flag,
+                data_label=data_label, corr_name=corr_name, **kwargs
+            )
 
         model_wedge = None
         if not data_only:
@@ -464,14 +439,122 @@ class VegaPlots:
                 if models_ls is not None:
                     model_ls = models_ls[i]
 
-                model_wedge = self.plot_model(ax, mu_bin, model, cov_mat, cross_flag, label,
-                                              corr_name, model_ls=model_ls,
-                                              model_color=model_color, **kwargs)
+                model_wedge = self.plot_model(
+                    ax, mu_bin, model=model, cov_mat=cov_mat, cross_flag=cross_flag,
+                    label=label, corr_name=corr_name, model_ls=model_ls,
+                    model_color=model_color, **kwargs
+                )
 
         if not no_postprocess:
-            self.postprocess_plot(ax, mu_bin, **kwargs)
+            self.postprocess_wedge_plot(ax, mu_bin, **kwargs)
 
         return data_wedge, model_wedge
+
+    def plot_shells_panel(
+        self, ax, r_bins, model=None, cov_mat=None, labels=None, data=None, cross_flag=False,
+        corr_name='lyaxlya', models_only=False, data_fmts=None, colors=None,
+        data_only=False, no_postprocess=False, **kwargs
+    ):
+        """Plot a wedge into the input axes using the input mu_bin
+
+        Parameters
+        ----------
+        ax : plt.axes
+            Axes object to plot the wedge in
+        r_bins : List[(float, float)]
+            List of min and max r values defining the shells
+        model : array or dict, optional
+            Model to plot, by default None
+        cov_mat : array or dict, optional
+            Covariance matrix as an array or a dictionary of components, by default None
+        label : str, optional
+            Label for the model, by default None
+        data : array or dict, optional
+            Data vector as an array or a dictionary of components, by default None
+        cross_flag : bool, optional
+            Whether the wedge is for the cross-correlation, by default False
+        corr_name : str, optional
+            Name of the correlation component, by default 'lyaxlya'
+        models_only : bool, optional
+            Whether to only plot models and ignore the data, by default False
+        data_fmts : List[str], optional
+            List of formats for the data points, by default None
+        colors : List[str], optional
+            List of colors for the models and data, by default None
+        data_only : bool, optional
+            Whether to only plot data and ignore the models, by default False
+        data_label : str, optional
+            Label for the data, by default None
+        no_postprocess : bool, optional
+            Whether to skip the postprocessing of the plot, by default False
+        """
+        data_shells = []
+        model_shells = []
+
+        for i, r_bin in enumerate(r_bins):
+            fmt = '.' if data_fmts is None else data_fmts[i]
+            color = None if colors is None else colors[i]
+            if labels is None:
+                label = r"$r \in [{:.0f}, {:.0f}]$ Mpc/h".format(r_bin[0], r_bin[1])
+            else:
+                label = labels[i] if i < len(labels) else None
+
+            if not models_only:
+                data_shells.append(self.plot_data(
+                    ax, r_bin, is_shell=True, data=data, cov_mat=cov_mat,
+                    cross_flag=cross_flag, label=label, corr_name=corr_name,
+                    data_fmt=fmt, data_color=color, **kwargs
+                ))
+
+            if not data_only:
+                model_shells.append(self.plot_model(
+                    ax, r_bin, is_shell=True, model=model, cov_mat=cov_mat,
+                    cross_flag=cross_flag, corr_name=corr_name, model_color=color,
+                    **kwargs
+                ))
+
+        # if not no_postprocess:
+        #     self.postprocess_plot(ax, mu_bin, **kwargs)
+
+        return data_shells, model_shells
+
+    def plot_shells_residuals(
+        self, ax, data_shells, model_shells, data_fmts=None, colors=None, alpha=1.0,
+        var_latex=r"\theta", set_ylabel=True, **kwargs
+    ):
+        assert len(data_shells) == len(model_shells)
+
+        max_residual = 0
+        for i, (data_shell, model_shell) in enumerate(zip(data_shells, model_shells)):
+            x_grid, x_data, x_cov = data_shell
+            x_model = model_shell[1]
+
+            # Compute residuals
+            x_residuals = (x_data - x_model) / np.sqrt(x_cov.diagonal())
+            max_residual = max(max_residual, np.max(np.abs(x_residuals)))
+
+            # Plot residuals
+            fmt = '.' if data_fmts is None else data_fmts[i]
+            color = None if colors is None else colors[i]
+
+            ax.errorbar(
+                x_grid, x_residuals, yerr=np.ones_like(x_residuals),
+                fmt=fmt, color=color, alpha=alpha, capsize=2
+            )
+
+        if set_ylabel:
+            ax.set_ylabel(r"$\Delta\xi(" + var_latex + r")/\sigma_{\xi}$")
+
+        if 'theta' in var_latex:
+            ax.set_xlabel(r"$\theta$ [deg]")
+        else:
+            ax.set_xlabel(f"${var_latex}$")
+        ax.axhline(0, c='k')
+
+        if max_residual < 3:
+            ax.set_ylim(-4, 4)
+        else:
+            ax.set_ylim(-max_residual - 1, max_residual + 1)
 
     def plot_1wedge(self, models=None, cov_mat=None, labels=None, data=None, cross_flag=False,
                     corr_name='lyaxlya', models_only=False, data_only=False, data_label=None,
@@ -688,7 +771,7 @@ class VegaPlots:
                                 no_postprocess=True, **kwargs)
 
         xmin, xmax = ax.get_xlim()
-        self.postprocess_plot(ax, title=title, **kwargs)
+        self.postprocess_wedge_plot(ax, title=title, **kwargs)
         if self.has_data:
             ymin, ymax = ax.get_ylim()
             ax.fill_betweenx((ymin, ymax), xmin, self.cuts[corr_name]['r_min'],
@@ -699,3 +782,186 @@ class VegaPlots:
         ax.set_xlim(xmin, xmax)
 
         self.fig = fig
+
+    def plot_4shells(
+        self, model, angle_var='theta', r_bins=None, corr_name='lyaxlya',
+        var_latex=r'\theta'
+    ):
+        if r_bins is None:
+            rmin = self.cuts['lyaxlya']['r_min']
+            rmax = self.cuts['lyaxlya']['r_max']
+            r_bins = np.logspace(np.log10(rmin), np.log10(rmax), 5)
+            r_bins[1:-1] = np.round(r_bins[1:-1], -1)
+        else:
+            assert len(r_bins) == 5, 'plot_4shels works with exactly 4 shells (5 bin edges)'
+
+        plt.rcParams['font.size'] = 16
+        plt.rc('axes', labelsize=22)
+        plt.rc('axes', titlesize=18)
+        plt.rc('legend', fontsize=20)
+        plt.rc('xtick', labelsize=18)
+        plt.rc('ytick', labelsize=18)
+
+        fig, axs = plt.subplots(
+            2, 2, figsize=(16, 8), sharex=True, height_ratios=(4, 1), gridspec_kw={'hspace': 0})
+
+        r_zip = list(zip(r_bins[:-1], r_bins[1:]))
+
+        cmap = plt.get_cmap('seismic')
+        colors = cmap((0.25, 0.75, 0.03, 1.0))
+        fmts = ['d', '.', 'd', '.']
+
+        cross = 'qso' in corr_name
+        # return r_zip
+        data_shells, model_shells = self.plot_shells_panel(
+            axs[0, 0], r_zip[:2], model=model, cross_flag=cross, corr_name=corr_name,
+            data_fmts=fmts[:2], colors=colors[:2], angle_var=angle_var
+        )
+
+        self.plot_shells_residuals(
+            axs[1, 0], data_shells, model_shells, data_fmts=fmts[:2],
+            colors=colors[:2], angle_var=angle_var
+        )
+
+        data_shells, model_shells = self.plot_shells_panel(
+            axs[0, 1], r_zip[2:], model=model, cross_flag=cross, corr_name=corr_name,
+            data_fmts=fmts[2:], colors=colors[2:], angle_var=angle_var
+        )
+
+        self.plot_shells_residuals(
+            axs[1, 1], data_shells, model_shells, data_fmts=fmts[2:],
+            colors=colors[2:], set_ylabel=False, angle_var=angle_var
+        )
+
+        axs[0, 0].set_ylabel(r"$10^3\xi(" + var_latex + r")$")
+        axs[0, 0].legend()
+        axs[0, 1].legend()
+
+        if cross:
+            axs[1, 0].set_xticks([0, 30, 60, 90, 120, 150, 180])
+            axs[1, 1].set_xticks([0, 30, 60, 90, 120, 150, 180])
+        else:
+            axs[1, 0].set_xticks([0, 30, 60, 90])
+            axs[1, 1].set_xticks([0, 30, 60, 90])
+
+        self.fig = fig
+
+    def plot_sensitivity(self, sensitivity, pname='ap', pname2=None, pct=95,
+                         distorted=True, comp='both', rpow=0, save=None):
+        """Plot parameter sensitivities.
+
+        Plot the sensitivity to one parameter or the joint sensitivity to a pair of parameters.
+        The resulting plot shows the partial derivatives of `pname` on the left-hand side and
+        the distribution of the Fisher information for pname or, if pname2 is specified,
+        (pname, pname2) on the right-hand side.
+
+        Parameters
+        ----------
+        sensitivity - dict
+            Dictionary with keys `nominal`, `partials` and `fisher`, normally obtained by calling
+            `compute_sensitivity()` on a VegaInterface object, then passing its `sensitivity`
+            attribute here.
+        pname - str
+            Name of the first parameter to use. Partial derivatives are only displayed for this
+            parameter, even when pname2 is specified.
+        pname2 - str or None
+            Name of the second parameter to use. Displays the Fisher information associated with
+            the covariance of (pname,pname2) when specified. If None, then use (pname,pname).
+        pct - float
+            Clip the color map for values above this percentile value.
+        distorted - bool
+            Plot the sensitivity of the predicted correlation including the distortion matrix
+            when True.  Otherwise, use the undistorted correlation function model.
+        comp - str
+            Which component of the signal model to display. Select either `peak`, `smooth`
+            or `both`.
+        rpow - float
+            The power of the radial weight to use for plotting the partial derivatives of pname.
+        save - str or None
+            Save the produced plot a file with this name. When None, do not save the plot.
+        """
+        # Get the indices of the requested parameters.
+        pnames = list(sensitivity['nominal'].keys())
+        if pname not in pnames:
+            raise RuntimeError(f'Unknown floating parameter "{pname}".')
+        if not pname2:
+            pname2 = pname
+        elif pname2 not in pnames:
+            raise RuntimeError(f'Unknown floating parameter "{pname2}".')
+
+        cname = list(sensitivity['fisher'].keys())[0]
+        ppair = (
+            (pname, pname2) if (pname, pname2) in sensitivity['fisher'][cname] else (pname2, pname)
+        )
+
+        if comp not in ('peak', 'smooth', 'both'):
+            raise ValueError(f'Invalid comp "{comp}" (expected peak/smooth/both)')
+
+        fig = plt.figure(figsize=(12, 9), constrained_layout=True)
+        pvalue, perror = sensitivity['nominal'][pname]
+        title = f'{pname} = {pvalue:.4f} ± {perror:.3f}'
+        if pname2:
+            pvalue2, perror2 = sensitivity['nominal'][pname2]
+            title += f', {pname2} = {pvalue2:.4f} ± {perror2:.3f}'
+        fig.suptitle(title)
+        gs = fig.add_gridspec(3, 4)
+
+        # Lookup the max value of the Fisher info over all datasets,
+        # to normalize the Fisher info plots.
+        max_info = np.max([
+            np.nanpercentile(sensitivity['fisher'][cname][ppair], pct)
+            for cname in sensitivity['fisher']
+        ])
+
+        rtxt = '' if rpow == 0 else ('r ' if rpow == 1 else f'r**{rpow} ')
+        dist = 0 if distorted else 1
+
+        for cname in self.data:
+
+            rtgrid = np.linspace(*self.rt_setup_data[cname])
+            rpgrid = np.linspace(*self.rp_setup_data[cname])
+            rt, rp = np.meshgrid(rpgrid, rtgrid)
+            r = np.hypot(rp, rt).reshape(-1)
+            nrt = len(rtgrid)
+            nrp = len(rpgrid)
+            bbox = tuple(np.percentile(rp, (0, 100))) + tuple(np.percentile(rt, (0, 100)))
+
+            row = 0 if cname.startswith('lya') else slice(1, None)
+            col = 0 if cname.endswith('lya') else 1
+            y1, y2 = (0.92, 0.84) if cname.startswith('lya') else (0.96, 0.92)
+
+            P = r**rpow * sensitivity['partials'][cname][pname][dist]
+            if comp == 'both':
+                P = P.sum(axis=0)
+            elif comp == 'peak':
+                P = P[0]
+            elif comp == 'smooth':
+                P = P[1]
+            if np.all(P == 0):
+                continue
+
+            ax = fig.add_subplot(gs[row, col])
+            vlim = np.percentile(np.abs(P), pct)
+            ax.imshow(
+                P.reshape(nrp, nrt), origin='lower', interpolation='none', cmap='seismic',
+                vmin=-vlim, vmax=+vlim, extent=bbox, aspect='auto'
+            )
+            ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
+            ax.text(0.95, y2, f'{rtxt}∂M(rp,rt)/∂p', ha='right', transform=ax.transAxes)
+
+            cmap = plt.get_cmap('afmhot_r').copy()
+            cmap.set_bad('lightgray')
+
+            # Lookup the Fisher distribution for this sample,
+            # the specified params, and distortion option.
+            F = sensitivity['fisher'][cname][ppair][dist]
+            ax = fig.add_subplot(gs[row, col + 2])
+            ax.imshow(
+                F.reshape(nrp, nrt), origin='lower', interpolation='none', cmap=cmap,
+                vmin=0, vmax=max_info, extent=bbox, aspect='auto'
+            )
+            ax.text(0.95, y1, cname + ':', ha='right', transform=ax.transAxes)
+            ax.text(0.95, y2, '∂$^2$F$_{pq}$(rt,rp)/∂rt∂rp', ha='right', transform=ax.transAxes)
+
+        if save:
+            plt.savefig(save)
