@@ -225,6 +225,8 @@ class Metals:
 
             if self.fast_metal_bias:
                 xi_metals += bias1 * bias2 * xi
+            else:
+                xi_metals += xi
 
         return xi_metals
 
