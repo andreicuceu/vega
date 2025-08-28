@@ -47,6 +47,7 @@ class Metals:
         # ell_max = self._corr_item.config['model'].getint('ell_max', 6)
         self._coordinates = corr_item.model_coordinates
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
+        self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
         self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
 
         # Read the growth rate and sigma_smooth from the fiducial config
@@ -196,8 +197,10 @@ class Metals:
 
             # If not in fast metals mode, compute the usual way
             # Slow mode also allows the full save of components
-            pk = self.Pk_metal[corr_hash].compute(pk_lin, local_pars, fast_metals=True)
+            pk = self.Pk_metal[corr_hash].compute(
+                pk_lin, local_pars, fast_metals=self.fast_metal_bias)
             if self.save_components:
+                assert not self.fast_metal_bias, 'You need to set fast_metal_bias=False.'
                 self.pk[component][(name1, name2)] = copy.deepcopy(pk)
 
             xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], local_pars)
@@ -211,7 +214,7 @@ class Metals:
             if self.new_metals:
                 if self.rp_only_metal_mats:
                     xi = (self.rp_metal_dmats[(name1, name2)]
-                        @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
+                          @ xi.reshape(self.rp_nbins, self.rt_nbins)).flatten()
                 else:
                     xi = self.rp_metal_dmats[(name1, name2)] @ xi
             else:
@@ -220,7 +223,8 @@ class Metals:
             if self.save_components:
                 self.xi_distorted[component][(name1, name2)] = copy.deepcopy(xi)
 
-            xi_metals += bias1 * bias2 * xi
+            if self.fast_metal_bias:
+                xi_metals += bias1 * bias2 * xi
 
         return xi_metals
 
