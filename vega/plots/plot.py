@@ -788,8 +788,8 @@ class VegaPlots:
         var_latex=r'\theta'
     ):
         if r_bins is None:
-            rmin = self.cuts['lyaxlya']['r_min']
-            rmax = self.cuts['lyaxlya']['r_max']
+            rmin = self.cuts[corr_name]['r_min']
+            rmax = self.cuts[corr_name]['r_max']
             r_bins = np.logspace(np.log10(rmin), np.log10(rmax), 5)
             r_bins[1:-1] = np.round(r_bins[1:-1], -1)
         else:
