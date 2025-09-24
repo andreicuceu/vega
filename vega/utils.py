@@ -21,9 +21,9 @@ VEGA_BLINDED_PARS = {
     'phi_smooth': ['all'],
     'growth_rate': ['all'],
     'alpha_smooth': ['all'],
-    'ap': ['CIV', 'civ'],
-    'at': ['CIV', 'civ'],
-    'alpha': ['CIV', 'civ'],
+    # 'ap': ['CIV', 'civ'],
+    # 'at': ['CIV', 'civ'],
+    # 'alpha': ['CIV', 'civ'],
 }
 
 
