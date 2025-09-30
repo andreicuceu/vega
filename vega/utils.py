@@ -21,9 +21,6 @@ VEGA_BLINDED_PARS = {
     'phi_smooth': ['all'],
     'growth_rate': ['all'],
     'alpha_smooth': ['all'],
-    # 'ap': ['CIV', 'civ'],
-    # 'at': ['CIV', 'civ'],
-    # 'alpha': ['CIV', 'civ'],
 }
 
 
@@ -315,7 +312,6 @@ def get_blinding(blind_pars, blinding_strat):
         },
         'desi_y3': {
             'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_16_06_2025.npz',
-            'bao': Path(blind_dir) / 'bao-parameter-blinding' / 'dr2_bao_CIV_blinding_20_03_2025.npz',
         }
     }
 
