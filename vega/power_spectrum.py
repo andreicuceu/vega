@@ -392,11 +392,12 @@ class PowerSpectrum:
         one_lya_flag = "LY" in self.tracer1_name or "LY" in self.tracer2_name
 
         q1 = params["dnl_arinyo_q1"]
-        q2 = params["dnl_arinyo_q2"]
         kv = params["dnl_arinyo_kv"]
         av = params["dnl_arinyo_av"]
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
+
+        q2 = params.get("dnl_arinyo_q2", 0)
 
         if self._arinyo_pars is None:
             self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp]) + 1
