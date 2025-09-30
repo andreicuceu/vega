@@ -377,5 +377,13 @@ def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
     return np.exp(-(k_par_grid**2 * sigma_par**2 + k_trans_grid**2 * sigma_trans**2) / 2)
 
 
-class VegaBoundsError(Exception):
+class VegaModelError(Exception):
+    pass
+
+
+class VegaBoundsError(VegaModelError):
+    pass
+
+
+class VegaArinyoError(VegaModelError):
     pass

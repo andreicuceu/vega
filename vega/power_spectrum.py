@@ -405,6 +405,9 @@ class PowerSpectrum:
             pressure = (self.k_grid / kp) * (self.k_grid / kp)
             dnl = np.exp(growth * (1 - pec_velocity) - pressure)
 
+            if np.any(np.isnan(dnl)) or np.any(np.isinf(dnl)):
+                raise utils.VegaArinyoError
+
             self._arinyo_pars = np.array([q1, kv, av, bv, kp])
             if two_lya_flag:
                 self._arinyo_dnl_cache = dnl
@@ -412,7 +415,6 @@ class PowerSpectrum:
                 self._arinyo_dnl_cache = np.sqrt(dnl)
             else:
                 return np.ones(dnl.shape)
-                # raise ValueError("Arinyo NL term called for correlation with no Lyman-alpha")
 
         return self._arinyo_dnl_cache
 
