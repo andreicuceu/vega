@@ -50,3 +50,9 @@ bias_SiIII(1207)               -0.5         0.          0.001
 bias_SiII(1260)                -0.5         0.          0.001
 bias_CIV(eff)                  -0.5         0.          0.001
 desi_inst_sys_amp               0.0        1e-2         5e-5
+dnl_arinyo_q1                  -2.0         2.0         0.1
+dnl_arinyo_q2                  -1.0         1.0         0.1
+dnl_arinyo_kv                   0.1         4.0         0.1
+dnl_arinyo_av                   0.1         1.0         0.1
+dnl_arinyo_bv                   1.0         2.0         0.1
+dnl_arinyo_kp                   5.0        25.0         1.0

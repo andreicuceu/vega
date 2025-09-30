@@ -392,15 +392,17 @@ class PowerSpectrum:
         one_lya_flag = "LY" in self.tracer1_name or "LY" in self.tracer2_name
 
         q1 = params["dnl_arinyo_q1"]
+        q2 = params["dnl_arinyo_q2"]
         kv = params["dnl_arinyo_kv"]
         av = params["dnl_arinyo_av"]
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
 
         if self._arinyo_pars is None:
-            self._arinyo_pars = np.array([q1, kv, av, bv, kp]) + 1
-        if not np.allclose(np.array([q1, kv, av, bv, kp]), self._arinyo_pars):
-            growth = q1 * self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp]) + 1
+        if not np.allclose(np.array([q1, q2, kv, av, bv, kp]), self._arinyo_pars):
+            delta_squared = self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            growth = q1 * delta_squared + q2 * delta_squared**2
             pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
             pressure = (self.k_grid / kp) * (self.k_grid / kp)
             dnl = np.exp(growth * (1 - pec_velocity) - pressure)
@@ -408,7 +410,7 @@ class PowerSpectrum:
             if np.any(np.isnan(dnl)) or np.any(np.isinf(dnl)):
                 raise utils.VegaArinyoError
 
-            self._arinyo_pars = np.array([q1, kv, av, bv, kp])
+            self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp])
             if two_lya_flag:
                 self._arinyo_dnl_cache = dnl
             elif one_lya_flag:
