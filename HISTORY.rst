@@ -2,6 +2,13 @@
 History
 =======
 
+1.4.2 (2025-10-01)
+------------------
+* Unblinded DR2 CIV BAO analysis
+* Added Arinyo q2 parameter
+* Added explicit call limit for iminuit
+* Minor bug fixes
+
 1.4.1 (2025-08-25)
 ------------------
 * Add support for shell plots in the plotting module
