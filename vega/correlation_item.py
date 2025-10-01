@@ -100,8 +100,7 @@ class CorrelationItem:
 
         self.cosmo = picca_constants.Cosmo(
                 Om=cosmo_params['Omega_m'], Ok=cosmo_params['Omega_k'],
-                Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'],
-                blinding='none', verbose=False
+                Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'], verbose=False
             )
 
     def check_if_blind_corr(self, blind_tracers):
