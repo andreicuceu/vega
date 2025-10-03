@@ -673,6 +673,7 @@ class BuildConfig:
         # Small scale non-linear model
         if self.options['small_scale_nl']:
             new_params['dnl_arinyo_q1'] = get_par('dnl_arinyo_q1')
+            new_params['dnl_arinyo_q2'] = get_par('dnl_arinyo_q2')
             new_params['dnl_arinyo_kv'] = get_par('dnl_arinyo_kv')
             new_params['dnl_arinyo_av'] = get_par('dnl_arinyo_av')
             new_params['dnl_arinyo_bv'] = get_par('dnl_arinyo_bv')
