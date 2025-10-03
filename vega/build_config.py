@@ -424,11 +424,9 @@ class BuildConfig:
         zeff_rmin = fit_info.get('zeff_rmin', 0.)
         zeff_rmax = fit_info.get('zeff_rmax', 300.)
 
-        zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
         if self.zeff_in is None:
+            zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
             self.zeff_in = zeff_comp
-        elif self.zeff_in != zeff_comp:
-            print('Warning: Input zeff and computed zeff are different. Will write input zeff.')
 
         # Write the paths to the correlation configs
         config['data sets'] = {}
