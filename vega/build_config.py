@@ -66,6 +66,8 @@ class BuildConfig:
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['marginalize-small-scales'] = options.get('marginalize-small-scales', False)
         self.options['single-bin-marg-xi'] = options.get('single-bin-marg-xi', False)
+        self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
+        self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -330,6 +332,11 @@ class BuildConfig:
         # Marginalize small scales
         config['model']['marginalize-small-scales'] = str(self.options['marginalize-small-scales'])
         config['model']['single-bin-marg-xi'] = str(self.options['single-bin-marg-xi'])
+
+        # P(k) damping scale
+        if self.options['pk-damping-scale'] is not None:
+            config['model']['pk-damping-scale'] = str(self.options['pk-damping-scale'])
+            config['model']['pk-damping-power'] = str(self.options['pk-damping-power'])
 
         # General things
         if 'broadband' in corr_info:

@@ -42,6 +42,10 @@ class PowerSpectrum:
         self._bin_size_rt = config.getfloat('bin_size_rt')
         self.use_Gk = self._config.getboolean('model binning', True)
 
+        # Damping scale for P(k) - used to match EFT behavior
+        self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
+        self.pk_damping_power = config.getint('pk-damping-power', 2)
+
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
         self._add_uv = self._config.getboolean('add uv', False)
@@ -158,6 +162,11 @@ class PowerSpectrum:
             else:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
+
+        # P(k) damping at high k
+        if self.pk_damping_scale is not None:
+            pk_full *= utils.compute_kn_smoothing(
+                self.pk_damping_scale, self.k_grid, n=self.pk_damping_power)
 
         return pk_full
 

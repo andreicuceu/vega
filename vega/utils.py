@@ -377,6 +377,27 @@ def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
     return np.exp(-(k_par_grid**2 * sigma_par**2 + k_trans_grid**2 * sigma_trans**2) / 2)
 
 
+@njit
+def compute_kn_smoothing(scale_par, k_grid, n):
+    """Compute a k^n smoothing factor.
+
+    Parameters
+    ----------
+    scale_par : float
+        Scale parameter
+    k_grid : array
+        Grid of k values
+    n : int
+        Exponent of k
+
+    Returns
+    -------
+    array
+        Smoothing factor
+    """
+    return np.exp(-scale_par**2*k_grid**n/2)
+
+
 class VegaModelError(Exception):
     pass
 
