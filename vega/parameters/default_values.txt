@@ -56,3 +56,7 @@ dnl_arinyo_kv                   0.1         4.0         0.1
 dnl_arinyo_av                   0.1         1.0         0.1
 dnl_arinyo_bv                   1.0         2.0         0.1
 dnl_arinyo_kp                   5.0        25.0         1.0
+bias_xi_lyaxlya_0_0             0.0         1.0         1e-3
+bias_xi_lyaxlya_0_1             0.0         1.0         1e-3
+bias_xi_lyaxlya_1_0             0.0         1.0         1e-3
+bias_xi_lyaxlya_1_1             0.0         1.0         1e-3

@@ -325,6 +325,11 @@ class BuildConfig:
             if self.options['radiation_effects']:
                 config['model']['radiation effects'] = 'True'
 
+        # Marginalize small scales
+        if 'marginalize_small_scales' in self.options:
+            config['model']['marginalize-small-scales'] = str(
+                self.options['marginalize_small_scales'])
+
         # General things
         if 'broadband' in corr_info:
             config['broadband'] = {}
@@ -750,6 +755,12 @@ class BuildConfig:
         for name, value in parameters.items():
             if 'BB' in name and name not in new_params:
                 new_params[name] = value
+
+        # Marginalize small scales
+        if self.options.get('marginalize_small_scales', False):
+            for name, value in parameters.items():
+                if 'bias_xi' in name and name not in new_params:
+                    new_params[name] = value
 
         self._parameters = new_params
 

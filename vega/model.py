@@ -1,3 +1,5 @@
+import numpy as np
+
 from . import power_spectrum
 from . import pktoxi
 from . import correlation_func as corr_func
@@ -9,6 +11,8 @@ class Model:
     """
     Class for computing Lyman-alpha forest correlation function models.
     """
+    _marg_par_names = None
+    _marg_xi_mask = None
 
     def __init__(self, corr_item, fiducial, scale_params, data=None):
         """
@@ -139,6 +143,15 @@ class Model:
             xi_model *= self.broadband.compute(pars, 'pre-mul')
             xi_model += self.broadband.compute(pars, 'pre-add')
 
+        if self._corr_item.marginalize_small_scales:
+            if self._marg_par_names is None:
+                self._init_marg_xi_params(pars)
+
+            if self._marg_par_names:
+                assert self._has_distortion_mat
+                xi_marg_pars = np.array([pars[name] for name in self._marg_par_names])
+                xi_model[self._marg_xi_mask] = xi_marg_pars
+
         # Apply the distortion matrix
         if self._has_distortion_mat:
             xi_model = self._data.distortion_mat.dot(xi_model)
@@ -206,3 +219,21 @@ class Model:
         xi_full = self._compute_model(pars, pk_full, 'full')
 
         return xi_full
+
+    def _init_marg_xi_params(self, marg_pars):
+        rp_nbins = self._corr_item.model_coordinates.rp_nbins
+        rt_nbins = self._corr_item.model_coordinates.rt_nbins
+        corr_name = self._corr_item.name
+        mask = np.zeros_like(
+            self._corr_item.model_coordinates.r_grid).astype(bool).reshape(rp_nbins, rt_nbins)
+        names = []
+
+        for i in range(rp_nbins):
+            for j in range(rt_nbins):
+                par_name = f'bias_xi_{corr_name}_{i}_{j}'
+                if par_name in marg_pars:
+                    mask[i, j] = True
+                    names.append(par_name)
+
+        self._marg_par_names = names
+        self._marg_xi_mask = mask.reshape(int(rp_nbins * rt_nbins))

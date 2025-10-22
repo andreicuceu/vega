@@ -45,6 +45,8 @@ class CorrelationItem:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
 
         self.test_flag = config['data'].getboolean('test', False)
+        self.marginalize_small_scales = config['model'].getboolean(
+            'marginalize-small-scales', False)
 
         self.has_metals = False
         self.has_bb = False
