@@ -221,6 +221,34 @@ class Model:
         return xi_full
 
     def _init_marg_xi_params(self, marg_pars):
+        rp_nbins_dist = self._corr_item.dist_model_coordinates.rp_nbins
+        rt_nbins_dist = self._corr_item.dist_model_coordinates.rt_nbins
+        rp_nbins = self._corr_item.model_coordinates.rp_nbins
+        rt_nbins = self._corr_item.model_coordinates.rt_nbins
+
+        mask = np.zeros_like(
+            self._corr_item.model_coordinates.r_grid).astype(bool).reshape(rp_nbins, rt_nbins)
+        names = []
+
+        cb = rp_nbins // self._corr_item.dist_model_coordinates.rp_nbins
+        if self._corr_item.single_bin_marg_xi:
+            for i in range(rp_nbins_dist):
+                for j in range(rt_nbins_dist):
+                    par_name = f'bias_xi_{i}_{j}'
+                    if par_name in marg_pars:
+                        mask[i*cb:i*cb+cb, j*cb:j*cb+cb] = True
+                        print(mask[i*cb:i*cb+cb, j*cb:j*cb+cb])
+                        names += [par_name] * mask[i*cb:i*cb+cb, j*cb:j*cb+cb].size
+        else:
+            for i in range(rp_nbins):
+                for j in range(rt_nbins):
+                    par_name = f'bias_xi_{i}_{j}'
+                    if par_name in marg_pars:
+                        mask[i, j] = True
+                        names.append(par_name)
+
+        self._marg_par_names = names
+        self._marg_xi_mask = mask.reshape(int(rp_nbins * rt_nbins))
         rp_nbins = self._corr_item.model_coordinates.rp_nbins
         rt_nbins = self._corr_item.model_coordinates.rt_nbins
         corr_name = self._corr_item.name

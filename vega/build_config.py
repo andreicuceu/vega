@@ -65,6 +65,7 @@ class BuildConfig:
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['marginalize-small-scales'] = options.get('marginalize-small-scales', False)
+        self.options['single-bin-marg-xi'] = options.get('single-bin-marg-xi', False)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -328,6 +329,7 @@ class BuildConfig:
 
         # Marginalize small scales
         config['model']['marginalize-small-scales'] = str(self.options['marginalize-small-scales'])
+        config['model']['single-bin-marg-xi'] = str(self.options['single-bin-marg-xi'])
 
         # General things
         if 'broadband' in corr_info:
