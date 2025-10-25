@@ -166,7 +166,7 @@ class PowerSpectrum:
         # P(k) damping at high k
         if self.pk_damping_scale is not None:
             pk_full *= utils.compute_kn_smoothing(
-                self.pk_damping_scale, self.k_grid, n=self.pk_damping_power)
+                self.pk_damping_scale, self.k_grid.astype(float), n=self.pk_damping_power)
 
         return pk_full
 
