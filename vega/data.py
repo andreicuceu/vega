@@ -45,6 +45,7 @@ class Data:
         self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
         self.weighted_multipoles = corr_item.config['model'].getboolean('weighted_multipoles', False)
         self._multipole_matrix = None
+        self.averaging_matrix_multipoles = None
         self._rmu_binning = None
         if self.use_multipoles:
             ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
@@ -718,6 +719,9 @@ class Data:
         self.nb = np.tile(self.nb.reshape(nmu, nr).sum(0), self.nells)
 
         self._multipole_matrix = mult_matrix
+        self.averaging_matrix_multipoles = np.abs(self._multipole_matrix)
+        norm = self.averaging_matrix_multipoles.sum(axis=1)
+        self.averaging_matrix_multipoles  /= norm[:, None]
 
         if self.has_distortion:
             # Calculate the multipole matrix for the distortion model coordinates 
