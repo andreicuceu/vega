@@ -66,7 +66,12 @@ class CorrelationItem:
             list of all metal correlations we need to compute
         """
         self.tracer_catalog = tracer_catalog
-        self.metal_correlations = metal_correlations
+        self.metal_correlations = []
+        for corr in metal_correlations:
+            corr_hash = tuple(set((corr[0], corr[1])))
+            if corr_hash not in self.metal_correlations:
+                self.metal_correlations.append(corr_hash)
+        # self.metal_correlations = metal_correlations
         self.has_metals = True
 
     def init_broadband(self, coeff_binning_model):
