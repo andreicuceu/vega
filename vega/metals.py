@@ -44,7 +44,6 @@ class Metals:
         self.size = corr_item.model_coordinates.rp_grid.size
         self._coordinates = corr_item.model_coordinates
         self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
-        self.cross_metal_factor = corr_item.config['model'].getint('cross_metal_factor', 2)
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
@@ -67,6 +66,7 @@ class Metals:
 
         # Build a mask for the cross-correlations with the main tracers (Lya, QSO)
         self.main_tracers = [corr_item.tracer1['name'], corr_item.tracer2['name']]
+        self.is_auto_correlation = (self.main_tracers[0] == self.main_tracers[1])
         self.main_tracer_types = [corr_item.tracer1['type'], corr_item.tracer2['type']]
         self.main_cross_mask = [tracer1 in self.main_tracers or tracer2 in self.main_tracers
                                 for (tracer1, tracer2) in corr_item.metal_correlations]
@@ -211,9 +211,9 @@ class Metals:
         pk = self.Pk_metal[corr_hash].compute(pk_lin, pars, fast_metals=fast_metals)
         self.PktoXi[corr_hash].cache_pars = None
         xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], pars)
-        # If cross-metal correlation, apply the cross metal factor
-        if corr_hash[0] != corr_hash[1]:
-            xi *= self.cross_metal_factor
+        # If cross-metal correlation, multiply by 2 to account for symmetry
+        if self.is_auto_correlation and corr_hash[0] != corr_hash[1]:
+            xi *= 2
 
         if self.save_components:
             assert not self.fast_metals, 'You need to set fast_metal_bias=False.'
