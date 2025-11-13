@@ -69,9 +69,12 @@ class CorrelationItem:
         self.metal_correlations = []
         for corr in metal_correlations:
             corr_hash = tuple(set((corr[0], corr[1])))
+            if len(corr_hash) != 2:
+                corr_hash = (corr[0], corr[0])
+
             if corr_hash not in self.metal_correlations:
                 self.metal_correlations.append(corr_hash)
-        # self.metal_correlations = metal_correlations
+
         self.has_metals = True
 
     def init_broadband(self, coeff_binning_model):

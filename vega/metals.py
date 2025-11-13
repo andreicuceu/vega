@@ -84,9 +84,8 @@ class Metals:
         self.Xi_metal = {}
         self.rp_metal_dmats = {}
         if corr_item.has_metals:
-            for name1, name2 in corr_item.metal_correlations:
-                # Assumes cross-corelations Lya x Metal and Metal x Lya are the same
-                corr_hash = tuple(set((name1, name2)))
+            for corr_hash in corr_item.metal_correlations:
+                name1, name2 = corr_hash
 
                 # Get the tracer info
                 tracer1 = corr_item.tracer_catalog[name1]
@@ -103,7 +102,10 @@ class Metals:
                         self._coordinates, rp_grid, rt_grid, z_grid)
                 else:
                     # Read rp and rt for the metal correlation
-                    metal_coordinates = data.metal_coordinates[(name1, name2)]
+                    if corr_hash in data.metal_coordinates:
+                        metal_coordinates = data.metal_coordinates[corr_hash]
+                    else:
+                        metal_coordinates = data.metal_coordinates[corr_hash[::-1]]
 
                 # Get bin sizes
                 if self._data is not None:
@@ -192,18 +194,9 @@ class Metals:
             self.cache_xi_metal_cross_main[xi_hash] = xi
 
         # Add the correct metal dmats for each correlation
-        if self.new_metals:
-            if self.rp_only_metal_mats:
-                xi = (
-                    self.rp_metal_dmats[corr_hash]
-                    @ xi.reshape(self.rp_nbins, self.rt_nbins)
-                ).flatten()
-            else:
-                xi = self.rp_metal_dmats[corr_hash] @ xi
-        else:
-            xi = self._data.metal_mats[corr_hash].dot(xi)
+        dmat_xi = self.apply_metal_matrix(xi, corr_hash)
 
-        return xi
+        return dmat_xi
 
     def compute_metal_corr_slow(
         self, pars, pk_lin, corr_hash, fast_metals, add_metal_dmat=True, component=None
@@ -225,21 +218,12 @@ class Metals:
             return xi
 
         # Apply the metal matrix
-        if self.new_metals:
-            if self.rp_only_metal_mats:
-                xi = (
-                    self.rp_metal_dmats[corr_hash]
-                    @ xi.reshape(self.rp_nbins, self.rt_nbins)
-                ).flatten()
-            else:
-                xi = self.rp_metal_dmats[corr_hash] @ xi
-        else:
-            xi = self._data.metal_mats[corr_hash].dot(xi)
+        dmat_xi = self.apply_metal_matrix(xi, corr_hash)
 
         if self.save_components:
-            self.xi_distorted[component][corr_hash] = copy.deepcopy(xi)
+            self.xi_distorted[component][corr_hash] = copy.deepcopy(dmat_xi)
 
-        return xi
+        return dmat_xi
 
     def compute(self, pars, pk_lin, component):
         """Compute metal correlations for input isotropic P(k).
@@ -269,18 +253,19 @@ class Metals:
 
         xi_metals = np.zeros(self.size)
         self.cache_xi_metal_cross_main = {}  # clear cache each time compute is called
-        for name1, name2, in self._corr_item.metal_correlations:
+        for corr_hash in self._corr_item.metal_correlations:
+            name1, name2 = corr_hash
+
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
-            corr_hash = tuple(set((name1, name2)))
 
             is_cross_with_main_tracer = (name1 in self.main_tracers or name2 in self.main_tracers)
             if self.fast_metals and is_cross_with_main_tracer:
                 xi_metals += bias1 * bias2 * self.compute_xi_metal_cross_main(
-                    pk_lin, local_pars, name1, name2, beta1, beta2)
+                    pk_lin, local_pars, corr_hash, beta1, beta2)
 
             elif self.fast_metals:
                 xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
-                    pk_lin, local_pars, name1, name2)
+                    pk_lin, local_pars, corr_hash)
 
             else:
                 # If not in fast metals mode, compute the usual way
@@ -297,6 +282,37 @@ class Metals:
 
         self.cache_xi_metal_cross_main = {}  # clear cache after compute is done
         return xi_metals
+
+    def apply_metal_matrix(self, xi, corr_hash):
+        """Apply metal distortion matrices to input correlation function.
+
+        Parameters
+        ----------
+        xi : 1D Array
+            correlation function to apply metal distortion matrices to
+        corr_hash : tuple
+            tuple of the two metal tracer names
+
+        Returns
+        -------
+        1D Array
+            distorted correlation function
+        """
+        if self.new_metals:
+            if self.rp_only_metal_mats:
+                dmat_xi = (
+                    self.rp_metal_dmats[corr_hash]
+                    @ xi.reshape(self.rp_nbins, self.rt_nbins)
+                ).flatten()
+            else:
+                dmat_xi = self.rp_metal_dmats[corr_hash] @ xi
+        else:
+            if corr_hash in self._data.metal_mats:
+                dmat_xi = self._data.metal_mats[corr_hash].dot(xi)
+            else:
+                dmat_xi = self._data.metal_mats[corr_hash[::-1]].dot(xi)
+
+        return dmat_xi
 
     @staticmethod
     def rebin(vector, rebin_factor):
