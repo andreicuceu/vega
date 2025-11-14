@@ -183,9 +183,13 @@ class Analysis:
 
         # TODO The corr items need to have an imposed order
         full_data_mask = []
+        full_model_mask = []
         for name in self._corr_items:
             full_data_mask.append(self._data[name].data_mask)
+            full_model_mask.append(self._data[name].model_mask)
+
         full_data_mask = np.concatenate(full_data_mask)
+        full_model_mask = np.concatenate(full_model_mask)
 
         if self._cholesky_global_cov is None:
             masked_cov = self._global_cov[:, full_data_mask]
@@ -195,23 +199,28 @@ class Analysis:
             self._cholesky_global_cov = np.linalg.cholesky(scale * masked_cov)
 
         # TODO The corr items need to have an imposed order
-        masked_fiducial = []
-        for name, data in self._data.items():
-            mask = data.dist_model_coordinates.get_mask_to_other(data.data_coordinates)
-            if data.data_mask.size == fiducial_model[name].size:
-                masked_fiducial.append(fiducial_model[name])
-            elif mask.size == fiducial_model[name].size:
-                masked_fiducial.append(fiducial_model[name][mask])
-            else:
-                raise ValueError('Input fiducial has unknown size. '
-                                 'It must match the data or the model.')
-        masked_fiducial = np.concatenate(masked_fiducial)
+        full_fiducial_model = np.concatenate([fiducial_model[name] for name in self._data])
+        masked_fiducial = full_fiducial_model[full_model_mask]
+        # Naim comment:  unsure about the purpose of the below code
+        # masked_fiducial = []
+        # for name, data in self._data.items():
+        #     mask = data.dist_model_coordinates.get_mask_to_other(data.data_coordinates)
+        #     if data.data_mask.size == fiducial_model[name].size:
+        #         masked_fiducial.append(fiducial_model[name])
+        #     elif mask.size == fiducial_model[name].size:
+        #         masked_fiducial.append(fiducial_model[name][mask])
+        #     else:
+        #         raise ValueError('Input fiducial has unknown size. '
+        #                          'It must match the data or the model.')
+        # masked_fiducial = np.concatenate(masked_fiducial)
 
         if forecast:
-            self.current_mc_mock = masked_fiducial[full_data_mask]
+            self.current_mc_mock = masked_fiducial
+            # self.current_mc_mock = masked_fiducial[full_data_mask]
         else:
             ran_vec = np.random.randn(full_data_mask.sum())
-            self.current_mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(
+            # self.current_mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(
+            self.current_mc_mock = masked_fiducial + self._cholesky_global_cov.dot(
                 ran_vec)
 
         return self.current_mc_mock
