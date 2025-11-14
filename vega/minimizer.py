@@ -78,7 +78,7 @@ class Minimizer:
 
             mig_init.errordef = 1
             mig_init.print_level = 1
-            mig_init.migrad()
+            mig_init.migrad(ncall=100000)
             print(mig_init.fmin)
             print(mig_init.params)
 
@@ -94,7 +94,7 @@ class Minimizer:
 
         self._minuit.errordef = 1
         self._minuit.print_level = 1
-        self._minuit.migrad()
+        self._minuit.migrad(ncall=100000)
         print(self._minuit.fmin)
         print(self._minuit.params)
 

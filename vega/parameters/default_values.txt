@@ -34,6 +34,10 @@ drp_QSO                        -3.0         3.0         0.1
 qso_rad_strength                0.0         2.0         0.1
 par_sigma_smooth                0.0        10.          0.1
 per_sigma_smooth                0.0        10.          0.1
+par_sigma_smooth_LYA            0.0        10.          0.1
+per_sigma_smooth_LYA            0.0        10.          0.1
+par_sigma_smooth_QSO            0.0        10.          0.1
+per_sigma_smooth_QSO            0.0        10.          0.1
 par_exp_smooth                  0.0        10.          0.1
 per_exp_smooth                  0.0        10.          0.1
 bias_eta_SiII(1190)            -0.5         0.          0.001
@@ -47,3 +51,13 @@ bias_SiIII(1207)               -0.5         0.          0.001
 bias_SiII(1260)                -0.5         0.          0.001
 bias_CIV(eff)                  -0.5         0.          0.001
 desi_inst_sys_amp               0.0        1e-2         5e-5
+dnl_arinyo_q1                  -2.0         2.0         0.1
+dnl_arinyo_q2                  -1.0         1.0         0.1
+dnl_arinyo_kv                   0.1         4.0         0.1
+dnl_arinyo_av                   0.1         1.0         0.1
+dnl_arinyo_bv                   1.0         2.0         0.1
+dnl_arinyo_kp                   5.0        25.0         1.0
+bias_xi_lyaxlya_0_0             0.0         1.0         1e-3
+bias_xi_lyaxlya_0_1             0.0         1.0         1e-3
+bias_xi_lyaxlya_1_0             0.0         1.0         1e-3
+bias_xi_lyaxlya_1_1             0.0         1.0         1e-3

@@ -51,6 +51,10 @@ class PowerSpectrum:
         else:
             self._bin_size_rp = config.getfloat('bin_size_rp')
             self._bin_size_rt = config.getfloat('bin_size_rt')
+        
+        # Damping scale for P(k) - used to match EFT behavior
+        self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
+        self.pk_damping_power = config.getint('pk-damping-power', 2)
 
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
@@ -168,6 +172,11 @@ class PowerSpectrum:
             else:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
+
+        # P(k) damping at high k
+        if self.pk_damping_scale is not None:
+            pk_full *= utils.compute_kn_smoothing(
+                self.pk_damping_scale, self.k_grid.astype(float), n=self.pk_damping_power)
 
         return pk_full
 
@@ -407,22 +416,27 @@ class PowerSpectrum:
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
 
+        q2 = params.get("dnl_arinyo_q2", 0)
+
         if self._arinyo_pars is None:
-            self._arinyo_pars = np.array([q1, kv, av, bv, kp]) + 1
-        if not np.allclose(np.array([q1, kv, av, bv, kp]), self._arinyo_pars):
-            growth = q1 * self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp]) + 1
+        if not np.allclose(np.array([q1, q2, kv, av, bv, kp]), self._arinyo_pars):
+            delta_squared = self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            growth = q1 * delta_squared + q2 * delta_squared**2
             pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
             pressure = (self.k_grid / kp) * (self.k_grid / kp)
             dnl = np.exp(growth * (1 - pec_velocity) - pressure)
 
-            self._arinyo_pars = np.array([q1, kv, av, bv, kp])
+            if np.any(np.isnan(dnl)) or np.any(np.isinf(dnl)):
+                raise utils.VegaArinyoError
+
+            self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp])
             if two_lya_flag:
                 self._arinyo_dnl_cache = dnl
             elif one_lya_flag:
                 self._arinyo_dnl_cache = np.sqrt(dnl)
             else:
                 return np.ones(dnl.shape)
-                # raise ValueError("Arinyo NL term called for correlation with no Lyman-alpha")
 
         return self._arinyo_dnl_cache
 

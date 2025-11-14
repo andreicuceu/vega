@@ -51,6 +51,10 @@ class CorrelationItem:
             self.ells_to_model = [int(_) for _ in ells_to_model]
 
         self.test_flag = config['data'].getboolean('test', False)
+        self.marginalize_small_scales = config['model'].getboolean(
+            'marginalize-small-scales', False)
+        self.single_bin_marg_xi = config['model'].getboolean(
+            'single-bin-marg-xi', False)
 
         self.has_metals = False
         self.has_bb = False
@@ -106,8 +110,7 @@ class CorrelationItem:
 
         self.cosmo = picca_constants.Cosmo(
                 Om=cosmo_params['Omega_m'], Ok=cosmo_params['Omega_k'],
-                Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'],
-                blinding='none', verbose=False
+                Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'], verbose=False
             )
 
     def check_if_blind_corr(self, blind_tracers):

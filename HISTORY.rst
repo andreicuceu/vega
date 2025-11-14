@@ -2,6 +2,29 @@
 History
 =======
 
+1.4.2 (2025-10-01)
+------------------
+* Unblinded DR2 CIV BAO analysis
+* Added Arinyo q2 parameter
+* Added explicit call limit for iminuit
+* Minor bug fixes
+
+1.4.1 (2025-08-25)
+------------------
+* Add support for shell plots in the plotting module
+* Automatic shell plots after fits when using run_vega.py
+* Add option to fit independent full-shape smoothing parameters for each tracer
+* Add MC functionality to the ConfigBuilder
+* Some minor bug fixes related to MC mocks
+
+1.4.0 (2025-07-01)
+------------------
+* Overhaul of the Monte Carlo mocks functionality, now supports global covariances
+* Minor improvements to blinding functionality, and added blinding for DR2 full-shape
+* Update flat priors to have more realistic ranges
+* Added options to compute shell compression as a function of mu, mu^2, and theta
+* Fixed a bug in the plotting of the Fisher information as a function of rp and rt
+
 1.3.1 (2024-12-11)
 ------------------
 * Unblind Y3 BAO analysis

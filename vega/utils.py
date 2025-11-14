@@ -21,9 +21,6 @@ VEGA_BLINDED_PARS = {
     'phi_smooth': ['all'],
     'growth_rate': ['all'],
     'alpha_smooth': ['all'],
-    'ap': ['CIV', 'civ'],
-    'at': ['CIV', 'civ'],
-    'alpha': ['CIV', 'civ'],
 }
 
 
@@ -359,7 +356,6 @@ def get_blinding(blind_pars, blinding_strat):
         },
         'desi_y3': {
             'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_16_06_2025.npz',
-            'bao': Path(blind_dir) / 'bao-parameter-blinding' / 'dr2_bao_CIV_blinding_20_03_2025.npz',
         }
     }
 
@@ -425,5 +421,34 @@ def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
     return np.exp(-(k_par_grid**2 * sigma_par**2 + k_trans_grid**2 * sigma_trans**2) / 2)
 
 
-class VegaBoundsError(Exception):
+@njit
+def compute_kn_smoothing(scale_par, k_grid, n):
+    """Compute a k^n smoothing factor.
+
+    Parameters
+    ----------
+    scale_par : float
+        Scale parameter
+    k_grid : array
+        Grid of k values
+    n : int
+        Exponent of k
+
+    Returns
+    -------
+    array
+        Smoothing factor
+    """
+    return np.exp(-scale_par**2*k_grid**n/2)
+
+
+class VegaModelError(Exception):
+    pass
+
+
+class VegaBoundsError(VegaModelError):
+    pass
+
+
+class VegaArinyoError(VegaModelError):
     pass

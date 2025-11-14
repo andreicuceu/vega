@@ -245,7 +245,7 @@ class VegaInterface:
         # Compute model
         try:
             model_cf = self.compute_model(params, run_init=False, direct_pk=direct_pk)
-        except utils.VegaBoundsError:
+        except utils.VegaModelError:
             for name in self.corr_items:
                 self.models[name].PktoXi.cache_pars = None
             return 1e100

@@ -42,6 +42,7 @@ def run_vega(config_path):
 
     num_pars = len(vega.sample_params['limits'])
     for name in vega.plots.data:
+        # Get title
         bestfit_legend = f'Correlation: {name}, Total '
         bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'
         bestfit_legend += f': {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) '
@@ -49,8 +50,21 @@ def run_vega(config_path):
         if not vega.bestfit.fmin.is_valid:
             bestfit_legend = 'Invalid fit! Disregard these results.'
 
-        vega.plots.plot_4wedges(models=[vega.bestfit_model[name]], corr_name=name, title=None,
-                                mu_bin_labels=True, no_font=True, model_colors=['r'], xlim=None)
+        # Plot wedges
+        vega.plots.plot_4wedges(
+            models=[vega.bestfit_model[name]], corr_name=name, title=None,
+            mu_bin_labels=True, no_font=True, model_colors=['r'], xlim=None
+        )
         vega.plots.fig.suptitle(bestfit_legend, fontsize=18, y=1.03)
-        vega.plots.fig.savefig(f'{vega.output.outfile[:-5]}_{name}.png', dpi='figure',
-                               bbox_inches='tight', facecolor='white')
+        vega.plots.fig.savefig(
+            f'{vega.output.outfile[:-5]}_{name}_wedges.png', dpi='figure',
+            bbox_inches='tight', facecolor='white'
+        )
+
+        # Plot shells
+        vega.plots.plot_4shells(model=vega.bestfit_model[name], corr_name=name)
+        vega.plots.fig.suptitle(bestfit_legend, fontsize=22, y=0.95)
+        vega.plots.fig.savefig(
+            f'{vega.output.outfile[:-5]}_{name}_shells.png', dpi='figure',
+            bbox_inches='tight', facecolor='white'
+        )
