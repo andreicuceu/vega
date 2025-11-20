@@ -729,6 +729,9 @@ class VegaInterface:
             self.full_data_mask.append(self.data[name].data_mask)
             self.full_model_mask.append(self.data[name].model_mask)
 
+        self.full_data_mask = np.concatenate(self.full_data_mask)
+        self.full_model_mask = np.concatenate(self.full_model_mask)
+
         # Construct combined templates for the mode marginalization
         # Following just updates the covariance matrix
         # More stable inversion can be achieved through Woodbury, but
@@ -737,17 +740,26 @@ class VegaInterface:
                 corr_item.marginalize_small_scales
                 for corr_item in self.corr_items.values()
         ):
-            G = np.full((len(self.corr_items), len(self.corr_items)), None)
+            # G = np.full((len(self.corr_items), len(self.corr_items)), None)
+            j = 0
             for i, name in enumerate(self.corr_items):
+                ndata = self.data[name].full_data_size
+                wd, wm = self.data[name].data_mask, self.data[name].model_mask
+
                 if self.corr_items[name].marginalize_small_scales:
-                    G[i, i] = self.data[name].get_dist_xi_marg_templates()
+                    # G[i, i] = self.data[name].get_dist_xi_marg_templates()
+                    M1 = self.global_cov[j:j + ndata, j:j + ndata]
+                    w = np.logical_and.outer(wd, wd)
+                    M1[w] += self.data[name].get_dist_xi_marg_templates(
+                        )[wm, :][:, wm].ravel()
 
-            all_templates = block_array(G, format='csr')
+                j += ndata
 
-            self.global_cov += all_templates.dot(all_templates.T)
-
-        self.full_data_mask = np.concatenate(self.full_data_mask)
-        self.full_model_mask = np.concatenate(self.full_model_mask)
+            # cov_update = block_array(G, format='csr')
+            # cov_update = cov_update[self.full_model_mask, :][:, self.full_model_mask]
+            # w = np.logical_and.outer(self.full_data_mask, self.full_data_mask)
+            # self.global_cov[w] += cov_update.toarray().ravel()
+            # del w, cov_update
 
         if self.low_mem_mode:
             masked_cov = self.global_cov[:, self.full_data_mask]
