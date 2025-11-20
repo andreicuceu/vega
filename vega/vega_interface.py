@@ -2,6 +2,7 @@
 import os.path
 import numpy as np
 import scipy.stats
+from scipy.sparse import block_array
 from astropy.io import fits
 import configparser
 import copy
@@ -727,6 +728,23 @@ class VegaInterface:
         for name in self.corr_items:
             self.full_data_mask.append(self.data[name].data_mask)
             self.full_model_mask.append(self.data[name].model_mask)
+
+        # Construct combined templates for the mode marginalization
+        # Following just updates the covariance matrix
+        # More stable inversion can be achieved through Woodbury, but
+        # requires handling masked pixels without removing them from cov.
+        if any(
+                self.models[name].marginalization_templates is not None
+                for name in self.corr_items
+        ):
+            G = np.full((len(self.corr_items), len(self.corr_items)), None)
+            for i, name in enumerate(self.corr_items):
+                if self.models[name].marginalization_templates is not None:
+                    G[i, i] = self.models[name].marginalization_templates
+
+            all_templates = block_array(G, format='csr')
+
+            self.global_cov += all_templates.dot(all_templates.T)
 
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)

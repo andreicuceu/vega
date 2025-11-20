@@ -83,6 +83,8 @@ class Model:
         if corr_item.marginalize_small_scales:
             assert self._has_distortion_mat
             self._init_marg_xi_templates()
+        else:
+            self.marginalization_templates = None
 
     def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
@@ -265,7 +267,8 @@ class Model:
                 templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
         templates = sparse_vstack(templates).tocsr().T
-        self.templates = self._data.distortion_mat.dot(templates)
+        self.marginalization_templates = self._data.distortion_mat.dot(templates)
+        self.marginalization_templates *= self._corr_item.marginalize_small_scales_prior_sigma
         # SVD to cut off degen modes?
 
     def _init_marg_xi_params(self, marg_pars):

@@ -52,8 +52,8 @@ class CorrelationItem:
             config['model'].getfloat("marginalize-below-rpmax", 0),
             config['model'].getfloat("marginalize-above-rpmin", 0)
         ]
-        self.marginalize_small_scales_prior_var = config['model'].getfloat(
-            "marginalize-prior-variance", 0)
+        self.marginalize_small_scales_prior_sigma = config['model'].getfloat(
+            "marginalize-prior-sigma", 10.0)
         self.marginalize_small_scales = {}
         for i, name in enumerate(['rtmax', 'rtmin', 'rpmax', 'rpmin']):
             if marg_rs[i] > 0:
