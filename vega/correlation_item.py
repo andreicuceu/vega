@@ -45,10 +45,19 @@ class CorrelationItem:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
 
         self.test_flag = config['data'].getboolean('test', False)
-        self.marginalize_small_scales = config['model'].getboolean(
-            'marginalize-small-scales', False)
-        self.single_bin_marg_xi = config['model'].getboolean(
-            'single-bin-marg-xi', False)
+
+        marg_rs = [
+            config['model'].getfloat("marginalize-below-rtmax", 0),
+            config['model'].getfloat("marginalize-above-rtmin", 0),
+            config['model'].getfloat("marginalize-below-rpmax", 0),
+            config['model'].getfloat("marginalize-above-rpmin", 0)
+        ]
+        self.marginalize_small_scales_prior_var = config['model'].getfloat(
+            "marginalize-prior-variance", 0)
+        self.marginalize_small_scales = {}
+        for i, name in enumerate(['rtmax', 'rtmin', 'rpmax', 'rpmin']):
+            if marg_rs[i] > 0:
+                self.marginalize_small_scales[name] = marg_rs[i]
 
         self.has_metals = False
         self.has_bb = False
