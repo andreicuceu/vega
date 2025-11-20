@@ -750,8 +750,9 @@ class VegaInterface:
                     # G[i, i] = self.data[name].get_dist_xi_marg_templates()
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
                     w = np.logical_and.outer(wd, wd)
-                    M1[w] += self.data[name].get_dist_xi_marg_templates(
-                        )[wm, :][:, wm].ravel()
+                    M1[w] += self.data[name].cov_marg_update
+
+                    self.data[name].cov_marg_update = None
 
                 j += ndata
 

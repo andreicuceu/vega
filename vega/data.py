@@ -82,7 +82,10 @@ class Data:
             cov_update = self.get_dist_xi_marg_templates()
             cov_update = cov_update[self.model_mask, :][:, self.model_mask]
             w = np.logical_and.outer(self.data_mask, self.data_mask)
-            self._cov_mat[w] += cov_update.ravel()
+            self.cov_marg_update = cov_update.ravel()
+            self._cov_mat[w] += self.cov_marg_update
+        else:
+            self.cov_marg_update = None
 
         self._cholesky = None
         self._scale = 1.
