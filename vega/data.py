@@ -646,10 +646,21 @@ class Data:
         return self.mc_mock
 
     def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
-        """
+        """Multiply undistorted templates with the distortion matrix and
+        return either 1) compressed template matrix or 2) A . A^T that updates
+        the covariance matrix.
+
+        Parameters
+        ----------
+        factor: float
+            Compression cut-off ratio with respect to the highes singular value.
+        return_AAT : bool, default: True
+            Returns covariance update matrix if true.
+
         Returns
         -------
         2D np.array
+            Template or covariance update matrix.
         """
         assert self.corr_item.marginalize_small_scales
         assert self.has_distortion

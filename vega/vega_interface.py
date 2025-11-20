@@ -740,27 +740,22 @@ class VegaInterface:
                 corr_item.marginalize_small_scales
                 for corr_item in self.corr_items.values()
         ):
-            # G = np.full((len(self.corr_items), len(self.corr_items)), None)
+            print('Updating global covariance with marginalization templates.')
             j = 0
             for i, name in enumerate(self.corr_items):
                 ndata = self.data[name].full_data_size
                 wd, wm = self.data[name].data_mask, self.data[name].model_mask
 
                 if self.corr_items[name].marginalize_small_scales:
-                    # G[i, i] = self.data[name].get_dist_xi_marg_templates()
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
                     w = np.logical_and.outer(wd, wd)
                     M1[w] += self.data[name].cov_marg_update
 
-                    self.data[name].cov_marg_update = None
+                    if self.low_mem_mode:
+                        del self.data[name].cov_marg_update
 
                 j += ndata
-
-            # cov_update = block_array(G, format='csr')
-            # cov_update = cov_update[self.full_model_mask, :][:, self.full_model_mask]
-            # w = np.logical_and.outer(self.full_data_mask, self.full_data_mask)
-            # self.global_cov[w] += cov_update.toarray().ravel()
-            # del w, cov_update
+            del j
 
         if self.low_mem_mode:
             masked_cov = self.global_cov[:, self.full_data_mask]

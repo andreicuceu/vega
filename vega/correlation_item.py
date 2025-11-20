@@ -129,10 +129,18 @@ class CorrelationItem:
         return False
 
     def get_undist_xi_marg_templates(self):
+        """Calculate undistorted correlation function marginalization templates.
+        Degenerate modes are removed in the (relevant) distorted space in
+            data.get_dist_xi_marg_templates function.
+
+        Returns
+        -------
+        sparse array, likely csc_array
+            Prior sigma is multiplied to each vector.
+        """
         templates = []
         N = self.model_coordinates.rt_regular_grid.size
-        d = np.ones(1)
-        # ['rtmax', 'rtmin', 'rpmax', 'rpmin']
+        d = np.ones(1)  # required in coo_array construction
 
         if 'rtmax' in self.marginalize_small_scales:
             rtmax = self.marginalize_small_scales['rtmax']
@@ -166,6 +174,5 @@ class CorrelationItem:
             for i in idx:
                 templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
-        # SVD to cut off degen modes?
         a = self.marginalize_small_scales_prior_sigma
         return a * sparse_vstack(templates).tocsr().T
