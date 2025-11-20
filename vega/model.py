@@ -226,8 +226,10 @@ class Model:
 
     def _init_marg_xi_templates(self):
         from scipy.sparse import coo_array, vstack as sparse_vstack
+
         templates = []
         N = self._corr_item.dist_model_coordinates.rt_regular_grid.size
+        d = np.ones(1)
         # ['rtmax', 'rtmin', 'rpmax', 'rpmin']
 
         if 'rtmax' in self._corr_item.marginalize_small_scales:
@@ -236,7 +238,7 @@ class Model:
                 self._corr_item.dist_model_coordinates.rt_regular_grid < rtmax
             )[0]
             for i in idx:
-                templates.append(coo_array((1.0, i), shape=N))
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
         if 'rtmin' in self._corr_item.marginalize_small_scales:
             rtmin = self._corr_item.marginalize_small_scales['rtmin']
@@ -244,7 +246,7 @@ class Model:
                 self._corr_item.dist_model_coordinates.rt_regular_grid > rtmin
             )[0]
             for i in idx:
-                templates.append(coo_array((1.0, i), shape=N))
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
         if 'rpmax' in self._corr_item.marginalize_small_scales:
             rpmax = self._corr_item.marginalize_small_scales['rpmax']
@@ -252,7 +254,7 @@ class Model:
                 self._corr_item.dist_model_coordinates.rp_regular_grid < rpmax
             )[0]
             for i in idx:
-                templates.append(coo_array((1.0, i), shape=N))
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
         if 'rpmin' in self._corr_item.marginalize_small_scales:
             rpmin = self._corr_item.marginalize_small_scales['rpmin']
@@ -260,9 +262,9 @@ class Model:
                 self._corr_item.dist_model_coordinates.rp_regular_grid > rpmin
             )[0]
             for i in idx:
-                templates.append(coo_array((1.0, i), shape=N))
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
-        templates = sparse_vstack(sparse_vstack).tocsr().T
+        templates = sparse_vstack(templates).tocsr().T
         self.templates = self._data.distortion_mat.dot(templates)
         # SVD to cut off degen modes?
 
