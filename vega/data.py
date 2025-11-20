@@ -81,7 +81,7 @@ class Data:
             templates = self.get_dist_xi_marg_templates()
             cov_update = templates.dot(templates.T)
             cov_update = cov_update[self.model_mask, :][:, self.model_mask]
-            w = np.logical_and.outer(self..data_mask, self..data_mask)
+            w = np.logical_and.outer(self.data_mask, self.data_mask)
             self._cov_mat[w] += cov_update
 
         self._cholesky = None
