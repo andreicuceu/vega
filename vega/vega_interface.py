@@ -2,7 +2,6 @@
 import os.path
 import numpy as np
 import scipy.stats
-from scipy.sparse import block_array
 from astropy.io import fits
 import configparser
 import copy
