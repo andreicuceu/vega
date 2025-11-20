@@ -79,7 +79,7 @@ class Data:
 
         if corr_item.marginalize_small_scales:
             print('Updating covariance with marginalization templates.')
-            cov_update = self.get_dist_xi_marg_templates(return_AAT=True)
+            cov_update = self.get_dist_xi_marg_templates()
             cov_update = cov_update[self.model_mask, :][:, self.model_mask]
             w = np.logical_and.outer(self.data_mask, self.data_mask)
             self._cov_mat[w] += cov_update.ravel()
@@ -642,7 +642,7 @@ class Data:
 
         return self.mc_mock
 
-    def get_dist_xi_marg_templates(self, factor=1e-5, return_AAT=False):
+    def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
         """
         Returns
         -------
@@ -657,7 +657,7 @@ class Data:
         # Compress using svd to remove degenerate modes
         print("  SVD of template matrix to remove degenerate modes.")
         u, s, vh = np.linalg.svd(templates.toarray(), full_matrices=False)
-        w = s > 1e-5 * s[0]
+        w = s > factor * s[0]
         print(f"  Removed {w.size - w.sum()} out of {w.size} modes.")
 
         if return_AAT:
