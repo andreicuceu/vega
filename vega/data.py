@@ -79,11 +79,10 @@ class Data:
 
         if corr_item.marginalize_small_scales:
             print('Updating covariance with marginalization templates.')
-            templates = self.get_dist_xi_marg_templates()
-            cov_update = templates.dot(templates.T)
+            cov_update = self.get_dist_xi_marg_templates(return_AAT=True)
             cov_update = cov_update[self.model_mask, :][:, self.model_mask]
             w = np.logical_and.outer(self.data_mask, self.data_mask)
-            self._cov_mat[w] += cov_update.toarray().ravel()
+            self._cov_mat[w] += cov_update.ravel()
 
         self._cholesky = None
         self._scale = 1.
@@ -643,9 +642,25 @@ class Data:
 
         return self.mc_mock
 
-    def get_dist_xi_marg_templates(self):
+    def get_dist_xi_marg_templates(self, factor=1e-5, return_AAT=False):
+        """
+        Returns
+        -------
+        2D np.array
+        """
         assert self.corr_item.marginalize_small_scales
         assert self.has_distortion
 
         templates = self.corr_item.get_undist_xi_marg_templates()
-        return self.distortion_mat.dot(templates)
+        templates = self.distortion_mat.dot(templates)
+
+        # Compress using svd to remove degenerate modes
+        u, s, vh = np.linalg.svd(templates.toarray(), full_matrices=False)
+        w = s > 1e-5 * s[0]
+
+        if return_AAT:
+            del vh
+            uw = u[:, w]
+            return np.dot(uw * s[w]**2, uw.T)
+
+        return np.dot(u[:, w] * s[w], vh[w, :][:, w])
