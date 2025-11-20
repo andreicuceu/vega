@@ -734,13 +734,13 @@ class VegaInterface:
         # More stable inversion can be achieved through Woodbury, but
         # requires handling masked pixels without removing them from cov.
         if any(
-                self.models[name].marginalization_templates is not None
-                for name in self.corr_items
+                corr_item.marginalize_small_scales
+                for corr_item in self.corr_items.values()
         ):
             G = np.full((len(self.corr_items), len(self.corr_items)), None)
             for i, name in enumerate(self.corr_items):
-                if self.models[name].marginalization_templates is not None:
-                    G[i, i] = self.models[name].marginalization_templates
+                if self.corr_items[name].marginalize_small_scales:
+                    G[i, i] = self.data[name].get_dist_xi_marg_templates()
 
             all_templates = block_array(G, format='csr')
 

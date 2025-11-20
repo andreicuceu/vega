@@ -77,6 +77,10 @@ class Data:
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
+        if corr_item.marginalize_small_scales:
+            templates = self.get_dist_xi_marg_templates()
+            self._cov_mat += templates.dot(templates.T)
+
         self._cholesky = None
         self._scale = 1.
         self.scaled_inv_masked_cov = None
@@ -634,3 +638,10 @@ class Data:
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
+
+    def get_dist_xi_marg_templates(self):
+        assert self.corr_item.marginalize_small_scales
+        assert self.has_distortion
+
+        templates = self.corr_item.get_undist_xi_marg_templates()
+        return self.distortion_mat.dot(templates)

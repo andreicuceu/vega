@@ -80,12 +80,6 @@ class Model:
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
 
-        if corr_item.marginalize_small_scales:
-            assert self._has_distortion_mat
-            self._init_marg_xi_templates()
-        else:
-            self.marginalization_templates = None
-
     def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
@@ -225,51 +219,6 @@ class Model:
         xi_full = self._compute_model(pars, pk_full, 'full')
 
         return xi_full
-
-    def _init_marg_xi_templates(self):
-        from scipy.sparse import coo_array, vstack as sparse_vstack
-
-        templates = []
-        N = self._corr_item.dist_model_coordinates.rt_regular_grid.size
-        d = np.ones(1)
-        # ['rtmax', 'rtmin', 'rpmax', 'rpmin']
-
-        if 'rtmax' in self._corr_item.marginalize_small_scales:
-            rtmax = self._corr_item.marginalize_small_scales['rtmax']
-            idx = np.nonzero(
-                self._corr_item.dist_model_coordinates.rt_regular_grid < rtmax
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
-
-        if 'rtmin' in self._corr_item.marginalize_small_scales:
-            rtmin = self._corr_item.marginalize_small_scales['rtmin']
-            idx = np.nonzero(
-                self._corr_item.dist_model_coordinates.rt_regular_grid > rtmin
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
-
-        if 'rpmax' in self._corr_item.marginalize_small_scales:
-            rpmax = self._corr_item.marginalize_small_scales['rpmax']
-            idx = np.nonzero(
-                self._corr_item.dist_model_coordinates.rp_regular_grid < rpmax
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
-
-        if 'rpmin' in self._corr_item.marginalize_small_scales:
-            rpmin = self._corr_item.marginalize_small_scales['rpmin']
-            idx = np.nonzero(
-                self._corr_item.dist_model_coordinates.rp_regular_grid > rpmin
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
-
-        templates = sparse_vstack(templates).tocsr().T
-        self.marginalization_templates = self._data.distortion_mat.dot(templates)
-        self.marginalization_templates *= self._corr_item.marginalize_small_scales_prior_sigma
-        # SVD to cut off degen modes?
 
     def _init_marg_xi_params(self, marg_pars):
         rp_nbins_dist = self._corr_item.dist_model_coordinates.rp_nbins

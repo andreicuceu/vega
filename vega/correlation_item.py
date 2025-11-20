@@ -1,3 +1,5 @@
+import numpy as np
+from scipy.sparse import coo_array, vstack as sparse_vstack
 from picca import constants as picca_constants
 
 
@@ -125,3 +127,45 @@ class CorrelationItem:
                 return True
 
         return False
+
+    def get_undist_xi_marg_templates(self):
+        templates = []
+        N = self.dist_model_coordinates.rt_regular_grid.size
+        d = np.ones(1)
+        # ['rtmax', 'rtmin', 'rpmax', 'rpmin']
+
+        if 'rtmax' in self.marginalize_small_scales:
+            rtmax = self.marginalize_small_scales['rtmax']
+            idx = np.nonzero(
+                self.dist_model_coordinates.rt_regular_grid < rtmax
+            )[0]
+            for i in idx:
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+
+        if 'rtmin' in self.marginalize_small_scales:
+            rtmin = self.marginalize_small_scales['rtmin']
+            idx = np.nonzero(
+                self.dist_model_coordinates.rt_regular_grid > rtmin
+            )[0]
+            for i in idx:
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+
+        if 'rpmax' in self.marginalize_small_scales:
+            rpmax = self.marginalize_small_scales['rpmax']
+            idx = np.nonzero(
+                self.dist_model_coordinates.rp_regular_grid < rpmax
+            )[0]
+            for i in idx:
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+
+        if 'rpmin' in self.marginalize_small_scales:
+            rpmin = self.marginalize_small_scales['rpmin']
+            idx = np.nonzero(
+                self.dist_model_coordinates.rp_regular_grid > rpmin
+            )[0]
+            for i in idx:
+                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+
+        # SVD to cut off degen modes?
+        a = self.marginalize_small_scales_prior_sigma
+        return a * sparse_vstack(templates).tocsr().T
