@@ -655,8 +655,10 @@ class Data:
         templates = self.distortion_mat.dot(templates)
 
         # Compress using svd to remove degenerate modes
+        print("  SVD of template matrix to remove degenerate modes.")
         u, s, vh = np.linalg.svd(templates.toarray(), full_matrices=False)
         w = s > 1e-5 * s[0]
+        print(f"  Removed {w.size - w.sum()} out of {w.size} modes.")
 
         if return_AAT:
             del vh
