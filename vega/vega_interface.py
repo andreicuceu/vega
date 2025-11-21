@@ -742,16 +742,16 @@ class VegaInterface:
             print('Updating global covariance with marginalization templates.')
             j = 0
             for name in self.corr_items:
-                ndata = self.data[name].full_data_size
-                wd = self.data[name].data_mask
+                data = self.data[name]
+                ndata = data.full_data_size
+                wd = data.data_mask
 
                 if self.corr_items[name].marginalize_small_scales:
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
-                    w = np.logical_and.outer(wd, wd)
-                    M1[w] += self.data[name].cov_marg_update
+                    M1[np.ix_(wd, wd)] += data.cov_marg_update
 
                     if self.low_mem_mode:
-                        del self.data[name].cov_marg_update
+                        del data.cov_marg_update
 
                 j += ndata
             del j
