@@ -741,7 +741,7 @@ class VegaInterface:
         ):
             print('Updating global covariance with marginalization templates.')
             j = 0
-            for i, name in enumerate(self.corr_items):
+            for name in self.corr_items:
                 ndata = self.data[name].full_data_size
                 wd = self.data[name].data_mask
 
