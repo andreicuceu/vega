@@ -168,6 +168,11 @@ class CorrelationItem:
             )[0]]
 
         common_idx = reduce(np.intersect1d, indeces)
+        if common_idx.size == 0:
+            raise ValueError(
+                "No common indices found for small-scale marginalization templates."
+            )
+
         templates = []
         for i in common_idx:
             templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
