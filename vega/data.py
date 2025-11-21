@@ -662,8 +662,10 @@ class Data:
         2D np.array
             Template or covariance update matrix.
         """
-        assert self.corr_item.marginalize_small_scales
-        assert self.has_distortion
+        if not self.corr_item.marginalize_small_scales:
+            raise ValueError("Marginalization not configured")
+        if not self.has_distortion:
+            raise ValueError("Distortion matrix required for marginalization")
 
         templates = self.corr_item.get_undist_xi_marg_templates()
         templates = self.distortion_mat.dot(templates)
