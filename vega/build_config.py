@@ -78,8 +78,8 @@ class BuildConfig:
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
-        self.options['zmin'] = options.get('zmin', '0.0')
-        self.options['zmax'] = options.get('zmax', '10.0')
+        self.options['zmin'] = options.get('zmin', 0.0)
+        self.options['zmax'] = options.get('zmax', 10.0)
 
         metals = options.get('metals', None)
         if metals is not None:
