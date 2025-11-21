@@ -80,10 +80,9 @@ class Data:
         if corr_item.marginalize_small_scales:
             print('Updating covariance with marginalization templates.')
             cov_update = self.get_dist_xi_marg_templates()
-            cov_update = cov_update[self.model_mask, :][:, self.model_mask]
-            w = np.logical_and.outer(self.data_mask, self.data_mask)
+            cov_update = cov_update[np.ix_(self.model_mask, self.model_mask)]
             self.cov_marg_update = cov_update.ravel()
-            self._cov_mat[w] += self.cov_marg_update
+            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
         else:
             self.cov_marg_update = None
 
@@ -647,15 +646,16 @@ class Data:
 
     def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
         """Multiply undistorted templates with the distortion matrix and
-        return either 1) compressed template matrix or 2) A . A^T that updates
-        the covariance matrix.
+        return either 1) full template matrix or 2) compressed A . A^T that
+        updates the covariance matrix.
 
         Parameters
         ----------
-        factor: float
-            Compression cut-off ratio with respect to the highes singular value.
-        return_AAT : bool, default: True
-            Returns covariance update matrix if true.
+        factor: float, default: 1e-8
+            Compression cut-off ratio with respect to the highest singular value.
+        return_AAT : bool, optional
+            If True (default), returns the covariance update matrix (A @ A^T).
+            If False, returns the template matrix.
 
         Returns
         -------
@@ -668,17 +668,17 @@ class Data:
             raise ValueError("Distortion matrix required for marginalization")
 
         templates = self.corr_item.get_undist_xi_marg_templates()
-        templates = self.distortion_mat.dot(templates)
+        templates = self.distortion_mat.dot(templates).toarray()
+
+        if not return_AAT:
+            return templates
 
         # Compress using svd to remove degenerate modes
         print("  SVD of template matrix to remove degenerate modes.")
-        u, s, vh = np.linalg.svd(templates.toarray(), full_matrices=False)
+        u, s, _ = np.linalg.svd(templates, full_matrices=False)
         w = s > factor * s[0]
+        u = u[:, w]
+        s = s[w]
         print(f"  Removed {w.size - w.sum()} out of {w.size} modes.")
 
-        if return_AAT:
-            del vh
-            uw = u[:, w]
-            return np.dot(uw * s[w]**2, uw.T)
-
-        return np.dot(u[:, w] * s[w], vh[w, :][:, w])
+        return np.dot(u * s**2, u.T)
