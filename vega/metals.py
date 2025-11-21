@@ -16,9 +16,6 @@ class Metals:
     """
     # cache_pk = LRUCache(128)
     # cache_xi = LRUCache(128)
-    cache_xi_metal_metal = {}
-    cache_xi_metal_cross_main = {}
-
     growth_rate = None
     fast_metals = False
 
@@ -49,6 +46,9 @@ class Metals:
         self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
         if self.fast_metals:
             self.fast_metal_bias = True
+
+        self.cache_xi_metal_metal = {}
+        self.cache_xi_metal_cross_main = {}
 
         # Read the growth rate and sigma_smooth from the fiducial config
         if 'growth_rate' in fiducial:
