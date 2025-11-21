@@ -743,7 +743,7 @@ class VegaInterface:
             j = 0
             for i, name in enumerate(self.corr_items):
                 ndata = self.data[name].full_data_size
-                wd, wm = self.data[name].data_mask, self.data[name].model_mask
+                wd = self.data[name].data_mask
 
                 if self.corr_items[name].marginalize_small_scales:
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
