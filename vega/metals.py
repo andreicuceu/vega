@@ -135,7 +135,7 @@ class Metals:
 
     def compute_xi_metal_metal(self, pk_lin, pars, corr_hash):
         """Compute M_1 x M_2 metal cross-correlations with caching.
-        This only caches by tracer names, so the only parameters than can change
+        This only caches by tracer names, so the only parameters that can change
         are metal biases which are added later. Everything else is fixed.
 
         Parameters
