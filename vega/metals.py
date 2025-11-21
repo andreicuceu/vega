@@ -311,14 +311,11 @@ class Metals:
         return z_qso, weights_qso
 
     def get_rp_pairs(self, z1, z2):
-        try:
-            r1 = self.cosmo.get_r_comov(z1)
-            r2 = self.cosmo.get_r_comov(z2)
-        except ValueError as error:
-            if any(z1 < 0) or any(z2 < 0):
-                raise ValueError(
-                    "Attempting to compute distance to a negative redshift") from error
-            raise error
+        if np.any(z1 < 0) or np.any(z2 < 0):
+            raise ValueError(
+                "Attempting to compute distance to a negative redshift")
+        r1 = self.cosmo.get_r_comov(z1)
+        r2 = self.cosmo.get_r_comov(z2)
 
         # Get all pairs
         rp_pairs = (r1[:, None] - r2[None, :]).ravel()  # same sign as line 676 of cf.py (1-2)
