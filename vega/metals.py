@@ -209,7 +209,7 @@ class Metals:
             xi *= 2
 
         if self.save_components:
-            assert not self.fast_metals, 'You need to set fast_metal_bias=False.'
+            assert not fast_metals, 'You need to set fast_metal_bias=False.'
             assert component is not None, 'You need to provide component name.'
             self.pk[component][corr_hash] = copy.deepcopy(pk)
             self.xi[component][corr_hash] = copy.deepcopy(xi)
