@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.sparse import coo_array, vstack as sparse_vstack
 from picca import constants as picca_constants
+from functools import reduce
 
 
 class CorrelationItem:
@@ -138,41 +139,38 @@ class CorrelationItem:
         sparse array, likely csc_array
             Prior sigma is multiplied to each vector.
         """
-        templates = []
         N = self.model_coordinates.rt_regular_grid.size
         d = np.ones(1)  # required in coo_array construction
+        indeces = []
 
         if 'rtmax' in self.marginalize_small_scales:
             rtmax = self.marginalize_small_scales['rtmax']
-            idx = np.nonzero(
+            indeces += [np.nonzero(
                 self.model_coordinates.rt_regular_grid < rtmax
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+            )[0]]
 
         if 'rtmin' in self.marginalize_small_scales:
             rtmin = self.marginalize_small_scales['rtmin']
-            idx = np.nonzero(
+            indeces += [np.nonzero(
                 self.model_coordinates.rt_regular_grid > rtmin
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+            )[0]]
 
         if 'rpmax' in self.marginalize_small_scales:
             rpmax = self.marginalize_small_scales['rpmax']
-            idx = np.nonzero(
+            indeces += [np.nonzero(
                 self.model_coordinates.rp_regular_grid < rpmax
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+            )[0]]
 
         if 'rpmin' in self.marginalize_small_scales:
             rpmin = self.marginalize_small_scales['rpmin']
-            idx = np.nonzero(
+            indeces += [np.nonzero(
                 self.model_coordinates.rp_regular_grid > rpmin
-            )[0]
-            for i in idx:
-                templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+            )[0]]
+
+        common_idx = reduce(np.intersect1d, indeces)
+        templates = []
+        for i in common_idx:
+            templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
 
         a = self.marginalize_small_scales_prior_sigma
         return a * sparse_vstack(templates).tocsr().T
