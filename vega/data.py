@@ -80,8 +80,7 @@ class Data:
         if corr_item.marginalize_small_scales:
             print('Updating covariance with marginalization templates.')
             cov_update = self.get_dist_xi_marg_templates()
-            cov_update = cov_update[np.ix_(self.model_mask, self.model_mask)]
-            self.cov_marg_update = cov_update.ravel()
+            self.cov_marg_update = cov_update[np.ix_(self.model_mask, self.model_mask)]
             self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
         else:
             self.cov_marg_update = None
