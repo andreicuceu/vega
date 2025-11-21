@@ -75,7 +75,8 @@ class CorrelationItem:
                 corr_hash = (corr[0], corr[0])
 
             # Make sure main tracers are in the correct position in the tuple
-            if self.tracer1['name'] == corr_hash[1] or self.tracer2['name'] == corr_hash[0]:
+            if corr_hash[0] not in [self.tracer1['name'], self.tracer2['name']] and \
+               corr_hash[1] in [self.tracer1['name'], self.tracer2['name']]:
                 corr_hash = (corr_hash[1], corr_hash[0])
 
             # Avoid duplicates
