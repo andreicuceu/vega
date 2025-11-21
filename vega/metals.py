@@ -280,7 +280,6 @@ class Metals:
                 else:
                     xi_metals += xi
 
-        self.cache_xi_metal_cross_main = {}  # clear cache after compute is done
         return xi_metals
 
     def apply_metal_matrix(self, xi, corr_hash):
