@@ -184,7 +184,7 @@ class Metals:
             metal cross-correlation function
         """
         par_array = np.array([pars[key] for key in sorted(pars.keys())])
-        xi_hash = (beta1, beta2, *par_array)
+        xi_hash = (beta1, beta2, *tuple(par_array))
 
         if xi_hash in self.cache_xi_metal_cross_main:
             xi = self.cache_xi_metal_cross_main[xi_hash]
