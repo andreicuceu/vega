@@ -68,14 +68,15 @@ class CorrelationItem:
         self.tracer_catalog = tracer_catalog
         self.metal_correlations = []
         for corr in metal_correlations:
-            corr_hash = tuple(set((corr[0], corr[1])))
+            corr_hash = tuple(sorted([corr[0], corr[1]]))
 
             # If only one tracer is given, assume auto-correlation
             if len(corr_hash) != 2:
                 corr_hash = (corr[0], corr[0])
 
             # Make sure main tracers are in the correct position in the tuple
-            if self.tracer1['name'] == corr_hash[1] or self.tracer2['name'] == corr_hash[0]:
+            if corr_hash[0] not in [self.tracer1['name'], self.tracer2['name']] and \
+               corr_hash[1] in [self.tracer1['name'], self.tracer2['name']]:
                 corr_hash = (corr_hash[1], corr_hash[0])
 
             # Avoid duplicates

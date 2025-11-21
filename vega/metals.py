@@ -135,7 +135,7 @@ class Metals:
 
     def compute_xi_metal_metal(self, pk_lin, pars, corr_hash):
         """Compute M_1 x M_2 metal cross-correlations with caching.
-        This only caches by tracer names, so the only parameters than can change
+        This only caches by tracer names, so the only parameters that can change
         are metal biases which are added later. Everything else is fixed.
 
         Parameters
@@ -184,7 +184,7 @@ class Metals:
             metal cross-correlation function
         """
         par_array = np.array([pars[key] for key in sorted(pars.keys())])
-        xi_hash = (beta1, beta2, *par_array)
+        xi_hash = (beta1, beta2, *tuple(par_array))
 
         if xi_hash in self.cache_xi_metal_cross_main:
             xi = self.cache_xi_metal_cross_main[xi_hash]
@@ -209,7 +209,7 @@ class Metals:
             xi *= 2
 
         if self.save_components:
-            assert not self.fast_metals, 'You need to set fast_metal_bias=False.'
+            assert not fast_metals, 'You need to set fast_metal_bias=False.'
             assert component is not None, 'You need to provide component name.'
             self.pk[component][corr_hash] = copy.deepcopy(pk)
             self.xi[component][corr_hash] = copy.deepcopy(xi)
@@ -280,7 +280,6 @@ class Metals:
                 else:
                     xi_metals += xi
 
-        self.cache_xi_metal_cross_main = {}  # clear cache after compute is done
         return xi_metals
 
     def apply_metal_matrix(self, xi, corr_hash):
