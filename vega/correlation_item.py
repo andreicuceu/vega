@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import coo_array, vstack as sparse_vstack
+from scipy.sparse import coo_array
 from picca import constants as picca_constants
 from functools import reduce
 
@@ -139,8 +139,6 @@ class CorrelationItem:
         sparse array, likely csc_array
             Prior sigma is multiplied to each vector.
         """
-        N = self.model_coordinates.rt_regular_grid.size
-        d = np.ones(1)  # required in coo_array construction
         indeces = []
 
         if 'rtmax' in self.marginalize_small_scales:
@@ -173,9 +171,12 @@ class CorrelationItem:
                 "No common indices found for small-scale marginalization templates."
             )
 
-        templates = []
-        for i in common_idx:
-            templates.append(coo_array((d, ([0], [i])), shape=(1, N)))
+        N = self.model_coordinates.rt_regular_grid.size
+        d = np.ones(common_idx.size)
+
+        templates = coo_array(
+            (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
+        ).tocsr().T
 
         a = self.marginalize_small_scales_prior_sigma
-        return a * sparse_vstack(templates).tocsr().T
+        return a * templates
