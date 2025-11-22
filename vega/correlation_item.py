@@ -156,13 +156,13 @@ class CorrelationItem:
         if 'rpmax' in self.marginalize_small_scales:
             rpmax = self.marginalize_small_scales['rpmax']
             indeces += [np.nonzero(
-                self.model_coordinates.rp_regular_grid < rpmax
+                np.abs(self.model_coordinates.rp_regular_grid) < rpmax
             )[0]]
 
         if 'rpmin' in self.marginalize_small_scales:
             rpmin = self.marginalize_small_scales['rpmin']
             indeces += [np.nonzero(
-                self.model_coordinates.rp_regular_grid > rpmin
+                np.abs(self.model_coordinates.rp_regular_grid) > rpmin
             )[0]]
 
         common_idx = reduce(np.intersect1d, indeces)
