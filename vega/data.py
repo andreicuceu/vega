@@ -675,7 +675,7 @@ class Data:
 
         # Compress using svd to remove degenerate modes
         templates = templates[self.model_mask, :].toarray()
-        print(f"  There are {templates.shape[1].size} templates. "
+        print(f"  There are {templates.shape[1]} templates. "
               "SVD of template matrix to remove degenerate modes.")
         u, s, _ = np.linalg.svd(templates, full_matrices=False)
         w = s > factor * s[0]
