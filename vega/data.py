@@ -79,11 +79,11 @@ class Data:
 
         if corr_item.marginalize_small_scales:
             print('Updating covariance with marginalization templates.')
-            cov_update = self.get_dist_xi_marg_templates()
-            self.cov_marg_update = cov_update[np.ix_(self.model_mask, self.model_mask)]
+            self.cov_marg_update = self.get_dist_xi_marg_templates()
             self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
         else:
             self.cov_marg_update = None
+            self.num_marg_modes = 0
 
         self._cholesky = None
         self._scale = 1.
@@ -667,17 +667,19 @@ class Data:
             raise ValueError("Distortion matrix required for marginalization")
 
         templates = self.corr_item.get_undist_xi_marg_templates()
-        templates = self.distortion_mat.dot(templates).toarray()
+        templates = self.distortion_mat.dot(templates)
 
         if not return_AAT:
-            return templates
+            return templates.toarray()
 
         # Compress using svd to remove degenerate modes
-        print("  SVD of template matrix to remove degenerate modes.")
+        templates = templates[self.model_mask, :].toarray()
+        print(f"  There are {w.size} templates. SVD of template matrix to remove degenerate modes.")
         u, s, _ = np.linalg.svd(templates, full_matrices=False)
         w = s > factor * s[0]
         u = u[:, w]
         s = s[w]
-        print(f"  Removed {w.size - w.sum()} out of {w.size} modes.")
+        print(f"  There are {w.sum()} remaining modes for marginalization.")
+        self.num_marg_modes = w.sum()
 
         return np.dot(u * s**2, u.T)
