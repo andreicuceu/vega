@@ -89,6 +89,7 @@ class Data:
         self._scale = 1.
         self.scaled_inv_masked_cov = None
         self.scaled_log_cov_det = None
+        self.effective_data_size = self.data_size - self.num_marg_modes
 
     @property
     def blind(self):

@@ -435,7 +435,7 @@ class VegaInterface:
         num_pars = len(self.sample_params['limits'])
         print('\n----------------------------------------------------')
         for name in self.corr_items:
-            data_size = self.data[name].data_size
+            data_size = self.data[name].effective_data_size
             self.total_data_size += data_size
 
             if self.monte_carlo and self._use_global_cov:
