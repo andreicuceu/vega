@@ -435,7 +435,7 @@ class VegaInterface:
         num_pars = len(self.sample_params['limits'])
         print('\n----------------------------------------------------')
         for name in self.corr_items:
-            data_size = self.data[name].data_size
+            data_size = self.data[name].effective_data_size
             self.total_data_size += data_size
 
             if self.monte_carlo and self._use_global_cov:
@@ -730,6 +730,31 @@ class VegaInterface:
 
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)
+
+        # Construct combined templates for the mode marginalization
+        # Following just updates the covariance matrix
+        # More stable inversion can be achieved through Woodbury, but
+        # requires handling masked pixels without removing them from cov.
+        if any(
+                corr_item.marginalize_small_scales
+                for corr_item in self.corr_items.values()
+        ):
+            print('Updating global covariance with marginalization templates.')
+            j = 0
+            for name in self.corr_items:
+                data = self.data[name]
+                ndata = data.full_data_size
+                wd = data.data_mask
+
+                if self.corr_items[name].marginalize_small_scales:
+                    M1 = self.global_cov[j:j + ndata, j:j + ndata]
+                    M1[np.ix_(wd, wd)] += data.cov_marg_update
+
+                    if self.low_mem_mode:
+                        del data.cov_marg_update
+
+                j += ndata
+            del j
 
         if self.low_mem_mode:
             masked_cov = self.global_cov[:, self.full_data_mask]

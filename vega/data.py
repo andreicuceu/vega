@@ -2,7 +2,7 @@ import numpy as np
 from astropy.io import fits
 from scipy import linalg
 from scipy import sparse
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_array
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
@@ -77,10 +77,19 @@ class Data:
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
+        if corr_item.marginalize_small_scales:
+            print('Updating covariance with marginalization templates.')
+            self.cov_marg_update = self.get_dist_xi_marg_templates()
+            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+        else:
+            self.cov_marg_update = None
+            self.num_marg_modes = 0
+
         self._cholesky = None
         self._scale = 1.
         self.scaled_inv_masked_cov = None
         self.scaled_log_cov_det = None
+        self.effective_data_size = self.data_size - self.num_marg_modes
 
     @property
     def blind(self):
@@ -263,9 +272,9 @@ class Data:
 
         if dmat_path is None:
             if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
+                self._distortion_mat = csr_array(hdul[1].data['DM_BLIND'].astype(float))
             elif 'DM' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
+                self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
 
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
@@ -361,9 +370,9 @@ class Data:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
         if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
+            self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
         elif 'DM_BLIND' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
+            self._distortion_mat = csr_array(hdul[1].data['DM_BLIND'].astype(float))
         else:
             raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
@@ -553,9 +562,9 @@ class Data:
 
         dm_name = dm_prefix + name
         if dm_name in metal_hdul[2].columns.names:
-            self.metal_mats[tracers] = csr_matrix(metal_hdul[2].data[dm_name])
+            self.metal_mats[tracers] = csr_array(metal_hdul[2].data[dm_name])
         elif len(metal_hdul) > 3 and dm_name in metal_hdul[3].columns.names:
-            self.metal_mats[tracers] = csr_matrix(metal_hdul[3].data[dm_name])
+            self.metal_mats[tracers] = csr_array(metal_hdul[3].data[dm_name])
         elif self.corr_item.test_flag:
             self.metal_mats[tracers] = sparse.eye(metal_mat_size)
         else:
@@ -634,3 +643,45 @@ class Data:
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
+
+    def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
+        """Multiply undistorted templates with the distortion matrix and
+        return either 1) full template matrix or 2) compressed A . A^T that
+        updates the covariance matrix.
+
+        Parameters
+        ----------
+        factor: float, default: 1e-8
+            Compression cut-off ratio with respect to the highest singular value.
+        return_AAT : bool, optional
+            If True (default), returns the covariance update matrix (A @ A^T).
+            If False, returns the template matrix.
+
+        Returns
+        -------
+        2D np.array
+            Template or covariance update matrix.
+        """
+        if not self.corr_item.marginalize_small_scales:
+            raise ValueError("Marginalization not configured")
+        if not self.has_distortion:
+            raise ValueError("Distortion matrix required for marginalization")
+
+        templates = self.corr_item.get_undist_xi_marg_templates()
+        templates = self.distortion_mat.dot(templates)
+
+        if not return_AAT:
+            return templates.toarray()
+
+        # Compress using svd to remove degenerate modes
+        templates = templates[self.model_mask, :].toarray()
+        print(f"  There are {templates.shape[1]} templates. "
+              "SVD of template matrix to remove degenerate modes.")
+        u, s, _ = np.linalg.svd(templates, full_matrices=False)
+        w = s > factor * s[0]
+        u = u[:, w]
+        s = s[w]
+        print(f"  There are {w.sum()} remaining modes for marginalization.")
+        self.num_marg_modes = w.sum()
+
+        return np.dot(u * s**2, u.T)
