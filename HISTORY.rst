@@ -2,6 +2,10 @@
 History
 =======
 
+1.5.1 (2025-11-24)
+------------------
+* Fix bug with QSO-metal computation of metal matrices
+
 1.5.0 (2025-11-21)
 ------------------
 * Optimize metal computation by caching more correlations
