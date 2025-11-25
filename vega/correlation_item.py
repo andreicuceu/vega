@@ -190,7 +190,7 @@ class CorrelationItem:
                 )
         else:
             mask = self.model_coordinates.get_mask_scale_cuts(
-                self.config['cuts']
+                self.config['cuts'], small_scale_mask=True
             )
             common_idx = np.nonzero(~mask)[0]
             print(
