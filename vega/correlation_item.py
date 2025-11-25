@@ -62,6 +62,9 @@ class CorrelationItem:
             if marg_rs[i] > 0:
                 self.marginalize_small_scales[name] = marg_rs[i]
 
+        self.marginalize_small_scales_with_cuts = config['model'].getboolean(
+            "marginalize-small-scales-with-cuts", False)
+
         self.has_metals = False
         self.has_bb = False
 
@@ -154,36 +157,45 @@ class CorrelationItem:
         sparse array, likely csc_array
             Prior sigma is multiplied to each vector.
         """
-        indeces = []
+        if not self.marginalize_small_scales_with_cuts:
+            indeces = []
+            if 'rtmax' in self.marginalize_small_scales:
+                rtmax = self.marginalize_small_scales['rtmax']
+                indeces += [np.nonzero(
+                    self.model_coordinates.rt_regular_grid < rtmax
+                )[0]]
 
-        if 'rtmax' in self.marginalize_small_scales:
-            rtmax = self.marginalize_small_scales['rtmax']
-            indeces += [np.nonzero(
-                self.model_coordinates.rt_regular_grid < rtmax
-            )[0]]
+            if 'rtmin' in self.marginalize_small_scales:
+                rtmin = self.marginalize_small_scales['rtmin']
+                indeces += [np.nonzero(
+                    self.model_coordinates.rt_regular_grid > rtmin
+                )[0]]
 
-        if 'rtmin' in self.marginalize_small_scales:
-            rtmin = self.marginalize_small_scales['rtmin']
-            indeces += [np.nonzero(
-                self.model_coordinates.rt_regular_grid > rtmin
-            )[0]]
+            if 'rpmax' in self.marginalize_small_scales:
+                rpmax = self.marginalize_small_scales['rpmax']
+                indeces += [np.nonzero(
+                    np.abs(self.model_coordinates.rp_regular_grid) < rpmax
+                )[0]]
 
-        if 'rpmax' in self.marginalize_small_scales:
-            rpmax = self.marginalize_small_scales['rpmax']
-            indeces += [np.nonzero(
-                np.abs(self.model_coordinates.rp_regular_grid) < rpmax
-            )[0]]
+            if 'rpmin' in self.marginalize_small_scales:
+                rpmin = self.marginalize_small_scales['rpmin']
+                indeces += [np.nonzero(
+                    np.abs(self.model_coordinates.rp_regular_grid) > rpmin
+                )[0]]
 
-        if 'rpmin' in self.marginalize_small_scales:
-            rpmin = self.marginalize_small_scales['rpmin']
-            indeces += [np.nonzero(
-                np.abs(self.model_coordinates.rp_regular_grid) > rpmin
-            )[0]]
-
-        common_idx = reduce(np.intersect1d, indeces)
-        if common_idx.size == 0:
-            raise ValueError(
-                "No common indices found for small-scale marginalization templates."
+            common_idx = reduce(np.intersect1d, indeces)
+            if common_idx.size == 0:
+                raise ValueError(
+                    "No common indices found for small-scale marginalization templates."
+                )
+        else:
+            mask = self.model_coordinates.get_mask_scale_cuts(
+                self.config['cuts']
+            )
+            common_idx = np.nonzero(~mask)[0]
+            print(
+                f"Marginalizing distortion scales with {common_idx.size} points "
+                "based on scale cuts."
             )
 
         N = self.model_coordinates.rt_regular_grid.size
