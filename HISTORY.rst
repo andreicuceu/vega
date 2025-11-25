@@ -2,6 +2,14 @@
 History
 =======
 
+1.5.0 (2025-11-21)
+------------------
+* Optimize metal computation by caching more correlations
+* Added small scale marginalization for distorted analyses
+* Add option for k^n smoothing to match EFT behavior
+* Minor updates to the ConfigBuilder
+* Minor bug fixes
+
 1.4.2 (2025-10-01)
 ------------------
 * Unblinded DR2 CIV BAO analysis

@@ -78,7 +78,23 @@ class CorrelationItem:
             list of all metal correlations we need to compute
         """
         self.tracer_catalog = tracer_catalog
-        self.metal_correlations = metal_correlations
+        self.metal_correlations = []
+        for corr in metal_correlations:
+            corr_hash = tuple(sorted([corr[0], corr[1]]))
+
+            # If only one tracer is given, assume auto-correlation
+            if len(corr_hash) != 2:
+                corr_hash = (corr[0], corr[0])
+
+            # Make sure main tracers are in the correct position in the tuple
+            if corr_hash[0] not in [self.tracer1['name'], self.tracer2['name']] and \
+               corr_hash[1] in [self.tracer1['name'], self.tracer2['name']]:
+                corr_hash = (corr_hash[1], corr_hash[0])
+
+            # Avoid duplicates
+            if corr_hash not in self.metal_correlations:
+                self.metal_correlations.append(corr_hash)
+
         self.has_metals = True
 
     def init_broadband(self, coeff_binning_model):
