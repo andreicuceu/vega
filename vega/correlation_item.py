@@ -208,7 +208,7 @@ class CorrelationItem:
                     mask_model[i*cb:i*cb+cb, j*cb:j*cb+cb] = mask_dist_model[i, j]
 
             # Get the common indices for the bins to marginalize over
-            common_idx = np.nonzero(~mask_model.reshape(rp_nbins*rt_nbins))[0]
+            common_idx = np.nonzero(~mask_model.reshape(rp_nbins*rt_nbins).astype(bool))[0]
             print(
                 f"Marginalizing distortion scales with {common_idx.size} points "
                 "based on scale cuts."
