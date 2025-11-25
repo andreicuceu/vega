@@ -189,10 +189,26 @@ class CorrelationItem:
                     "No common indices found for small-scale marginalization templates."
                 )
         else:
-            mask = self.model_coordinates.get_mask_scale_cuts(
+            # Initialize the number of bins for each coordinate set
+            rp_nbins_dist = self.dist_model_coordinates.rp_nbins
+            rt_nbins_dist = self.dist_model_coordinates.rt_nbins
+            rp_nbins = self.model_coordinates.rp_nbins
+            rt_nbins = self.model_coordinates.rt_nbins
+            cb = rp_nbins // rp_nbins_dist
+
+            # Get the mask in the distorted space
+            mask_dist_model = self.dist_model_coordinates.get_mask_scale_cuts(
                 self.config['cuts'], small_scale_mask=True
-            )
-            common_idx = np.nonzero(~mask)[0]
+            ).reshape(rp_nbins_dist, rt_nbins_dist)
+
+            # Build the mask in the undistorted space
+            mask_model = np.zeros((rp_nbins, rt_nbins))
+            for i in range(rp_nbins_dist):
+                for j in range(rt_nbins_dist):
+                    mask_model[i*cb:i*cb+cb, j*cb:j*cb+cb] = mask_dist_model[i, j]
+
+            # Get the common indices for the bins to marginalize over
+            common_idx = np.nonzero(~mask_model.reshape(rp_nbins*rt_nbins))[0]
             print(
                 f"Marginalizing distortion scales with {common_idx.size} points "
                 "based on scale cuts."
