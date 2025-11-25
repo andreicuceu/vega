@@ -62,8 +62,8 @@ class CorrelationItem:
             if marg_rs[i] > 0:
                 self.marginalize_small_scales[name] = marg_rs[i]
 
-        self.marginalize_small_scales_with_cuts = config['model'].getboolean(
-            "marginalize-small-scales-with-cuts", False)
+        self.marginalize_small_scales['all-rmin'] = config['model'].getboolean(
+            "marginalize-all-rmin-cuts", False)
 
         self.has_metals = False
         self.has_bb = False
@@ -157,7 +157,7 @@ class CorrelationItem:
         sparse array, likely csc_array
             Prior sigma is multiplied to each vector.
         """
-        if not self.marginalize_small_scales_with_cuts:
+        if 'all-rmin' not in self.marginalize_small_scales:
             indeces = []
             if 'rtmax' in self.marginalize_small_scales:
                 rtmax = self.marginalize_small_scales['rtmax']

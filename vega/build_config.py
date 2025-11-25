@@ -70,6 +70,7 @@ class BuildConfig:
         self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', 0)
         self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', 0)
         self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', 0)
+        self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -336,6 +337,8 @@ class BuildConfig:
         config['model']['marginalize-above-rtmin'] = str(self.options['marginalize-above-rtmin'])
         config['model']['marginalize-below-rpmax'] = str(self.options['marginalize-below-rpmax'])
         config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
+        config['model']['marginalize-all-rmin-cuts'] = str(
+            self.options['marginalize-all-rmin-cuts'])
 
         # P(k) damping scale
         if self.options['pk-damping-scale'] is not None:
