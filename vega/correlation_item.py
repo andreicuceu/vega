@@ -62,8 +62,9 @@ class CorrelationItem:
             if marg_rs[i] > 0:
                 self.marginalize_small_scales[name] = marg_rs[i]
 
-        self.marginalize_small_scales['all-rmin'] = config['model'].getboolean(
-            "marginalize-all-rmin-cuts", False)
+        marginalize_all = config['model'].getboolean("marginalize-all-rmin-cuts", False)
+        if marginalize_all:
+            self.marginalize_small_scales['all-rmin'] = True
 
         self.has_metals = False
         self.has_bb = False
@@ -189,6 +190,8 @@ class CorrelationItem:
                     "No common indices found for small-scale marginalization templates."
                 )
         else:
+            assert self.marginalize_small_scales['all-rmin']
+
             # Initialize the number of bins for each coordinate set
             rp_nbins_dist = self.dist_model_coordinates.rp_nbins
             rt_nbins_dist = self.dist_model_coordinates.rt_nbins
