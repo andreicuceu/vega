@@ -158,10 +158,10 @@ class Coordinates:
         """
         # Read the cuts
         rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
+        rp_max_cut = cuts_config.getfloat('rp-max', 300.)
 
         rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
+        rt_max_cut = cuts_config.getfloat('rt-max', 300.)
 
         r_min_cut = cuts_config.getfloat('r-min', 10.)
         r_max_cut = cuts_config.getfloat('r-max', 180.)

@@ -238,7 +238,7 @@ class BuildConfig:
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
-        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -200))
+        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -300))
         config['cuts']['mu-min'] = str(corr_info.get('mu-min', -1))
         config['cuts']['mu-max'] = str(corr_info.get('mu-max', 1))
         if self.options['test']:
