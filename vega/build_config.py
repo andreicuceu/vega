@@ -82,6 +82,8 @@ class BuildConfig:
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
+        self.options['zmin'] = options.get('zmin', 0.0)
+        self.options['zmax'] = options.get('zmax', 10.0)
 
         metals = options.get('metals', None)
         if metals is not None:
@@ -291,6 +293,8 @@ class BuildConfig:
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
                     config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
+                    config['data']['zmin'] = str(self.options.get('zmin'))
+                    config['data']['zmax'] = str(self.options.get('zmax'))
 
                     config['metal-matrix'] = {}
                     config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(

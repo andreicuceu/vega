@@ -50,6 +50,10 @@ class Metals:
         self.cache_xi_metal_metal = {}
         self.cache_xi_metal_cross_main = {}
 
+        # Redshift bins
+        self.zmin = corr_item.config['data'].getfloat('zmin', 0.0)
+        self.zmax = corr_item.config['data'].getfloat('zmax', 10.0)
+
         # Read the growth rate and sigma_smooth from the fiducial config
         if 'growth_rate' in fiducial:
             self.growth_rate = fiducial['growth_rate']
@@ -414,6 +418,9 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
+        weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
@@ -548,6 +555,9 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
+        weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
