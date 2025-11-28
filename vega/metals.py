@@ -472,6 +472,9 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
+        weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
