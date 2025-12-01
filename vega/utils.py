@@ -4,9 +4,24 @@ from numba import njit, float64
 import os.path
 from pathlib import Path
 from functools import lru_cache
+from cachetools import cached, LRUCache
+from cachetools.keys import hashkey
 from scipy.interpolate import interp1d
 
 import vega
+
+CACHE_SMOOTHING = LRUCache(128)
+
+BLIND_FIXED_PARS = [
+    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full', 'alpha_full'
+]
+
+# Dictionary with blinded parameters and the tracers for which they are blinded
+VEGA_BLINDED_PARS = {
+    'phi_smooth': ['all'],
+    'growth_rate': ['all'],
+    'alpha_smooth': ['all'],
+}
 
 
 @njit
@@ -278,5 +293,118 @@ def compute_log_cov_det(cov_mat, data_mask):
     return np.linalg.slogdet(masked_cov)[1]
 
 
-class VegaBoundsError(Exception):
+def get_blinding(blind_pars, blinding_strat):
+    assert blinding_strat is not None, 'Blinding failed, do not run!!!'
+    print(f'Blinding parameters: {blind_pars}')
+
+    if ('ap' in blind_pars) or ('at' in blind_pars) or ('alpha' in blind_pars):
+        blinding_type = 'bao'
+    elif ('growth' in blind_pars) or ('phi_smooth' in blind_pars):
+        blinding_type = 'full-shape'
+    else:
+        raise ValueError(f'No blinding implemented for parameters {blind_pars}')
+
+    blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/'
+    blinding_choices = {
+        'desi_y1': {
+            'full-shape': None,
+            'bao': None
+        },
+        'desi_y3': {
+            'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_16_06_2025.npz',
+        }
+    }
+
+    if blinding_strat not in blinding_choices:
+        raise ValueError(f'Unknown blinding version: {blinding_strat}.')
+
+    blinding_file = blinding_choices[blinding_strat][blinding_type]
+    if blinding_file is None:
+        return None
+
+    if not blinding_file.exists():
+        raise ValueError(
+            f'Blinding file not found: {blinding_file}. Full-shape analyses must be run at NERSC.')
+
+    blinding = {}
+    with np.load(blinding_file) as file:
+        for par in blind_pars:
+            if par not in VEGA_BLINDED_PARS:
+                raise ValueError(f'Blinding for parameter {par} not implemented.')
+            if par == 'alpha':
+                dap = float(file['ap'])
+                dat = float(file['at'])
+                blinding[par] = np.sqrt(np.log(
+                    np.pi - np.sqrt((1 + np.pi - np.exp(dap**2)) * (1 + np.pi - np.exp(dat**2))) + 1
+                    ))
+            else:
+                blinding[par] = float(file[par])
+
+    return blinding
+
+
+def apply_blinding(params, blinding):
+    for par, val in blinding.items():
+        params[par] += (np.pi - np.exp(val**2))
+
+    return params
+
+
+@cached(
+    cache=CACHE_SMOOTHING,
+    key=lambda sigma_par, sigma_trans, k_par_grid, k_trans_grid: hashkey(sigma_par, sigma_trans)
+)
+@njit
+def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
+    """Compute a Gaussian smoothing factor.
+
+    Parameters
+    ----------
+    sigma_par : float
+        Sigma for parallel direction
+    sigma_trans : float
+        Sigma for transverse direction
+    k_par_grid : array
+        Grid of k values for parallel direction
+    k_trans_grid : array
+        Grid of k values for transverse direction
+
+    Returns
+    -------
+    array
+        Smoothing factor
+    """
+    return np.exp(-(k_par_grid**2 * sigma_par**2 + k_trans_grid**2 * sigma_trans**2) / 2)
+
+
+@njit
+def compute_kn_smoothing(scale_par, k_grid, n):
+    """Compute a k^n smoothing factor.
+
+    Parameters
+    ----------
+    scale_par : float
+        Scale parameter
+    k_grid : array
+        Grid of k values
+    n : int
+        Exponent of k
+
+    Returns
+    -------
+    array
+        Smoothing factor
+    """
+    return np.exp(-scale_par**2*k_grid**n/2)
+
+
+class VegaModelError(Exception):
+    pass
+
+
+class VegaBoundsError(VegaModelError):
+    pass
+
+
+class VegaArinyoError(VegaModelError):
     pass

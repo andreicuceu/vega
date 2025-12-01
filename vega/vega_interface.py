@@ -14,10 +14,7 @@ from vega.analysis import Analysis
 from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
-
-BLIND_FIXED_PARS = ['ap_full', 'at_full', 'aiso_full', 'epsilon_full',
-                    'phi_smooth', 'alpha_smooth', 'phi_full', 'alpha_full',
-                    'growth_rate']
+from vega.postprocess.fit_results import FitResults
 
 
 class VegaInterface:
@@ -106,6 +103,12 @@ class VegaInterface:
             else:
                 self.data[name] = None
 
+        # Check blinding
+        self._blind = False
+        self._rnsps = None
+        if self._has_data:
+            self._init_blinding()
+
         # Initialize scale parameters
         self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
 
@@ -113,25 +116,8 @@ class VegaInterface:
         self.models = {}
         if self._has_data:
             for name, corr_item in self.corr_items.items():
-                self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
-                                          self.data[name])
-
-        # Check blinding
-        self._blind = False
-        if self._has_data:
-            for data_obj in self.data.values():
-                if data_obj.blind:
-                    self._blind = True
-
-        # Apply blinding
-        if self._blind:
-            for par in self.sample_params['limits'].keys():
-                if par in BLIND_FIXED_PARS:
-                    raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
-
-            if ('bias_QSO' in self.sample_params['limits']) and (
-                    'beta_QSO' in self.sample_params['limits']):
-                print('WARNING! Running on blind data and sampling bias_QSO and beta_QSO.')
+                self.models[name] = Model(
+                    corr_item, self.fiducial, self.scale_params, self.data[name])
 
         # Read the monte carlo parameters
         self.mc_config = None
@@ -139,7 +125,7 @@ class VegaInterface:
             self.mc_config = {}
             config = self.main_config['monte carlo']
 
-            self.mc_config['params'] = copy.deepcopy(self.params)
+            self.mc_config['params'] = {}
             mc_params = self.main_config['mc parameters']
             for param, value in mc_params.items():
                 self.mc_config['params'][param] = float(value)
@@ -175,18 +161,23 @@ class VegaInterface:
         )
 
         # Check for sampler
-        self.has_sampler = False
+        self.run_sampler = False
         if 'control' in self.main_config:
-            self.has_sampler = self.main_config['control'].getboolean('sampler', False)
-            if self.has_sampler:
-                if 'Polychord' not in self.main_config:
-                    raise RuntimeError('run_sampler called, but no sampler initialized')
+            self.run_sampler = self.main_config['control'].getboolean('run_sampler', False)
+            self.sampler = self.main_config['control'].get('sampler', None)
+            if self.run_sampler:
+                if self.sampler not in ['Polychord', 'PocoMC']:
+                    raise ValueError('Sampler not recognized. Please use Polychord or PocoMC.')
+                if self.sampler not in self.main_config:
+                    raise RuntimeError('run_sampler called, but no sampler config found')
 
         # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
-        # Initialize vega plots
+        # Initialize the monte carlo flag
         self.monte_carlo = False
+
+        # Initialize vega plots
         self.plots = None
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
@@ -208,11 +199,8 @@ class VegaInterface:
         dict
             Dictionary of cf models for each component
         """
-        # Overwrite computation parameters
-        local_params = copy.deepcopy(self.params)
-        if params is not None:
-            for par, val in params.items():
-                local_params[par] = val
+        # Get computation parameters
+        local_params = self._get_lcl_prms(params)
 
         # Go through each component and compute the model cf
         model_cf = {}
@@ -220,12 +208,12 @@ class VegaInterface:
             self.models = {}
         for name, corr_item in self.corr_items.items():
             if run_init:
-                self.models[name] = Model(corr_item, self.fiducial, self.scale_params,
-                                          self.data[name])
+                self.models[name] = Model(
+                    corr_item, self.fiducial, self.scale_params, self.data[name])
 
             if direct_pk is None:
-                model_cf[name] = self.models[name].compute(local_params, self.fiducial['pk_full'],
-                                                           self.fiducial['pk_smooth'])
+                model_cf[name] = self.models[name].compute(
+                    local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'])
             else:
                 model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
 
@@ -248,70 +236,40 @@ class VegaInterface:
         """
         assert self._has_data
 
-        # Check if blinding is initialized
-        if self._blind is None:
-            self._blind = False
-            for data_obj in self.data.values():
-                if data_obj.blind:
-                    self._blind = True
-
-        # Overwrite computation parameters
-        local_params = copy.deepcopy(self.params)
-        if params is not None:
-            for par, val in params.items():
-                local_params[par] = val
-
-        # Enforce blinding
-        if self._blind:
-            for par, val in local_params.items():
-                if par in BLIND_FIXED_PARS:
-                    local_params[par] = 1.
-
-        # Compute chisq
-        chi2 = 0
-        full_model = []
-        full_masked_data = []
-        for name in self.corr_items:
-            try:
-                if direct_pk is None:
-                    model_cf = self.models[name].compute(
-                        local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'])
-                else:
-                    model_cf = self.models[name].compute_direct(local_params, direct_pk)
-            except utils.VegaBoundsError:
+        # Compute model
+        try:
+            model_cf = self.compute_model(params, run_init=False, direct_pk=direct_pk)
+        except utils.VegaModelError:
+            for name in self.corr_items:
                 self.models[name].PktoXi.cache_pars = None
-                return 1e100
+            return 1e100
 
-            if self._use_global_cov:
-                full_model.append(model_cf)
-
-            if self.monte_carlo:
-                if not self._use_global_cov:
-                    diff = self.data[name].masked_mc_mock - model_cf[self.data[name].model_mask]
-                    chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
-            else:
-                if self._use_global_cov:
-                    full_masked_data.append(self.data[name].masked_data_vec)
-                else:
-                    diff = self.data[name].masked_data_vec - model_cf[self.data[name].model_mask]
-                    chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
-
+        # Compute chisq for the case where we use the global covariance
         if self._use_global_cov:
-            full_model = np.concatenate(full_model)
             if self.monte_carlo:
                 full_masked_data = self.analysis.current_mc_mock
             else:
-                full_masked_data = np.concatenate(full_masked_data)
+                full_masked_data = np.concatenate(
+                    [self.data[name].masked_data_vec for name in self.corr_items])
+
+            full_model = np.concatenate([model_cf[name] for name in self.corr_items])
             diff = full_masked_data - full_model[self.full_model_mask]
             chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
+        # Compute chisq for the case where the correlations are independent
+        else:
+            chi2 = 0
+            for name in self.corr_items:
+                model_corr = model_cf[name][self.data[name].model_mask]
+                if self.monte_carlo:
+                    diff = self.data[name].masked_mc_mock - model_corr
+                    chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+                else:
+                    diff = self.data[name].masked_data_vec - model_corr
+                    chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+
         # Add priors
-        for param, prior in self.priors.items():
-            if param not in local_params:
-                err_msg = ("You have specified a prior for a parameter not in "
-                           f"the model. Offending parameter: {param}")
-                assert param in local_params, err_msg
-            chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
+        chi2 += self.compute_prior_chi2(params)
 
         assert isinstance(chi2, float)
         return chi2
@@ -354,61 +312,108 @@ class VegaInterface:
         log_lik = log_norm - 0.5 * chi2
 
         # Add priors normalization
-        for param, prior in self.priors.items():
+        for prior in self.priors.values():
             log_lik += self._gaussian_lik_prior(prior[1])
 
         return log_lik
 
-    def monte_carlo_sim(self, params=None, scale=None, seed=int(0), forecast=False):
-        """Compute Monte Carlo simulations for each Correlation item.
-
-        Parameters
-        ----------
-        params : dict, optional
-            Computation parameters, by default None
-        scale : float/dict, optional
-            Scaling for the covariance, by default 1.
-        seed : int, optional
-            Seed for the random number generator, by default 0
-        forecast : boolean, optional
-            Forecast option. If true, we don't add noise to the mock,
-            by default False
-
-        Returns
-        -------
-        dict
-            Dictionary with MC mocks for each item
-        """
-        assert self._has_data
-
-        # Overwrite computation parameters
+    def _get_lcl_prms(self, params=None):
         local_params = copy.deepcopy(self.params)
         if params is not None:
-            for par, val in params.items():
-                local_params[par] = val
+            local_params |= params
 
-        mocks = {}
-        for name in self.corr_items:
-            # Compute fiducial model
-            fiducial_model = self.models[name].compute(
-                local_params, self.fiducial['pk_full'],
-                self.fiducial['pk_smooth'])
+        assert self._blind is not None
+        if self._rnsps is not None:
+            assert self._blind
+            local_params = utils.apply_blinding(local_params, self._rnsps)
 
-            # Get scale
-            if scale is None:
-                item_scale = self.corr_items[name].cov_rescale
-            elif type(scale) is float or type(scale) is int:
-                item_scale = scale
-            elif name in scale:
-                item_scale = scale[name]
+            # Enforce blinding
+            for par, val in local_params.items():
+                if par in utils.BLIND_FIXED_PARS:
+                    local_params[par] = 1.
+
+        return local_params
+
+    def compute_prior_chi2(self, params=None):
+        local_params = self._get_lcl_prms(params)
+
+        chi2 = 0
+        for param, prior in self.priors.items():
+            if param not in local_params:
+                err_msg = ("You have specified a prior for a parameter not in "
+                           f"the model. Offending parameter: {param}")
+                assert param in local_params, err_msg
+            chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
+
+        return chi2
+
+    def get_fiducial_for_monte_carlo(self, print_func=print):
+        mc_params = self.mc_config['params']
+        mc_start_from_fit = self.main_config['control'].get('mc_start_from_fit', None)
+
+        # Read existing fit and use the bestfit values for the MC template
+        if mc_start_from_fit is not None:
+            print_func(f'Reading input fit {mc_start_from_fit}')
+            existing_fit = FitResults(utils.find_file(mc_start_from_fit))
+            mc_params = existing_fit.params | mc_params
+            print_func(f'Set template parameters to {mc_params}.')
+
+        # Do fit on input data and use the bestfit values for the MC template
+        elif self.sample_params['limits']:
+            print_func('Running initial fit')
+            # run compute_model once to initialize all the caches
+            _ = self.compute_model(run_init=False)
+
+            # Run minimizer
+            self.minimize()
+
+            mc_params = self.bestfit.values | mc_params
+            print_func(f'Set template parameters to {mc_params}.')
+
+        # Get fiducial model
+        use_measured_fiducial = self.main_config['control'].getboolean(
+            'use_measured_fiducial', False)
+        if use_measured_fiducial:
+            fiducial_model = {}
+            for name in self.corr_items.keys():
+                fiducial_path = self.main_config['control'].get(f'mc_fiducial_{name}')
+                with fits.open(utils.find_file(fiducial_path)) as hdul:
+                    fiducial_model[name] = hdul[1].data['DA']
+        else:
+            use_full_pk = self.main_config['control'].getboolean('use_full_pk_for_mc', False)
+            if use_full_pk:
+                fiducial_model = self.compute_model(
+                    mc_params, run_init=False, direct_pk=self.fiducial['pk_full'])
             else:
-                item_scale = 1.
+                fiducial_model = self.compute_model(mc_params, run_init=False)
 
-            # Create the mock
-            mocks[name] = self.data[name].create_monte_carlo(
-                fiducial_model, item_scale, seed, forecast)
+        return fiducial_model
 
+    def initialize_monte_carlo(self, scale=None, print_func=print):
+        # Get the fiducial model
+        fiducial_model = self.get_fiducial_for_monte_carlo(print_func)
+
+        # Reset the minimizer
+        sample_params = self.mc_config['sample']
+        self.minimizer = Minimizer(self.chi2, sample_params)
+
+        # Check if we need to run a forecast and get the seed
+        forecast = self.main_config['control'].getboolean('forecast', False)
+        seed = self.main_config['control'].getint('mc_seed', 0)
+
+        if self._use_global_cov:
+            if scale is None and 'global_cov_rescale' in self.main_config['control']:
+                scale = self.main_config['control'].getfloat('global_cov_rescale')
+
+            mocks = self.analysis.create_global_monte_carlo(
+                fiducial_model, seed=seed, scale=scale, forecast=forecast)
+        else:
+            mocks = self.analysis.create_monte_carlo_sim(
+                fiducial_model, seed=seed, scale=scale, forecast=forecast)
+
+        # Activate monte carlo mode
         self.monte_carlo = True
+
         return mocks
 
     def minimize(self):
@@ -433,7 +438,10 @@ class VegaInterface:
             data_size = self.data[name].data_size
             self.total_data_size += data_size
 
-            if self.monte_carlo:
+            if self.monte_carlo and self._use_global_cov:
+                # TODO Figure out a better way to handle this
+                chisq = 0
+            elif self.monte_carlo:
                 diff = self.data[name].masked_mc_mock \
                     - self.bestfit_model[name][self.data[name].model_mask]
                 chisq = diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
@@ -669,6 +677,41 @@ class VegaInterface:
 
         return prior_dict
 
+    def _init_blinding(self):
+        """Initialize blinding at the parameter level.
+        """
+        blinding_strat = None
+        for data_obj in self.data.values():
+            if data_obj.blind:
+                self._blind = True
+
+                if blinding_strat is None:
+                    blinding_strat = data_obj.blinding_strat
+                elif blinding_strat != data_obj.blinding_strat:
+                    raise ValueError('Different blinding strategies found in the data sets.')
+
+        if not self._blind:
+            return
+
+        blind_pars = []
+        for par in self.sample_params['limits'].keys():
+            if par in utils.BLIND_FIXED_PARS:
+                raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
+
+            if par not in utils.VEGA_BLINDED_PARS:
+                continue
+
+            tracers = utils.VEGA_BLINDED_PARS[par]
+            if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items.values()]):
+                blind_pars += [par]
+
+        if len(blind_pars) > 0:
+            self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
+
+        if ('bias_QSO' in self.sample_params['limits']) and (
+                'beta_QSO' in self.sample_params['limits']):
+            raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
+
     def read_global_cov(self, global_cov_file, scale=None):
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
@@ -726,73 +769,95 @@ class VegaInterface:
         if nominal is None:
             if self.bestfit.params is None:
                 raise RuntimeError('No nominal parameter values provided or saved by minimize()')
-            nominal = {p.name: ( p.value, p.error ) for p in self.bestfit.params}
-        nfloating = len(nominal)
-        ninfo = (nfloating * (nfloating + 1)) // 2
+            nominal = {p.name: (p.value, p.error) for p in self.bestfit.params}
+
         params = copy.deepcopy(self.params)
         for pname, (pvalue, perror) in nominal.items():
             params[pname] = pvalue
+
         # Initialize the sensitivity results.
-        self.sensitivity = dict(nominal = copy.deepcopy(nominal), partials={ }, fisher={ })
-        for n in self.corr_items:
-            rp = self.corr_items[n].model_coordinates.rp_grid
-            rt = self.corr_items[n].model_coordinates.rt_grid
-            self.sensitivity['partials'][n] = np.zeros((nfloating, 2, 2, len(rp)))
-            self.sensitivity['fisher'][n] = np.zeros((ninfo, 2, len(rp)))
+        self.sensitivity = dict(nominal=copy.deepcopy(nominal), partials={}, fisher={})
+        for name in self.corr_items:
+            self.sensitivity['partials'][name] = {}
+            self.sensitivity['fisher'][name] = {}
+
         # Loop over fit parameters
         self.fiducial['save-components'] = True
         bao_amp = self.params['bao_amp']
         for pindex, (pname, (pvalue, perror)) in enumerate(nominal.items()):
             if verbose:
-                print(f'Calculating sensitivity for [{pindex}] {pname} at {pvalue:.4f} ± {perror:.4f}')
+                print(
+                    f'Calculating sensitivity for [{pindex}] {pname} at'
+                    f' {pvalue:.4f} ± {perror:.4f}'
+                )
+
             # Compute partial derivatives wrt to p for each multipole
             delta = frac * perror
             for sign in (+1, -1):
                 params[pname] = pvalue + sign * delta
                 # Compute the model for all datasets.
                 cfs = self.compute_model(params, run_init=True)
+
                 # Loop over datasets to update the partial derivative calculations.
                 for n, cf in cfs.items():
+                    if pname not in self.sensitivity['partials'][n]:
+                        rp = self.corr_items[n].model_coordinates.rp_grid
+                        self.sensitivity['partials'][n][pname] = np.zeros((2, 2, len(rp)))
+
                     model = self.models[n]
                     # Distorted peak
-                    self.sensitivity['partials'][n][pindex,0,0] += sign * bao_amp * model.xi_distorted['peak']['core']
+                    self.sensitivity['partials'][n][pname][0, 0] += (
+                        sign * bao_amp * model.xi_distorted['peak']['core'])
+
                     # Distorted smooth
-                    self.sensitivity['partials'][n][pindex,0,1] += sign * model.xi_distorted['smooth']['core']
+                    self.sensitivity['partials'][n][pname][0, 1] += (
+                        sign * model.xi_distorted['smooth']['core'])
+
                     # Undistorted peak
-                    self.sensitivity['partials'][n][pindex,1,0] += sign * bao_amp * model.xi['peak']['core']
+                    self.sensitivity['partials'][n][pname][1, 0] += (
+                        sign * bao_amp * model.xi['peak']['core'])
+
                     # Distorted smooth
-                    self.sensitivity['partials'][n][pindex,1,1] += sign * model.xi['smooth']['core']
+                    self.sensitivity['partials'][n][pname][1, 1] += (
+                        sign * model.xi['smooth']['core'])
+
             # Normalize the partial derivatives.
             for n in self.corr_items:
-                self.sensitivity['partials'][n][pindex] /= 2 * delta
+                self.sensitivity['partials'][n][pname] /= 2 * delta
+
             # Restore the fitted parameter value.
             params[pname] = pvalue
 
         # Loop over pairs of fit parameters.
         if verbose:
             print('Computing Fisher information for each pair of parameters...')
-        idx = 0
-        for pindex1, (pname1, (pvalue1, perror1)) in enumerate(nominal.items()):
-            for pindex2, (pname2, (pvalue2, perror2)) in enumerate(nominal.items()):
+        for pindex1, pname1 in enumerate(nominal):
+            for pindex2, pname2 in enumerate(nominal):
                 if pindex1 > pindex2:
                     continue
+
                 # Loop over datasets.
                 for n in self.corr_items:
-                    fisher = self.sensitivity['fisher'][n][idx]
+                    if (pname1, pname2) not in self.sensitivity['fisher'][n]:
+                        rp = self.corr_items[n].model_coordinates.rp_grid
+                        self.sensitivity['fisher'][n][(pname1, pname2)] = np.zeros((2, len(rp)))
+
+                    fisher = self.sensitivity['fisher'][n][(pname1, pname2)]
                     # Lookup the data vector mask for this dataset
                     mask = self.data[n].data_mask
+
                     # Loop over distorted / non-distorted.
                     for idistort in range(2):
                         # Combine peak + smooth partials.
-                        partial1 = self.sensitivity['partials'][n][pindex1,idistort].sum(axis=0)
-                        partial2 = self.sensitivity['partials'][n][pindex2,idistort].sum(axis=0)
+                        partial1 = self.sensitivity['partials'][n][pname1][idistort].sum(axis=0)
+                        partial2 = self.sensitivity['partials'][n][pname2][idistort].sum(axis=0)
+
                         # Calculate the Fisher info for all unmasked correlation bins.
-                        masked_info = partial1[mask] * self.data[n].inv_masked_cov.dot(partial2[mask])
-                        fisher[idistort, self.data[n].data_mask] = masked_info
+                        masked_info = (
+                            partial1[mask] * self.data[n].inv_masked_cov.dot(partial2[mask]))
+                        fisher[idistort, mask] = masked_info
                         # Calculate the predicted inverse covariance for this parameter pair.
-                        #ivar[idistort] = np.sum(fisher[idistort])
-                        #ferror = ivar ** -0.5 if ivar > 0 else np.nan
+                        # ivar[idistort] = np.sum(fisher[idistort])
+                        # ferror = ivar ** -0.5 if ivar > 0 else np.nan
                         # Set unused bins to NaN for plotting
                         fisher[idistort, ~mask] = np.nan
-                idx += 1
-

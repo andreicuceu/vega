@@ -1,13 +1,18 @@
+import numpy as np
+
 from . import power_spectrum
 from . import pktoxi
 from . import correlation_func as corr_func
 from . import metals
+from . import broadband_poly
 
 
 class Model:
     """
     Class for computing Lyman-alpha forest correlation function models.
     """
+    _marg_par_names = None
+    _marg_xi_mask = None
 
     def __init__(self, corr_item, fiducial, scale_params, data=None):
         """
@@ -34,8 +39,8 @@ class Model:
             data_has_distortion = self._data.has_distortion
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
 
-        self._corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
-        self._corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
+        corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
+        corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -44,102 +49,38 @@ class Model:
             self.xi_distorted = {'peak': {}, 'smooth': {}, 'full': {}}
 
         # Initialize Broadband
-        bin_size_rp_data = corr_item.data_coordinates.rp_binsize
-        bin_size_rp_model = corr_item.model_coordinates.rp_binsize
-        self.bb_config = None
-        if 'broadband' in self._corr_item.config:
-            self.bb_config = self.init_broadband(
-                self._corr_item.config['broadband'], self._corr_item.name, 
-                bin_size_rp_data, bin_size_rp_model
+        self.broadband = None
+        if 'broadband' in corr_item.config:
+            self.broadband = broadband_poly.BroadbandPolynomials(
+                corr_item.config['broadband'], corr_item.name,
+                corr_item.model_coordinates, corr_item.dist_model_coordinates
             )
 
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
-            self._corr_item.config['model'], fiducial, self._corr_item.tracer1,
-            self._corr_item.tracer2, self._corr_item.name
+            corr_item.config['model'], fiducial,
+            corr_item.tracer1, corr_item.tracer2, corr_item.name
         )
 
         # Initialize the Pk to Xi transform
-        ell_max = self._corr_item.config['model'].getint('ell_max', 6)
-        fht_lowring = self._corr_item.config['model'].getboolean('fht_lowring', True)
-        fht_extrap = self._corr_item.config['model'].getboolean('fht_extrap', False)
-        self.PktoXi = pktoxi.PktoXi(
-            self.Pk_core.k_grid, self.Pk_core.muk_grid, ell_max,
-            self._corr_item.old_fftlog, fht_lowring, fht_extrap
-        )
+        self.PktoXi = pktoxi.PktoXi.init_from_Pk(self.Pk_core, corr_item.config['model'])
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
-            self._corr_item.config['model'], fiducial, corr_item.model_coordinates,
-            scale_params, self._corr_item.tracer1, self._corr_item.tracer2, self.bb_config
+            corr_item.config['model'], fiducial, corr_item.model_coordinates,
+            scale_params, corr_item.tracer1, corr_item.tracer2, cosmo=corr_item.cosmo
         )
 
         # Initialize metals if needed
         self.metals = None
-        if self._corr_item.has_metals:
-            self.metals = metals.Metals(corr_item, fiducial, scale_params, self.PktoXi, data)
+        if corr_item.has_metals:
+            self.metals = metals.Metals(corr_item, fiducial, scale_params, data)
+            self.no_metal_decomp = corr_item.config['model'].getboolean('no-metal-decomp', True)
 
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
 
-    @staticmethod
-    def init_broadband(bb_input, cf_name, bin_size_rp_data, bin_size_rp_model):
-        """Read the broadband config and initialize what we need.
-
-        Parameters
-        ----------
-        bb_input : ConfigParser
-            broadband section from the config file
-        cf_name : string
-            Name of corr item
-        bin_size_rp_data : float
-            Size of data r parallel bins
-        bin_size_rp_model : float
-            Size of model r parallel bins
-
-        Returns
-        -------
-        list
-            list with configs of broadband terms
-        """
-        bb_config = []
-        for item, value in bb_input.items():
-            value = value.split()
-            config = {}
-            # Check if it's additive or multiplicative
-            assert value[0] == 'add' or value[0] == 'mul'
-            config['type'] = value[0]
-
-            # Check if it's pre distortion or post distortion
-            assert value[1] == 'pre' or value[1] == 'post'
-            config['pre'] = value[1]
-
-            # Check if it's over rp/rt or r/mu
-            assert value[2] == 'rp,rt' or value[2] == 'r,mu'
-            config['rp_rt'] = value[2]
-
-            # Check if it's normal or sky
-            if len(value) == 6:
-                config['func'] = value[5]
-            else:
-                config['func'] = 'broadband'
-
-            # Get the coordinate configs
-            r_min, r_max, dr = value[3].split(':')
-            mu_min, mu_max, dmu = value[4].split(':')
-            config['r_config'] = (int(r_min), int(r_max), int(dr))
-            config['mu_config'] = (int(mu_min), int(mu_max), int(dmu))
-            if config['pre'] == 'pre':
-                config['bin_size_rp'] = bin_size_rp_model
-            else:
-                config['bin_size_rp'] = bin_size_rp_data
-
-            config['cf_name'] = cf_name
-            bb_config.append(config)
-
-        return bb_config
-
-    def _compute_model(self, pars, pk_lin, component='smooth'):
+    def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
 
@@ -155,6 +96,8 @@ class Model:
         component : str, optional
             Name of pk component, used as key for dictionary of saved
             components ('peak' or 'smooth' or 'full'), by default 'smooth'
+        xi_metals : 1D Array, optional
+            Metal correlation functions, by default None
 
         Returns
         -------
@@ -178,14 +121,17 @@ class Model:
 
         # Compute metal correlations
         if self._corr_item.has_metals:
-            xi_model += self.metals.compute(pars, pk_lin, component)
+            if self.no_metal_decomp and xi_metals is not None:
+                xi_model += xi_metals
+            elif not self.no_metal_decomp:
+                xi_model += self.metals.compute(pars, pk_lin, component)
 
-            # Merge saved metal components into the member dictionaries
-            if self.save_components:
-                self.pk[component] = {**self.pk[component], **self.metals.pk[component]}
-                self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
-                self.xi_distorted[component] = {**self.xi_distorted[component],
-                                                **self.metals.xi_distorted[component]}
+                # Merge saved metal components into the member dictionaries
+                if self.save_components:
+                    self.pk[component] = {**self.pk[component], **self.metals.pk[component]}
+                    self.xi[component] = {**self.xi[component], **self.metals.xi[component]}
+                    self.xi_distorted[component] = {**self.xi_distorted[component],
+                                                    **self.metals.xi_distorted[component]}
 
         # Add DESI instrumental systematics model
         if self._instrumental_systematics_flag and component != 'peak':
@@ -193,20 +139,27 @@ class Model:
                 pars, self._corr_item.data_coordinates.rp_binsize)
 
         # Apply pre distortion broadband
-        if self.bb_config is not None:
-            assert self.Xi_core.has_bb
-            xi_model *= self.Xi_core.compute_broadband(pars, 'pre-mul')
-            xi_model += self.Xi_core.compute_broadband(pars, 'pre-add')
+        if self.broadband is not None:
+            xi_model *= self.broadband.compute(pars, 'pre-mul')
+            xi_model += self.broadband.compute(pars, 'pre-add')
+
+        if self._corr_item.marginalize_small_scales:
+            if self._marg_par_names is None:
+                self._init_marg_xi_params(pars)
+
+            if self._marg_par_names:
+                assert self._has_distortion_mat
+                xi_marg_pars = np.array([pars[name] for name in self._marg_par_names])
+                xi_model[self._marg_xi_mask] = xi_marg_pars
 
         # Apply the distortion matrix
         if self._has_distortion_mat:
             xi_model = self._data.distortion_mat.dot(xi_model)
 
         # Apply post distortion broadband
-        if self.bb_config is not None:
-            assert self.Xi_core.has_bb
-            xi_model *= self.Xi_core.compute_broadband(pars, 'post-mul')
-            xi_model += self.Xi_core.compute_broadband(pars, 'post-add')
+        if self.broadband is not None:
+            xi_model *= self.broadband.compute(pars, 'post-mul')
+            xi_model += self.broadband.compute(pars, 'post-add')
 
         # Save final xi
         if self.save_components:
@@ -232,11 +185,16 @@ class Model:
         1D Array
             Full correlation function
         """
+
         pars['peak'] = True
         xi_peak = self._compute_model(pars, pk_full - pk_smooth, 'peak')
 
         pars['peak'] = False
-        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth')
+        xi_metals = None
+        if self._corr_item.has_metals and self.no_metal_decomp:
+            xi_metals = self.metals.compute(pars, pk_full, 'full')
+
+        xi_smooth = self._compute_model(pars, pk_smooth, 'smooth', xi_metals=xi_metals)
 
         xi_full = pars['bao_amp'] * xi_peak + xi_smooth
         return xi_full
@@ -261,3 +219,49 @@ class Model:
         xi_full = self._compute_model(pars, pk_full, 'full')
 
         return xi_full
+
+    def _init_marg_xi_params(self, marg_pars):
+        rp_nbins_dist = self._corr_item.dist_model_coordinates.rp_nbins
+        rt_nbins_dist = self._corr_item.dist_model_coordinates.rt_nbins
+        rp_nbins = self._corr_item.model_coordinates.rp_nbins
+        rt_nbins = self._corr_item.model_coordinates.rt_nbins
+
+        mask = np.zeros_like(
+            self._corr_item.model_coordinates.r_grid).astype(bool).reshape(rp_nbins, rt_nbins)
+        names = []
+
+        cb = rp_nbins // self._corr_item.dist_model_coordinates.rp_nbins
+        if self._corr_item.single_bin_marg_xi:
+            for i in range(rp_nbins_dist):
+                for j in range(rt_nbins_dist):
+                    par_name = f'bias_xi_{i}_{j}'
+                    if par_name in marg_pars:
+                        mask[i*cb:i*cb+cb, j*cb:j*cb+cb] = True
+                        print(mask[i*cb:i*cb+cb, j*cb:j*cb+cb])
+                        names += [par_name] * mask[i*cb:i*cb+cb, j*cb:j*cb+cb].size
+        else:
+            for i in range(rp_nbins):
+                for j in range(rt_nbins):
+                    par_name = f'bias_xi_{i}_{j}'
+                    if par_name in marg_pars:
+                        mask[i, j] = True
+                        names.append(par_name)
+
+        self._marg_par_names = names
+        self._marg_xi_mask = mask.reshape(int(rp_nbins * rt_nbins))
+        rp_nbins = self._corr_item.model_coordinates.rp_nbins
+        rt_nbins = self._corr_item.model_coordinates.rt_nbins
+        corr_name = self._corr_item.name
+        mask = np.zeros_like(
+            self._corr_item.model_coordinates.r_grid).astype(bool).reshape(rp_nbins, rt_nbins)
+        names = []
+
+        for i in range(rp_nbins):
+            for j in range(rt_nbins):
+                par_name = f'bias_xi_{corr_name}_{i}_{j}'
+                if par_name in marg_pars:
+                    mask[i, j] = True
+                    names.append(par_name)
+
+        self._marg_par_names = names
+        self._marg_xi_mask = mask.reshape(int(rp_nbins * rt_nbins))

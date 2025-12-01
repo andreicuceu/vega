@@ -1,8 +1,11 @@
+from picca import constants as picca_constants
+
+
 class CorrelationItem:
     """Class for handling the info and config of
     each correlation function component.
     """
-    cosmo_params = None
+    cosmo = None
     model_coordinates = None
     dist_model_coordinates = None
     data_coordinates = None
@@ -29,7 +32,6 @@ class CorrelationItem:
 
         self.cov_rescale = config['data'].getfloat('cov_rescale', None)
         self.has_distortion = config['data'].getboolean('distortion', True)
-        self.old_fftlog = config['model'].getboolean('old_fftlog', False)
 
         self.has_data = config['data'].getboolean('has_datafile', True)
         if 'filename' not in config['data']:
@@ -43,6 +45,10 @@ class CorrelationItem:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
 
         self.test_flag = config['data'].getboolean('test', False)
+        self.marginalize_small_scales = config['model'].getboolean(
+            'marginalize-small-scales', False)
+        self.single_bin_marg_xi = config['model'].getboolean(
+            'single-bin-marg-xi', False)
 
         self.has_metals = False
         self.has_bb = False
@@ -60,7 +66,22 @@ class CorrelationItem:
             list of all metal correlations we need to compute
         """
         self.tracer_catalog = tracer_catalog
-        self.metal_correlations = metal_correlations
+        self.metal_correlations = []
+        for corr in metal_correlations:
+            corr_hash = tuple(sorted([corr[0], corr[1]]))
+
+            # If only one tracer is given, assume auto-correlation
+            if len(corr_hash) != 2:
+                corr_hash = (corr[0], corr[0])
+
+            # Make sure main tracers are in the correct position in the tuple
+            if corr_hash[0] == self.tracer2['name'] or corr_hash[1] == self.tracer1['name']:
+                corr_hash = (corr_hash[1], corr_hash[0])
+
+            # Avoid duplicates
+            if corr_hash not in self.metal_correlations:
+                self.metal_correlations.append(corr_hash)
+
         self.has_metals = True
 
     def init_broadband(self, coeff_binning_model):
@@ -92,3 +113,21 @@ class CorrelationItem:
         self.data_coordinates = model_coordinates if data_coordinates is None else data_coordinates
         self.dist_model_coordinates = (model_coordinates if dist_model_coordinates is None
                                        else dist_model_coordinates)
+
+    def init_cosmo(self, cosmo_params):
+        self.cosmo_params = cosmo_params
+
+        self.cosmo = picca_constants.Cosmo(
+                Om=cosmo_params['Omega_m'], Ok=cosmo_params['Omega_k'],
+                Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'], verbose=False
+            )
+
+    def check_if_blind_corr(self, blind_tracers):
+        if 'all' in blind_tracers:
+            return True
+
+        for tracer in blind_tracers:
+            if tracer in self.tracer1['name'] or tracer in self.tracer2['name']:
+                return True
+
+        return False

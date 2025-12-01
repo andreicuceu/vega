@@ -1,6 +1,5 @@
 import numpy as np
 import copy
-from pkg_resources import resource_filename
 from numba import njit, float64
 from . import utils
 
@@ -43,6 +42,10 @@ class PowerSpectrum:
         self._bin_size_rt = config.getfloat('bin_size_rt')
         self.use_Gk = self._config.getboolean('model binning', True)
 
+        # Damping scale for P(k) - used to match EFT behavior
+        self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
+        self.pk_damping_power = config.getint('pk-damping-power', 2)
+
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
         self._add_uv = self._config.getboolean('add uv', False)
@@ -54,8 +57,7 @@ class PowerSpectrum:
 
             fvoigt_model = self._config.get('fvoigt_model')
             if '/' not in fvoigt_model:
-                path = f"{resource_filename('vega', 'models')}/fvoigt_models/"
-                path += f"Fvoigt_{fvoigt_model}.txt"
+                path = utils.find_file(f'fvoigt_models/Fvoigt_{fvoigt_model}.txt')
             else:
                 path = fvoigt_model
             self._Fvoigt_data = np.loadtxt(path)
@@ -160,6 +162,11 @@ class PowerSpectrum:
             else:
                 raise ValueError('"velocity dispersion" must be of type'
                                  ' "gauss" or "lorentz".')
+
+        # P(k) damping at high k
+        if self.pk_damping_scale is not None:
+            pk_full *= utils.compute_kn_smoothing(
+                self.pk_damping_scale, self.k_grid.astype(float), n=self.pk_damping_power)
 
         return pk_full
 
@@ -399,22 +406,27 @@ class PowerSpectrum:
         bv = params["dnl_arinyo_bv"]
         kp = params["dnl_arinyo_kp"]
 
+        q2 = params.get("dnl_arinyo_q2", 0)
+
         if self._arinyo_pars is None:
-            self._arinyo_pars = np.array([q1, kv, av, bv, kp]) + 1
-        if not np.allclose(np.array([q1, kv, av, bv, kp]), self._arinyo_pars):
-            growth = q1 * self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp]) + 1
+        if not np.allclose(np.array([q1, q2, kv, av, bv, kp]), self._arinyo_pars):
+            delta_squared = self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
+            growth = q1 * delta_squared + q2 * delta_squared**2
             pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
             pressure = (self.k_grid / kp) * (self.k_grid / kp)
             dnl = np.exp(growth * (1 - pec_velocity) - pressure)
 
-            self._arinyo_pars = np.array([q1, kv, av, bv, kp])
+            if np.any(np.isnan(dnl)) or np.any(np.isinf(dnl)):
+                raise utils.VegaArinyoError
+
+            self._arinyo_pars = np.array([q1, q2, kv, av, bv, kp])
             if two_lya_flag:
                 self._arinyo_dnl_cache = dnl
             elif one_lya_flag:
                 self._arinyo_dnl_cache = np.sqrt(dnl)
             else:
                 return np.ones(dnl.shape)
-                # raise ValueError("Arinyo NL term called for correlation with no Lyman-alpha")
 
         return self._arinyo_dnl_cache
 
@@ -454,20 +466,48 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        sigma_par = params.get('par_sigma_smooth', None)
-        sigma_trans = params.get('per_sigma_smooth', None)
+        check_tracer1 = self.tracer1_name in ['LYA', 'QSO']
+        check_tracer2 = self.tracer2_name in ['LYA', 'QSO']
 
-        if sigma_par is None and sigma_trans is None:
-            raise ValueError('Asked for fullshape gaussian smoothing without setting the'
-                             ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).')
-        elif sigma_par is None:
-            sigma_par = sigma_trans
-        elif sigma_trans is None:
-            sigma_trans = sigma_par
+        if ('par_sigma_smooth' in params) or ('per_sigma_smooth' in params):
+            sigma_par = params.get('par_sigma_smooth', None)
+            sigma_trans = params.get('per_sigma_smooth', None)
 
-        gauss_smoothing = self.k_par_grid**2 * sigma_par**2
-        gauss_smoothing += self.k_trans_grid**2 * sigma_trans**2
-        return np.exp(-gauss_smoothing / 2)**2
+            if sigma_par is None and sigma_trans is None:
+                raise ValueError(
+                    'Asked for fullshape gaussian smoothing without setting the'
+                    ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
+                )
+            elif sigma_par is None:
+                sigma_par = sigma_trans
+            elif sigma_trans is None:
+                sigma_trans = sigma_par
+
+            return utils.compute_gauss_smoothing(
+                sigma_par, sigma_trans, self.k_par_grid, self.k_trans_grid)**2
+
+        elif (('par_sigma_smooth_metals' in params) and ('per_sigma_smooth_metals' in params)
+              and not (check_tracer1 and check_tracer2)):
+            return utils.compute_gauss_smoothing(
+                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'],
+                self.k_par_grid, self.k_trans_grid)**2
+
+        else:
+            return (
+                utils.compute_gauss_smoothing(
+                    params[f'par_sigma_smooth_{self.tracer1_name}'],
+                    params[f'per_sigma_smooth_{self.tracer1_name}'],
+                    self.k_par_grid, self.k_trans_grid)
+                * utils.compute_gauss_smoothing(
+                    params[f'par_sigma_smooth_{self.tracer2_name}'],
+                    params[f'per_sigma_smooth_{self.tracer2_name}'],
+                    self.k_par_grid, self.k_trans_grid)
+            )
+        # else:
+        #     raise ValueError(
+        #         'Asked for fullshape gaussian smoothing without correctly setting the'
+        #         ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
+        #     )
 
     def compute_fullshape_exp_smoothing(self, params):
         """ Compute a Gaussian and exp smoothing for the full

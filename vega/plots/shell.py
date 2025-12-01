@@ -6,27 +6,36 @@ class Shell:
     Compress 2D correlation functions defined on an r_parallel/r_transverse grid
     into shells as a function mu
     """
-    def __init__(self, rp=(0., 200., 50), rt=(0., 200., 50), mu=(0., 1.), num_mu_bins_fraction=50,
-                 r=(25., 45.), scaling=10, abs_mu=False):
+    def __init__(
+        self, rp=(0, 200, 50), rt=(0, 200, 50), angle_var='theta',
+        angle_range=(0, np.pi/2), num_bins_fraction=50,
+        r=(30, 45), scaling=10, abs_mu=False
+    ):
         """Initialize computation of a shell
 
         Parameters
         ----------
         rp : tuple, optional
-            (Min, Max, Size) for r_parallel, by default (0., 200., 50)
+            (Min, Max, Size) for r_parallel, by default (0, 200, 50)
         rt : tuple, optional
-            (Min, Max, Size) for r_transverse, by default (0., 200., 50)
-        mu : tuple, optional
-            (Min, Max) for mu (= rp / r), by default (0., 1.)
-        num_mu_bins_fraction : int, optional
+            (Min, Max, Size) for r_transverse, by default (0, 200, 50)
+        angle_var : str, optional
+            Variable to use for the angle from ['theta', 'mu', 'mu2'], by default 'theta'
+        angle_range : tuple, optional
+            (Min, Max) for angle variable defined above, by default (0, np.pi/2)
+        num_bins_fraction : int, optional
             _description_, by default 50
         r : tuple, optional
-            (Min, Max) for isotropic separation bin, by default (25., 45.)
+            (Min, Max) for isotropic separation bin, by default (30, 45)
         scaling : int, optional
             Scaling for grid computation, by default 10
         abs_mu : bool, optional
             Flag for working with absolute values of mu, by default False
         """
+        assert angle_var in ['theta', 'mu', 'mu2'], "angle_var must be from ['theta', 'mu', 'mu2']"
+        if angle_var != 'theta':
+            angle_range = (angle_range[0], min(angle_range[1], 1))
+
         # Init bin limits on the fine scaled grid and get centers
         rp_scaled_bins = np.linspace(rp[0], rp[1], (scaling * rp[2]) + 1)
         rt_scaled_bins = np.linspace(rt[0], rt[1], (scaling * rt[2]) + 1)
@@ -41,6 +50,12 @@ class Shell:
         # Check if we need the absolute value of mu
         if abs_mu:
             mu_mesh = np.absolute(mu_mesh)
+            mu2_mesh = mu_mesh**2
+            theta_mesh = np.arccos(mu_mesh)
+        else:
+            mu2_mesh = mu_mesh**2
+            mu2_mesh[mu_mesh < 0] *= -1
+            theta_mesh = np.arccos(mu_mesh)
 
         # Initialize the right bin limits
         rp_bins = np.linspace(rp[0], rp[1], rp[2] + 1)
@@ -55,17 +70,28 @@ class Shell:
         rp_centers = rp[0] + (rp_idx + 0.5) * (rp[1] - rp[0]) / rp[2]
         rt_centers = rt[0] + (rt_idx + 0.5) * (rt[1] - rt[0]) / rt[2]
         r_centers = np.sqrt(rp_centers**2 + rt_centers**2)
-        mu_centers = rp_centers / r_centers
+        mu_centers = (rp_centers / r_centers)
+        mu2_centers = mu_centers**2
+        theta_centers = np.arccos(mu_centers)
+
+        mesh = mu_mesh if angle_var == 'mu' else mu2_mesh if angle_var == 'mu2' else theta_mesh
+        angle_centers = (
+            mu_centers if angle_var == 'mu'
+            else mu2_centers if angle_var == 'mu2'
+            else theta_centers
+        )
 
         # Compute the mask for the wedge
         mask = (r_mesh >= r[0]) & (r_mesh <= r[1])
-        mask &= (mu_centers > mu[0]) & (mu_centers < mu[1])
+        mask &= (angle_centers > angle_range[0]) & (angle_centers < angle_range[1])
 
-        num_bins_mu = int(np.ceil(np.sum(mask) / num_mu_bins_fraction))
-        mu_idx = ((mu_mesh - mu[0]) / (mu[1] - mu[0]) * num_bins_mu).astype(int)
+        num_bins_angle = int(np.ceil(np.sum(mask) / num_bins_fraction))
+        angle_idx = (
+            (mesh - angle_range[0]) / (angle_range[1] - angle_range[0]) * num_bins_angle
+        ).astype(int)
 
         # Compute bins on mesh. The numbers are positions in weights array
-        bins = rt_idx + rt[2] * rp_idx + rt[2] * rp[2] * mu_idx
+        bins = rt_idx + rt[2] * rp_idx + rt[2] * rp[2] * angle_idx
 
         # Compute the right counts and their index
         wedge_bins = bins[mask]
@@ -73,12 +99,14 @@ class Shell:
         positive_idx = np.where(counts != 0)
 
         # Initialize the weights and insert the right counts
-        self.weights = np.zeros((num_bins_mu, rt[2] * rp[2]))
+        self.weights = np.zeros((num_bins_angle, rt[2] * rp[2]))
         weights_idx = np.unravel_index(positive_idx, np.shape(self.weights))
         self.weights[weights_idx] = counts[positive_idx]
 
-        mu_bins = np.linspace(mu[0], mu[1], num_bins_mu + 1)
-        self.mu = self.get_bin_centers(mu_bins)
+        angle_bins = np.linspace(angle_range[0], angle_range[1], num_bins_angle + 1)
+        self.angle = self.get_bin_centers(angle_bins) 
+        if angle_var == 'theta':
+            self.angle *= 180 / np.pi  # Convert to degrees
 
     def __call__(self, data, covariance=None):
         """Computes the shell for the input data and optional covariance
@@ -110,11 +138,11 @@ class Shell:
         # Compute wedge and return simple
         shell = data_weights.dot(data)
         if covariance is None:
-            return self.mu, shell
+            return self.angle, shell
 
         # Compute wedge covariance and return full
         shell_cov = data_weights.dot(covariance).dot(data_weights.T)
-        return self.mu, shell, shell_cov
+        return self.angle, shell, shell_cov
 
     @staticmethod
     def get_bin_centers(bin_limits):

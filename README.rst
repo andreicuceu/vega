@@ -25,53 +25,58 @@ We recommend to start by creating a fresh conda environment. The following code 
 
 .. code-block:: console
 
-    $ conda create --name vega pip ipython jupyter jupyterlab ipykernel numpy scipy astropy numba h5py setuptools "iminuit>=2.0.0" cachetools matplotlib
-    $ conda activate vega
-    $ pip install mcfit
+    conda create --name vega pip ipython jupyter jupyterlab ipykernel numpy scipy astropy numba h5py setuptools "iminuit>=2.0.0" cachetools matplotlib
+    conda activate vega
+    pip install mcfit
 
 You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone https://github.com/andreicuceu/vega.git
+    git clone https://github.com/andreicuceu/vega.git
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl -OJL https://github.com/andreicuceu/Vega/tarball/master
+    curl -OJL https://github.com/andreicuceu/Vega/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
 .. code-block:: console
 
-    $ cd vega
-    $ pip install -e .
+    cd vega
+    pip install -e .
 
 If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
 
 .. code-block:: console
 
-    $ python -m ipykernel install --user --name vega --display-name Vega
+    python -m ipykernel install --user --name vega --display-name Vega
 
-Installing the sampler
-----------------------
-
-First install mpi4py using the NERSC specific commmand:
+Both of the samplers and a few other modules in Vega need mpi4py. If you are at NERSC, you should install this using the NERSC-specific command:
 
 .. code-block:: console
 
-    $ MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
+    MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 
-If you want to run the sampler, you will need `Polychord`_. Older instructions for Cori at NERSC can be found `here`_. Here are instructions for installing it on Perlmutter. Note that this requires the default Perlmutter envrinoment with no changes (except module load python). Start by following the steps above to install vega and its dendencies. After that clone `Polychord`_ and revert to an older stable commit:
+Vega currently has interfaces for two samplers: `Polychord`_ and `PocoMC`_. You do not need to install either of them to run the iminuit minimizer. Alternatively, if you only want to use one of the samplers, you only need to install that one (see instructions below).
+
+.. _tarball: https://github.com/andreicuceu/Vega/tarball/master
+.. _Polychord: https://github.com/PolyChord/PolyChordLite
+.. _PocoMC: https://github.com/minaskar/pocomc
+
+Installing Polychord
+--------------------
+
+Here are instructions for installing Polychord at NERSC. Note that this requires the default Perlmutter environment with no changes (except module load python). Start by following the steps above to install vega and its dendencies. After that clone `Polychord`_:
 
 .. code-block:: console
 
-    $ git clone https://github.com/PolyChord/PolyChordLite.git
-    $ cd PolyChordLite
-    $ git checkout 3bad756
+    git clone https://github.com/PolyChord/PolyChordLite.git
+    cd PolyChordLite
     
-In the PolyChordLite folder you will find a make file named "Makefile_gnu". You need to open and edit this file by changing lines 2-4 from:
+In the PolyChordLite folder, you will find a make file named "Makefile_gnu". You need to open and edit this file by changing lines 2-4 from:
 
 .. code-block:: make
 
@@ -91,28 +96,41 @@ After that, you can install PolyChord:
 
 .. code-block:: console
 
-    $ make veryclean
-    $ make COMPILER_TYPE=gnu
-    $ pip install -e .
+    make veryclean
+    make COMPILER_TYPE=gnu
+    pip install -e .
 
 You can test if PolyChord works by running the test script on an interactive node:
 
 .. code-block:: console
 
-    $ srun -n 2 python run_pypolychord.py
+    srun -n 2 python run_pypolychord.py
 
-Finally, you should add this line to your :code:`.bashrc` file, or at the beginning of your scripts (make sure to replace with the correct path to your version of PolyChord):
+Finally, you should add this line to your :code:`.bashrc` file, or at the beginning of your scripts (make sure to replace it with the correct path to your version of PolyChord):
 
 .. code-block:: console
 
     export LD_LIBRARY_PATH=/path/to/PolyChordLite/lib:${LD_LIBRARY_PATH}
 
-If you have any problems or questions about the sampler please raise an issue or email Andrei.
-
-
-.. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
-.. _here: https://github.com/andreicuceu/fitter2_tutorial
+
+Installing PocoMC
+-----------------
+
+Here are instructions for installing PocoMC at NERSC. First, install Pytorch in CPU mode (see `this`_ for more details):
+
+.. code-block:: console
+
+    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+Finally, install `PocoMC`_:
+
+.. code-block:: console
+
+    pip install pocomc
+
+.. _this: https://pytorch.org/get-started/locally/
+.. _PocoMC: https://github.com/minaskar/pocomc
 
 Usage
 -----
@@ -134,7 +152,7 @@ You can call Vega from a terminal using the scripts in the bin folder, and point
 
 .. code-block:: console
 
-    $ python run_vega.py path_to/main.ini
+    python run_vega.py path_to/main.ini
 
 The "run_vega.py" script can be used for computing model correlations and for running the fitter. However, these can also be run interactively (see next section).
 
@@ -142,7 +160,7 @@ On the other hand the sampler (PolyChord) cannot be run interactively and needs 
 
 .. code-block:: console
 
-    $ python run_vega_mpi.py path_to/main.ini
+    python run_vega_mpi.py path_to/main.ini
 
 We strongly suggest you run the sampler in parallel on many cores, as normal run-times are of the order :math:`10^2` - :math:`10^4` core hours.
 

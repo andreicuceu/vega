@@ -1,5 +1,6 @@
 import os
 import git
+import copy
 import numpy as np
 from pathlib import Path
 from astropy.io import fits
@@ -15,8 +16,11 @@ class BuildConfig:
     """
 
     _params_template = None
-    recognised_correlations = ['lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-                               'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla']
+    recognised_correlations = [
+        'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
+        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya'
+    ]
 
     def __init__(self, options={}, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
@@ -60,6 +64,10 @@ class BuildConfig:
         self.options['uv_background'] = options.get('uv_background', False)
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
+        self.options['marginalize-small-scales'] = options.get('marginalize-small-scales', False)
+        self.options['single-bin-marg-xi'] = options.get('single-bin-marg-xi', False)
+        self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
+        self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -71,6 +79,7 @@ class BuildConfig:
         self.options['test'] = options.get('test', False)
         self.options['use_metal_autos'] = options.get('use_metal_autos', True)
         self.options['new_metals'] = options.get('new_metals', False)
+        self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
 
@@ -105,8 +114,7 @@ class BuildConfig:
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
             List of options:
-                fitter: bool, default True
-                sampler: bool, default False
+                run_sampler: bool, default False
                 bias_beta_config: dict with 'tracer': 'bias_beta', 'bias_eta_beta', 'bias_bias_eta'
                 zeff: float, default None
                 zeff_rmin: float, default 0
@@ -132,7 +140,7 @@ class BuildConfig:
 
         # Check if we need sampler or fitter or both
         self.fitter = fit_info.get('fitter', True)
-        self.sampler = fit_info.get('sampler', False)
+        self.run_sampler = fit_info.get('run_sampler', False)
 
         # get the relevant paths
         self.config_path = Path(os.path.expandvars(out_path))
@@ -141,7 +149,8 @@ class BuildConfig:
             self.fitter_out_path = self.config_path / 'output_fitter'
             if not self.fitter_out_path.exists():
                 os.mkdir(self.fitter_out_path)
-        if self.sampler:
+        if self.run_sampler:
+            self.sampler = fit_info.get('sampler', 'Polychord')
             self.sampler_out_path = self.config_path / 'output_sampler'
             if not self.sampler_out_path.exists():
                 os.mkdir(self.sampler_out_path)
@@ -173,9 +182,9 @@ class BuildConfig:
                                  ' its configuration in the "correlations" dictionary.')
 
             # Build the config file for the correlation and save the path
-            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(name,
-                                                                             correlations[name],
-                                                                             git_hash)
+            corr_path, data_path, tracer1, tracer2 = self._build_corr_config(
+                name, correlations[name], git_hash)
+
             self.corr_paths.append(corr_path)
             self.data_paths.append(data_path)
             if tracer1 not in self.corr_names:
@@ -226,6 +235,9 @@ class BuildConfig:
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
+        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -200))
+        config['cuts']['mu-min'] = str(corr_info.get('mu-min', -1))
+        config['cuts']['mu-max'] = str(corr_info.get('mu-max', 1))
         if self.options['test']:
             config['data']['test'] = 'True'
 
@@ -275,6 +287,7 @@ class BuildConfig:
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
                     config['model']['new_metals'] = 'True'
+                    config['model']['rp_only_metal_mats'] = str(self.options['rp_only_metal_mats'])
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
                     config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
@@ -293,7 +306,7 @@ class BuildConfig:
                     config['metal-matrix']['alpha_SiII(1190)'] = self.options['metal-matrix'].get(
                         'alpha_SiII(1190)', '1.')
                     config['metal-matrix']['alpha_CIV(eff)'] = self.options['metal-matrix'].get(
-                        'alpha_CIV(eff)', '1.')
+                        'alpha_CIV(eff)', '0.')
 
                     config['metal-matrix']['z_ref_objects'] = self.options['metal-matrix'].get(
                         'z_ref_objects', '2.25')
@@ -315,6 +328,15 @@ class BuildConfig:
         if 'LYA' in [tracer1, tracer2] and 'QSO' in [tracer1, tracer2]:
             if self.options['radiation_effects']:
                 config['model']['radiation effects'] = 'True'
+
+        # Marginalize small scales
+        config['model']['marginalize-small-scales'] = str(self.options['marginalize-small-scales'])
+        config['model']['single-bin-marg-xi'] = str(self.options['single-bin-marg-xi'])
+
+        # P(k) damping scale
+        if self.options['pk-damping-scale'] is not None:
+            config['model']['pk-damping-scale'] = str(self.options['pk-damping-scale'])
+            config['model']['pk-damping-power'] = str(self.options['pk-damping-power'])
 
         # General things
         if 'broadband' in corr_info:
@@ -392,9 +414,9 @@ class BuildConfig:
         ----------
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
-            tracers separated by a single underscore (e.g. lyalya_qso),
-            and different correlations separated by a double underscore
-            (e.g. lyalya_lyalya__lyalya_qso). If unsure check the templates
+            tracers separated by an 'x' (e.g. lyaxqso),
+            and different correlations separated by an underscore
+            (e.g. lyaxlya_lyaxqso). If unsure check the templates
             folder to see all possibilities.
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
@@ -415,11 +437,9 @@ class BuildConfig:
         zeff_rmin = fit_info.get('zeff_rmin', 0.)
         zeff_rmax = fit_info.get('zeff_rmax', 300.)
 
-        zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
         if self.zeff_in is None:
+            zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
             self.zeff_in = zeff_comp
-        elif self.zeff_in != zeff_comp:
-            print('Warning: Input zeff and computed zeff are different. Will write input zeff.')
 
         # Write the paths to the correlation configs
         config['data sets'] = {}
@@ -482,22 +502,62 @@ class BuildConfig:
                                  'dictionary when calling BuildConfig.')
 
         # Check if we need the sampler
-        if self.sampler:
-            config['control'] = {}
-            config['control']['sampler'] = 'True'
+        config['control'] = {'run_sampler': 'False'}
+        if 'use_template_growth_rate' in fit_info:
+            config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
+        if self.run_sampler:
+            config['control']['run_sampler'] = 'True'
+            config['control']['sampler'] = self.sampler
+            if self.sampler == 'Polychord':
+                config['Polychord'] = {}
+                config['Polychord']['path'] = str(self.sampler_out_path)
+                config['Polychord']['name'] = run_name
 
-            config['Polychord'] = {}
-            config['Polychord']['path'] = str(self.sampler_out_path)
+                config['Polychord']['num_live'] = fit_info['Polychord'].get(
+                    'num_live', str(25*len(sample_params)))
+                config['Polychord']['num_repeats'] = fit_info['Polychord'].get(
+                    'num_repeats', str(len(sample_params)))
+                config['Polychord']['do_clustering'] = fit_info['Polychord'].get(
+                    'do_clustering', 'True')
+                config['Polychord']['boost_posterior'] = fit_info['Polychord'].get(
+                    'boost_posterior', str(0))
+            elif self.sampler == 'PocoMC':
+                config['PocoMC'] = {}
+                config['PocoMC']['path'] = str(self.sampler_out_path)
+                config['PocoMC']['name'] = run_name
 
-            config['Polychord']['name'] = run_name
-            config['Polychord']['num_live'] = fit_info['Polychord'].get('num_live',
-                                                                        str(25*len(sample_params)))
-            config['Polychord']['num_repeats'] = fit_info['Polychord'].get('num_repeats',
-                                                                           str(len(sample_params)))
-            config['Polychord']['do_clustering'] = fit_info['Polychord'].get('do_clustering',
-                                                                             'True')
-            config['Polychord']['boost_posterior'] = fit_info['Polychord'].get('boost_posterior',
-                                                                               str(0))
+                config['PocoMC']['precondition'] = fit_info['PocoMC'].get('precondition', 'True')
+                config['PocoMC']['dynamic'] = fit_info['PocoMC'].get('dynamic', 'False')
+                config['PocoMC']['n_effective'] = fit_info['PocoMC'].get('n_effective', '512')
+                config['PocoMC']['n_active'] = fit_info['PocoMC'].get('n_active', '256')
+                config['PocoMC']['n_total'] = fit_info['PocoMC'].get('n_total', '1024')
+                config['PocoMC']['n_evidence'] = fit_info['PocoMC'].get('n_evidence', '0')
+                config['PocoMC']['save_every'] = fit_info['PocoMC'].get('save_every', '3')
+                config['PocoMC']['use_mpi'] = fit_info['PocoMC'].get('use_mpi', 'True')
+                config['PocoMC']['num_cpu'] = fit_info['PocoMC'].get('num_cpu', '64')
+            else:
+                raise ValueError(
+                    f'Sampler {self.sampler} is not supported. '
+                    'Please choose from ["Polychord", "PocoMC"].')
+
+        if 'monte_carlo' in fit_info:
+            config['mc parameters'] = {}
+            for key, value in fit_info['monte_carlo']['parameters'].items():
+                config['mc parameters'][key] = str(value)
+
+            config['control']['run_montecarlo'] = 'True'  
+            if 'forecast' in fit_info['monte_carlo']:
+                config['control']['forecast'] = str(fit_info['monte_carlo']['forecast'])
+
+            if 'global_cov_rescale' in fit_info['monte_carlo']:
+                config['control']['global_cov_rescale'] = str(
+                    fit_info['monte_carlo']['global_cov_rescale'])
+
+            if 'mc_output' in fit_info['monte_carlo']:
+                config['control']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+
+            config['monte carlo'] = copy.deepcopy(config['sample'])
+            config['sample'] = {}
 
         # Write main config
         if self.name_extension is None:
@@ -603,7 +663,7 @@ class BuildConfig:
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if (name == 'LYA') or (name == 'LYB'):
+            if (name == 'LYA') or (name == 'LYB') or (name == 'CIV'):
                 bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
                 bias_eta = parameters.get(f'bias_eta_{name}', None)
                 beta = float(get_par(f'beta_{name}'))
@@ -627,6 +687,7 @@ class BuildConfig:
         # Small scale non-linear model
         if self.options['small_scale_nl']:
             new_params['dnl_arinyo_q1'] = get_par('dnl_arinyo_q1')
+            new_params['dnl_arinyo_q2'] = get_par('dnl_arinyo_q2')
             new_params['dnl_arinyo_kv'] = get_par('dnl_arinyo_kv')
             new_params['dnl_arinyo_av'] = get_par('dnl_arinyo_av')
             new_params['dnl_arinyo_bv'] = get_par('dnl_arinyo_bv')
@@ -674,12 +735,25 @@ class BuildConfig:
 
         # Full-shape smoothing
         if self.options['fullshape_smoothing'] is not None:
-            new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
-            if self.options['fullshape_smoothing'] in ['gauss', 'exp']:
-                new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
             if self.options['fullshape_smoothing'] == 'exp':
                 new_params['par_exp_smooth'] = get_par('par_exp_smooth')
                 new_params['per_exp_smooth'] = get_par('per_exp_smooth')
+                new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+                new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
+
+            if self.options['fullshape_smoothing'] == 'gauss_iso':
+                new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+
+            if self.options['fullshape_smoothing'] == 'gauss':
+                if 'par_sigma_smooth' in parameters:
+                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
+                if 'par_sigma_smooth_QSO' in parameters:
+                    new_params['par_sigma_smooth_QSO'] = get_par('par_sigma_smooth_QSO')
+                    new_params['per_sigma_smooth_QSO'] = get_par('per_sigma_smooth_QSO')
+                if 'par_sigma_smooth_LYA' in parameters:
+                    new_params['par_sigma_smooth_LYA'] = get_par('par_sigma_smooth_LYA')
+                    new_params['per_sigma_smooth_LYA'] = get_par('per_sigma_smooth_LYA')
 
         # DESI instrumental systematics amplitude
         if self.options['desi-instrumental-systematics']:
@@ -689,6 +763,12 @@ class BuildConfig:
         for name, value in parameters.items():
             if 'BB' in name and name not in new_params:
                 new_params[name] = value
+
+        # Marginalize small scales
+        if self.options.get('marginalize-small-scales', False):
+            for name, value in parameters.items():
+                if 'bias_xi' in name and name not in new_params:
+                    new_params[name] = value
 
         self._parameters = new_params
 

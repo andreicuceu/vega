@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
 
-BLINDING_STRATEGIES = ['desi_m2', 'desi_y1']
+BLINDING_STRATEGIES = ['desi_y3']
 
 
 class Data:
@@ -22,6 +22,7 @@ class Data:
     _inv_masked_cov = None
     _log_cov_det = None
     _blind = None
+    _blinding_strat = None
     cosmo_params = None
     dist_model_coordinates = None
     model_coordinates = None
@@ -69,7 +70,7 @@ class Data:
             self.corr_item.init_broadband(self.coeff_binning_model)
 
         if self.cosmo_params is not None:
-            self.corr_item.cosmo_params = self.cosmo_params
+            self.corr_item.init_cosmo(self.cosmo_params)
 
         if not self.has_distortion:
             self._distortion_mat = np.eye(self.full_data_size)
@@ -91,6 +92,17 @@ class Data:
             Blinding flag
         """
         return self._blind
+
+    @property
+    def blinding_strat(self):
+        """Blinding strategy property
+
+        Returns
+        -------
+        string
+            Blinding strategy
+        """
+        return self._blinding_strat
 
     @property
     def data_vec(self):
@@ -221,9 +233,12 @@ class Data:
                 self._blinding_strat = None
 
         if self._blinding_strat in BLINDING_STRATEGIES:
-            print(f'Strategy: {self._blinding_strat}. BAO can be sampled')
+            print(f'Strategy: {self._blinding_strat}')
 
             self._blind = True
+            # if self._blinding_strat == 'desi_y3':
+            #     assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
+
             if 'DA_BLIND' in hdul[1].columns.names:
                 print(f'Warning! Running on blinded data {data_path}')
                 print('Using DA_BLIND column')
@@ -234,11 +249,11 @@ class Data:
             else:
                 raise ValueError('No DA or DA_BLIND column found in data file.')
 
-        elif self._blinding_strat == 'desi_y3':
-            raise ValueError('Fits are forbidden on Y3 data as we do not have'
-                             ' a coherent blinding strategy yet.')
-
         elif self._blinding_strat is None:
+            self._blind = False
+            self._data_vec = hdul[1].data['DA']
+
+        elif self._blinding_strat in ['desi_m2', 'desi_y1']:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
 
@@ -248,9 +263,9 @@ class Data:
 
         if dmat_path is None:
             if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+                self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
             elif 'DM' in hdul[1].columns.names:
-                self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+                self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
 
         # Read the covariance matrix
         if not self.corr_item.low_mem_mode:
@@ -346,9 +361,9 @@ class Data:
             self._check_if_blinding_matches(header['BLINDING'], dmat_path)
 
         if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM'])
+            self._distortion_mat = csr_matrix(hdul[1].data['DM'].astype(float))
         elif 'DM_BLIND' in hdul[1].columns.names:
-            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'])
+            self._distortion_mat = csr_matrix(hdul[1].data['DM_BLIND'].astype(float))
         else:
             raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
@@ -567,10 +582,8 @@ class Data:
         1D Array
             Monte Carlo mock of the data
         """
-        if scale is None and self.corr_item.cov_rescale is None:
+        if scale is None:
             scale = 1
-        elif scale is None:
-            scale = self.corr_item.cov_rescale
 
         # Check if scale has changed and we need to recompute
         if np.isclose(scale, self._scale):
