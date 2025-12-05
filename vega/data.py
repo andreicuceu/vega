@@ -673,6 +673,8 @@ class Data:
         if not return_AAT:
             return templates.toarray()
 
+        templates *= self.corr_item.marginalize_small_scales_prior_sigma
+
         # Compress using svd to remove degenerate modes
         templates = templates[self.model_mask, :].toarray()
         print(f"  There are {templates.shape[1]} templates. "

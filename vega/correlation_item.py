@@ -224,5 +224,4 @@ class CorrelationItem:
             (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
         ).tocsr().T
 
-        a = self.marginalize_small_scales_prior_sigma
-        return a * templates
+        return templates
