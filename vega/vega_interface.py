@@ -435,20 +435,28 @@ class VegaInterface:
         num_pars = len(self.sample_params['limits'])
         print('\n----------------------------------------------------')
         for name in self.corr_items:
-            data_size = self.data[name].effective_data_size
+            data = self.data[name]
+            data_size = data.effective_data_size
             self.total_data_size += data_size
 
             if self.monte_carlo and self._use_global_cov:
                 # TODO Figure out a better way to handle this
                 chisq = 0
             elif self.monte_carlo:
-                diff = self.data[name].masked_mc_mock \
-                    - self.bestfit_model[name][self.data[name].model_mask]
-                chisq = diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+                diff = data.masked_mc_mock \
+                    - self.bestfit_model[name][data.model_mask]
+                chisq = diff.T.dot(data.scaled_inv_masked_cov.dot(diff))
             else:
-                diff = self.data[name].masked_data_vec \
-                    - self.bestfit_model[name][self.data[name].model_mask]
-                chisq = diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+                diff = data.masked_data_vec \
+                    - self.bestfit_model[name][data.model_mask]
+                chisq = diff.T.dot(data.inv_masked_cov.dot(diff))
+
+            # Calculate best-fitting values for the marginalized templates.
+            # This approximation ignores global_cov, hence correlations between
+            # CFs. Bestfit_model is updated in-place.
+            if data.marg_diff2coeff_matrix is not None:
+                bestfit_marg_coeff = data.marg_diff2coeff_matrix.dot(diff)
+                self.bestfit_model[name] += data.marg_templates.dot(bestfit_marg_coeff)
 
             reduced_chisq = chisq / (data_size - num_pars)
             p_value = 1 - scipy.stats.chi2.cdf(chisq, data_size - num_pars)
