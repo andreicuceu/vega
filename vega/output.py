@@ -157,7 +157,7 @@ class Output:
             ))
             columns.append(fits.Column(
                 name=name+'_VAR', format='D',
-                array=self.pad_array(self.data[name].cov_mat.diagonal(), num_rows)
+                array=self.pad_array(self.data[name].variance, num_rows)
             ))
 
             columns.append(fits.Column(
