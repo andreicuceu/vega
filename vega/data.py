@@ -77,12 +77,32 @@ class Data:
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
+        self.variance = self.cov_mat.diagonal()
+
         if corr_item.marginalize_small_scales:
             print('Updating covariance with marginalization templates.')
-            self.cov_marg_update = self.get_dist_xi_marg_templates()
+            self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
+
+            # Invert the matrix but do not save it
+            _inv_masked_cov = self.inv_masked_cov
+            self._inv_masked_cov = None
+
             self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+
+            # Construct solution matrix
+            templates_masked = self.marg_templates[self.model_mask, :]
+            G = templates_masked.T.dot(_inv_masked_cov)
+            S = np.diag(self.corr_item.marginalize_small_scales_prior_sigma**-2)
+            Ainv = np.linalg.inv(G.dot(templates_masked).toarray() + S)
+
+            # When multiplied by data - bestfit model, the below matrix will
+            # give the coefficients for each template. Total marginalized model
+            # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
+            self.marg_diff2coeff_matrix = Ainv.dot(G.toarray())
         else:
+            self.marg_templates = None
             self.cov_marg_update = None
+            self.marg_diff2coeff_matrix = None
             self.num_marg_modes = 0
 
         self._cholesky = None
@@ -646,7 +666,7 @@ class Data:
 
     def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
         """Multiply undistorted templates with the distortion matrix and
-        return either 1) full template matrix or 2) compressed A . A^T that
+        return either 1) full template matrix or 1 + 2) compressed A . A^T that
         updates the covariance matrix.
 
         Parameters
@@ -654,13 +674,15 @@ class Data:
         factor: float, default: 1e-8
             Compression cut-off ratio with respect to the highest singular value.
         return_AAT : bool, optional
-            If True (default), returns the covariance update matrix (A @ A^T).
+            If True (default), also returns the covariance update matrix (A @ A^T).
             If False, returns the template matrix.
 
         Returns
         -------
-        2D np.array
-            Template or covariance update matrix.
+        templates: csr_array
+            Template matrix
+        cov_update (optional): 2D np.array
+            Covariance update matrix.
         """
         if not self.corr_item.marginalize_small_scales:
             raise ValueError("Marginalization not configured")
@@ -671,19 +693,20 @@ class Data:
         templates = self.distortion_mat.dot(templates)
 
         if not return_AAT:
-            return templates.toarray()
+            return templates
 
-        templates *= self.corr_item.marginalize_small_scales_prior_sigma
+        t = templates * self.corr_item.marginalize_small_scales_prior_sigma
 
         # Compress using svd to remove degenerate modes
-        templates = templates[self.model_mask, :].toarray()
+        t = t[self.model_mask, :].toarray()
         print(f"  There are {templates.shape[1]} templates. "
               "SVD of template matrix to remove degenerate modes.")
-        u, s, _ = np.linalg.svd(templates, full_matrices=False)
+        u, s, _ = np.linalg.svd(t, full_matrices=False)
         w = s > factor * s[0]
         u = u[:, w]
         s = s[w]
         print(f"  There are {w.sum()} remaining modes for marginalization.")
         self.num_marg_modes = w.sum()
+        cov_update = np.dot(u * s**2, u.T)
 
-        return np.dot(u * s**2, u.T)
+        return templates, cov_update
