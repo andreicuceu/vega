@@ -80,6 +80,7 @@ class Data:
         self.variance = self.cov_mat.diagonal()
 
         if corr_item.marginalize_small_scales:
+            self.cov_mat_org = self.cov_mat.copy()
             print('Updating covariance with marginalization templates.')
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
             ntemps = self.marg_templates.shape[1]
@@ -104,6 +105,7 @@ class Data:
             # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
             self.marg_diff2coeff_matrix = Ainv.dot(G)
         else:
+            self.cov_mat_org = self.cov_mat
             self.marg_templates = None
             self.cov_marg_update = None
             self.marg_diff2coeff_matrix = None
