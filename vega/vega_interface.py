@@ -454,6 +454,7 @@ class VegaInterface:
             # Calculate best-fitting values for the marginalized templates.
             # This approximation ignores global_cov, hence correlations between
             # CFs. Bestfit_model is updated in-place.
+            bestfit_marg_coeff = None
             if data.marg_diff2coeff_matrix is not None:
                 bestfit_marg_coeff = data.marg_diff2coeff_matrix.dot(diff)
                 self.bestfit_model[name] += data.marg_templates.dot(bestfit_marg_coeff)
@@ -465,8 +466,10 @@ class VegaInterface:
                   f'= {reduced_chisq:.3f}, PTE={p_value:.2f}')
             print('----------------------------------------------------')
 
-            self.bestfit_corr_stats[name] = {'size': data_size, 'chisq': chisq,
-                                             'reduced_chisq': reduced_chisq, 'p_value': p_value}
+            self.bestfit_corr_stats[name] = {
+                'size': data_size, 'chisq': chisq, 'reduced_chisq': reduced_chisq,
+                'p_value': p_value, 'bestfit_marg_coeff': bestfit_marg_coeff
+            }
 
         self.chisq = self.minimizer.fmin.fval
         self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
