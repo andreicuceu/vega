@@ -89,7 +89,7 @@ class Output:
                              ' Reinitialize with a valid vega.data object.')
 
         primary_hdu = fits.PrimaryHDU()
-        model_hdus = self._model_hdu(corr_funcs, params, bestfit_corr_stats)
+        model_hdus = self._model_hdus(corr_funcs, params, bestfit_corr_stats)
         hdu_list = [primary_hdu] + model_hdus
 
         if minimizer is not None:
