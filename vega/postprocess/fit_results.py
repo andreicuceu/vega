@@ -94,7 +94,8 @@ class FitResults:
                     i += 1
             bestfit_marg_coeff = np.array(bestfit_marg_coeff)
 
-            self.correlations[corr_name] = CorrelationOutput(
+            lowercase_name = corr_name.lower()
+            self.correlations[lowercase_name] = CorrelationOutput(
                 model, model_mask, data, data_mask, variance, rp, rt, z,
                 size=size, chisq=chisq, reduced_chisq=reduced_chisq,
                 p_value=p_value, bestfit_marg_coeff=bestfit_marg_coeff

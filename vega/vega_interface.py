@@ -467,7 +467,7 @@ class VegaInterface:
             print('----------------------------------------------------')
 
             self.bestfit_corr_stats[name] = {
-                'size': data_size, 'chisq': chisq, 'reduced_chisq': reduced_chisq,
+                'masked_size': data_size, 'chisq': chisq, 'reduced_chisq': reduced_chisq,
                 'p_value': p_value, 'bestfit_marg_coeff': bestfit_marg_coeff
             }
 
