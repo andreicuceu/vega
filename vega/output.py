@@ -190,7 +190,7 @@ class Output:
             if self.data[name].nb is not None:
                 columns.append(fits.Column(
                     name=name+'_NB', format='K',
-                    array=self.pad_array(self.data[name].nb, num_rows)
+                    array=self.pad_array(self.data[name].nb, num_rows, pad_value=0)
                 ))
 
             model_hdu = fits.BinTableHDU.from_columns(columns)
