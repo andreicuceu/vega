@@ -196,9 +196,6 @@ class Output:
             model_hdu = fits.BinTableHDU.from_columns(columns)
             model_hdu.name = 'MODEL_' + name
 
-            card_name = 'hierarch ' + '_size'
-            model_hdu.header[card_name] = num_rows
-
             for par, val in params.items():
                 card_name = 'hierarch ' + par
                 model_hdu.header[card_name] = val

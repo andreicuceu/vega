@@ -86,13 +86,13 @@ class FitResults:
             reduced_chisq = hdu.header.get('HIERARCH REDUCED_CHISQ', None)
             p_value = hdu.header.get('HIERARCH P_VALUE', None)
 
-            if 'HIERARCH BESTFIT_MARG_COEFF_0' in hdu.header:
-                marg_coeffs = []
+            bestfit_marg_coeff = []
+            if 'HIERARCH marg_coeff_0' in hdu.header:
                 i = 0
-                while f'HIERARCH BESTFIT_MARG_COEFF_{i}' in hdu.header:
-                    marg_coeffs.append(hdu.header[f'HIERARCH BESTFIT_MARG_COEFF_{i}'])
+                while f'HIERARCH marg_coeff_{i}' in hdu.header:
+                    bestfit_marg_coeff.append(hdu.header[f'HIERARCH marg_coeff_{i}'])
                     i += 1
-                bestfit_marg_coeff = np.array(marg_coeffs)
+            bestfit_marg_coeff = np.array(bestfit_marg_coeff)
 
             self.correlations[corr_name] = CorrelationOutput(
                 model, model_mask, data, data_mask, variance, rp, rt, z,
