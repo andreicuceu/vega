@@ -69,7 +69,7 @@ class FitResults:
         self.correlations = {}
         self.num_data_points = 0
         for hdu in model_hdus:
-            corr_name = hdu.name.split('_')[1]
+            corr_name = hdu.name.split('_', 1)[1]
 
             model = hdu.data[corr_name + '_MODEL']
             model_mask = hdu.data[corr_name + '_MODEL_MASK']
