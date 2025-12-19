@@ -2,7 +2,7 @@ import numpy as np
 import scipy.stats as stats
 from astropy.io import fits
 from getdist import MCSamples
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Union
 from numpy.typing import ArrayLike
 
