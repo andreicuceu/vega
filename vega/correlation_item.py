@@ -159,32 +159,32 @@ class CorrelationItem:
             Prior sigma is multiplied to each vector.
         """
         if 'all-rmin' not in self.marginalize_small_scales:
-            indeces = []
+            indices = []
             if 'rtmax' in self.marginalize_small_scales:
                 rtmax = self.marginalize_small_scales['rtmax']
-                indeces += [np.nonzero(
+                indices += [np.nonzero(
                     self.model_coordinates.rt_regular_grid < rtmax
                 )[0]]
 
             if 'rtmin' in self.marginalize_small_scales:
                 rtmin = self.marginalize_small_scales['rtmin']
-                indeces += [np.nonzero(
+                indices += [np.nonzero(
                     self.model_coordinates.rt_regular_grid > rtmin
                 )[0]]
 
             if 'rpmax' in self.marginalize_small_scales:
                 rpmax = self.marginalize_small_scales['rpmax']
-                indeces += [np.nonzero(
+                indices += [np.nonzero(
                     np.abs(self.model_coordinates.rp_regular_grid) < rpmax
                 )[0]]
 
             if 'rpmin' in self.marginalize_small_scales:
                 rpmin = self.marginalize_small_scales['rpmin']
-                indeces += [np.nonzero(
+                indices += [np.nonzero(
                     np.abs(self.model_coordinates.rp_regular_grid) > rpmin
                 )[0]]
 
-            common_idx = reduce(np.intersect1d, indeces)
+            common_idx = reduce(np.intersect1d, indices)
             if common_idx.size == 0:
                 raise ValueError(
                     "No common indices found for small-scale marginalization templates."
