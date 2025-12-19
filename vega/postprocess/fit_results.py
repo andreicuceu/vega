@@ -43,6 +43,7 @@ class FitResults:
             name: value for name, value in zip(self.names, hdul['BESTFIT'].data['errors'])}
         self.num_pars = len(self.names)
 
+        self.marg_coeff = {}
         if not results_only:
             self.read_correlations(hdul)
 
@@ -95,6 +96,7 @@ class FitResults:
             bestfit_marg_coeff = np.array(bestfit_marg_coeff)
 
             lowercase_name = corr_name.lower()
+            self.marg_coeff[lowercase_name] = bestfit_marg_coeff
             self.correlations[lowercase_name] = CorrelationOutput(
                 model, model_mask, data, data_mask, variance, rp, rt, z,
                 size=size, chisq=chisq, reduced_chisq=reduced_chisq,
