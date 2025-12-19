@@ -204,8 +204,8 @@ class Output:
                 for par, val in bestfit_corr_stats[name].items():
                     if par == 'bestfit_marg_coeff':
                         names = [f'marg_coeff_{i}' for i in range(len(val))]
-                        for name, v in zip(names, val):
-                            card_name = 'hierarch ' + name
+                        for coeff_name, v in zip(names, val):
+                            card_name = 'hierarch ' + coeff_name
                             model_hdu.header[card_name] = v
                     else:
                         card_name = 'hierarch ' + par
