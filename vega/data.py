@@ -671,24 +671,25 @@ class Data:
         return self.mc_mock
 
     def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
-        """Multiply undistorted templates with the distortion matrix and
-        return either 1) full template matrix or 1 + 2) compressed A . A^T that
-        updates the covariance matrix.
+        """Multiply undistorted templates with the distortion matrix and return
+        either the distorted template matrix alone or, additionally, the
+        compressed covariance-update matrix A @ A^T, depending on ``return_AAT``.
 
         Parameters
         ----------
         factor: float, default: 1e-8
             Compression cut-off ratio with respect to the highest singular value.
         return_AAT : bool, optional
-            If True (default), also returns the covariance update matrix (A @ A^T).
-            If False, returns the template matrix.
+            If True (default), also returns the covariance update matrix (A @ A^T)
+            and the function returns a tuple ``(templates, cov_update)``.
+            If False, returns only the template matrix.
 
         Returns
         -------
         templates: csr_array
-            Template matrix
+            Template matrix.
         cov_update (optional): 2D np.array
-            Covariance update matrix.
+            Covariance update matrix, returned only when ``return_AAT`` is True.
         """
         if not self.corr_item.marginalize_small_scales:
             raise ValueError("Marginalization not configured")
