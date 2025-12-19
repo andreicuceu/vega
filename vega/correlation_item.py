@@ -156,7 +156,9 @@ class CorrelationItem:
         Returns
         -------
         sparse array, likely csc_array
-            Prior sigma is multiplied to each vector.
+            Sparse matrix of undistorted marginalization templates. Prior sigma
+            is applied in the calling function (e.g. in
+            ``data.get_dist_xi_marg_templates``), not here.
         """
         if 'all-rmin' not in self.marginalize_small_scales:
             indices = []
