@@ -203,6 +203,8 @@ class Output:
             if bestfit_corr_stats is not None:
                 for par, val in bestfit_corr_stats[name].items():
                     if par == 'bestfit_marg_coeff':
+                        if val is None:
+                            continue
                         names = [f'marg_coeff_{i}' for i in range(len(val))]
                         for coeff_name, v in zip(names, val):
                             card_name = 'hierarch ' + coeff_name
