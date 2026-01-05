@@ -42,6 +42,8 @@ class PowerSpectrum:
         self._bin_size_rt = config.getfloat('bin_size_rt')
         self.use_Gk = self._config.getboolean('model binning', True)
 
+        self.skip_nl_model_in_peak = config.getboolean('skip-nl-model-in-peak', True)
+
         # Damping scale for P(k) - used to match EFT behavior
         self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
         self.pk_damping_power = config.getint('pk-damping-power', 2)
@@ -119,7 +121,8 @@ class PowerSpectrum:
         pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2, fast_metals)
 
         # add non linear small scales
-        if 'small scale nl' in self._config.keys():
+        skip_nl = self.skip_nl_model_in_peak and params['peak']
+        if 'small scale nl' in self._config.keys() and not skip_nl:
             if 'arinyo' in self._config.get('small scale nl'):
                 pk_full *= self.compute_dnl_arinyo(params)
             elif 'mcdonald' in self._config.get('small scale nl'):
