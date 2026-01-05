@@ -42,7 +42,7 @@ class PowerSpectrum:
         self._bin_size_rt = config.getfloat('bin_size_rt')
         self.use_Gk = self._config.getboolean('model binning', True)
 
-        self.skip_nl_model_in_peak = config.getboolean('skip-nl-model-in-peak', True)
+        self.skip_nl_model_in_peak = config.getboolean('skip-nl-model-in-peak', False)
 
         # Damping scale for P(k) - used to match EFT behavior
         self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
