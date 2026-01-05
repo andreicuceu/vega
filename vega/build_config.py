@@ -61,6 +61,7 @@ class BuildConfig:
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
         self.options['bao_broadening'] = options.get('bao_broadening', False)
+        self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
         self.options['uv_background'] = options.get('uv_background', False)
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
@@ -339,6 +340,9 @@ class BuildConfig:
         config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
         config['model']['marginalize-all-rmin-cuts'] = str(
             self.options['marginalize-all-rmin-cuts'])
+
+        if 'skip-nl-model-in-peak' in self.options:
+            config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
 
         # P(k) damping scale
         if self.options['pk-damping-scale'] is not None:
