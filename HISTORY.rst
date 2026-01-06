@@ -2,6 +2,10 @@
 History
 =======
 
+1.6.0 (2026-01-06)
+------------------
+* Add analytic marginalization over small-scale marginalization parameters
+
 1.5.1 (2025-11-24)
 ------------------
 * Fix bug with QSO-metal computation of metal matrices
