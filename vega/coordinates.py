@@ -143,7 +143,7 @@ class Coordinates:
         mask &= (self.rt_grid <= other.rt_max)
         return mask
 
-    def get_mask_scale_cuts(self, cuts_config):
+    def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
         """Build mask to apply scale cuts
 
         Parameters
@@ -158,10 +158,10 @@ class Coordinates:
         """
         # Read the cuts
         rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
+        rp_max_cut = cuts_config.getfloat('rp-max', 300.)
 
         rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
+        rt_max_cut = cuts_config.getfloat('rt-max', 300.)
 
         r_min_cut = cuts_config.getfloat('r-min', 10.)
         r_max_cut = cuts_config.getfloat('r-max', 180.)
@@ -169,9 +169,14 @@ class Coordinates:
         mu_min_cut = cuts_config.getfloat('mu-min', -1.)
         mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
-        mask = (self.rp_regular_grid > rp_min_cut) & (self.rp_regular_grid < rp_max_cut)
-        mask &= (self.rt_regular_grid > rt_min_cut) & (self.rt_regular_grid < rt_max_cut)
-        mask &= (self.r_regular_grid > r_min_cut) & (self.r_regular_grid < r_max_cut)
+        mask = (self.rp_regular_grid > rp_min_cut) & (self.rt_regular_grid > rt_min_cut)
+        mask &= (self.r_regular_grid > r_min_cut)
+
+        if small_scale_mask:
+            return mask
+
+        mask &= (self.rp_regular_grid < rp_max_cut) & (self.rt_regular_grid < rt_max_cut)
+        mask &= (self.r_regular_grid < r_max_cut)
         mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
 
         return mask

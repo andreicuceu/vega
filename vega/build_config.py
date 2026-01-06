@@ -61,13 +61,17 @@ class BuildConfig:
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
         self.options['bao_broadening'] = options.get('bao_broadening', False)
+        self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
         self.options['uv_background'] = options.get('uv_background', False)
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
-        self.options['marginalize-small-scales'] = options.get('marginalize-small-scales', False)
-        self.options['single-bin-marg-xi'] = options.get('single-bin-marg-xi', False)
         self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
         self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
+        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', 0)
+        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', 0)
+        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', 0)
+        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', 0)
+        self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -235,7 +239,7 @@ class BuildConfig:
         config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
         config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
         config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
-        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -200))
+        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -300))
         config['cuts']['mu-min'] = str(corr_info.get('mu-min', -1))
         config['cuts']['mu-max'] = str(corr_info.get('mu-max', 1))
         if self.options['test']:
@@ -330,8 +334,15 @@ class BuildConfig:
                 config['model']['radiation effects'] = 'True'
 
         # Marginalize small scales
-        config['model']['marginalize-small-scales'] = str(self.options['marginalize-small-scales'])
-        config['model']['single-bin-marg-xi'] = str(self.options['single-bin-marg-xi'])
+        config['model']['marginalize-below-rtmax'] = str(self.options['marginalize-below-rtmax'])
+        config['model']['marginalize-above-rtmin'] = str(self.options['marginalize-above-rtmin'])
+        config['model']['marginalize-below-rpmax'] = str(self.options['marginalize-below-rpmax'])
+        config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
+        config['model']['marginalize-all-rmin-cuts'] = str(
+            self.options['marginalize-all-rmin-cuts'])
+
+        if 'skip-nl-model-in-peak' in self.options:
+            config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
 
         # P(k) damping scale
         if self.options['pk-damping-scale'] is not None:

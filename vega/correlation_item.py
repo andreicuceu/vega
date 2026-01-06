@@ -1,4 +1,7 @@
+import numpy as np
+from scipy.sparse import coo_array
 from picca import constants as picca_constants
+from functools import reduce
 
 
 class CorrelationItem:
@@ -45,10 +48,23 @@ class CorrelationItem:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
 
         self.test_flag = config['data'].getboolean('test', False)
-        self.marginalize_small_scales = config['model'].getboolean(
-            'marginalize-small-scales', False)
-        self.single_bin_marg_xi = config['model'].getboolean(
-            'single-bin-marg-xi', False)
+
+        marg_rs = [
+            config['model'].getfloat("marginalize-below-rtmax", 0),
+            config['model'].getfloat("marginalize-above-rtmin", 0),
+            config['model'].getfloat("marginalize-below-rpmax", 0),
+            config['model'].getfloat("marginalize-above-rpmin", 0)
+        ]
+        self.marginalize_small_scales_prior_sigma = config['model'].getfloat(
+            "marginalize-prior-sigma", 10.0)
+        self.marginalize_small_scales = {}
+        for i, name in enumerate(['rtmax', 'rtmin', 'rpmax', 'rpmin']):
+            if marg_rs[i] > 0:
+                self.marginalize_small_scales[name] = marg_rs[i]
+
+        marginalize_all = config['model'].getboolean("marginalize-all-rmin-cuts", False)
+        if marginalize_all:
+            self.marginalize_small_scales['all-rmin'] = True
 
         self.has_metals = False
         self.has_bb = False
@@ -131,3 +147,83 @@ class CorrelationItem:
                 return True
 
         return False
+
+    def get_undist_xi_marg_templates(self):
+        """Calculate undistorted correlation function marginalization templates.
+        Degenerate modes are removed in the (relevant) distorted space in
+            data.get_dist_xi_marg_templates function.
+
+        Returns
+        -------
+        sparse array, likely csc_array
+            Sparse matrix of undistorted marginalization templates. Prior sigma
+            is applied in the calling function (e.g. in
+            ``data.get_dist_xi_marg_templates``), not here.
+        """
+        if 'all-rmin' not in self.marginalize_small_scales:
+            indices = []
+            if 'rtmax' in self.marginalize_small_scales:
+                rtmax = self.marginalize_small_scales['rtmax']
+                indices += [np.nonzero(
+                    self.model_coordinates.rt_regular_grid < rtmax
+                )[0]]
+
+            if 'rtmin' in self.marginalize_small_scales:
+                rtmin = self.marginalize_small_scales['rtmin']
+                indices += [np.nonzero(
+                    self.model_coordinates.rt_regular_grid > rtmin
+                )[0]]
+
+            if 'rpmax' in self.marginalize_small_scales:
+                rpmax = self.marginalize_small_scales['rpmax']
+                indices += [np.nonzero(
+                    np.abs(self.model_coordinates.rp_regular_grid) < rpmax
+                )[0]]
+
+            if 'rpmin' in self.marginalize_small_scales:
+                rpmin = self.marginalize_small_scales['rpmin']
+                indices += [np.nonzero(
+                    np.abs(self.model_coordinates.rp_regular_grid) > rpmin
+                )[0]]
+
+            common_idx = reduce(np.intersect1d, indices)
+            if common_idx.size == 0:
+                raise ValueError(
+                    "No common indices found for small-scale marginalization templates."
+                )
+        else:
+            assert self.marginalize_small_scales['all-rmin']
+
+            # Initialize the number of bins for each coordinate set
+            rp_nbins_dist = self.dist_model_coordinates.rp_nbins
+            rt_nbins_dist = self.dist_model_coordinates.rt_nbins
+            rp_nbins = self.model_coordinates.rp_nbins
+            rt_nbins = self.model_coordinates.rt_nbins
+            cb = rp_nbins // rp_nbins_dist
+
+            # Get the mask in the distorted space
+            mask_dist_model = self.dist_model_coordinates.get_mask_scale_cuts(
+                self.config['cuts'], small_scale_mask=True
+            ).reshape(rp_nbins_dist, rt_nbins_dist)
+
+            # Build the mask in the undistorted space
+            mask_model = np.zeros((rp_nbins, rt_nbins))
+            for i in range(rp_nbins_dist):
+                for j in range(rt_nbins_dist):
+                    mask_model[i*cb:i*cb+cb, j*cb:j*cb+cb] = mask_dist_model[i, j]
+
+            # Get the common indices for the bins to marginalize over
+            common_idx = np.nonzero(~mask_model.reshape(rp_nbins*rt_nbins).astype(bool))[0]
+            print(
+                f"Marginalizing distortion scales with {common_idx.size} points "
+                "based on scale cuts."
+            )
+
+        N = self.model_coordinates.rt_regular_grid.size
+        d = np.ones(common_idx.size)
+
+        templates = coo_array(
+            (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
+        ).tocsr().T
+
+        return templates
