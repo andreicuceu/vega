@@ -142,7 +142,7 @@ class PowerSpectrum:
             pk_full *= self.compute_peak_nl(params)
 
         # add full shape smoothing
-        if 'fullshape smoothing' in self._config:
+        if 'fullshape smoothing' in self._config and not skip_nl:
             smoothing_type = self._config.get('fullshape smoothing')
             if 'gauss' in smoothing_type:
                 pk_full *= self.compute_fullshape_gauss_smoothing(params)
