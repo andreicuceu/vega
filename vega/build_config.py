@@ -765,6 +765,9 @@ class BuildConfig:
                 if 'par_sigma_smooth_LYA' in parameters:
                     new_params['par_sigma_smooth_LYA'] = get_par('par_sigma_smooth_LYA')
                     new_params['per_sigma_smooth_LYA'] = get_par('per_sigma_smooth_LYA')
+                if 'par_sigma_smooth_metals' in parameters:
+                    new_params['par_sigma_smooth_metals'] = get_par('par_sigma_smooth_metals')
+                    new_params['per_sigma_smooth_metals'] = get_par('per_sigma_smooth_metals')
 
         # DESI instrumental systematics amplitude
         if self.options['desi-instrumental-systematics']:
