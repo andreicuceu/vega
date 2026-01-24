@@ -110,15 +110,16 @@ class PowerSpectrum:
             if self.tracer2_name == 'LYA':
                 bias2, beta2 = self.compute_bias_beta_uv(bias2, beta2, params)
 
-        # Add HCD model
+        # Compute HCD model
+        kaiser_hcd = None
         if self.hcd_model is not None:
             if self.tracer1_name == 'LYA':
-                bias1, beta1 = self.compute_bias_beta_hcd(bias1, beta1, params)
+                kaiser_hcd = self.compute_kaiser_hcd(params)
             if self.tracer2_name == 'LYA':
-                bias2, beta2 = self.compute_bias_beta_hcd(bias2, beta2, params)
+                kaiser_hcd = self.compute_kaiser_hcd(params)
 
         # Compute kaiser model
-        pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2, fast_metals)
+        pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2, kaiser_hcd, fast_metals)
 
         # add non linear small scales
         skip_nl = self.skip_nl_model_in_peak and params['peak']
@@ -173,7 +174,7 @@ class PowerSpectrum:
 
         return pk_full
 
-    def compute_kaiser(self, bias1, beta1, bias2, beta2, fast_metals=False):
+    def compute_kaiser(self, bias1, beta1, bias2, beta2, kaiser_hcd=None, fast_metals=False):
         """Compute Kaiser model.
 
         Parameters
@@ -192,12 +193,21 @@ class PowerSpectrum:
         ND Array
             Kaiser term
         """
-        pk = (1 + beta1 * self.muk_grid**2)
-        pk = pk * (1 + beta2 * self.muk_grid**2)
+        # Turn off HCD for fast metals
+        if fast_metals:
+            return (1 + beta1 * self.muk_grid**2) * (1 + beta2 * self.muk_grid**2)
 
-        if not fast_metals:
-            pk *= bias1 * bias2
-        return pk
+        if self.tracer1_name == 'LYA' and kaiser_hcd is not None:
+            kaiser1 = bias1 * (1 + beta1 * self.muk_grid**2) + kaiser_hcd
+        else:
+            kaiser1 = bias1 * (1 + beta1 * self.muk_grid**2)
+
+        if self.tracer2_name == 'LYA' and kaiser_hcd is not None:
+            kaiser2 = bias2 * (1 + beta2 * self.muk_grid**2) + kaiser_hcd
+        else:
+            kaiser2 = bias2 * (1 + beta2 * self.muk_grid**2)
+
+        return kaiser1 * kaiser2
 
     def compute_bias_beta_uv(self, bias, beta, params):
         """ Compute effective biases that include UV modeling.
@@ -226,7 +236,7 @@ class PowerSpectrum:
 
         return bias_eff, beta_eff
 
-    def compute_bias_beta_hcd(self, bias, beta, params):
+    def compute_kaiser_hcd(self, params):
         """ Compute effective biases that include HCD modeling.
 
         Parameters
@@ -267,11 +277,12 @@ class PowerSpectrum:
             raise ValueError(f"Unknown hcd model {self.hcd_model}. "
                              "Choose from ['Rogers', 'fvoigt', 'sinc']")
 
-        bias_eff = bias + bias_hcd * self._F_hcd
-        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
-        beta_eff /= (bias + bias_hcd * self._F_hcd)
+        # bias_eff = bias + bias_hcd * self._F_hcd
+        # beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
+        # beta_eff /= (bias + bias_hcd * self._F_hcd)
+        kaiser_hcd = bias_hcd * (1 + beta_hcd * self.muk_grid**2) * self._F_hcd
 
-        return bias_eff, beta_eff
+        return kaiser_hcd
 
     def _compute_hcd_cached(self, func, L0_hcd, *args):
         if L0_hcd != self._L0_hcd_cache or self._F_hcd is None:
