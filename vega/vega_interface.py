@@ -16,6 +16,9 @@ from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
 
+import numdifftools as ndt
+
+
 
 class VegaInterface:
     """Main Vega class.
@@ -150,6 +153,15 @@ class VegaInterface:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
+        # Initialize the compression
+        if 'compression' in self.main_config:
+            self.use_compression = self.main_config['compression'].getboolean('use-compression', False)
+            if self.use_compression:
+                if not self._use_global_cov:
+                    #Only temporary
+                    raise RuntimeError('Compression requires a global covariance')
+                self._init_compression(self.main_config['compression'])
+
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
             self.minimizer = None
@@ -170,7 +182,7 @@ class VegaInterface:
                     raise ValueError('Sampler not recognized. Please use Polychord or PocoMC.')
                 if self.sampler not in self.main_config:
                     raise RuntimeError('run_sampler called, but no sampler config found')
-
+        
         # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
@@ -181,6 +193,162 @@ class VegaInterface:
         self.plots = None
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
+
+    def _init_compression(self, config):
+
+        print('INFO: Initializing compression')
+
+        # Load compression parameters
+
+        compress_params_names = config.get("compression-parameters", None)
+
+        if compress_params_names is not None:
+            #Currently not implemented
+            compress_params_names = compress_params_names.split(' ')
+            self.compress_params = {
+                par: self.params[par] for par in compress_params_names
+            }
+        else:
+            self.compress_params = self.sample_params["values"]
+
+        pnames = list(self.compress_params.keys())
+        p0     = np.array(list(self.compress_params.values()))
+
+        # Step size for numerical differentiation
+        epses = np.full_like(p0, 1e-8, dtype=float)
+
+        # Define vector model functions as closures
+        # ==============================================================
+        def vector_model_full(pvec):
+            """Full concatenated model vector (masked)."""
+            p_dict = dict(zip(pnames, pvec))
+
+            model = self.compute_model(params=p_dict, run_init=False)
+
+            full_vec = np.concatenate(list(model.values()))
+
+            return full_vec[self.full_model_mask]
+
+        def vector_model_block(pvec, block_name):
+            p_dict = dict(zip(pnames, pvec))
+            model = self.compute_model(params=p_dict, run_init=False)
+            return model[block_name]
+        # ==============================================================
+        
+        # Compute Jacobian per block
+
+        # self._jacobians = {}
+        # for name in self.corr_items:
+        #     jac_block = ndt.Jacobian(
+        #         lambda p, n=name: vector_model_block(p, n),
+        #         step=epses,
+        #         method="central"
+        #     )(p0)[self.data[name].model_mask]
+
+        #     #some columns zero for no param dependence
+        #     zero_cols = np.where(~jac_block.any(axis=0))[0]
+
+        #     #remove them
+        #     jac_block = np.delete(jac_block, zero_cols, axis=1)
+
+        #     self._jacobians[name] = jac_block
+
+        # Compute Jacobian of full model
+
+        self._full_jacobian = ndt.Jacobian(
+            vector_model_full,
+            step=epses,
+            method="central"
+        )(p0)
+
+        # Build full data vector + fiducial model
+
+        self._full_datavec = np.concatenate(
+            [cf.data_vec for cf in self.data.values()]
+        )[self.full_data_mask]
+
+        # Full model is concatenation of all blocks
+        full_model_blocks = [
+            vector_model_block(p0, name) for name in self.corr_items
+        ]
+
+        self._full_fidmod = np.concatenate(full_model_blocks)[self.full_model_mask]
+
+        residual = self._full_datavec - self._full_fidmod
+    
+        # Compute score vector
+
+        self.score = (
+            self._full_jacobian.T
+            @ self.masked_global_invcov
+            @ residual
+        )
+
+        # Compressed covariance (Fisher matrix)
+
+        self.compressed_global_covariance = (
+            self._full_jacobian.T
+            @ self.masked_global_invcov
+            @ self._full_jacobian
+        )
+
+        self.compressed_global_invcov = np.linalg.inv(
+            self.compressed_global_covariance
+        )
+
+        # Individual compressed covariances per corr
+        
+        #INSTEAD: compute everything together (i.e. concatenate covariances and models/data)
+        # self.inv_compressed_covariances = {}
+
+        # for name in self.corr_items:
+
+        #     jac_i = self._jacobians[name]
+
+        #     cov_i = (jac_i.T 
+        #              @ self.data[name].inv_masked_cov 
+        #              @ jac_i 
+        #              )   
+            
+        #     self.inv_compressed_covariances[name] = np.linalg.inv(cov_i)
+
+        # Metadata
+
+        self.ndim_compressed = self.compressed_global_invcov.shape[0]
+
+        print("INFO: Compression initialized successfully")
+
+        #compute compressed model 
+        #compressed likelihood 
+        #inference
+
+    def _compress(self, vec):
+        """
+        Score compress a vector
+        
+        :param vec: vector to compress
+        :return: compressed vector (dimension = N_params)
+        """
+        return self._full_jacobian.T @ self.masked_global_invcov @ (vec - self._full_fidmod)
+    
+    def compute_compressed_model(self, params=None, run_init=True, direct_pk=None, marg_coeff=None):
+
+        print('INFO: Computing compressed model')
+        if not self.use_compression:
+            raise ValueError('Compression not initialized')
+
+        #compute model for given set of parameters (compressed?)
+        model = self.compute_model(params=params, 
+                                     run_init=run_init, direct_pk=direct_pk,
+                                       marg_coeff=marg_coeff)
+
+        #full model, shape = (N_auto + N_cross,)
+        full_model = np.concatenate([cf for cf in model.values()])[self.full_model_mask]
+
+        #compute compressed model
+        compressed_model = self._full_jacobian.T @  self.masked_global_invcov @ (full_model - self._full_fidmod)
+
+        return compressed_model
 
     def compute_model(self, params=None, run_init=True, direct_pk=None, marg_coeff=None):
         """Compute correlation function model using input parameters.
@@ -225,6 +393,7 @@ class VegaInterface:
         return model_cf
 
     def chi2(self, params=None, direct_pk=None):
+        #alter function for compression
         """Compute full chi2 for all components.
 
         Parameters
@@ -258,20 +427,34 @@ class VegaInterface:
                     [self.data[name].masked_data_vec for name in self.corr_items])
 
             full_model = np.concatenate([model_cf[name] for name in self.corr_items])
-            diff = full_masked_data - full_model[self.full_model_mask]
-            chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
+            if self.use_compression:
+                diff = self._compress(full_masked_data) - self._compress(full_model[self.full_model_mask])
+                chi2 = diff.T.dot(self.compressed_global_invcov.dot(diff))
+            else:
+                diff = full_masked_data - full_model[self.full_model_mask]
+                chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
         # Compute chisq for the case where the correlations are independent
+        #currently use compression won't work here, because inv_compressed_covariances dimensions are reduced compared to data/model vectors
         else:
             chi2 = 0
             for name in self.corr_items:
                 model_corr = model_cf[name][self.data[name].model_mask]
                 if self.monte_carlo:
-                    diff = self.data[name].masked_mc_mock - model_corr
-                    chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+                    if self.use_compression:
+                        diff = self._compress(self.data[name].masked_mc_mock) - self._compress(model_corr)
+                        chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff)) 
+                        #not scaled, but it seems the cov scaling for montecarlo is not implemented anyway
+                    else:
+                        diff = self.data[name].masked_mc_mock - model_corr
+                        chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
                 else:
-                    diff = self.data[name].masked_data_vec - model_corr
-                    chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+                    if self.use_compression:
+                        diff = self._compress(self.data[name].masked_data_vec) - self._compress(model_corr)
+                        chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff))
+                    else:
+                        diff = self.data[name].masked_data_vec - model_corr
+                        chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         # Add priors
         chi2 += self.compute_prior_chi2(params)
@@ -790,7 +973,7 @@ class VegaInterface:
         """Compute the model sensitivity to each floating parameter.
 
         Calculate numerical partial derivatives of the model with respect to each floating
-        pararameter, evaluated at a specified point in parameter space. Calculate Fisher information
+        parameter, evaluated at a specified point in parameter space. Calculate Fisher information
         distributed over bins of (rt,rp).  Results are stored in a dictionary attribute
         named `sensitivity` with keys `nominal`, `partials`, and `fisher`.
 
