@@ -13,7 +13,7 @@ with open('HISTORY.rst') as history_file:
 
 scripts = glob.glob('bin/*')
 
-requirements = ['numpy', 'scipy==1.16.3', 'astropy', 'numba', 'iminuit', 'h5py', 'mcfit', 'picca',
+requirements = ['numpy', 'scipy', 'astropy', 'numba', 'iminuit', 'h5py', 'mcfit', 'picca',
                 'setuptools', 'cachetools', 'matplotlib', 'gitpython', 'getdist']
 
 setup_requirements = ['pytest-runner', ]
