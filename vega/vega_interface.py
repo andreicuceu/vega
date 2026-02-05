@@ -443,20 +443,20 @@ class VegaInterface:
             for name in self.corr_items:
                 model_corr = model_cf[name][self.data[name].model_mask]
                 if self.monte_carlo:
-                    if self.use_compression:
-                        diff = self._compress(self.data[name].masked_mc_mock) - self._compress(model_corr)
-                        chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff)) 
+                    # if self.use_compression:
+                    #     diff = self._compress(self.data[name].masked_mc_mock) - self._compress(model_corr)
+                    #     chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff)) 
                         #not scaled, but it seems the cov scaling for montecarlo is not implemented anyway
-                    else:
-                        diff = self.data[name].masked_mc_mock - model_corr
-                        chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
+                    # else:
+                    diff = self.data[name].masked_mc_mock - model_corr
+                    chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
                 else:
-                    if self.use_compression:
-                        diff = self._compress(self.data[name].masked_data_vec) - self._compress(model_corr)
-                        chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff))
-                    else:
-                        diff = self.data[name].masked_data_vec - model_corr
-                        chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
+                    # if self.use_compression:
+                    #     diff = self._compress(self.data[name].masked_data_vec) - self._compress(model_corr)
+                    #     chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff))
+                    # else:
+                    diff = self.data[name].masked_data_vec - model_corr
+                    chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
         # Add priors
         chi2 += self.compute_prior_chi2(params)
