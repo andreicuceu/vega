@@ -286,15 +286,19 @@ class VegaInterface:
 
         # Compressed covariance (Fisher matrix)
 
-        self.compressed_global_covariance = (
+        self.masked_compressed_global_cov = (
             self._full_jacobian.T
             @ self.masked_global_invcov
             @ self._full_jacobian
         )
 
-        self.compressed_global_invcov = np.linalg.inv(
-            self.compressed_global_covariance
+        self.masked_compressed_global_invcov = np.linalg.inv(
+            self.masked_compressed_global_cov
         )
+
+        self.masked_compressed_global_cov_logdet = np.linalg.slogdet(self.masked_compressed_global_cov)[1]
+
+        self.ndim_compressed = self.masked_compressed_global_invcov.shape[0]
 
         # Individual compressed covariances per corr
         
@@ -313,8 +317,6 @@ class VegaInterface:
         #     self.inv_compressed_covariances[name] = np.linalg.inv(cov_i)
 
         # Metadata
-
-        self.ndim_compressed = self.compressed_global_invcov.shape[0]
 
         print("INFO: Compression initialized successfully")
 
@@ -429,7 +431,7 @@ class VegaInterface:
             full_model = np.concatenate([model_cf[name] for name in self.corr_items])
             if self.use_compression:
                 diff = self._compress(full_masked_data) - self._compress(full_model[self.full_model_mask])
-                chi2 = diff.T.dot(self.compressed_global_invcov.dot(diff))
+                chi2 = diff.T.dot(self.masked_compressed_global_invcov.dot(diff))
             else:
                 diff = full_masked_data - full_model[self.full_model_mask]
                 chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
@@ -484,17 +486,21 @@ class VegaInterface:
 
         # Compute the normalization for each component
         log_norm = 0
-        for name in self.corr_items:
-            log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
 
-            if not self._use_global_cov:
-                if self.monte_carlo:
-                    log_norm -= 0.5 * self.data[name].scaled_log_cov_det
-                else:
-                    log_norm -= 0.5 * self.data[name].log_cov_det
+        if self.use_compression:
+            log_norm -= 0.5 * self.ndim_compressed * np.log(2 * np.pi)
+            log_norm -= 0.5 * self.masked_compressed_global_cov_logdet
+        else:
+            for name in self.corr_items:
+                log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
+                if not self._use_global_cov:
+                    if self.monte_carlo:
+                        log_norm -= 0.5 * self.data[name].scaled_log_cov_det
+                    else:
+                        log_norm -= 0.5 * self.data[name].log_cov_det
 
-        if self._use_global_cov:
-            log_norm -= 0.5 * self.masked_global_log_cov_det
+            if self._use_global_cov:
+                log_norm -= 0.5 * self.masked_global_log_cov_det
 
         # Compute log lik
         log_lik = log_norm - 0.5 * chi2
