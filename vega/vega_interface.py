@@ -154,6 +154,7 @@ class VegaInterface:
             self._use_global_cov = True
 
         # Initialize the compression
+        self.use_compression = False
         if 'compression' in self.main_config:
             self.use_compression = self.main_config['compression'].getboolean('use-compression', False)
             if self.use_compression:
