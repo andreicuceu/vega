@@ -77,39 +77,43 @@ class Data:
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
-        self.variance = self.cov_mat.diagonal()
-
-        if corr_item.marginalize_small_scales:
-            self.cov_mat_org = self.cov_mat.copy()
-            print('Updating covariance with marginalization templates.')
-            self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
-            ntemps = self.marg_templates.shape[1]
-
-            # Invert the matrix but do not save it
-            _inv_masked_cov = self.inv_masked_cov
-            self._inv_masked_cov = None
-
-            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
-
-            # Construct solution matrix, G becomes an ndarray
-            templates_masked = self.marg_templates[self.model_mask, :]
-            G = templates_masked.T.dot(_inv_masked_cov)
-
-            S = np.diag(np.full(
-                ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
-            ))
-            Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
-
-            # When multiplied by data - bestfit model, the below matrix will
-            # give the coefficients for each template. Total marginalized model
-            # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
-            self.marg_diff2coeff_matrix = Ainv.dot(G)
+        if self.corr_item.low_mem_mode:
+            self.variance = np.ones(self.full_data_size)
         else:
-            self.cov_mat_org = self.cov_mat
-            self.marg_templates = None
-            self.cov_marg_update = None
-            self.marg_diff2coeff_matrix = None
-            self.num_marg_modes = 0
+            self.variance = self.cov_mat.diagonal()
+
+        self.cov_mat_org = self.cov_mat
+        self.marg_templates = None
+        self.cov_marg_update = None
+        self.marg_diff2coeff_matrix = None
+        self.num_marg_modes = 0
+        if corr_item.marginalize_small_scales:
+            self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
+
+            if not self.corr_item.low_mem_mode:
+                self.cov_mat_org = self.cov_mat.copy()
+                print('Updating covariance with marginalization templates.')
+                ntemps = self.marg_templates.shape[1]
+
+                # Invert the matrix but do not save it
+                _inv_masked_cov = self.inv_masked_cov
+                self._inv_masked_cov = None
+
+                self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+
+                # Construct solution matrix, G becomes an ndarray
+                templates_masked = self.marg_templates[self.model_mask, :]
+                G = templates_masked.T.dot(_inv_masked_cov)
+
+                S = np.diag(np.full(
+                    ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
+                ))
+                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
+
+                # When multiplied by data - bestfit model, the below matrix will
+                # give the coefficients for each template. Total marginalized model
+                # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
+                self.marg_diff2coeff_matrix = Ainv.dot(G)
 
         self._cholesky = None
         self._scale = 1.
