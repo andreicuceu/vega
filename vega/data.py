@@ -82,7 +82,7 @@ class Data:
         else:
             self.variance = self.cov_mat.diagonal()
 
-        self.cov_mat_org = self.cov_mat
+        # self.cov_mat_org = self.cov_mat
         self.marg_templates = None
         self.cov_marg_update = None
         self.marg_diff2coeff_matrix = None
