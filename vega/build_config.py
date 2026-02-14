@@ -519,6 +519,7 @@ class BuildConfig:
         if self.run_sampler:
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
+            config['control']['low_mem_mode'] = fit_info.get('low_mem_mode', 'False')
             if self.sampler == 'Polychord':
                 config['Polychord'] = {}
                 config['Polychord']['path'] = str(self.sampler_out_path)
