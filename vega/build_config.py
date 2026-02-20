@@ -445,12 +445,14 @@ class BuildConfig:
 
         # Check the effective redshift
         self.zeff_in = fit_info.get('zeff', None)
-        zeff_rmin = fit_info.get('zeff_rmin', 0.)
-        zeff_rmax = fit_info.get('zeff_rmax', 300.)
+        zeff_rmin = float(fit_info.get('zeff_rmin', 0.))
+        zeff_rmax = float(fit_info.get('zeff_rmax', 300.))
 
         if self.zeff_in is None:
             zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
             self.zeff_in = zeff_comp
+        
+        self.zeff_in = float(self.zeff_in)
 
         # Write the paths to the correlation configs
         config['data sets'] = {}
