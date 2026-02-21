@@ -29,7 +29,7 @@ class CorrelationOutput:
 
 
 class FitResults:
-    def __init__(self, path, results_only=False):
+    def __init__(self, path, results_only=False, no_chain=False):
         hdul = fits.open(find_file(path))
 
         self.chisq = hdul['BESTFIT'].header['FVAL']
@@ -49,13 +49,13 @@ class FitResults:
 
         hdul.close()
 
-        if not results_only:
+        if not results_only and not no_chain:
             self.chain = self.make_chain(self.names, self.mean, self.cov)
 
     @staticmethod
     def make_chain(names, mean, cov):
         labels = build_names(names)
-        gaussian_samples = np.random.multivariate_normal(mean, cov, size=1000000)
+        gaussian_samples = np.random.multivariate_normal(mean, cov, size=100000)
         return MCSamples(samples=gaussian_samples, names=names, labels=list(labels.values()))
 
     def read_correlations(self, hdul):
