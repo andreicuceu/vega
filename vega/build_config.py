@@ -633,8 +633,8 @@ class BuildConfig:
             new_params['alpha'] = get_par('alpha')
             if self.options['full_shape']:
                 new_params['phi_full'] = get_par('phi_full')
-                if self.options['full_shape_alpha']:
-                    new_params['alpha_full'] = get_par('alpha_full')
+            if self.options['full_shape_alpha']:
+                new_params['alpha_full'] = get_par('alpha_full')
             if self.options['smooth_scaling']:
                 new_params['phi_smooth'] = get_par('phi_smooth')
                 new_params['alpha_smooth'] = get_par('alpha_smooth')
