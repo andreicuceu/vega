@@ -2,6 +2,12 @@
 History
 =======
 
+1.6.1 (2026-02-23)
+------------------
+* Unblind DR2 alpha_smooth parameter
+* Add support for alpha_full analyses while phi is still fitted separately
+* Some minor fixes to the low memory mode for sampler runs
+
 1.6.0 (2026-01-06)
 ------------------
 * Add analytic marginalization over small-scale marginalization parameters
