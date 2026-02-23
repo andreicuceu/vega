@@ -299,7 +299,7 @@ def get_blinding(blind_pars, blinding_strat):
 
     if ('ap' in blind_pars) or ('at' in blind_pars) or ('alpha' in blind_pars):
         blinding_type = 'bao'
-    elif ('growth' in blind_pars) or ('phi_smooth' in blind_pars):
+    elif ('growth_rate' in blind_pars) or ('phi_smooth' in blind_pars):
         blinding_type = 'full-shape'
     else:
         raise ValueError(f'No blinding implemented for parameters {blind_pars}')
