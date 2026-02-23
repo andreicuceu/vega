@@ -172,6 +172,8 @@ class ScaleParameters:
                 alpha = params['alpha']
             else:
                 alpha = params['alpha_smooth']
+        elif fullshape_alpha:
+            alpha = params['alpha_full']
         else:
             alpha = params['alpha' + name_addon]
 

@@ -721,11 +721,10 @@ class VegaInterface:
             if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items.values()]):
                 blind_pars += [par]
 
-        if blind_pars and 'alpha_smooth' not in blind_pars:
-            blind_pars += ['alpha_smooth']
-
         if len(blind_pars) > 0:
             self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
+        else:
+            raise ValueError('Running on blind data but no sampled parameters are blinded.')
 
         if ('bias_QSO' in self.sample_params['limits']) and (
                 'beta_QSO' in self.sample_params['limits']):

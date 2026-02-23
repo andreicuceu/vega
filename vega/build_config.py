@@ -451,7 +451,7 @@ class BuildConfig:
         if self.zeff_in is None:
             zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
             self.zeff_in = zeff_comp
-        
+
         self.zeff_in = float(self.zeff_in)
 
         # Write the paths to the correlation configs
