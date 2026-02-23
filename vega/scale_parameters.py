@@ -83,7 +83,7 @@ class ScaleParameters:
         elif self.parametrisation == 'aiso_epsilon':
             return self.aiso_epsilon(params)
         elif self.parametrisation == 'phi_alpha':
-            return self.phi_alpha(params)
+            return self.phi_alpha(params, fullshape_alpha=self.full_shape_alpha)
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
