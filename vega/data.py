@@ -87,11 +87,15 @@ class Data:
         self.cov_marg_update = None
         self.marg_diff2coeff_matrix = None
         self.num_marg_modes = 0
+        if not self.corr_item.low_mem_mode:
+            self.cov_mat_org = self.cov_mat.copy()
+        else:
+            self.has_cov_mat = False
+
         if corr_item.marginalize_small_scales:
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
 
             if not self.corr_item.low_mem_mode:
-                self.cov_mat_org = self.cov_mat.copy()
                 print('Updating covariance with marginalization templates.')
                 ntemps = self.marg_templates.shape[1]
 
