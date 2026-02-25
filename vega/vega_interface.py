@@ -158,9 +158,6 @@ class VegaInterface:
         if 'compression' in self.main_config:
             self.use_compression = self.main_config['compression'].getboolean('use-compression', False)
             if self.use_compression:
-                if not self._use_global_cov:
-                    #Only temporary
-                    raise RuntimeError('Compression requires a global covariance')
                 self._init_compression(self.main_config['compression'])
 
         # Initialize the minimizer and the analysis objects
@@ -199,12 +196,25 @@ class VegaInterface:
 
         print('INFO: Initializing compression')
 
-        # Load compression parameters
+        ### Likelihood and covariance information ###
+        self.compression_likelihood = config.get('likelihood', 'gaussian')
+        self.num_sims = config.getint('num sims', None)
+
+        if self.compression_likelihood == 't-distribution':
+            if self.num_sims is None:
+                raise ValueError('Number of simulations must be specified for t-distribution')
+
+        self._mock2mock_cov = config.get('mock-to-mock-cov', None)
+        if not self._use_global_cov and self._mock2mock_cov is None:
+            raise RuntimeError('Compression requires a global covariance'
+                            'or mock-to-mock covariance to run compressed analysis')
+
+        ### Compression code ###
+        ### Load compression parameters ###
 
         compress_params_names = config.get("compression-parameters", None)
-
         if compress_params_names is not None:
-            #Currently not implemented
+            # (Non-maximal compression) currently not implemented
             compress_params_names = compress_params_names.split(' ')
             self.compress_params = {
                 par: self.params[par] for par in compress_params_names
@@ -215,11 +225,12 @@ class VegaInterface:
         pnames = list(self.compress_params.keys())
         p0     = np.array(list(self.compress_params.values()))
 
-        # Step size for numerical differentiation
+        ### Step size for numerical differentiation ###
         epses = np.full_like(p0, 1e-8, dtype=float)
 
-        # Define vector model functions as closures
+        ### Define vector model functions as closures ###
         # ==============================================================
+
         def vector_model_full(pvec):
             """Full concatenated model vector (masked)."""
             p_dict = dict(zip(pnames, pvec))
@@ -234,27 +245,10 @@ class VegaInterface:
             p_dict = dict(zip(pnames, pvec))
             model = self.compute_model(params=p_dict, run_init=False)
             return model[block_name]
+
         # ==============================================================
-        
-        # Compute Jacobian per block
 
-        # self._jacobians = {}
-        # for name in self.corr_items:
-        #     jac_block = ndt.Jacobian(
-        #         lambda p, n=name: vector_model_block(p, n),
-        #         step=epses,
-        #         method="central"
-        #     )(p0)[self.data[name].model_mask]
-
-        #     #some columns zero for no param dependence
-        #     zero_cols = np.where(~jac_block.any(axis=0))[0]
-
-        #     #remove them
-        #     jac_block = np.delete(jac_block, zero_cols, axis=1)
-
-        #     self._jacobians[name] = jac_block
-
-        # Compute Jacobian of full model
+        #### Compute Jacobian of full model ###
 
         self._full_jacobian = ndt.Jacobian(
             vector_model_full,
@@ -262,7 +256,7 @@ class VegaInterface:
             method="central"
         )(p0)
 
-        # Build full data vector + fiducial model
+        ### Build full data vector + fiducial model ###
 
         self._full_datavec = np.concatenate(
             [cf.data_vec for cf in self.data.values()]
@@ -277,7 +271,7 @@ class VegaInterface:
 
         residual = self._full_datavec - self._full_fidmod
     
-        # Compute score vector
+        ### Compute score vector ###
 
         self.score = (
             self._full_jacobian.T
@@ -285,13 +279,17 @@ class VegaInterface:
             @ residual
         )
 
-        # Compressed covariance (Fisher matrix)
-
-        self.masked_compressed_global_cov = (
+        ### Compressed covariance ###
+        if self._mock2mock_cov is not None:
+            _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
+            self.masked_compressed_global_cov = _mock2mock_cov
+        else:
+            self.masked_compressed_global_cov = (
             self._full_jacobian.T
             @ self.masked_global_invcov
             @ self._full_jacobian
         )
+        breakpoint()
 
         self.masked_compressed_global_invcov = np.linalg.inv(
             self.masked_compressed_global_cov
@@ -299,31 +297,10 @@ class VegaInterface:
 
         self.masked_compressed_global_cov_logdet = np.linalg.slogdet(self.masked_compressed_global_cov)[1]
 
+        ### Metadata ###
         self.ndim_compressed = self.masked_compressed_global_invcov.shape[0]
 
-        # Individual compressed covariances per corr
-        
-        #INSTEAD: compute everything together (i.e. concatenate covariances and models/data)
-        # self.inv_compressed_covariances = {}
-
-        # for name in self.corr_items:
-
-        #     jac_i = self._jacobians[name]
-
-        #     cov_i = (jac_i.T 
-        #              @ self.data[name].inv_masked_cov 
-        #              @ jac_i 
-        #              )   
-            
-        #     self.inv_compressed_covariances[name] = np.linalg.inv(cov_i)
-
-        # Metadata
-
         print("INFO: Compression initialized successfully")
-
-        #compute compressed model 
-        #compressed likelihood 
-        #inference
 
     def _compress(self, vec):
         """
@@ -438,24 +415,14 @@ class VegaInterface:
                 chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))
 
         # Compute chisq for the case where the correlations are independent
-        #currently use compression won't work here, because inv_compressed_covariances dimensions are reduced compared to data/model vectors
         else:
             chi2 = 0
             for name in self.corr_items:
                 model_corr = model_cf[name][self.data[name].model_mask]
                 if self.monte_carlo:
-                    # if self.use_compression:
-                    #     diff = self._compress(self.data[name].masked_mc_mock) - self._compress(model_corr)
-                    #     chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff)) 
-                        #not scaled, but it seems the cov scaling for montecarlo is not implemented anyway
-                    # else:
                     diff = self.data[name].masked_mc_mock - model_corr
                     chi2 += diff.T.dot(self.data[name].scaled_inv_masked_cov.dot(diff))
                 else:
-                    # if self.use_compression:
-                    #     diff = self._compress(self.data[name].masked_data_vec) - self._compress(model_corr)
-                    #     chi2 += diff.T.dot(self.inv_compressed_covariances[name].dot(diff))
-                    # else:
                     diff = self.data[name].masked_data_vec - model_corr
                     chi2 += diff.T.dot(self.data[name].inv_masked_cov.dot(diff))
 
@@ -489,8 +456,20 @@ class VegaInterface:
         log_norm = 0
 
         if self.use_compression:
-            log_norm -= 0.5 * self.ndim_compressed * np.log(2 * np.pi)
-            log_norm -= 0.5 * self.masked_compressed_global_cov_logdet
+            if self.compression_likelihood == 'gaussian':
+                log_norm -= 0.5 * self.ndim_compressed * np.log(2 * np.pi)
+                log_norm -= 0.5 * self.masked_compressed_global_cov_logdet
+            elif self.compression_likelihood == 't-distribution':
+                _pre_factor = loggamma(0.5 * self.num_sims)
+                _pre_factor -= 0.5 * self.ndim_compressed * np.log(np.pi * (self.num_sims - 1))
+                _pre_factor -= loggamma(0.5 * (self.num_sims - self.ndim_compressed))
+
+                log_norm = _pre_factor - 0.5 * self.masked_compressed_global_cov_logdet
+            else:
+                raise  ValueError(
+                    f'Unknown likelihood type {self.compression_likelihood}.'
+                    ' Choose from ["gaussian", "t-distribution"].'
+                )
         else:
             for name in self.corr_items:
                 log_norm -= 0.5 * self.data[name].data_size * np.log(2 * np.pi)
@@ -504,7 +483,10 @@ class VegaInterface:
                 log_norm -= 0.5 * self.masked_global_log_cov_det
 
         # Compute log lik
-        log_lik = log_norm - 0.5 * chi2
+        if self.compression_likelihood == 't-distribution':
+            log_lik -= 0.5 * self.num_sims * np.log(1 + chi2 / (self.num_sims - 1))
+        else:
+            log_lik = log_norm - 0.5 * chi2
 
         # Add priors normalization
         for prior in self.priors.values():
