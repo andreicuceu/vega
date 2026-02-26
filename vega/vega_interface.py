@@ -5,6 +5,7 @@ import scipy.stats
 from astropy.io import fits
 import configparser
 import copy
+from scipy.special import loggamma
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -284,6 +285,9 @@ class VegaInterface:
             @ residual
         )
 
+        ### Metadata ###
+        self.ndim_compressed = self.score.size
+
         ### Compressed covariance ###
         if self._mock2mock_cov is not None:
             _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
@@ -298,11 +302,14 @@ class VegaInterface:
         self.masked_compressed_global_invcov = np.linalg.inv(
             self.masked_compressed_global_cov
         )
+        
+        #hartlap correction
+        if self._mock2mock_cov is not None:
+            alpha = (self.num_sims - self.ndim_compressed - 2) / (self.num_sims - 1)
+            self.masked_compressed_global_invcov *= alpha
 
         self.masked_compressed_global_cov_logdet = np.linalg.slogdet(self.masked_compressed_global_cov)[1]
 
-        ### Metadata ###
-        self.ndim_compressed = self.masked_compressed_global_invcov.shape[0]
 
         print("INFO: Compression initialized successfully")
 
