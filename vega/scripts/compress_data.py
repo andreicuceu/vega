@@ -4,7 +4,7 @@ from vega import VegaInterface
 import os
 import numpy as np
 
-def compress_data(config_path, cf_file=None, xcf_file=None, global_cov_file=None, outdir=None):
+def compress_data(config_path, cf_file, xcf_file, global_cov_file, outdir, name=None):
     """Compute a compressed covariance matrix from input covariance matrix + data vectors.
 
     Parameters
@@ -70,6 +70,9 @@ def compress_data(config_path, cf_file=None, xcf_file=None, global_cov_file=None
 
     _xi_compressed = vega.score
 
-    print('Writing compressed data vector to: ', os.path.join(outdir, 'xi_compressed.npz'))
+    if name is not None:
+        name = '_' + name
+
+    print('Writing compressed data vector to: ', os.path.join(outdir, 'xi_compressed{}.npz'.format(name)))
     # Save the compressed covariance matrix as npz file
-    np.savez(os.path.join(outdir, 'xi_compressed.npz'), xi_t = _xi_compressed)
+    np.savez(os.path.join(outdir, 'xi_compressed{}.npz'.format(name)), xi_t = _xi_compressed)

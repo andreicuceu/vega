@@ -16,6 +16,8 @@ cov : str
     Path to input global cov.
 outdir : str
     Path to output file.
+name : str, optional
+    Optional suffix for output file name.
 
 Returns
 -------
@@ -28,10 +30,11 @@ if __name__ == '__main__':
     parser.add_argument('--cf', type=str, required=True, help='Path to input cf data vector.')
     parser.add_argument('--xcf', type=str, required=True, help='Path to input xcf data vector.')
     parser.add_argument('--cov', type=str, required=True, help='Path to input global cov.')
-    parser.add_argument('--outdir','-o', type=str, required=True, help='Path to output directory, where new configs and'
-                                                        'compressed data vector will be saved.')
+    parser.add_argument('--outdir','-o', type=str, required=True, help='Path to output directory, where new configs' 
+    'and compressed data vector will be saved.')
     parser.add_argument('--config','-i', type=str, required=True, help='Path to vega config file')
+    parser.add_argument('--name', type=str, required=False, help='Optional name for output file')
 
     args = parser.parse_args()
 
-    compress_data(args.config, args.cf, args.xcf, args.cov, args.outdir)
+    compress_data(args.config, args.cf, args.xcf, args.cov, args.outdir, name=args.name)

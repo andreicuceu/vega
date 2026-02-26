@@ -156,9 +156,14 @@ class VegaInterface:
         # Initialize the compression
         self.use_compression = False
         if 'compression' in self.main_config:
-            self.use_compression = self.main_config['compression'].getboolean('use-compression', False)
+            _compression_config = self.main_config['compression']
+            self.use_compression = _compression_config.getboolean('use-compression', False)
             if self.use_compression:
-                self._init_compression(self.main_config['compression'])
+                self._compression_type = _compression_config.get('compression-type', 'score')  
+                if self._compression_type == 'score':
+                    self._init_score_compression(_compression_config)
+                elif self._compression_type == 'cca':
+                    raise NotImplementedError('CCA compression not implemented yet')
 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
@@ -192,7 +197,7 @@ class VegaInterface:
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
 
-    def _init_compression(self, config):
+    def _init_score_compression(self, config):
 
         print('INFO: Initializing compression')
 
@@ -289,7 +294,6 @@ class VegaInterface:
             @ self.masked_global_invcov
             @ self._full_jacobian
         )
-        breakpoint()
 
         self.masked_compressed_global_invcov = np.linalg.inv(
             self.masked_compressed_global_cov
