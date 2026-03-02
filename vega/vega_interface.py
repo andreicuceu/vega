@@ -6,6 +6,8 @@ from astropy.io import fits
 import configparser
 import copy
 from scipy.special import loggamma
+from scipy.linalg import cholesky, solve_triangular, svd
+
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -18,8 +20,6 @@ from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
 
 import numdifftools as ndt
-
-
 
 class VegaInterface:
     """Main Vega class.
@@ -160,11 +160,8 @@ class VegaInterface:
             _compression_config = self.main_config['compression']
             self.use_compression = _compression_config.getboolean('use-compression', False)
             if self.use_compression:
-                self._compression_type = _compression_config.get('compression-type', 'score')  
-                if self._compression_type == 'score':
-                    self._init_score_compression(_compression_config)
-                elif self._compression_type == 'cca':
-                    raise NotImplementedError('CCA compression not implemented yet')
+                self._init_compression(_compression_config)
+
 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params['limits']:
@@ -198,7 +195,75 @@ class VegaInterface:
         if self._has_data:
             self.plots = VegaPlots(vega_data=self.data)
 
-    def _init_score_compression(self, config):
+    def _score_compression(self):
+        residual = self._full_datavec - self._full_fidmod
+    
+        ### Compute score vector ###
+
+        self.score = (
+            self._full_jacobian.T
+            @ self.masked_global_invcov
+            @ residual
+        )  
+
+        ### Compressed covariance ###
+        if self._mock2mock_cov is not None:
+            _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
+            self.masked_compressed_global_cov = _mock2mock_cov
+        else:
+            self.masked_compressed_global_cov = (
+            self._full_jacobian.T
+            @ self.masked_global_invcov
+            @ self._full_jacobian
+        )
+
+        self.masked_compressed_global_invcov = np.linalg.inv(
+            self.masked_compressed_global_cov
+        )
+
+        self.masked_compressed_global_cov_logdet = np.linalg.slogdet(self.masked_compressed_global_cov)[1]
+        
+        ### Metadata ###
+        self.ndim_compressed = self.score.size
+        if self._mock2mock_cov is not None:
+            self._hartlap = (self.num_sims - self.ndim_compressed - 2) / (self.num_sims - 1)
+
+        print(f'INFO: Score compression initialized.')  
+
+    def _cca_compression(self):
+        ### Set up Eigenvalue problem for CCA compression ###
+        ### parameter covariance ###
+        _parameter_cov = np.linalg.inv(self.fisher_matrix)
+
+        ### Inverse parameter covariance ###
+        _inv_parameter_cov = np.linalg.inv(_parameter_cov)
+
+        ### Data-parameter covariance, linear approximation ###
+        _data_param_cov = self._full_jacobian @ _parameter_cov
+
+        ### Matrix to solve for eigenvalues/vectors for compressed data ###
+        # _cca_cov_data = (self.masked_global_invcov @ 
+        #             _data_param_cov @
+        #             _inv_parameter_cov @
+        #             _data_param_cov.T)  
+
+        # ### Matrix to solve for eigenvalues/vectors for compressed parameters ###
+        # _cca_cov_parameter = (_inv_parameter_cov @ 
+        #             _data_param_cov.T @
+        #             self.masked_global_invcov @
+        #             _data_param_cov)
+
+        # w, v = np.linalg.eig(_cca_cov_parameter)
+
+        ### Masked data covariance ###
+        _masked_data_cov = self.global_cov[:, self.full_data_mask]
+        _masked_data_cov = _masked_data_cov[self.full_data_mask, :]
+        
+        self._cca_w, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
+                                    _parameter_cov, 
+                                    _data_param_cov)
+
+    def _init_compression(self, config):
 
         print('INFO: Initializing compression')
 
@@ -215,9 +280,10 @@ class VegaInterface:
             raise RuntimeError('Compression requires a global covariance'
                             'or mock-to-mock covariance to run compressed analysis')
 
+        self._compression_type = config.get('compression-type', 'score')  
+
         ### Compression code ###
         ### Load compression parameters ###
-
         compress_params_names = config.get("compression-parameters", None)
         if compress_params_names is not None:
             # (Non-maximal compression) currently not implemented
@@ -236,7 +302,6 @@ class VegaInterface:
 
         ### Define vector model functions as closures ###
         # ==============================================================
-
         def vector_model_full(pvec):
             """Full concatenated model vector (masked)."""
             p_dict = dict(zip(pnames, pvec))
@@ -251,11 +316,9 @@ class VegaInterface:
             p_dict = dict(zip(pnames, pvec))
             model = self.compute_model(params=p_dict, run_init=False)
             return model[block_name]
-
         # ==============================================================
 
         #### Compute Jacobian of full model ###
-
         self._full_jacobian = ndt.Jacobian(
             vector_model_full,
             step=epses,
@@ -263,7 +326,6 @@ class VegaInterface:
         )(p0)
 
         ### Build full data vector + fiducial model ###
-
         self._full_datavec = np.concatenate(
             [cf.data_vec for cf in self.data.values()]
         )[self.full_data_mask]
@@ -272,46 +334,20 @@ class VegaInterface:
         full_model_blocks = [
             vector_model_block(p0, name) for name in self.corr_items
         ]
-
         self._full_fidmod = np.concatenate(full_model_blocks)[self.full_model_mask]
 
-        residual = self._full_datavec - self._full_fidmod
-    
-        ### Compute score vector ###
+        ### Compute Fisher information matrix ###
+        self.fisher_matrix = (self._full_jacobian.T @ 
+                        self.masked_global_invcov @ 
+                        self._full_jacobian)  
 
-        self.score = (
-            self._full_jacobian.T
-            @ self.masked_global_invcov
-            @ residual
-        )
-
-        ### Metadata ###
-        self.ndim_compressed = self.score.size
-
-        ### Compressed covariance ###
-        if self._mock2mock_cov is not None:
-            _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
-            self.masked_compressed_global_cov = _mock2mock_cov
+        ### Load specific compression type ###
+        if self._compression_type == 'score':
+            self._score_compression()
+        elif self._compression_type == 'cca':
+            self._cca_compression()
         else:
-            self.masked_compressed_global_cov = (
-            self._full_jacobian.T
-            @ self.masked_global_invcov
-            @ self._full_jacobian
-        )
-
-        self.masked_compressed_global_invcov = np.linalg.inv(
-            self.masked_compressed_global_cov
-        )
-        
-        #hartlap correction
-        if self._mock2mock_cov is not None:
-            alpha = (self.num_sims - self.ndim_compressed - 2) / (self.num_sims - 1)
-            self.masked_compressed_global_invcov *= alpha
-
-        self.masked_compressed_global_cov_logdet = np.linalg.slogdet(self.masked_compressed_global_cov)[1]
-
-
-        print("INFO: Compression initialized successfully")
+            raise ValueError('Compression type not recognized. Choose from: [score, cca]')
 
     def _compress(self, vec):
         """
@@ -419,8 +455,9 @@ class VegaInterface:
 
             full_model = np.concatenate([model_cf[name] for name in self.corr_items])
             if self.use_compression:
+                _inv_cov = self.masked_compressed_global_invcov
                 diff = self._compress(full_masked_data) - self._compress(full_model[self.full_model_mask])
-                chi2 = diff.T.dot(self.masked_compressed_global_invcov.dot(diff))
+                chi2 = diff.T.dot(_inv_cov.dot(diff))
             else:
                 diff = full_masked_data - full_model[self.full_model_mask]
                 chi2 = diff.T.dot(self.masked_global_invcov.dot(diff))

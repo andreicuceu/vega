@@ -397,6 +397,56 @@ def compute_kn_smoothing(scale_par, k_grid, n):
     """
     return np.exp(-scale_par**2*k_grid**n/2)
 
+import numpy as np
+from scipy.linalg import cholesky, solve_triangular, svd
+
+def compute_cca_weights(data_cov, param_cov, data_param_cov):
+    """
+    CSolves the CCA eigenproblem:
+        Cd^{-1} Cdp Cp^{-1} Cpd
+
+    without forming explicit inverses.
+
+    Parameters
+    ----------
+    data_cov : (Nd, Nd) array
+        Data covariance matrix (symmetric positive definite).
+    param_cov : (Np, Np) array
+        Parameter covariance matrix (symmetric positive definite).
+    data_param_cov : (Nd, Np) array
+        Cross-covariance Cov(d, p).
+
+    n_modes : int or None
+        Number of leading CCA modes to return.
+        If None, returns all.
+
+    Returns
+    -------
+    W : (Nd, k) array
+        CCA weights for data components (columns).
+    s : (k,) array
+        Canonical correlations (sqrt of eigenvalues).
+    """
+
+    # --- Cholesky factorization ---
+    chol_d = cholesky(data_cov, lower=True)
+    chol_p = cholesky(param_cov, lower=True)
+
+    # --- Whiten cross-covariance ---
+    # Solve chol_d X = data_param_cov
+    X = solve_triangular(chol_d, data_param_cov, lower=True)
+
+    # Solve chol_p Y = X^T
+    M = solve_triangular(chol_p, X.T, lower=True).T
+
+    # --- SVD of whitened matrix ---
+    U, s, Vt = svd(M, full_matrices=False)
+
+    # --- Transform back to original data space ---
+    W = solve_triangular(chol_d.T, U, lower=False)
+
+    return W, s
+
 
 class VegaModelError(Exception):
     pass
