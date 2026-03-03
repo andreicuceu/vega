@@ -33,13 +33,22 @@ if __name__ == '__main__':
     print_func('Initializing Vega')
 
     if args.init_limit is not None:
+        mpi_comm.barrier()
+
         node_comm = mpi_comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
         local_rank = node_comm.Get_rank()
         local_size = node_comm.Get_size()
+
         print(f'Node rank: {local_rank}, Node size: {local_size}')
+
         node_comm.Barrier()
-        # Initialize Vega in low memory mode
-        vega = VegaInterface(args.config)
+        for i in range(local_size // args.init_limit + 1):
+            if local_rank // args.init_limit == i:
+                # Initialize Vega in low memory mode
+                vega = VegaInterface(args.config)
+            node_comm.Barrier()
+
+        mpi_comm.barrier()
     else:
         # Initialize Vega and get the sampling parameters
         vega = VegaInterface(args.config)
