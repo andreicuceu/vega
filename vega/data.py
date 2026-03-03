@@ -717,6 +717,14 @@ class Data:
         templates = self.corr_item.get_undist_xi_marg_templates()
         templates = self.distortion_mat.dot(templates)
 
+        if self.corr_item.fit_marg_scales:
+            # Update masks
+            self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
+                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
+            self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
+                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
         if not return_AAT:
             return templates
 

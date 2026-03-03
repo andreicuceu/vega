@@ -66,6 +66,8 @@ class CorrelationItem:
         if marginalize_all:
             self.marginalize_small_scales['all-rmin'] = True
 
+        self.fit_marg_scales = config['model'].getboolean("fit-marginalized-scales", False)
+
         self.has_metals = False
         self.has_bb = False
 
