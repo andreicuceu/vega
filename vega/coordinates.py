@@ -194,23 +194,23 @@ class Coordinates:
         Array
             Mask
         """
-        mask = np.zeros_like(self.rp_regular_grid, dtype=bool)
+        mask = np.ones_like(self.rp_regular_grid, dtype=bool)
 
         if 'rtmax' in marginalization_cuts:
             rtmax = marginalization_cuts['rtmax']
-            mask |= self.rt_regular_grid < rtmax
+            mask &= self.rt_regular_grid < rtmax
         if 'rtmin' in marginalization_cuts:
             rtmin = marginalization_cuts['rtmin']
-            mask |= self.rt_regular_grid > rtmin
+            mask &= self.rt_regular_grid > rtmin
         if 'rpmax' in marginalization_cuts:
             rpmax = marginalization_cuts['rpmax']
-            mask |= np.abs(self.rp_regular_grid) < rpmax
+            mask &= np.abs(self.rp_regular_grid) < rpmax
         if 'rpmin' in marginalization_cuts:
             rpmin = marginalization_cuts['rpmin']
-            mask |= np.abs(self.rp_regular_grid) > rpmin
+            mask &= np.abs(self.rp_regular_grid) > rpmin
 
         if 'all-rmin' in marginalization_cuts:
-            mask |= ~self.get_mask_scale_cuts(
+            mask = ~self.get_mask_scale_cuts(
                 cuts_config, small_scale_mask=True
             )
 
