@@ -60,7 +60,9 @@ class Sampler:
             latex_names = build_names(list(self.names))
 
             if self.derived_dict is not None:
-                for corr, num_marg in self.derived_dict.items():
+                corr_names = sorted(self.derived_dict.keys())
+                for corr in corr_names:
+                    num_marg = self.derived_dict[corr]
                     for i in range(num_marg):
                         name = f'{corr}_marg_{i}'
                         latex_name = r'M_{\rm ' + f'{corr}' + '}^{' + f'{i}' + '}'
