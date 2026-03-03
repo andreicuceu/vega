@@ -83,14 +83,13 @@ class Data:
             self.variance = self.cov_mat.diagonal()
 
         # self.cov_mat_org = self.cov_mat
+        self.cov_mat_org = None
         self.marg_templates = None
         self.cov_marg_update = None
         self.marg_diff2coeff_matrix = None
         self.num_marg_modes = 0
         if not self.corr_item.low_mem_mode:
             self.cov_mat_org = self.cov_mat.copy()
-        else:
-            self.has_cov_mat = False
 
         if corr_item.marginalize_small_scales:
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
@@ -241,6 +240,17 @@ class Data:
             Covariance matrix flag
         """
         return self._cov_mat is not None
+
+    @property
+    def has_cov_mat_org(self):
+        """Original covariance matrix flag
+
+        Returns
+        -------
+        bool
+            Covariance matrix flag
+        """
+        return self.cov_mat_org is not None
 
     @property
     def has_distortion(self):
