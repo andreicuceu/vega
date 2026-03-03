@@ -719,8 +719,8 @@ class Data:
 
         if self.corr_item.fit_marg_scales:
             # Update masks
-            self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
-                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+            # self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
+            #     self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
 
             self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
                 self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
