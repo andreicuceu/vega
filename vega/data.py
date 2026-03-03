@@ -167,9 +167,19 @@ class Data:
             Masked data vector (xi[mask])
         """
         if self._masked_data_vec is None:
-            self._masked_data_vec = np.zeros(self.data_mask.sum())
-            self._masked_data_vec[:] = self.data_vec[self.data_mask]
+            self._masked_data_vec = self.data_vec[self.data_mask]
         return self._masked_data_vec
+
+    @property
+    def data_size(self):
+        """Data size property
+
+        Returns
+        -------
+        int
+            Data size (number of bins after masking)
+        """
+        return self.masked_data_vec.size
 
     @property
     def cov_mat(self):
@@ -385,7 +395,6 @@ class Data:
         self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
 
         # Compute data size
-        self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
         # Read the cuts we need to save for plotting
@@ -724,6 +733,10 @@ class Data:
 
             self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
                 self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
+            # Recompute masked data vector and size
+            self._masked_data_vec = None
+            _ = self.masked_data_vec
 
         if not return_AAT:
             return templates
