@@ -39,8 +39,6 @@ if __name__ == '__main__':
         local_rank = node_comm.Get_rank()
         local_size = node_comm.Get_size()
 
-        print(f'Node rank: {local_rank}, Node size: {local_size}')
-
         node_comm.Barrier()
         for i in range(local_size // args.init_limit + 1):
             if local_rank // args.init_limit == i:
@@ -78,7 +76,8 @@ if __name__ == '__main__':
         from vega.samplers.polychord import Polychord
 
         print_func('Running Polychord')
-        sampler = Polychord(vega.main_config['Polychord'], sampling_params, vega.log_lik)
+        sampler = Polychord(
+            vega.main_config['Polychord'], sampling_params, vega.log_lik, vega.corr_num_marg_modes)
         sampler.run()
 
     elif vega.sampler == 'PocoMC':
