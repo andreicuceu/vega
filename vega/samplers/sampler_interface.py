@@ -63,7 +63,7 @@ class Sampler:
                 for corr, num_marg in self.derived_dict.items():
                     for i in range(num_marg):
                         name = f'{corr}_marg_{i}'
-                        latex_name = rf'M_{corr}^{i}'
+                        latex_name = 'M_{' + f'{corr}' + '}^{' + f'{i}' + '}'
                         latex_names[name] = latex_name
 
             with open(parnames_path, 'w') as f:
