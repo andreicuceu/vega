@@ -72,6 +72,8 @@ class BuildConfig:
         self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', 0)
         self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', 0)
         self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
+        self.options['marginalize-prior-sigma'] = options.get('marginalize-prior-sigma', 10.0)
+        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', False)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -340,6 +342,8 @@ class BuildConfig:
         config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
         config['model']['marginalize-all-rmin-cuts'] = str(
             self.options['marginalize-all-rmin-cuts'])
+        config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior_sigma'])
+        config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
 
         if 'skip-nl-model-in-peak' in self.options:
             config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
