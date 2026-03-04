@@ -342,7 +342,7 @@ class BuildConfig:
         config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
         config['model']['marginalize-all-rmin-cuts'] = str(
             self.options['marginalize-all-rmin-cuts'])
-        config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior_sigma'])
+        config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
         config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
 
         if 'skip-nl-model-in-peak' in self.options:
