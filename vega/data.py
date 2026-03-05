@@ -734,6 +734,14 @@ class Data:
             self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
                 self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
 
+            if self.data_mask.sum() != self.model_mask.sum():
+                raise ValueError(
+                    "Data and model masks should be the same after marginalization scale cuts."
+                    " The most likely reason is a mismatch in rp-min between the data and"
+                    " the model coordinates. Check that 'rp-min = -300' for cross-correlations, "
+                    " or set it to the smallest rp in your distortion matrix."
+                )
+
             # Recompute masked data vector and size
             self._masked_data_vec = None
             _ = self.masked_data_vec
