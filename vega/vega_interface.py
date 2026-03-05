@@ -209,19 +209,19 @@ class VegaInterface:
         ### Compressed covariance ###
         if self._mock2mock_cov is not None:
             _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
-            self.masked_compressed_global_cov = _mock2mock_cov
+            self.compressed_global_cov = _mock2mock_cov
         else:
-            self.masked_compressed_global_cov = (
+            self.compressed_global_cov = (
             self._full_jacobian.T
             @ self.masked_global_invcov
             @ self._full_jacobian
         )
 
-        self.masked_compressed_global_invcov = np.linalg.inv(
-            self.masked_compressed_global_cov
+        self.compressed_global_invcov = np.linalg.inv(
+            self.compressed_global_cov
         )
 
-        self.masked_compressed_global_cov_logdet = np.linalg.slogdet(self.masked_compressed_global_cov)[1]
+        self.compressed_global_cov_logdet = np.linalg.slogdet(self.compressed_global_cov)[1]
         
         ### Metadata ###
         self.ndim_compressed = self.score.size
@@ -235,33 +235,24 @@ class VegaInterface:
         ### parameter covariance ###
         _parameter_cov = np.linalg.inv(self.fisher_matrix)
 
-        ### Inverse parameter covariance ###
-        _inv_parameter_cov = np.linalg.inv(_parameter_cov)
-
         ### Data-parameter covariance, linear approximation ###
         _data_param_cov = self._full_jacobian @ _parameter_cov
-
-        ### Matrix to solve for eigenvalues/vectors for compressed data ###
-        # _cca_cov_data = (self.masked_global_invcov @ 
-        #             _data_param_cov @
-        #             _inv_parameter_cov @
-        #             _data_param_cov.T)  
-
-        # ### Matrix to solve for eigenvalues/vectors for compressed parameters ###
-        # _cca_cov_parameter = (_inv_parameter_cov @ 
-        #             _data_param_cov.T @
-        #             self.masked_global_invcov @
-        #             _data_param_cov)
-
-        # w, v = np.linalg.eig(_cca_cov_parameter)
 
         ### Masked data covariance ###
         _masked_data_cov = self.global_cov[:, self.full_data_mask]
         _masked_data_cov = _masked_data_cov[self.full_data_mask, :]
         
-        self._cca_w, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
+        self._cca_mat, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
                                     _parameter_cov, 
-                                    _data_param_cov)
+                                    _data_param_cov,
+                                    num_modes=None)
+
+        ### Compressed covariance ###
+        self.compressed_global_cov =  self._cca_mat.T @ _masked_data_cov @ self._cca_mat
+
+        ### Compressed inverse cov ###
+        self.compressed_global_invcov = np.linalg.inv(self.compressed_global_cov)
+
 
     def _init_compression(self, config):
 
@@ -280,7 +271,7 @@ class VegaInterface:
             raise RuntimeError('Compression requires a global covariance'
                             'or mock-to-mock covariance to run compressed analysis')
 
-        self._compression_type = config.get('compression-type', 'score')  
+        self.compression_type = config.get('compression-type', 'score')  
 
         ### Compression code ###
         ### Load compression parameters ###
@@ -342,21 +333,26 @@ class VegaInterface:
                         self._full_jacobian)  
 
         ### Load specific compression type ###
-        if self._compression_type == 'score':
+        if self.compression_type == 'score':
             self._score_compression()
-        elif self._compression_type == 'cca':
+        elif self.compression_type == 'cca':
             self._cca_compression()
         else:
             raise ValueError('Compression type not recognized. Choose from: [score, cca]')
 
-    def _compress(self, vec):
+    def compress(self, vec):
         """
-        Score compress a vector
+        Compress a vector with either score or cca compression.
         
         :param vec: vector to compress
-        :return: compressed vector (dimension = N_params)
+        :return: compressed vector (dimension <= N_params)
+
         """
-        return self._full_jacobian.T @ self.masked_global_invcov @ (vec - self._full_fidmod)
+        ### Load specific compression type ###
+        if self.compression_type == 'score':
+            return self._full_jacobian.T @ self.masked_global_invcov @ (vec - self._full_fidmod)
+        elif self.compression_type == 'cca':
+            return self._cca_mat.T @ vec
     
     def compute_compressed_model(self, params=None, run_init=True, direct_pk=None, marg_coeff=None):
 
@@ -455,8 +451,8 @@ class VegaInterface:
 
             full_model = np.concatenate([model_cf[name] for name in self.corr_items])
             if self.use_compression:
-                _inv_cov = self.masked_compressed_global_invcov
-                diff = self._compress(full_masked_data) - self._compress(full_model[self.full_model_mask])
+                _inv_cov = self.compressed_global_invcov
+                diff = self.compress(full_masked_data) - self.compress(full_model[self.full_model_mask])
                 chi2 = diff.T.dot(_inv_cov.dot(diff))
             else:
                 diff = full_masked_data - full_model[self.full_model_mask]
@@ -506,13 +502,13 @@ class VegaInterface:
         if self.use_compression:
             if self.compression_likelihood == 'gaussian':
                 log_norm -= 0.5 * self.ndim_compressed * np.log(2 * np.pi)
-                log_norm -= 0.5 * self.masked_compressed_global_cov_logdet
+                log_norm -= 0.5 * self.compressed_global_cov_logdet
             elif self.compression_likelihood == 't-distribution':
                 _pre_factor = loggamma(0.5 * self.num_sims)
                 _pre_factor -= 0.5 * self.ndim_compressed * np.log(np.pi * (self.num_sims - 1))
                 _pre_factor -= loggamma(0.5 * (self.num_sims - self.ndim_compressed))
 
-                log_norm = _pre_factor - 0.5 * self.masked_compressed_global_cov_logdet
+                log_norm = _pre_factor - 0.5 * self.compressed_global_cov_logdet
             else:
                 raise  ValueError(
                     f'Unknown likelihood type {self.compression_likelihood}.'

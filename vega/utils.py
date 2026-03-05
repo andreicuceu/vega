@@ -7,6 +7,7 @@ from functools import lru_cache
 from cachetools import cached, LRUCache
 from cachetools.keys import hashkey
 from scipy.interpolate import interp1d
+from scipy.linalg import cholesky, solve_triangular, svd
 
 import vega
 
@@ -397,10 +398,7 @@ def compute_kn_smoothing(scale_par, k_grid, n):
     """
     return np.exp(-scale_par**2*k_grid**n/2)
 
-import numpy as np
-from scipy.linalg import cholesky, solve_triangular, svd
-
-def compute_cca_weights(data_cov, param_cov, data_param_cov):
+def compute_cca_weights(data_cov, param_cov, data_param_cov, num_modes):
     """
     CSolves the CCA eigenproblem:
         Cd^{-1} Cdp Cp^{-1} Cpd
@@ -441,6 +439,11 @@ def compute_cca_weights(data_cov, param_cov, data_param_cov):
 
     # --- SVD of whitened matrix ---
     U, s, Vt = svd(M, full_matrices=False)
+
+    # --- Optional truncation ---
+    if num_modes is not None:
+        U = U[:, :num_modes]
+        s = s[:num_modes]
 
     # --- Transform back to original data space ---
     W = solve_triangular(chol_d.T, U, lower=False)
