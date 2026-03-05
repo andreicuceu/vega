@@ -12,6 +12,13 @@ if __name__ == '__main__':
         description='Run Vega in parallel.')
 
     pars.add_argument('config', type=str, help='Config file')
+    pars.add_argument(
+        '--init-limit', type=int, default=None,
+        help=(
+            'Maximum number of cuncurrent initializations of Vega. '
+            'Use this to avoid memory issues when running with many MPI threads.'
+        )
+    )
     args = pars.parse_args()
 
     mpi_comm = MPI.COMM_WORLD
@@ -25,8 +32,25 @@ if __name__ == '__main__':
 
     print_func('Initializing Vega')
 
-    # Initialize Vega and get the sampling parameters
-    vega = VegaInterface(args.config)
+    if args.init_limit is not None:
+        mpi_comm.barrier()
+
+        node_comm = mpi_comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        local_rank = node_comm.Get_rank()
+        local_size = node_comm.Get_size()
+
+        node_comm.Barrier()
+        for i in range(local_size // args.init_limit + 1):
+            if local_rank // args.init_limit == i:
+                # Initialize Vega in low memory mode
+                vega = VegaInterface(args.config)
+            node_comm.Barrier()
+
+        mpi_comm.barrier()
+    else:
+        # Initialize Vega and get the sampling parameters
+        vega = VegaInterface(args.config)
+
     sampling_params = vega.sample_params['limits']
 
     # run compute_model once to initialize all the caches
@@ -52,7 +76,8 @@ if __name__ == '__main__':
         from vega.samplers.polychord import Polychord
 
         print_func('Running Polychord')
-        sampler = Polychord(vega.main_config['Polychord'], sampling_params, vega.log_lik)
+        sampler = Polychord(
+            vega.main_config['Polychord'], sampling_params, vega.log_lik, vega.corr_num_marg_modes)
         sampler.run()
 
     elif vega.sampler == 'PocoMC':
