@@ -160,6 +160,12 @@ class VegaInterface:
             self.corr_items, self.data, self.mc_config, self.global_cov
         )
 
+        # Check for analytic marginalization configuration
+        self.corr_num_marg_modes = {}
+        if self._has_data:
+            for name in self.corr_items:
+                self.corr_num_marg_modes[name] = self.data[name].num_marg_modes
+
         # Check for sampler
         self.run_sampler = False
         if 'control' in self.main_config:
@@ -224,7 +230,7 @@ class VegaInterface:
 
         return model_cf
 
-    def chi2(self, params=None, direct_pk=None):
+    def chi2(self, params=None, direct_pk=None, return_marg_coeff=False):
         """Compute full chi2 for all components.
 
         Parameters
@@ -277,9 +283,13 @@ class VegaInterface:
         chi2 += self.compute_prior_chi2(params)
 
         assert isinstance(chi2, float)
-        return chi2
+        if not return_marg_coeff:
+            return chi2
 
-    def log_lik(self, params=None, direct_pk=None):
+        marg_coeff = self.compute_marg_coeff(model_cf)
+        return chi2, marg_coeff
+
+    def log_lik(self, params=None, direct_pk=None, return_marg_coeff=False):
         """Compute full log likelihood for all components.
 
         Parameters
@@ -297,7 +307,10 @@ class VegaInterface:
         assert self._has_data
 
         # Get the full chi2
-        chi2 = self.chi2(params, direct_pk)
+        if return_marg_coeff:
+            chi2, marg_coeff = self.chi2(params, direct_pk, return_marg_coeff)
+        else:
+            chi2 = self.chi2(params, direct_pk)
 
         # Compute the normalization for each component
         log_norm = 0
@@ -320,6 +333,12 @@ class VegaInterface:
         for prior in self.priors.values():
             log_lik += self._gaussian_lik_prior(prior[1])
 
+        if return_marg_coeff:
+            corr_names = sorted(self.corr_items.keys())
+            marg_coeff_list = np.hstack([
+                marg_coeff[corr] for corr in corr_names
+            ])
+            return log_lik, marg_coeff_list
         return log_lik
 
     def _get_lcl_prms(self, params=None):
@@ -420,6 +439,26 @@ class VegaInterface:
         self.monte_carlo = True
 
         return mocks
+
+    def compute_marg_coeff(self, model_cf):
+        bestfit_marg_coeff = {}
+        for name in self.corr_items:
+            corr_data = self.data[name]
+
+            if self.monte_carlo:
+                diff = corr_data.masked_mc_mock \
+                    - model_cf[name][corr_data.model_mask]
+            else:
+                diff = corr_data.masked_data_vec \
+                    - model_cf[name][corr_data.model_mask]
+
+            # Calculate best-fitting values for the marginalized templates.
+            # This approximation ignores global_cov, hence correlations between
+            # CFs. Bestfit_model is updated in-place.
+            if corr_data.marg_diff2coeff_matrix is not None:
+                bestfit_marg_coeff[name] = corr_data.marg_diff2coeff_matrix.dot(diff)
+
+        return bestfit_marg_coeff
 
     def minimize(self):
         """Minimize the chi2 over the sampled parameters.

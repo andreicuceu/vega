@@ -66,9 +66,9 @@ class CorrelationItem:
         if marginalize_all:
             self.marginalize_small_scales['all-rmin'] = True
 
-        marginalize_match_data_bins = config['model'].getboolean("marginalize-match-data-bins", False)
-        if marginalize_match_data_bins:
-            self.marginalize_small_scales['match-data-bins'] = True
+        self.marginalize_match_data_bins = config['model'].getboolean("marginalize-match-data-bins", False)
+        self.fit_marg_scales = config['model'].getboolean("fit-marginalized-scales", False)
+
 
         self.has_metals = False
         self.has_bb = False
@@ -223,7 +223,7 @@ class CorrelationItem:
                 "based on scale cuts."
             )
 
-        if 'match-data-bins' in self.marginalize_small_scales and self.marginalize_small_scales['match-data-bins'] :
+        if self.marginalize_match_data_bins :
             print('set marginalization templates matching the data bins')
             rp = self.model_coordinates.rp_grid[common_idx]
             rt = self.model_coordinates.rt_grid[common_idx]

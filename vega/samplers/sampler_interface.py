@@ -1,5 +1,6 @@
 import os.path
 import sys
+import numpy as np
 from pathlib import Path
 
 from mpi4py import MPI
@@ -11,11 +12,17 @@ from vega.parameters.param_utils import build_names
 class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
-    def __init__(self, sampler_config, limits, log_lik_func):
+    def __init__(self, sampler_config, limits, log_lik_func, derived_dict=None):
         self.limits = limits
         self.names = list(limits.keys())
         self.num_params = len(limits)
-        self.num_derived = 0
+        self.derived_dict = None
+        if derived_dict is not None:
+            self.derived_dict = derived_dict
+            self.num_derived = np.sum([num_marg for num_marg in derived_dict.values()])
+        else:
+            self.num_derived = 0
+
         self.log_lik = log_lik_func
 
         self.getdist_latex = sampler_config.getboolean('getdist_latex', True)
@@ -51,6 +58,16 @@ class Sampler:
             print('Writing parameter names')
             sys.stdout.flush()
             latex_names = build_names(list(self.names))
+
+            if self.derived_dict is not None:
+                corr_names = sorted(self.derived_dict.keys())
+                for corr in corr_names:
+                    num_marg = self.derived_dict[corr]
+                    for i in range(num_marg):
+                        name = f'{corr}_marg_{i}'
+                        latex_name = r'M_{\rm ' + f'{corr}' + '}^{' + f'{i}' + '}'
+                        latex_names[name] = latex_name
+
             with open(parnames_path, 'w') as f:
                 for name, latex in latex_names.items():
                     if self.getdist_latex:

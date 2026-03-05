@@ -2,6 +2,12 @@
 History
 =======
 
+1.6.2 (2026-03-04)
+------------------
+* Updates and improvements to the small-scale marginaliztion functionality
+* Improvements to the sampler performance
+* Add SSM parameters as derived parameters in PolyChord
+
 1.6.1 (2026-02-23)
 ------------------
 * Unblind DR2 alpha_smooth parameter

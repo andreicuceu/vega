@@ -94,29 +94,29 @@ class Data:
         if corr_item.marginalize_small_scales:
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
 
-            if not self.corr_item.low_mem_mode:
-                print('Updating covariance with marginalization templates.')
-                ntemps = self.marg_templates.shape[1]
+            # if not self.corr_item.low_mem_mode:
+            print('Updating covariance with marginalization templates.')
+            ntemps = self.marg_templates.shape[1]
 
-                # Invert the matrix but do not save it
-                _inv_masked_cov = self.inv_masked_cov
-                self._inv_masked_cov = None
+            # Invert the matrix but do not save it
+            _inv_masked_cov = self.inv_masked_cov
+            self._inv_masked_cov = None
 
-                self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
 
-                # Construct solution matrix, G becomes an ndarray
-                templates_masked = self.marg_templates[self.model_mask, :]
-                G = templates_masked.T.dot(_inv_masked_cov)
+            # Construct solution matrix, G becomes an ndarray
+            templates_masked = self.marg_templates[self.model_mask, :]
+            G = templates_masked.T.dot(_inv_masked_cov)
 
-                S = np.diag(np.full(
-                    ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
-                ))
-                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
+            S = np.diag(np.full(
+                ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
+            ))
+            Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
 
-                # When multiplied by data - bestfit model, the below matrix will
-                # give the coefficients for each template. Total marginalized model
-                # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
-                self.marg_diff2coeff_matrix = Ainv.dot(G)
+            # When multiplied by data - bestfit model, the below matrix will
+            # give the coefficients for each template. Total marginalized model
+            # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
+            self.marg_diff2coeff_matrix = Ainv.dot(G)
 
         self._cholesky = None
         self._scale = 1.
@@ -167,9 +167,19 @@ class Data:
             Masked data vector (xi[mask])
         """
         if self._masked_data_vec is None:
-            self._masked_data_vec = np.zeros(self.data_mask.sum())
-            self._masked_data_vec[:] = self.data_vec[self.data_mask]
+            self._masked_data_vec = self.data_vec[self.data_mask]
         return self._masked_data_vec
+
+    @property
+    def data_size(self):
+        """Data size property
+
+        Returns
+        -------
+        int
+            Data size (number of bins after masking)
+        """
+        return self.masked_data_vec.size
 
     @property
     def cov_mat(self):
@@ -321,16 +331,16 @@ class Data:
                 self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
 
         # Read the covariance matrix
-        if not self.corr_item.low_mem_mode:
-            if cov_path is not None:
-                print(f'Reading covariance matrix file {cov_path}\n')
-                with fits.open(find_file(cov_path)) as cov_hdul:
-                    self._cov_mat = cov_hdul[1].data['CO']
-            elif 'CO' in hdul[1].columns.names:
-                self._cov_mat = hdul[1].data['CO']
+        # if not self.corr_item.low_mem_mode:
+        if cov_path is not None:
+            print(f'Reading covariance matrix file {cov_path}\n')
+            with fits.open(find_file(cov_path)) as cov_hdul:
+                self._cov_mat = cov_hdul[1].data['CO']
+        elif 'CO' in hdul[1].columns.names:
+            self._cov_mat = hdul[1].data['CO']
 
-            if cov_rescale is not None:
-                self._cov_mat *= cov_rescale
+        if cov_rescale is not None:
+            self._cov_mat *= cov_rescale
 
         # Get the cosmological parameters
         if "OMEGAM" in header:
@@ -385,7 +395,6 @@ class Data:
         self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
 
         # Compute data size
-        self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
         # Read the cuts we need to save for plotting
@@ -716,6 +725,18 @@ class Data:
 
         templates = self.corr_item.get_undist_xi_marg_templates()
         templates = self.distortion_mat.dot(templates)
+
+        if self.corr_item.fit_marg_scales:
+            # Update masks
+            self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
+                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
+            self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
+                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
+            # Recompute masked data vector and size
+            self._masked_data_vec = None
+            _ = self.masked_data_vec
 
         if not return_AAT:
             return templates
