@@ -28,7 +28,7 @@ class Data:
     model_coordinates = None
     data_coordinates = None
 
-    def __init__(self, corr_item):
+    def __init__(self, corr_item, marginalize_in_fit = False):
         """Read the data and initialize the coordinate grids.
 
         Parameters
@@ -95,23 +95,31 @@ class Data:
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
 
             # if not self.corr_item.low_mem_mode:
-            print('Updating covariance with marginalization templates.')
+            # print('Updating covariance with marginalization templates.')
             ntemps = self.marg_templates.shape[1]
 
             # Invert the matrix but do not save it
             _inv_masked_cov = self.inv_masked_cov
             self._inv_masked_cov = None
 
-            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            if not marginalize_in_fit :
+                print('add to covariance for small scale marginalization')
+                self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            else :
+                print('do not add anything to covariance, because will fit small scale templates')
+                self.cov_marg_update = None
 
             # Construct solution matrix, G becomes an ndarray
             templates_masked = self.marg_templates[self.model_mask, :]
             G = templates_masked.T.dot(_inv_masked_cov)
 
-            S = np.diag(np.full(
-                ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
-            ))
-            Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
+            if not ( self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins ) :
+                S = np.diag(np.full(
+                    ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
+                ))
+                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
+            else :
+                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T) # should be positive definite
 
             # When multiplied by data - bestfit model, the below matrix will
             # give the coefficients for each template. Total marginalized model
