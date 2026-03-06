@@ -99,6 +99,7 @@ class Data:
             ntemps = self.marg_templates.shape[1]
 
             # Invert the matrix but do not save it
+            self._inv_masked_cov = None
             _inv_masked_cov = self.inv_masked_cov
             self._inv_masked_cov = None
 
