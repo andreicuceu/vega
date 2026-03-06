@@ -58,9 +58,9 @@ class VegaInterface:
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
         self.low_mem_mode &= global_cov_file is not None
 
-        self.marginalize_in_fit = self.main_config['control'].getboolean('marginalize_in_fit', True)
+        self.marginalize_in_fit = self.main_config['control'].getboolean('marginalize_in_fit', False)
         if self.marginalize_in_fit:
-            print("fill do marginalize_in_fit")
+            print("will do marginalize_in_fit")
 
         # Initialize the individual components
         self.corr_items = {}
