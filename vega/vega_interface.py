@@ -58,7 +58,8 @@ class VegaInterface:
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
         self.low_mem_mode &= global_cov_file is not None
 
-        self.marginalize_in_fit = self.main_config['control'].getboolean('marginalize_in_fit', False)
+        self.marginalize_in_fit = self.main_config['control'].getboolean(
+            'marginalize_in_fit', False)
         if self.marginalize_in_fit:
             print("will do marginalize_in_fit")
 
@@ -103,7 +104,7 @@ class VegaInterface:
         # Initialize the data
         for name, corr_item in self.corr_items.items():
             if self._has_data:
-                self.data[name] = data.Data(corr_item,marginalize_in_fit=self.marginalize_in_fit)
+                self.data[name] = data.Data(corr_item, marginalize_in_fit=self.marginalize_in_fit)
             else:
                 self.data[name] = None
 

@@ -28,7 +28,7 @@ class Data:
     model_coordinates = None
     data_coordinates = None
 
-    def __init__(self, corr_item, marginalize_in_fit = False):
+    def __init__(self, corr_item, marginalize_in_fit=False):
         """Read the data and initialize the coordinate grids.
 
         Parameters
@@ -103,10 +103,10 @@ class Data:
             _inv_masked_cov = self.inv_masked_cov
             self._inv_masked_cov = None
 
-            if not marginalize_in_fit :
+            if not marginalize_in_fit:
                 print('add to covariance for small scale marginalization')
                 self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
-            else :
+            else:
                 print('do not add anything to covariance, because will fit small scale templates')
                 self.cov_marg_update = None
 
@@ -114,13 +114,13 @@ class Data:
             templates_masked = self.marg_templates[self.model_mask, :]
             G = templates_masked.T.dot(_inv_masked_cov)
 
-            if not ( self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins ) :
+            if not (self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins):
                 S = np.diag(np.full(
                     ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
                 ))
                 Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
-            else :
-                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T) # should be positive definite
+            else:
+                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T)  # should be positive definite
 
             # When multiplied by data - bestfit model, the below matrix will
             # give the coefficients for each template. Total marginalized model
@@ -516,7 +516,8 @@ class Data:
         list
             list of all metal correlations we need to compute
         """
-        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(metal_config)
+        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
+            metal_config)
 
         self.metal_mats = {}
         self.metal_coordinates = {}

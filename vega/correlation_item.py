@@ -66,7 +66,8 @@ class CorrelationItem:
         if marginalize_all:
             self.marginalize_small_scales['all-rmin'] = True
 
-        self.marginalize_match_data_bins = config['model'].getboolean("marginalize-match-data-bins", False)
+        self.marginalize_match_data_bins = config['model'].getboolean(
+            "marginalize-match-data-bins", False)
         self.fit_marg_scales = config['model'].getboolean("fit-marginalized-scales", False)
 
 
@@ -223,24 +224,30 @@ class CorrelationItem:
                 "based on scale cuts."
             )
 
-        if self.marginalize_match_data_bins :
+        if self.marginalize_match_data_bins:
             print('set marginalization templates matching the data bins')
             rp = self.model_coordinates.rp_grid[common_idx]
             rt = self.model_coordinates.rt_grid[common_idx]
             dist_rp = self.dist_model_coordinates.rp_grid
             dist_rt = self.dist_model_coordinates.rt_grid
-            indices_in_data_bins=((dist_rp[None,:]-rp[:,None])**2+(dist_rt[None,:]-rt[:,None])**2).argmin(axis=1)
-            unique_indices_in_data_bins=np.unique(indices_in_data_bins)
-            val=[]
-            tempindex=[]
-            coordindex=[]
-            for i,data_idx in enumerate(unique_indices_in_data_bins) :
-                model_indices=common_idx[indices_in_data_bins==data_idx]
-                val        += np.ones(model_indices.size).tolist()
-                tempindex  += np.repeat(i,model_indices.size).tolist()
+            indices_in_data_bins = (
+                (dist_rp[None, :] - rp[:, None])**2 + (dist_rt[None, :] - rt[:, None])**2
+            ).argmin(axis=1)
+
+            unique_indices_in_data_bins = np.unique(indices_in_data_bins)
+            val = []
+            tempindex = []
+            coordindex = []
+            for i, data_idx in enumerate(unique_indices_in_data_bins):
+                model_indices = common_idx[indices_in_data_bins == data_idx]
+                val += np.ones(model_indices.size).tolist()
+                tempindex += np.repeat(i, model_indices.size).tolist()
                 coordindex += model_indices.tolist()
-            templates=coo_array((val, (tempindex,coordindex)), shape=(unique_indices_in_data_bins.size, self.model_coordinates.rt_regular_grid.size)).tocsr().T
-        else :
+            templates = coo_array(
+                (val, (tempindex, coordindex)), shape=(
+                    unique_indices_in_data_bins.size, self.model_coordinates.rt_regular_grid.size)
+            ).tocsr().T
+        else:
             N = self.model_coordinates.rt_regular_grid.size
             d = np.ones(common_idx.size)
 
@@ -248,6 +255,6 @@ class CorrelationItem:
                 (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
             ).tocsr().T
 
-        print("marginalization templates shape=",templates.shape)
+        print("marginalization templates shape=", templates.shape)
 
         return templates
