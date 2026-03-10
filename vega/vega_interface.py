@@ -230,10 +230,14 @@ class VegaInterface:
 
         print(f'INFO: Score compression initialized.')  
 
-    def _cca_compression(self):
-        ### Set up Eigenvalue problem for CCA compression ###
+    def _cca_compression(self, config):
         ### parameter covariance ###
-        _parameter_cov = np.linalg.inv(self.fisher_matrix)
+        _parameter_cov_file = config.get('cca-parameter-cov', None)
+        if _parameter_cov_file is None:
+            _parameter_cov = np.linalg.inv(self.fisher_matrix)
+        else:
+            _parameter_cov = np.load(_parameter_cov_file)['cov']
+            print(f'INFO: Using parameter cov from: {_parameter_cov_file}')
 
         ### Data-parameter covariance, linear approximation ###
         _data_param_cov = self._full_jacobian @ _parameter_cov
@@ -253,6 +257,13 @@ class VegaInterface:
         ### Compressed inverse cov ###
         self.compressed_global_invcov = np.linalg.inv(self.compressed_global_cov)
 
+        ### log det for likelihood normalization ###
+        self.compressed_global_cov_logdet = np.linalg.slogdet(self.compressed_global_cov)[1]
+
+        ### Metadata ###
+        self.ndim_compressed = self._cca_vals.size
+
+        print(f'INFO: CCA compression initialized.') 
 
     def _init_compression(self, config):
 
@@ -336,7 +347,7 @@ class VegaInterface:
         if self.compression_type == 'score':
             self._score_compression()
         elif self.compression_type == 'cca':
-            self._cca_compression()
+            self._cca_compression(config)
         else:
             raise ValueError('Compression type not recognized. Choose from: [score, cca]')
 
