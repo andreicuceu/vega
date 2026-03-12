@@ -580,7 +580,16 @@ class BuildConfig:
                     fit_info['monte_carlo']['global_cov_rescale'])
 
             if 'mc_output' in fit_info['monte_carlo']:
-                config['control']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+                config['output']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+
+            if 'num_mc_mocks' in fit_info['monte_carlo']:
+                config['control']['num_mc_mocks'] = str(fit_info['monte_carlo']['num_mc_mocks'])
+
+            if 'mc_seed' in fit_info['monte_carlo']:
+                config['control']['mc_seed'] = str(fit_info['monte_carlo']['mc_seed'])
+
+            if 'run_mc_fits' in fit_info['monte_carlo']:
+                config['control']['run_mc_fits'] = str(fit_info['monte_carlo']['run_mc_fits'])
 
             config['monte carlo'] = copy.deepcopy(config['sample'])
             config['sample'] = {}
