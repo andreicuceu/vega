@@ -70,7 +70,6 @@ class CorrelationItem:
             "marginalize-match-data-bins", False)
         self.fit_marg_scales = config['model'].getboolean("fit-marginalized-scales", False)
 
-
         self.has_metals = False
         self.has_bb = False
 
@@ -225,7 +224,6 @@ class CorrelationItem:
             )
 
         if self.marginalize_match_data_bins:
-            print('set marginalization templates matching the data bins')
             rp = self.model_coordinates.rp_grid[common_idx]
             rt = self.model_coordinates.rt_grid[common_idx]
             dist_rp = self.dist_model_coordinates.rp_grid
@@ -235,26 +233,23 @@ class CorrelationItem:
             ).argmin(axis=1)
 
             unique_indices_in_data_bins = np.unique(indices_in_data_bins)
-            val = []
-            tempindex = []
-            coordindex = []
-            for i, data_idx in enumerate(unique_indices_in_data_bins):
-                model_indices = common_idx[indices_in_data_bins == data_idx]
-                val += np.ones(model_indices.size).tolist()
-                tempindex += np.repeat(i, model_indices.size).tolist()
-                coordindex += model_indices.tolist()
+            # Vectorized construction of COO data: Map each element
+            # of indices_in_data_bins to its position in unique_indices_in_data_bins
+            row_indices = np.searchsorted(unique_indices_in_data_bins, indices_in_data_bins)
+            d = np.ones(common_idx.size, dtype=float)
             templates = coo_array(
-                (val, (tempindex, coordindex)), shape=(
-                    unique_indices_in_data_bins.size, self.model_coordinates.rt_regular_grid.size)
+                (d, (row_indices, common_idx)),
+                shape=(
+                    unique_indices_in_data_bins.size,
+                    self.model_coordinates.rt_regular_grid.size,
+                )
             ).tocsr().T
         else:
             N = self.model_coordinates.rt_regular_grid.size
-            d = np.ones(common_idx.size)
+            d = np.ones(common_idx.size, dtype=float)
 
             templates = coo_array(
                 (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
             ).tocsr().T
-
-        print("marginalization templates shape=", templates.shape)
 
         return templates

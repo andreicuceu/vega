@@ -1,6 +1,5 @@
 import numpy as np
 from astropy.io import fits
-from scipy import linalg
 from scipy import sparse
 from scipy.sparse import csr_array
 
@@ -104,24 +103,22 @@ class Data:
             self._inv_masked_cov = None
 
             if not marginalize_in_fit:
-                print('add to covariance for small scale marginalization')
                 self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
             else:
-                print('do not add anything to covariance, because will fit small scale templates')
                 self.cov_marg_update = None
 
             # Construct solution matrix, G becomes an ndarray
             templates_masked = self.marg_templates[self.model_mask, :]
             G = templates_masked.T.dot(_inv_masked_cov)
+            A = templates_masked.T.dot(G.T).T
 
             if not (self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins):
                 S = np.diag(np.full(
                     ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
                 ))
-                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
-            else:
-                Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T)  # should be positive definite
+                A = A + S  # should be positive definite
 
+            Ainv = np.linalg.pinvh(A)
             # When multiplied by data - bestfit model, the below matrix will
             # give the coefficients for each template. Total marginalized model
             # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
@@ -676,9 +673,9 @@ class Data:
             if self.cholesky_masked_cov:
                 masked_cov = self.cov_mat[:, self.data_mask]
                 masked_cov = masked_cov[self.data_mask, :]
-                self._cholesky = linalg.cholesky(self._scale * masked_cov)
+                self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
             else:
-                self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
+                self._cholesky = np.linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
         if seed is not None:

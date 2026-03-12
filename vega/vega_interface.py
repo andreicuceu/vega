@@ -59,9 +59,9 @@ class VegaInterface:
         self.low_mem_mode &= global_cov_file is not None
 
         self.marginalize_in_fit = self.main_config['control'].getboolean(
-            'marginalize_in_fit', False)
+            'marginalize-in-fit', False)
         if self.marginalize_in_fit:
-            print("will do marginalize_in_fit")
+            print("Marginalizing in fit")
 
         # Initialize the individual components
         self.corr_items = {}
@@ -260,9 +260,12 @@ class VegaInterface:
                 self.models[name].PktoXi.cache_pars = None
             return 1e100
 
+        # Get marginalization coefficients
+        if return_marg_coeff or self.marginalize_in_fit:
+            marg_coeff = self.compute_marg_coeff(model_cf)
+
         if self.marginalize_in_fit:
             # Fit on the fly the template correction
-            marg_coeff = self.compute_marg_coeff(model_cf)
             for name in self.data:
                 if self.data[name].marg_templates is not None:
                     model_cf[name] += self.data[name].marg_templates.dot(marg_coeff[name])
@@ -297,10 +300,6 @@ class VegaInterface:
         assert isinstance(chi2, float)
         if not return_marg_coeff:
             return chi2
-
-        if not self.marginalize_in_fit:
-            # otherwise already computed
-            marg_coeff = self.compute_marg_coeff(model_cf)
 
         return chi2, marg_coeff
 
@@ -458,8 +457,10 @@ class VegaInterface:
     def compute_marg_coeff(self, model_cf):
         bestfit_marg_coeff = {}
         for name in self.corr_items:
-            corr_data = self.data[name]
+            if not self.data[name].marginalize_small_scales:
+                pass
 
+            corr_data = self.data[name]
             if self.monte_carlo:
                 diff = corr_data.masked_mc_mock \
                     - model_cf[name][corr_data.model_mask]
@@ -818,7 +819,7 @@ class VegaInterface:
 
                 if self.corr_items[name].marginalize_small_scales:
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
-                    if data.cov_marg_update is not None :
+                    if data.cov_marg_update is not None:
                         M1[np.ix_(wd, wd)] += data.cov_marg_update
 
                     if self.low_mem_mode:
