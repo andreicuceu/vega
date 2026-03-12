@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import copy
 
 import numpy as np
@@ -41,6 +42,10 @@ class Metals:
         self.size = corr_item.model_coordinates.rp_grid.size
         self._coordinates = corr_item.model_coordinates
         self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
+
+        # Redshift bins
+        self.zmin = corr_item.config['data'].getfloat('zmin', 0.0)
+        self.zmax = corr_item.config['data'].getfloat('zmax', 10.0)
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
@@ -417,6 +422,9 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
+        weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
@@ -551,6 +559,9 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
+        weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
