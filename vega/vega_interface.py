@@ -58,6 +58,11 @@ class VegaInterface:
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
         self.low_mem_mode &= global_cov_file is not None
 
+        self.marginalize_in_fit = self.main_config['control'].getboolean(
+            'marginalize-in-fit', False)
+        if self.marginalize_in_fit:
+            print("Marginalizing in fit")
+
         # Initialize the individual components
         self.corr_items = {}
         for path in ini_files:
@@ -99,7 +104,7 @@ class VegaInterface:
         # Initialize the data
         for name, corr_item in self.corr_items.items():
             if self._has_data:
-                self.data[name] = data.Data(corr_item)
+                self.data[name] = data.Data(corr_item, marginalize_in_fit=self.marginalize_in_fit)
             else:
                 self.data[name] = None
 
@@ -255,6 +260,16 @@ class VegaInterface:
                 self.models[name].PktoXi.cache_pars = None
             return 1e100
 
+        # Get marginalization coefficients
+        if return_marg_coeff or self.marginalize_in_fit:
+            marg_coeff = self.compute_marg_coeff(model_cf)
+
+        if self.marginalize_in_fit:
+            # Fit on the fly the template correction
+            for name in self.data:
+                if self.data[name].marg_templates is not None:
+                    model_cf[name] += self.data[name].marg_templates.dot(marg_coeff[name])
+
         # Compute chisq for the case where we use the global covariance
         if self._use_global_cov:
             if self.monte_carlo:
@@ -286,7 +301,6 @@ class VegaInterface:
         if not return_marg_coeff:
             return chi2
 
-        marg_coeff = self.compute_marg_coeff(model_cf)
         return chi2, marg_coeff
 
     def log_lik(self, params=None, direct_pk=None, return_marg_coeff=False):
@@ -443,8 +457,10 @@ class VegaInterface:
     def compute_marg_coeff(self, model_cf):
         bestfit_marg_coeff = {}
         for name in self.corr_items:
-            corr_data = self.data[name]
+            if not self.data[name].marginalize_small_scales:
+                pass
 
+            corr_data = self.data[name]
             if self.monte_carlo:
                 diff = corr_data.masked_mc_mock \
                     - model_cf[name][corr_data.model_mask]
@@ -803,7 +819,8 @@ class VegaInterface:
 
                 if self.corr_items[name].marginalize_small_scales:
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
-                    M1[np.ix_(wd, wd)] += data.cov_marg_update
+                    if data.cov_marg_update is not None:
+                        M1[np.ix_(wd, wd)] += data.cov_marg_update
 
                     if self.low_mem_mode:
                         del data.cov_marg_update

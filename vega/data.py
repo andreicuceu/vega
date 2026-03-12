@@ -1,6 +1,5 @@
 import numpy as np
 from astropy.io import fits
-from scipy import linalg
 from scipy import sparse
 from scipy.sparse import csr_array
 
@@ -28,7 +27,7 @@ class Data:
     model_coordinates = None
     data_coordinates = None
 
-    def __init__(self, corr_item):
+    def __init__(self, corr_item, marginalize_in_fit=False):
         """Read the data and initialize the coordinate grids.
 
         Parameters
@@ -95,24 +94,31 @@ class Data:
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
 
             # if not self.corr_item.low_mem_mode:
-            print('Updating covariance with marginalization templates.')
+            # print('Updating covariance with marginalization templates.')
             ntemps = self.marg_templates.shape[1]
 
             # Invert the matrix but do not save it
+            self._inv_masked_cov = None
             _inv_masked_cov = self.inv_masked_cov
             self._inv_masked_cov = None
 
-            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            if not marginalize_in_fit:
+                self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            else:
+                self.cov_marg_update = None
 
             # Construct solution matrix, G becomes an ndarray
             templates_masked = self.marg_templates[self.model_mask, :]
             G = templates_masked.T.dot(_inv_masked_cov)
+            A = templates_masked.T.dot(G.T).T
 
-            S = np.diag(np.full(
-                ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
-            ))
-            Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
+            if not (self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins):
+                S = np.diag(np.full(
+                    ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
+                ))
+                A = A + S  # should be positive definite
 
+            Ainv = np.linalg.pinvh(A)
             # When multiplied by data - bestfit model, the below matrix will
             # give the coefficients for each template. Total marginalized model
             # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
@@ -507,7 +513,8 @@ class Data:
         list
             list of all metal correlations we need to compute
         """
-        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(metal_config)
+        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
+            metal_config)
 
         self.metal_mats = {}
         self.metal_coordinates = {}
@@ -666,9 +673,9 @@ class Data:
             if self.cholesky_masked_cov:
                 masked_cov = self.cov_mat[:, self.data_mask]
                 masked_cov = masked_cov[self.data_mask, :]
-                self._cholesky = linalg.cholesky(self._scale * masked_cov)
+                self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
             else:
-                self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
+                self._cholesky = np.linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
         if seed is not None:

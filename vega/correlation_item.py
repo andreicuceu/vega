@@ -66,6 +66,8 @@ class CorrelationItem:
         if marginalize_all:
             self.marginalize_small_scales['all-rmin'] = True
 
+        self.marginalize_match_data_bins = config['model'].getboolean(
+            "marginalize-match-data-bins", False)
         self.fit_marg_scales = config['model'].getboolean("fit-marginalized-scales", False)
 
         self.has_metals = False
@@ -221,11 +223,33 @@ class CorrelationItem:
                 "based on scale cuts."
             )
 
-        N = self.model_coordinates.rt_regular_grid.size
-        d = np.ones(common_idx.size)
+        if self.marginalize_match_data_bins:
+            rp = self.model_coordinates.rp_grid[common_idx]
+            rt = self.model_coordinates.rt_grid[common_idx]
+            dist_rp = self.dist_model_coordinates.rp_grid
+            dist_rt = self.dist_model_coordinates.rt_grid
+            indices_in_data_bins = (
+                (dist_rp[None, :] - rp[:, None])**2 + (dist_rt[None, :] - rt[:, None])**2
+            ).argmin(axis=1)
 
-        templates = coo_array(
-            (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
-        ).tocsr().T
+            unique_indices_in_data_bins = np.unique(indices_in_data_bins)
+            # Vectorized construction of COO data: Map each element
+            # of indices_in_data_bins to its position in unique_indices_in_data_bins
+            row_indices = np.searchsorted(unique_indices_in_data_bins, indices_in_data_bins)
+            d = np.ones(common_idx.size, dtype=float)
+            templates = coo_array(
+                (d, (row_indices, common_idx)),
+                shape=(
+                    unique_indices_in_data_bins.size,
+                    self.model_coordinates.rt_regular_grid.size,
+                )
+            ).tocsr().T
+        else:
+            N = self.model_coordinates.rt_regular_grid.size
+            d = np.ones(common_idx.size, dtype=float)
+
+            templates = coo_array(
+                (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
+            ).tocsr().T
 
         return templates
