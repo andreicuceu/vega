@@ -26,22 +26,26 @@ class ScaleParameters:
         if self.full_shape_alpha and self.two_alpha_smooth:
             raise ValueError(
                 'The "full-shape-alpha" and "two-alpha-smooth" options are incompatible.')
+        
+        if self.metal_scaling and self.two_alpha_smooth:
+            raise ValueError(
+                'The "metal-scaling" and "two-alpha-smooth" options are incompatible.')
 
         self.parametrisation = config.get('cosmo fit func', 'ap_at')
         if self.parametrisation not in ['ap_at', 'aiso_epsilon', 'phi_alpha']:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
-    def get_ap_at(self, params, metal_corr=False, corr_name=None):
+    def get_ap_at(self, params, corr_name=None, metal_corr=False):
         """Main compute function for extracting the right ap/at
 
         Parameters
         ----------
         params : dict
             Computation parameters
-        metal_corr : bool, optional
-            Whether we are working with a metal correlation, by default False
         corr_name : str, optional
             Name of the correlation, by default None. Only used for the two-alpha-smooth option
+        metal_corr : bool, optional
+            Whether we are working with a metal correlation, by default False
 
 
         Returns
@@ -53,7 +57,7 @@ class ScaleParameters:
             return self.default()
 
         if self.full_shape:
-            return self.get_fullshape_params(params, corr_name)
+            return self.get_fullshape_params(params, corr_name, )
         elif params['peak']:
             return self.get_bao_params(params)
         elif self.smooth_scaling:
