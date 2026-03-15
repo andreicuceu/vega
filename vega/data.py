@@ -118,7 +118,7 @@ class Data:
                 ))
                 A = A + S  # should be positive definite
 
-            Ainv = np.linalg.pinvh(A)
+            Ainv = np.linalg.inv(A)
             # When multiplied by data - bestfit model, the below matrix will
             # give the coefficients for each template. Total marginalized model
             # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))

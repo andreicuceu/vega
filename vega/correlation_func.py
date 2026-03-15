@@ -16,8 +16,10 @@ class CorrelationFunction:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, coordinates, scale_params,
-                 tracer1, tracer2, cosmo=None, metal_corr=False):
+    def __init__(
+        self, config, fiducial, coordinates, scale_params,
+        tracer1, tracer2, cosmo=None, metal_corr=False
+    ):
         """
 
         Parameters
@@ -44,6 +46,7 @@ class CorrelationFunction:
         self._multipole = config.getint('single_multipole', -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2
+        self._corr_name = f'{tracer1["name"]}x{tracer2["name"]}'
         self._z_eff = fiducial['z_eff']
         self._scale_params = scale_params
         self._metal_corr = metal_corr
@@ -167,7 +170,8 @@ class CorrelationFunction:
             delta_rp = params.get(self._delta_rp_name, 0.)
 
         # Get rescaled Xi coordinates
-        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
+        ap, at = self._scale_params.get_ap_at(
+            params, corr_name=self._corr_name, metal_corr=self._metal_corr)
 
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
