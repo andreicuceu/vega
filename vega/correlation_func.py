@@ -560,6 +560,7 @@ class CorrelationFunction:
 
         return correction
 
+    @staticmethod
     def compute_shotnoise_A(ntau=100, nrho=10000):
         # compute function of Eq. 19 of Gontcho A Gontcho et al, arxiv:1404.7425
         tau = np.linspace(0.01, 5, ntau)
