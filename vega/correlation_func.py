@@ -584,7 +584,8 @@ class CorrelationFunction:
         )
 
     def compute_uv_shotnoise(self, params, rescaled_r, rescaled_mu):
-        amp = params["uv_shotnoise_amp"]
+        shotnoise_amp = params["uv_shotnoise_amp"]
+        bias_gamma = params["bias_gamma"]
         # lambda0 = 1/kappa0 is the mean free path of ionizing photons
         # in Gontcho A Gontcho et al, arxiv:1404.7425
         lambda_uv = params["lambda_uv"]
@@ -595,4 +596,4 @@ class CorrelationFunction:
         else:
             r = self._r
 
-        return amp * self.uv_A(r / lambda_uv)
+        return bias_gamma**2 / lambda_uv**2 * shotnoise_amp / r * self.uv_A(r / lambda_uv)
