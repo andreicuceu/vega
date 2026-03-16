@@ -149,9 +149,9 @@ class CorrelationFunction:
         # Add standard asymmetry
         if self.asymmetry_flag:
             xi += self.compute_xi_asymmetry(pk_lin, PktoXi_obj, params)
-        
+
         # Add UV shotnoise
-        if self.uv_shotnoise_flag:
+        if self.uv_shotnoise_flag and self._tracer1['name'] == self._tracer2['name']:
             xi += self.compute_uv_shotnoise(params, rescaled_r, rescaled_mu)
 
         return xi
