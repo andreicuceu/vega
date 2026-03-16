@@ -26,7 +26,7 @@ class ScaleParameters:
         if self.full_shape_alpha and self.two_alpha_smooth:
             raise ValueError(
                 'The "full-shape-alpha" and "two-alpha-smooth" options are incompatible.')
-        
+
         if self.metal_scaling and self.two_alpha_smooth:
             raise ValueError(
                 'The "metal-scaling" and "two-alpha-smooth" options are incompatible.')

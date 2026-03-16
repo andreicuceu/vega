@@ -457,7 +457,7 @@ class VegaInterface:
     def compute_marg_coeff(self, model_cf):
         bestfit_marg_coeff = {}
         for name in self.corr_items:
-            if not self.data[name].marginalize_small_scales:
+            if not self.corr_items[name].marginalize_small_scales:
                 pass
 
             corr_data = self.data[name]
