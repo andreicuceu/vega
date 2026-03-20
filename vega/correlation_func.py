@@ -589,7 +589,15 @@ class CorrelationFunction:
         # lambda0 = 1/kappa0 is the mean free path of ionizing photons
         # in Gontcho A Gontcho et al, arxiv:1404.7425
         lambda_uv = params["lambda_uv"]
-        bias_gamma = params["bias_gamma"]
+        if 'bias_gamma' in params:
+            bias_gamma = params["bias_gamma"]
+        elif 'bias_gamma_e' in params:
+            bias_gamma = params["bias_gamma_e"]
+        else:
+            raise ValueError(
+                "You asked for UV shotnoise, but bias_gamma or bias_gamma_e is"
+                " not in the parameters."
+            )
 
         # r (before distortion)
         if self._rescale_coords_systematics:
