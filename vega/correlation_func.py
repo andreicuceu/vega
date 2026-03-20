@@ -589,6 +589,7 @@ class CorrelationFunction:
         # lambda0 = 1/kappa0 is the mean free path of ionizing photons
         # in Gontcho A Gontcho et al, arxiv:1404.7425
         lambda_uv = params["lambda_uv"]
+        bias_gamma = params["bias_gamma"]
 
         # r (before distortion)
         if self._rescale_coords_systematics:
@@ -596,4 +597,4 @@ class CorrelationFunction:
         else:
             r = self._r
 
-        return shotnoise_amp / r * self.uv_A(r / lambda_uv)
+        return bias_gamma**2 * shotnoise_amp * lambda_uv / r * self.uv_A(r / lambda_uv)
