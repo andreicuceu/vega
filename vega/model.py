@@ -4,6 +4,19 @@ from . import correlation_func as corr_func
 from . import metals
 from . import broadband_poly
 
+import numpy as np
+# from scipy.special import expn
+
+# def compute_shotnoise_A(ntau=50,nrho=10000) :
+#     # compute function of Eq. 19 of Gontcho A Gontcho et al, arxiv:1404.7425
+#     tau = np.linspace(0.01,3,ntau)
+#     a   = np.zeros(tau.size)
+#     rho = np.linspace(0.0001,10,nrho)
+#     drho  = rho[1]-rho[0]
+#     for i,t in enumerate(tau) :
+#         a[i] = -np.sum(drho*np.exp(-rho)/rho*(expn(1,rho*np.sqrt(1+(t/rho)**2))-expn(1,rho*np.abs(1-t/rho))))
+#     return tau,a
+
 
 class Model:
     """
@@ -76,6 +89,10 @@ class Model:
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
 
+        # self._add_uv_shotnoise = corr_item.config['model'].getboolean('add uv shotnoise', False)
+        # self._uv_shotnoise_tau = None
+        # self._uv_shotnoise_A   = None
+
     def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
@@ -133,6 +150,10 @@ class Model:
         if self._instrumental_systematics_flag and component != 'peak':
             xi_model += self.Xi_core.compute_desi_instrumental_systematics(
                 pars, self._corr_item.data_coordinates.rp_binsize)
+
+        # # Add UV shotnoise
+        # if self._add_uv_shotnoise :
+        #     xi_model += self.compute_uv_shotnoise(pars)
 
         # Apply pre distortion broadband
         if self.broadband is not None:
@@ -206,3 +227,19 @@ class Model:
         xi_full = self._compute_model(pars, pk_full, 'full')
 
         return xi_full
+
+    # def uv_A(self,tau) :
+    #     if self._uv_shotnoise_A is None :
+    #         print("compute_shotnoise_A")
+    #         self._uv_shotnoise_tau , self._uv_shotnoise_A = compute_shotnoise_A()
+    #     return np.interp(tau,self._uv_shotnoise_tau,self._uv_shotnoise_A,left=self._uv_shotnoise_A[0],right=0)
+
+    # def compute_uv_shotnoise(self,pars) :
+    #     amp = pars["uv_shotnoise_amp"]
+    #     # lambda0 = 1/kappa0 is the mean free path of ionizing photons
+    #     # in Gontcho A Gontcho et al, arxiv:1404.7425
+    #     lambda0 = pars["uv_shotnoise_lambda0"]
+
+    #     # r (before distortion)
+    #     r = np.sqrt(self._corr_item.model_coordinates.rp_grid**2+self._corr_item.model_coordinates.rt_grid**2)
+    #     return amp*self.uv_A(r/lambda0)
