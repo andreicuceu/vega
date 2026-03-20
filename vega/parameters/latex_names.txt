@@ -15,6 +15,7 @@ growth_rate f
 bias_gamma b_\gamma
 bias_prim b'
 lambda_uv \lambda_{\rm UV}\;[{\rm Mpc/h}]
+uv_shotnoise_amp A_\mathrm{UV}^\mathrm{shot}
 bias_hcd b_{\rm HCD}
 beta_hcd \beta_{\rm HCD}
 L0_hcd L_{\rm HCD}\;[{\rm Mpc/h}]

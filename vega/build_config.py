@@ -275,6 +275,7 @@ class BuildConfig:
         if type1 == 'continuous' or type2 == 'continuous':
             if self.options['uv_background']:
                 config['model']['add uv'] = 'True'
+                config['model']['add uv shotnoise'] = 'True'
 
             if self.options['hcd_model'] is not None:
                 assert self.options['hcd_model'] in ['fvoigt', 'Rogers2018', 'sinc']
@@ -757,6 +758,7 @@ class BuildConfig:
             new_params['bias_gamma'] = get_par('bias_gamma')
             new_params['bias_prim'] = get_par('bias_prim')
             new_params['lambda_uv'] = get_par('lambda_uv')
+            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
 
         # Metals
         if self.options['metals'] is not None:
