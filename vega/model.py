@@ -76,10 +76,6 @@ class Model:
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
 
-        # self._add_uv_shotnoise = corr_item.config['model'].getboolean('add uv shotnoise', False)
-        # self._uv_shotnoise_tau = None
-        # self._uv_shotnoise_A   = None
-
     def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
@@ -137,10 +133,6 @@ class Model:
         if self._instrumental_systematics_flag and component != 'peak':
             xi_model += self.Xi_core.compute_desi_instrumental_systematics(
                 pars, self._corr_item.data_coordinates.rp_binsize)
-
-        # # Add UV shotnoise
-        # if self._add_uv_shotnoise :
-        #     xi_model += self.compute_uv_shotnoise(pars)
 
         # Apply pre distortion broadband
         if self.broadband is not None:
