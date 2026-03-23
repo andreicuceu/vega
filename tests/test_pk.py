@@ -55,7 +55,7 @@ def kaiser():
 def compute_bias_beta_uv_heii(model_config, fiducial, tracer1, tracer2, dataset_name):
     pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     params = {'bias_gamma': 0.1125, 'bias_prim': -0.66, 'lambda_uv': 300}
-    bias_uv, beat_uv = pk.compute_bias_beta_uv(-0.12, 1.6, params)
+    bias_uv, beat_uv = pk.compute_bias_beta_uv_heii(-0.12, 1.6, params)
     assert np.sum(bias_uv) == pytest.approx(-35.268497)
     assert np.sum(beat_uv) == pytest.approx(1138.77689)
 
