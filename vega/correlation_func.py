@@ -47,6 +47,8 @@ class CorrelationFunction:
         self._multipole = config.getint('single_multipole', -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2
+        self._is_auto = (
+            (self._tracer1['type'] == 'continuous') and (self._tracer2['type'] == 'continuous'))
         self._corr_name = f'{tracer1["name"]}x{tracer2["name"]}'
         self._z_eff = fiducial['z_eff']
         self._scale_params = scale_params
@@ -151,7 +153,7 @@ class CorrelationFunction:
             xi += self.compute_xi_asymmetry(pk_lin, PktoXi_obj, params)
 
         # Add UV shotnoise
-        if self.uv_shotnoise_flag and self._tracer1['name'] == self._tracer2['name']:
+        if self.uv_shotnoise_flag:
             xi += self.compute_uv_shotnoise(params, rescaled_r, rescaled_mu)
 
         return xi

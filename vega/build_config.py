@@ -63,7 +63,9 @@ class BuildConfig:
         self.options['bao_broadening'] = options.get('bao_broadening', False)
         self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
         self.options['uv_background'] = options.get('uv_background', False)
+        self.options['uv_shotnoise_cross'] = options.get('uv_shotnoise_cross', False)
         self.options['HeII_reionization'] = options.get('HeII_reionization', False)
+
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
@@ -274,9 +276,14 @@ class BuildConfig:
 
         # Things that require at least one tracer to be continuous
         if type1 == 'continuous' or type2 == 'continuous':
+
             if self.options['uv_background']:
                 config['model']['add uv'] = 'True'
-                config['model']['add uv shotnoise'] = 'True'
+
+                # UV shotnoise is added to auto by default, and to cross only with extra flag
+                if type1 == type2 or self.options['uv_shotnoise_cross']:
+                    config['model']['add uv shotnoise'] = 'True'
+
             if self.options['HeII_reionization']:
                 config['model']['add HeII'] = 'True'
 
