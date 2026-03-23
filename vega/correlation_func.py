@@ -105,8 +105,8 @@ class CorrelationFunction:
         self.uv_shotnoise_flag = False
         self._uv_shotnoise_tau = None
         self._uv_shotnoise_A = None
-        if 'add uv shotnoise' in self._config:
-            self.uv_shotnoise_flag = self._config.getboolean('add uv shotnoise')
+        if 'UVB-shotnoise' in self._config:
+            self.uv_shotnoise_flag = self._config.getboolean('UVB-shotnoise')
             self._uv_shotnoise_tau, self._uv_shotnoise_A = self.compute_shotnoise_A()
 
         # Place holder for interpolation function for DESI intrumental systematics

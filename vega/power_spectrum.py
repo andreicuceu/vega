@@ -50,8 +50,8 @@ class PowerSpectrum:
 
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
-        self._add_uv = self._config.getboolean('add uv', False)
-        self._add_heii = self._config.getboolean('add HeII', False)
+        self._add_uvb = self._config.getboolean('UVB-fluctuations', False)
+        self._add_heii = self._config.getboolean('HeII-reionization', False)
 
         # Check the HCD model
         self._Fvoigt_data = None
@@ -104,8 +104,8 @@ class PowerSpectrum:
         bias_beta = utils.bias_beta(params, self.tracer1_name, self.tracer2_name)
         bias1, beta1, bias2, beta2 = bias_beta
 
-        # Add UV model
-        if self._add_uv or self._add_heii:
+        # Add UVB fluctuations and HeII reionization models
+        if self._add_uvb or self._add_heii:
             if self.tracer1_name == 'LYA':
                 bias1, beta1 = self.compute_bias_beta_uv_heii(bias1, beta1, params)
             if self.tracer2_name == 'LYA':
@@ -219,7 +219,7 @@ class PowerSpectrum:
         """
         bias_eff = bias
 
-        if self._add_uv:
+        if self._add_uvb:
             bias_gamma = params["bias_gamma"]
             bias_prim = params["bias_prim"]
             lambda_uv = params["lambda_uv"]

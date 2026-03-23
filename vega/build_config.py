@@ -62,9 +62,9 @@ class BuildConfig:
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
         self.options['bao_broadening'] = options.get('bao_broadening', False)
         self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
-        self.options['uv_background'] = options.get('uv_background', False)
-        self.options['uv_shotnoise_cross'] = options.get('uv_shotnoise_cross', False)
-        self.options['HeII_reionization'] = options.get('HeII_reionization', False)
+        self.options['UVB-fluctuations'] = options.get('UVB-fluctuations', False)
+        self.options['UVB-SN-cross'] = options.get('UVB-SN-cross', False)
+        self.options['HeII-reionization'] = options.get('HeII-reionization', False)
 
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
@@ -277,15 +277,15 @@ class BuildConfig:
         # Things that require at least one tracer to be continuous
         if type1 == 'continuous' or type2 == 'continuous':
 
-            if self.options['uv_background']:
-                config['model']['add uv'] = 'True'
+            if self.options['UVB-fluctuations']:
+                config['model']['UVB-fluctuations'] = 'True'
 
                 # UV shotnoise is added to auto by default, and to cross only with extra flag
-                if type1 == type2 or self.options['uv_shotnoise_cross']:
-                    config['model']['add uv shotnoise'] = 'True'
+                if type1 == type2 or self.options['UVB-SN-cross']:
+                    config['model']['UVB-shotnoise'] = 'True'
 
-            if self.options['HeII_reionization']:
-                config['model']['add HeII'] = 'True'
+            if self.options['HeII-reionization']:
+                config['model']['HeII-reionization'] = 'True'
 
             if self.options['hcd_model'] is not None:
                 assert self.options['hcd_model'] in ['fvoigt', 'Rogers2018', 'sinc']
