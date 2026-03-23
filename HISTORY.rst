@@ -2,6 +2,12 @@
 History
 =======
 
+1.7.0 (2026-03-23)
+------------------
+* Added UVB shotnoise and HeII reionization models
+* Updated some flag names for consistency
+* Added support for the redshift bin analysis
+
 1.6.3 (2026-03-11)
 ------------------
 * Added new options for small-scale marginalization:
