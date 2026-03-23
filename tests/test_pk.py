@@ -52,10 +52,10 @@ def kaiser():
     assert beta2 == pytest.approx(0.97 / 3.7)
 
 
-def compute_bias_beta_uv(model_config, fiducial, tracer1, tracer2, dataset_name):
+def compute_bias_beta_uv_heii(model_config, fiducial, tracer1, tracer2, dataset_name):
     pk = PowerSpectrum(model_config, fiducial, tracer1, tracer2, dataset_name)
     params = {'bias_gamma': 0.1125, 'bias_prim': -0.66, 'lambda_uv': 300}
-    bias_uv, beat_uv = pk.compute_bias_beta_uv(-0.12, 1.6, params)
+    bias_uv, beat_uv = pk.compute_bias_beta_uv_heii(-0.12, 1.6, params)
     assert np.sum(bias_uv) == pytest.approx(-35.268497)
     assert np.sum(beat_uv) == pytest.approx(1138.77689)
 
@@ -198,19 +198,19 @@ def auto_pk(fiducial):
     assert np.mean(pk_metals) == pytest.approx(1228.9847366)
 
     model_config['model-hcd'] = 'Rogers'
-    model_config['add uv'] = 'True'
+    model_config['UVB-fluctuations'] = 'True'
     model_config['fvoigt_model'] = 'exp'
     model_config['small scale nl'] = 'arinyo'  # mcdonald
     model_config['fullshape smoothing'] = 'gauss'  # exp
 
-    compute_bias_beta_uv(model_config, fiducial, tracer1, tracer2, dataset_name)
+    compute_bias_beta_uv_heii(model_config, fiducial, tracer1, tracer2, dataset_name)
     compute_bias_beta_hcd(model_config, fiducial, tracer1, tracer2, dataset_name)
     compute_peak_nl(model_config, fiducial, tracer1, tracer2, dataset_name)
     compute_dnl(model_config, fiducial, tracer1, tracer2, dataset_name)
     compute_fullshape_smoothing(model_config, fiducial, tracer1, tracer2, dataset_name)
 
     model_config['model-hcd'] = 'Rogers'
-    model_config['add uv'] = 'True'
+    model_config['UVB-fluctuations'] = 'True'
     model_config['fvoigt_model'] = 'exp'
     model_config['small scale nl'] = 'arinyo'  # mcdonald
     model_config['fullshape smoothing'] = 'gauss'  # exp
@@ -243,7 +243,7 @@ def cross_pk(fiducial):
     model_config['bin_size_rt'] = '4'
     model_config['num_bins_muk'] = '1000'
     model_config['model-hcd'] = 'Rogers'
-    model_config['add uv'] = 'True'
+    model_config['UVB-fluctuations'] = 'True'
     model_config['fvoigt_model'] = 'exp'
     model_config['fullshape smoothing'] = 'gauss'  # exp
     model_config['velocity dispersion'] = 'lorentz'  # gauss

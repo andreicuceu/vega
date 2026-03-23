@@ -62,7 +62,10 @@ class BuildConfig:
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
         self.options['bao_broadening'] = options.get('bao_broadening', False)
         self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
-        self.options['uv_background'] = options.get('uv_background', False)
+        self.options['UVB-fluctuations'] = options.get('UVB-fluctuations', False)
+        self.options['UVB-SN-cross'] = options.get('UVB-SN-cross', False)
+        self.options['HeII-reionization'] = options.get('HeII-reionization', False)
+
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
@@ -90,6 +93,8 @@ class BuildConfig:
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
+        self.options['zmin'] = options.get('zmin', 0.0)
+        self.options['zmax'] = options.get('zmax', 10.0)
 
         metals = options.get('metals', None)
         if metals is not None:
@@ -271,8 +276,16 @@ class BuildConfig:
 
         # Things that require at least one tracer to be continuous
         if type1 == 'continuous' or type2 == 'continuous':
-            if self.options['uv_background']:
-                config['model']['add uv'] = 'True'
+
+            if self.options['UVB-fluctuations']:
+                config['model']['UVB-fluctuations'] = 'True'
+
+                # UV shotnoise is added to auto by default, and to cross only with extra flag
+                if type1 == type2 or self.options['UVB-SN-cross']:
+                    config['model']['UVB-shotnoise'] = 'True'
+
+            if self.options['HeII-reionization']:
+                config['model']['HeII-reionization'] = 'True'
 
             if self.options['hcd_model'] is not None:
                 assert self.options['hcd_model'] in ['fvoigt', 'Rogers2018', 'sinc']
@@ -299,6 +312,8 @@ class BuildConfig:
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
                     config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
+                    config['data']['zmin'] = str(self.options.get('zmin'))
+                    config['data']['zmax'] = str(self.options.get('zmax'))
 
                     config['metal-matrix'] = {}
                     config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
@@ -576,7 +591,16 @@ class BuildConfig:
                     fit_info['monte_carlo']['global_cov_rescale'])
 
             if 'mc_output' in fit_info['monte_carlo']:
-                config['control']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+                config['output']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+
+            if 'num_mc_mocks' in fit_info['monte_carlo']:
+                config['control']['num_mc_mocks'] = str(fit_info['monte_carlo']['num_mc_mocks'])
+
+            if 'mc_seed' in fit_info['monte_carlo']:
+                config['control']['mc_seed'] = str(fit_info['monte_carlo']['mc_seed'])
+
+            if 'run_mc_fits' in fit_info['monte_carlo']:
+                config['control']['run_mc_fits'] = str(fit_info['monte_carlo']['run_mc_fits'])
 
             config['monte carlo'] = copy.deepcopy(config['sample'])
             config['sample'] = {}
@@ -744,6 +768,13 @@ class BuildConfig:
             new_params['bias_gamma'] = get_par('bias_gamma')
             new_params['bias_prim'] = get_par('bias_prim')
             new_params['lambda_uv'] = get_par('lambda_uv')
+            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
+
+        if self.options['HeII_reionization']:
+            new_params['bias_gamma_e'] = get_par('bias_gamma_e')
+            new_params['bias_prim'] = get_par('bias_prim')
+            new_params['lambda_HeII'] = get_par('lambda_HeII')
+            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
 
         # Metals
         if self.options['metals'] is not None:

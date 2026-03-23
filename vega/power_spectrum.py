@@ -50,7 +50,8 @@ class PowerSpectrum:
 
         # Get the HCD model and check for UV
         self.hcd_model = self._config.get('model-hcd', None)
-        self._add_uv = self._config.getboolean('add uv', False)
+        self._add_uvb = self._config.getboolean('UVB-fluctuations', False)
+        self._add_heii = self._config.getboolean('HeII-reionization', False)
 
         # Check the HCD model
         self._Fvoigt_data = None
@@ -103,12 +104,12 @@ class PowerSpectrum:
         bias_beta = utils.bias_beta(params, self.tracer1_name, self.tracer2_name)
         bias1, beta1, bias2, beta2 = bias_beta
 
-        # Add UV model
-        if self._add_uv:
+        # Add UVB fluctuations and HeII reionization models
+        if self._add_uvb or self._add_heii:
             if self.tracer1_name == 'LYA':
-                bias1, beta1 = self.compute_bias_beta_uv(bias1, beta1, params)
+                bias1, beta1 = self.compute_bias_beta_uv_heii(bias1, beta1, params)
             if self.tracer2_name == 'LYA':
-                bias2, beta2 = self.compute_bias_beta_uv(bias2, beta2, params)
+                bias2, beta2 = self.compute_bias_beta_uv_heii(bias2, beta2, params)
 
         # Add HCD model
         if self.hcd_model is not None:
@@ -199,8 +200,8 @@ class PowerSpectrum:
             pk *= bias1 * bias2
         return pk
 
-    def compute_bias_beta_uv(self, bias, beta, params):
-        """ Compute effective biases that include UV modeling.
+    def compute_bias_beta_uv_heii(self, bias, beta, params):
+        """ Compute effective biases that include UV and helium reionization modeling.
 
         Parameters
         ----------
@@ -216,13 +217,25 @@ class PowerSpectrum:
         (float, float)
             Effective bias and beta
         """
-        bias_gamma = params["bias_gamma"]
-        bias_prim = params["bias_prim"]
-        lambda_uv = params["lambda_uv"]
+        bias_eff = bias
 
-        W = np.arctan(self.k_grid * lambda_uv) / (self.k_grid * lambda_uv)
-        beta_eff = beta / (1 + bias_gamma / bias * W / (1 + bias_prim * W))
-        bias_eff = bias + bias_gamma * W / (1 + bias_prim * W)
+        if self._add_uvb:
+            bias_gamma = params["bias_gamma"]
+            bias_prim = params["bias_prim"]
+            lambda_uv = params["lambda_uv"]
+
+            W = np.arctan(self.k_grid * lambda_uv) / (self.k_grid * lambda_uv)
+            bias_eff += bias_gamma * W / (1 + bias_prim * W)
+
+        if self._add_heii:
+            bias_gamma_e = params["bias_gamma_e"]
+            bias_prim = params["bias_prim"]
+            lambda_heii = params["lambda_HeII"]
+
+            W = np.arctan(self.k_grid * lambda_heii) / (self.k_grid * lambda_heii)
+            bias_eff += bias_gamma_e * W / (1 + bias_prim * W)
+
+        beta_eff = beta * bias / bias_eff
 
         return bias_eff, beta_eff
 
