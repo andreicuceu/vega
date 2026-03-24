@@ -174,7 +174,7 @@ class Output:
                 ),
                 fits.Column(
                     name=name+'_VAR', format='D',
-                    array=self.pad_array(self.data[name].cov_mat.variance, num_rows)
+                    array=self.pad_array(self.data[name].variance, num_rows)
                 )
             ]
 
