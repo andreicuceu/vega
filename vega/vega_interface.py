@@ -56,7 +56,7 @@ class VegaInterface:
         global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
         self.apply_global_hartlap = self.main_config['data sets'].getboolean(
             'apply-global-hartlap', False)
-        self._precival_corr = 1.0
+        self._percival_corr = 1.0
 
         self.model_pk = self.main_config['control'].getboolean('model_pk', False)
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
@@ -559,7 +559,7 @@ class VegaInterface:
         -------
         float
         """
-        return self._precival_corr
+        return self._percival_corr
 
     @property
     def bestfit(self):
@@ -838,10 +838,10 @@ class VegaInterface:
         if self.apply_global_hartlap:
             ndata = np.sum(self.full_data_mask)
             hartlap = (nsamples - 1) / (nsamples - ndata - 2)
-            self._precival_corr = utils.percival_correction(
+            self._percival_corr = utils.percival_correction(
                 nsamples, ndata, len(self.sample_params['limits']))
             print(f"Applying global Hartlap factor: C x {hartlap:.2f}. "
-                  f"Percival correction is {self._precival_corr:.2f}. "
+                  f"Percival correction is {self._percival_corr:.2f}. "
                   "This needs to be manually applied to the parameter cov.!")
 
             if hartlap <= 0:
