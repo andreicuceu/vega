@@ -122,8 +122,13 @@ class Output:
         hdul.writeto(Path(self.outfile), overwrite=self.overwrite)
 
     @staticmethod
-    def pad_array(array, size_to_match, pad_value=-1):
-        # Nan cannot represented in integer arrays
+    def pad_array(array, size_to_match, pad_value=None):
+        # Use NaN for floating-point arrays and -1 for integer arrays by default
+        if pad_value is None:
+            if np.issubdtype(array.dtype, np.floating):
+                pad_value = np.nan
+            else:
+                pad_value = -1
         return np.pad(array, (0, size_to_match - len(array)), constant_values=pad_value)
 
     def _model_hdus(self, corr_funcs, params, bestfit_corr_stats=None):
