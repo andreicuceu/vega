@@ -764,13 +764,13 @@ class BuildConfig:
             new_params['qso_rad_decrease'] = get_par('qso_rad_decrease')
 
         # UV background parameters
-        if self.options['uv_background']:
+        if self.options['UVB-fluctuations']:
             new_params['bias_gamma'] = get_par('bias_gamma')
             new_params['bias_prim'] = get_par('bias_prim')
             new_params['lambda_uv'] = get_par('lambda_uv')
             new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
 
-        if self.options['HeII_reionization']:
+        if self.options['HeII-reionization']:
             new_params['bias_gamma_e'] = get_par('bias_gamma_e')
             new_params['bias_prim'] = get_par('bias_prim')
             new_params['lambda_HeII'] = get_par('lambda_HeII')
