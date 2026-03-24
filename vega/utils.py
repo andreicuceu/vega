@@ -13,14 +13,14 @@ import vega
 CACHE_SMOOTHING = LRUCache(128)
 
 BLIND_FIXED_PARS = [
-    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full', 'alpha_full'
+    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full',  # 'alpha_full'
 ]
 
 # Dictionary with blinded parameters and the tracers for which they are blinded
 VEGA_BLINDED_PARS = {
     'phi_smooth': ['all'],
     'growth_rate': ['all'],
-    'alpha_smooth': ['all'],
+    # 'alpha_smooth': ['all'],
 }
 
 
@@ -343,7 +343,7 @@ def get_blinding(blind_pars, blinding_strat):
 
     if ('ap' in blind_pars) or ('at' in blind_pars) or ('alpha' in blind_pars):
         blinding_type = 'bao'
-    elif ('growth' in blind_pars) or ('phi_smooth' in blind_pars):
+    elif ('growth_rate' in blind_pars) or ('phi_smooth' in blind_pars):
         blinding_type = 'full-shape'
     else:
         raise ValueError(f'No blinding implemented for parameters {blind_pars}')
@@ -356,6 +356,7 @@ def get_blinding(blind_pars, blinding_strat):
         },
         'desi_y3': {
             'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_16_06_2025.npz',
+            'bao': None
         }
     }
 

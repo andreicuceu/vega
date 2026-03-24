@@ -25,20 +25,32 @@ class ScaleParameters:
         self.full_shape_alpha = config.getboolean('full-shape-alpha', False)
         self.smooth_scaling = config.getboolean('smooth-scaling', False)
         self.metal_scaling = config.getboolean('metal-scaling', False)
+        self.two_alpha_smooth = config.getboolean('two-alpha-smooth', False)
+
+        if self.full_shape_alpha and self.two_alpha_smooth:
+            raise ValueError(
+                'The "full-shape-alpha" and "two-alpha-smooth" options are incompatible.')
+
+        if self.metal_scaling and self.two_alpha_smooth:
+            raise ValueError(
+                'The "metal-scaling" and "two-alpha-smooth" options are incompatible.')
 
         self.parametrisation = config.get('cosmo fit func', 'ap_at')
         if self.parametrisation not in ScaleParameters._parametrisations:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
-    def get_ap_at(self, params, metal_corr=False):
+    def get_ap_at(self, params, corr_name=None, metal_corr=False):
         """Main compute function for extracting the right ap/at
 
         Parameters
         ----------
         params : dict
             Computation parameters
+        corr_name : str, optional
+            Name of the correlation, by default None. Only used for the two-alpha-smooth option
         metal_corr : bool, optional
             Whether we are working with a metal correlation, by default False
+
 
         Returns
         -------
@@ -49,11 +61,11 @@ class ScaleParameters:
             return self.default()
 
         if self.full_shape:
-            return self.fullshape_ap_at(params)
+            return self.get_fullshape_params(params, corr_name, )
         elif params['peak']:
-            return self.standard_ap_at(params)
+            return self.get_bao_params(params)
         elif self.smooth_scaling:
-            return self.fullshape_ap_at(params)
+            return self.get_fullshape_params(params, corr_name)
 
         return self.default()
 
@@ -68,9 +80,8 @@ class ScaleParameters:
         """
         return 1., 1.
 
-    def standard_ap_at(self, params):
-        """Standard ap/at naming. Used for the peak component in BAO studies,
-        or for the full-shape if that option is True.
+    def get_bao_params(self, params):
+        """Used for the peak component in both BAO and full-shape fits.
 
         Parameters
         ----------
@@ -83,7 +94,7 @@ class ScaleParameters:
             alpha parallel, alpha transverse
         """
         if self.parametrisation == 'ap_at':
-            return params['ap'], params['at']
+            return self.ap_at(params)
         elif self.parametrisation == 'aiso_epsilon':
             return self.aiso_epsilon(params)
         elif self.parametrisation == 'phi_alpha':
@@ -93,7 +104,7 @@ class ScaleParameters:
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
-    def fullshape_ap_at(self, params):
+    def get_fullshape_params(self, params, corr_name=None):
         """Full-shape ap/at naming. If full-shape-alpha is False it only works with the
         phi_alpha parametrisation.
 
@@ -101,6 +112,8 @@ class ScaleParameters:
         ----------
         params : dict
             Computation parameters
+        corr_name : str, optional
+            Name of the correlation, by default None. Only used for the two-alpha-smooth option
 
         Returns
         -------
@@ -112,41 +125,86 @@ class ScaleParameters:
                              'Set full-shape-alpha to True for other parametrisations.')
 
         if self.parametrisation == 'ap_at':
-            return params['ap_full'], params['at_full']
+            return self.ap_at(params, ap_name='ap_full', at_name='at_full')
 
         elif self.parametrisation == 'aiso_epsilon':
-            return self.aiso_epsilon(params, name_addon='_full')
+            return self.aiso_epsilon(params, aiso_name='aiso_full', epsilon_name='epsilon_full')
 
         elif self.parametrisation == 'phi_alpha':
-            if self.full_shape:
-                name_addon = '_full'
-            else:
-                assert self.smooth_scaling
-                name_addon = '_smooth'
-
-            return self.phi_alpha(params, name_addon, self.full_shape_alpha)
+            return self.get_fullshape_phi_alpha(params, corr_name)
 
         else:
             raise ValueError('Unknown parametrisation {}.'.format(self.parametrisation))
 
-    @staticmethod
-    def aiso_epsilon(params, name_addon=''):
-        """Compute alpha_isotropic / epsilon parametrisation, and return ap/at.
+    def get_fullshape_phi_alpha(self, params, corr_name=None):
+        """Full-shape phi/alpha parametrisation. If two-alpha-smooth is False it only works with the
+        peak component.
 
         Parameters
         ----------
         params : dict
             Computation parameters
-        name_addon : str, optional
-            Name addon for full shape, by default ''
+        corr_name : str, optional
+            Name of the correlation, by default None. Only used for the two-alpha-smooth option
 
         Returns
         -------
         float, float
             alpha parallel, alpha transverse
         """
-        aiso = params['aiso' + name_addon]
-        epsilon = params['epsilon' + name_addon]
+        phi_name = 'phi_full' if self.full_shape else 'phi_smooth'
+
+        if self.full_shape_alpha:
+            alpha_name = 'alpha_full'
+        elif params['peak']:
+            alpha_name = 'alpha'
+        elif self.two_alpha_smooth:
+            alpha_name = f'alpha_smooth_{corr_name}'
+        else:
+            alpha_name = 'alpha_smooth'
+
+        return self.phi_alpha(params, phi_name=phi_name, alpha_name=alpha_name)
+
+    @staticmethod
+    def ap_at(params, ap_name='ap', at_name='at'):
+        """Return alpha parallel and alpha transverse from parameters.
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+        ap_name : str, optional
+            Name of the alpha parallel parameter, by default 'ap'
+        at_name : str, optional
+            Name of the alpha transverse parameter, by default 'at'
+
+        Returns
+        -------
+        float, float
+            alpha parallel, alpha transverse
+        """
+        return params[ap_name], params[at_name]
+
+    @staticmethod
+    def aiso_epsilon(params, aiso_name='aiso', epsilon_name='epsilon'):
+        """Compute alpha_isotropic / epsilon parametrisation, and return ap/at.
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+        aiso_name : str, optional
+            Name of the isotropic alpha parameter, by default 'aiso'
+        epsilon_name : str, optional
+            Name of the epsilon parameter, by default 'epsilon'
+
+        Returns
+        -------
+        float, float
+            alpha parallel, alpha transverse
+        """
+        aiso = params[aiso_name]
+        epsilon = params[epsilon_name]
         ap = aiso * (1 + epsilon)**2
         at = aiso / (1 + epsilon)
 
@@ -162,7 +220,7 @@ class ScaleParameters:
         return ap, at
 
     @staticmethod
-    def phi_alpha(params, name_addon='', fullshape_alpha=False):
+    def phi_alpha(params, phi_name='phi', alpha_name='alpha'):
         """Compute phi / alpha parametrisation, and return ap/at.
         See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
 
@@ -170,26 +228,18 @@ class ScaleParameters:
         ----------
         params : dict
             Computation parameters
-        name_addon : str, optional
-            Name addon for full shape or smooth scaling, by default ''
-        fullshape_alpha : bool, optional
-            Whether to have only one isotropic alpha for the full shape, by default False
+        phi_name : str, optional
+            Name of the phi parameter, by default 'phi'
+        alpha_name : str, optional
+            Name of the alpha parameter, by default 'alpha'
 
         Returns
         -------
         float, float
             alpha parallel, alpha transverse
         """
-        phi = params['phi' + name_addon]
-
-        if name_addon == '_full' and not fullshape_alpha:
-            if params['peak']:
-                alpha = params['alpha']
-            else:
-                alpha = params['alpha_smooth']
-        else:
-            alpha = params['alpha' + name_addon]
-
+        phi = params[phi_name]
+        alpha = params[alpha_name]
         ap = alpha / np.sqrt(phi)
         at = alpha * np.sqrt(phi)
         return ap, at

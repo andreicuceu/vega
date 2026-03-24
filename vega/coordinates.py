@@ -5,7 +5,7 @@ class Coordinates:
     def get_mask_to_other(self, other):
         raise NotImplementedError
 
-    def get_mask_scale_cuts(self, cuts_config):
+    def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
         """Build mask to apply scale cuts
 
         Parameters
@@ -20,10 +20,10 @@ class Coordinates:
         """
         # Read the cuts
         rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-        rp_max_cut = cuts_config.getfloat('rp-max', 200.)
+        rp_max_cut = cuts_config.getfloat('rp-max', 300.)
 
         rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-        rt_max_cut = cuts_config.getfloat('rt-max', 200.)
+        rt_max_cut = cuts_config.getfloat('rt-max', 300.)
 
         r_min_cut = cuts_config.getfloat('r-min', 10.)
         r_max_cut = cuts_config.getfloat('r-max', 180.)
@@ -31,10 +31,50 @@ class Coordinates:
         mu_min_cut = cuts_config.getfloat('mu-min', -1.)
         mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
-        mask = (self.rp_regular_grid > rp_min_cut) & (self.rp_regular_grid < rp_max_cut)
-        mask &= (self.rt_regular_grid > rt_min_cut) & (self.rt_regular_grid < rt_max_cut)
-        mask &= (self.r_regular_grid > r_min_cut) & (self.r_regular_grid < r_max_cut)
+        mask = (self.rp_regular_grid > rp_min_cut) & (self.rt_regular_grid > rt_min_cut)
+        mask &= (self.r_regular_grid > r_min_cut)
+
+        if small_scale_mask:
+            return mask
+
+        mask &= (self.rp_regular_grid < rp_max_cut) & (self.rt_regular_grid < rt_max_cut)
+        mask &= (self.r_regular_grid < r_max_cut)
         mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
+
+        return mask
+
+    def get_mask_marginalization_scales(self, cuts_config, marginalization_cuts):
+        """Build mask to for bins that are marginalized
+
+        Parameters
+        ----------
+        marginalization_cuts : dict
+            Dictionary with the small-scale marginalization cuts
+
+        Returns
+        -------
+        Array
+            Mask
+        """
+        mask = np.ones_like(self.rp_regular_grid, dtype=bool)
+
+        if 'rtmax' in marginalization_cuts:
+            rtmax = marginalization_cuts['rtmax']
+            mask &= self.rt_regular_grid < rtmax
+        if 'rtmin' in marginalization_cuts:
+            rtmin = marginalization_cuts['rtmin']
+            mask &= self.rt_regular_grid > rtmin
+        if 'rpmax' in marginalization_cuts:
+            rpmax = marginalization_cuts['rpmax']
+            mask &= np.abs(self.rp_regular_grid) < rpmax
+        if 'rpmin' in marginalization_cuts:
+            rpmin = marginalization_cuts['rpmin']
+            mask &= np.abs(self.rp_regular_grid) > rpmin
+
+        if 'all-rmin' in marginalization_cuts:
+            mask = ~self.get_mask_scale_cuts(
+                cuts_config, small_scale_mask=True
+            )
 
         return mask
 

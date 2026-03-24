@@ -2,6 +2,51 @@
 History
 =======
 
+1.7.1 (2026-03-24)
+------------------
+* Minor bug fix in ConfigBuilder
+
+1.7.0 (2026-03-23)
+------------------
+* Added UVB shotnoise and HeII reionization models
+* Updated some flag names for consistency
+* Added support for the redshift bin analysis
+
+1.6.3 (2026-03-11)
+------------------
+* Added new options for small-scale marginalization:
+    - Option to fit the marginalized bins
+    - Option to marginalize over data bins instead of model bins
+    - Option to fit marginalized parameters at every step of the likelihood instead of marginalizing in the covariance matrix.
+
+1.6.2 (2026-03-04)
+------------------
+* Updates and improvements to the small-scale marginaliztion functionality
+* Improvements to the sampler performance
+* Add SSM parameters as derived parameters in PolyChord
+
+1.6.1 (2026-02-23)
+------------------
+* Unblind DR2 alpha_smooth parameter
+* Add support for alpha_full analyses while phi is still fitted separately
+* Some minor fixes to the low memory mode for sampler runs
+
+1.6.0 (2026-01-06)
+------------------
+* Add analytic marginalization over small-scale marginalization parameters
+
+1.5.1 (2025-11-24)
+------------------
+* Fix bug with QSO-metal computation of metal matrices
+
+1.5.0 (2025-11-21)
+------------------
+* Optimize metal computation by caching more correlations
+* Added small scale marginalization for distorted analyses
+* Add option for k^n smoothing to match EFT behavior
+* Minor updates to the ConfigBuilder
+* Minor bug fixes
+
 1.4.2 (2025-10-01)
 ------------------
 * Unblinded DR2 CIV BAO analysis

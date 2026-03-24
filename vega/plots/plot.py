@@ -35,8 +35,8 @@ class VegaPlots:
                 cross_flag = data.tracer1['type'] != data.tracer2['type']
                 self.cross_flag[name] = cross_flag
                 self.data[name] = data.data_vec
-                if data.has_cov_mat:
-                    self.cov_mat[name] = data.cov_mat
+                if data.has_cov_mat_org:
+                    self.cov_mat[name] = data.cov_mat_org
 
                 # Initialize data coordinates
                 self.rp_setup_data[name], self.rt_setup_data[name], self.r_setup_data[name] = \

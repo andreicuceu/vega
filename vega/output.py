@@ -34,7 +34,10 @@ class Output:
         self.mc_output = config.get('mc_output', None)
         self.percival = percival
 
-    def write_results(self, corr_funcs, params, minimizer=None, scan_results=None, models=None):
+    def write_results(
+        self, corr_funcs, params, minimizer=None, bestfit_corr_stats=None,
+        scan_results=None, models=None
+    ):
         """Write results in the fits or hdf format
 
         Parameters
@@ -53,15 +56,18 @@ class Output:
             Dictionary with the Vega Model objects, by default None
         """
         if self.type == 'fits':
-            self.write_results_fits(corr_funcs, params, minimizer, scan_results, models)
+            self.write_results_fits(
+                corr_funcs, params, minimizer, bestfit_corr_stats, scan_results, models)
         elif self.type == 'hdf' or self.type == 'h5':
             self.write_results_hdf(minimizer, scan_results)
         else:
             raise ValueError('Unknown output type. Set type = fits'
                              ' or type = hdf')
 
-    def write_results_fits(self, corr_funcs, params, minimizer=None, scan_results=None,
-                           models=None):
+    def write_results_fits(
+        self, corr_funcs, params, minimizer=None, bestfit_corr_stats=None,
+        scan_results=None, models=None
+    ):
         """Write output in the fits format
 
         Parameters
@@ -84,8 +90,8 @@ class Output:
                              ' Reinitialize with a valid vega.data object.')
 
         primary_hdu = fits.PrimaryHDU()
-        model_hdu = self._model_hdu(corr_funcs, params)
-        hdu_list = [primary_hdu, model_hdu]
+        model_hdus = self._model_hdus(corr_funcs, params, bestfit_corr_stats)
+        hdu_list = [primary_hdu] + model_hdus
 
         if minimizer is not None:
             bestfit_hdu = self._bestfit_hdu(minimizer)
@@ -120,8 +126,8 @@ class Output:
         # Nan cannot represented in integer arrays
         return np.pad(array, (0, size_to_match - len(array)), constant_values=pad_value)
 
-    def _model_hdu(self, corr_funcs, params):
-        """Create HDU with the computed model correlations,
+    def _model_hdus(self, corr_funcs, params, bestfit_corr_stats=None):
+        """Create HDUs with the computed model correlations,
         and the parameters used to compute them
 
         Parameters
@@ -130,6 +136,8 @@ class Output:
             Output correlations given compute_model
         params : dict
             Computation parameters
+        bestfit_corr_stats : dict, optional
+            Dictionary with bestfit statistics for each correlation, by default None
 
         Returns
         -------
@@ -141,6 +149,7 @@ class Output:
         num_rows = np.max(list(sizes.values()))
         columns = []
         for name, cf in corr_funcs.items():
+            num_rows = len(cf)
             if len(self.data[name].data_vec) > num_rows:
                 raise ValueError('Data coordinate grid is larger than the model grid.')
 
@@ -160,7 +169,7 @@ class Output:
             ))
             columns.append(fits.Column(
                 name=name+'_VAR', format='D',
-                array=self.pad_array(self.data[name].cov_mat.diagonal(), num_rows)
+                array=self.pad_array(self.data[name].cov_mat.variance, num_rows)
             ))
 
             if not self.corr_items[name].use_multipoles:
@@ -198,15 +207,13 @@ class Output:
                 ))
 
             if self.data[name].nb is not None:
-                columns.append(fits.Column(name=name+'_NB', format='K',
-                                           array=self.pad_array(self.data[name].nb, num_rows)))
+                columns.append(fits.Column(
+                    name=name+'_NB', format='K',
+                    array=self.pad_array(self.data[name].nb, num_rows, pad_value=0)
+                ))
 
-        model_hdu = fits.BinTableHDU.from_columns(columns)
-        model_hdu.name = 'Model'
-
-        for name, size in sizes.items():
-            card_name = 'hierarch ' + name + '_size'
-            model_hdu.header[card_name] = size
+            model_hdu = fits.BinTableHDU.from_columns(columns)
+            model_hdu.name = 'MODEL_' + name
 
         for name, size in sizes_data.items():
             card_name = 'hierarch ' + name + '_datasize'
@@ -221,7 +228,22 @@ class Output:
             card_name = 'hierarch ' + par
             model_hdu.header[card_name] = val
 
-        return model_hdu
+            if bestfit_corr_stats is not None:
+                for par, val in bestfit_corr_stats[name].items():
+                    if par == 'bestfit_marg_coeff':
+                        if val is None:
+                            continue
+                        names = [f'marg_coeff_{i}' for i in range(len(val))]
+                        for coeff_name, v in zip(names, val):
+                            card_name = 'hierarch ' + coeff_name
+                            model_hdu.header[card_name] = v
+                    else:
+                        card_name = 'hierarch ' + par
+                        model_hdu.header[card_name] = val
+
+            model_hdus.append(model_hdu)
+
+        return model_hdus
 
     def _bestfit_hdu(self, minimizer):
         """Create HDU with the bestfit info
@@ -260,7 +282,7 @@ class Output:
 
         # Create the Table HDU from the columns
         bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
-        bestfit_hdu.name = 'Bestfit'
+        bestfit_hdu.name = 'BESTFIT'
 
         # Add all the attributes of the minimum to the header
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
