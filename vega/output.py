@@ -144,33 +144,34 @@ class Output:
         astropy.io.fits.hdu.table.BinTableHDU
             HDU with the model correlation
         """
-        sizes = {name: len(cf) for name, cf in corr_funcs.items()}
         sizes_data = {name: dat.full_data_size for name, dat in self.data.items()}
-        num_rows = np.max(list(sizes.values()))
-        columns = []
+        model_hdus = []
         for name, cf in corr_funcs.items():
             num_rows = len(cf)
             if len(self.data[name].data_vec) > num_rows:
                 raise ValueError('Data coordinate grid is larger than the model grid.')
 
-            columns.append(fits.Column(
-                name=name+'_MODEL', format='D', array=self.pad_array(cf, num_rows)))
-            columns.append(fits.Column(
-                name=name+'_MODEL_MASK', format='L',
-                array=self.pad_array(self.data[name].model_mask, num_rows, False)
-            ))
-            columns.append(fits.Column(
-                name=name+'_MASK', format='L',
-                array=self.pad_array(self.data[name].data_mask, num_rows, False)
-            ))
-            columns.append(fits.Column(
-                name=name+'_DATA', format='D',
-                array=self.pad_array(self.data[name].data_vec, num_rows)
-            ))
-            columns.append(fits.Column(
-                name=name+'_VAR', format='D',
-                array=self.pad_array(self.data[name].cov_mat.variance, num_rows)
-            ))
+            columns = [
+                fits.Column(
+                    name=name+'_MODEL', format='D', array=self.pad_array(cf, num_rows)
+                ),
+                fits.Column(
+                    name=name+'_MODEL_MASK', format='L',
+                    array=self.pad_array(self.data[name].model_mask, num_rows, False)
+                ),
+                fits.Column(
+                    name=name+'_MASK', format='L',
+                    array=self.pad_array(self.data[name].data_mask, num_rows, False)
+                ),
+                fits.Column(
+                    name=name+'_DATA', format='D',
+                    array=self.pad_array(self.data[name].data_vec, num_rows)
+                ),
+                fits.Column(
+                    name=name+'_VAR', format='D',
+                    array=self.pad_array(self.data[name].cov_mat.variance, num_rows)
+                )
+            ]
 
             if not self.corr_items[name].use_multipoles:
                 columns.append(fits.Column(
@@ -215,18 +216,9 @@ class Output:
             model_hdu = fits.BinTableHDU.from_columns(columns)
             model_hdu.name = 'MODEL_' + name
 
-        for name, size in sizes_data.items():
-            card_name = 'hierarch ' + name + '_datasize'
-            model_hdu.header[card_name] = size
-            if self.data[name].use_multipoles:
-                card_name = 'hierarch ' + name + '_multipoles'
-                model_hdu.header[card_name] = True
-                card_name = 'hierarch ' + name + '_nell'
-                model_hdu.header[card_name] = self.data[name].nells
-
-        for par, val in params.items():
-            card_name = 'hierarch ' + par
-            model_hdu.header[card_name] = val
+            for par, val in params.items():
+                card_name = 'hierarch ' + par
+                model_hdu.header[card_name] = val
 
             if bestfit_corr_stats is not None:
                 for par, val in bestfit_corr_stats[name].items():
@@ -240,6 +232,15 @@ class Output:
                     else:
                         card_name = 'hierarch ' + par
                         model_hdu.header[card_name] = val
+
+            for name, size in sizes_data.items():
+                card_name = 'hierarch ' + name + '_datasize'
+                model_hdu.header[card_name] = size
+                if self.data[name].use_multipoles:
+                    card_name = 'hierarch ' + name + '_multipoles'
+                    model_hdu.header[card_name] = True
+                    card_name = 'hierarch ' + name + '_nell'
+                    model_hdu.header[card_name] = self.data[name].nells
 
             model_hdus.append(model_hdu)
 
