@@ -14,7 +14,10 @@ class PowerSpectrum:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, tracer1, tracer2, dataset_name=None):
+    def __init__(
+            self, config, fiducial, tracer1, tracer2, dataset_name=None,
+            rmu_binning=False
+    ):
         """
 
         Parameters
@@ -38,12 +41,19 @@ class PowerSpectrum:
 
         self._name = dataset_name
         self.k_grid = fiducial['k']
-        self._bin_size_rp = config.getfloat('bin_size_rp')
-        self._bin_size_rt = config.getfloat('bin_size_rt')
+        self.rmu_binning = rmu_binning
         self.use_Gk = self._config.getboolean('model binning', True)
 
         self.skip_nl_model_in_peak = config.getboolean('skip-nl-model-in-peak', False)
 
+        if self.rmu_binning:
+            self._bin_size_r = config.getfloat('bin_size_r')
+            # mu smoothing does not make sense
+            # self._bin_size_mu = config.getfloat('bin_size_mu')
+        else:
+            self._bin_size_rp = config.getfloat('bin_size_rp')
+            self._bin_size_rt = config.getfloat('bin_size_rt')
+        
         # Damping scale for P(k) - used to match EFT behavior
         self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
         self.pk_damping_power = config.getint('pk-damping-power', 2)
@@ -459,14 +469,25 @@ class PowerSpectrum:
         ND Array
             G(k)
         """
-        bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
-        bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
-
         Gk = 1.
-        if bin_size_rp != 0:
-            Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
-        if bin_size_rt != 0:
-            Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+
+        if self.rmu_binning:
+            bin_size_r = params.get(f"r binsize {self._name}", self._bin_size_r)
+            # bin_size_mu = params.get(f"mu binsize {self._name}", self._bin_size_mu)
+
+            if bin_size_r != 0:
+                Gk = Gk * utils.sinc(self.k_grid * bin_size_r / 2)
+            # if bin_size_mu != 0:
+            #     Gk = Gk * utils.sinc(self.muk_grid * bin_size_mu / 2)
+        else:
+            bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
+            bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
+
+            if bin_size_rp != 0:
+                Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
+            if bin_size_rt != 0:
+                Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):

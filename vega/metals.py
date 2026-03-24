@@ -4,6 +4,7 @@ import numpy as np
 from astropy.io import fits
 from picca import constants as picca_constants
 from scipy.sparse import csr_matrix
+from scipy.interpolate import RegularGridInterpolator
 
 from . import coordinates
 from . import correlation_func as corr_func
@@ -38,8 +39,20 @@ class Metals:
         self._corr_item = corr_item
         self.cosmo = corr_item.cosmo
         self._data = data
+        self._rmu_binning = self._data is not None and self._data._rmu_binning
+
+        # self.PktoXi = PktoXi_obj
         self.size = corr_item.model_coordinates.rp_grid.size
-        self._coordinates = corr_item.model_coordinates
+        if self._rmu_binning:
+            ups = corr_item.config['model'].getint('rmu_metal_grid_factor', 1)
+            self._coordinates = copy.deepcopy(corr_item.model_coordinates)
+            self._coordinates.rp_binsize /= ups
+            self._coordinates.rt_binsize /= ups
+            self._coordinates.rp_nbins *= ups
+            self._coordinates.rt_nbins *= ups
+        else:
+            self._coordinates = corr_item.model_coordinates
+
         self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
 
         # Redshift bins
@@ -75,12 +88,31 @@ class Metals:
         self.main_cross_mask = [tracer1 in self.main_tracers or tracer2 in self.main_tracers
                                 for (tracer1, tracer2) in corr_item.metal_correlations]
 
+        self._interp_coords = None
+        self._interp = None
         # If in new metals mode, read the stacked delta files
         self.new_metals = corr_item.new_metals
         if self.new_metals:
             self.metal_matrix_config = corr_item.config['metal-matrix']
             self.rp_nbins = self._coordinates.rp_nbins
             self.rt_nbins = self._coordinates.rt_nbins
+            self.size = self.rp_nbins * self.rt_nbins
+
+            if self._rmu_binning:
+                rpg = np.linspace(
+                    self._coordinates.rp_min, self._coordinates.rp_max,
+                    self.rp_nbins + 1)
+                rpg = (rpg[1:] + rpg[:-1]) / 2
+                rtg = np.arange(
+                    self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
+                    self._coordinates.rt_binsize
+                )
+                self._interp_coords = np.vstack([
+                    corr_item.model_coordinates.rp_grid,
+                    corr_item.model_coordinates.rt_grid]).T
+                self._interp = RegularGridInterpolator(
+                    (rpg, rtg), np.zeros((rpg.size, rtg.size)),
+                    method='linear', bounds_error=False, fill_value=None)
 
         # Initialize metals
         self.Pk_metal = {}
@@ -102,7 +134,7 @@ class Metals:
                         dmat, rp_grid, rt_grid, z_grid = self.compute_metal_dmat(name1, name2)
 
                     self.rp_metal_dmats[corr_hash] = dmat
-                    metal_coordinates = coordinates.Coordinates.init_from_grids(
+                    metal_coordinates = coordinates.RtRpCoordinates.init_from_grids(
                         self._coordinates, rp_grid, rt_grid, z_grid)
                 else:
                     # Read rp and rt for the metal correlation
@@ -283,6 +315,10 @@ class Metals:
                     xi_metals += bias1 * bias2 * xi
                 else:
                     xi_metals += xi
+
+        if self._rmu_binning:
+            self._interp.values = xi_metals.reshape(self.rp_nbins, self.rt_nbins)
+            xi_metals = self._interp(self._interp_coords).ravel()
 
         return xi_metals
 

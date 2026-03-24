@@ -9,7 +9,7 @@ class Output:
     """Class for handling the Vega output,
     and reading/writing output files.
     """
-    def __init__(self, config, data, corr_items, analysis=None):
+    def __init__(self, config, data, corr_items, analysis=None, percival=1):
         """
 
         Parameters
@@ -32,6 +32,7 @@ class Output:
         self.output_cf = config.getboolean('write_cf', False)
         self.output_pk = config.getboolean('write_pk', False)
         self.mc_output = config.get('mc_output', None)
+        self.percival = percival
 
     def write_results(
         self, corr_funcs, params, minimizer=None, bestfit_corr_stats=None,
@@ -121,7 +122,13 @@ class Output:
         hdul.writeto(Path(self.outfile), overwrite=self.overwrite)
 
     @staticmethod
-    def pad_array(array, size_to_match, pad_value=np.nan):
+    def pad_array(array, size_to_match, pad_value=None):
+        # Use NaN for floating-point arrays and -1 for integer arrays by default
+        if pad_value is None:
+            if np.issubdtype(array.dtype, np.floating):
+                pad_value = np.nan
+            else:
+                pad_value = -1
         return np.pad(array, (0, size_to_match - len(array)), constant_values=pad_value)
 
     def _model_hdus(self, corr_funcs, params, bestfit_corr_stats=None):
@@ -142,6 +149,7 @@ class Output:
         astropy.io.fits.hdu.table.BinTableHDU
             HDU with the model correlation
         """
+        sizes_data = {name: dat.full_data_size for name, dat in self.data.items()}
         model_hdus = []
         for name, cf in corr_funcs.items():
             num_rows = len(cf)
@@ -150,7 +158,8 @@ class Output:
 
             columns = [
                 fits.Column(
-                    name=name+'_MODEL', format='D', array=self.pad_array(cf, num_rows)),
+                    name=name+'_MODEL', format='D', array=self.pad_array(cf, num_rows)
+                ),
                 fits.Column(
                     name=name+'_MODEL_MASK', format='L',
                     array=self.pad_array(self.data[name].model_mask, num_rows, False)
@@ -166,18 +175,34 @@ class Output:
                 fits.Column(
                     name=name+'_VAR', format='D',
                     array=self.pad_array(self.data[name].variance, num_rows)
-                ),
-                fits.Column(
-                    name=name+'_RP', format='D',
-                    array=self.pad_array(
-                        self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
-                ),
-                fits.Column(
-                    name=name+'_RT', format='D',
-                    array=self.pad_array(
-                        self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
-                ),
+                )
             ]
+
+            if not self.corr_items[name].use_multipoles:
+                columns.append(fits.Column(
+                    name=name+'_RP', format='D',
+                    array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_RT', format='D',
+                    array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
+                ))
+            else:
+                nmu = self.corr_items[name].dist_model_coordinates.mu_nbins
+                nr = self.corr_items[name].dist_model_coordinates.r_nbins
+                ells = np.repeat(self.corr_items[name].ells_to_model, nr)
+                rmodel = self.corr_items[name].dist_model_coordinates.r_grid.reshape(
+                    nmu, nr).mean(0)
+                rmodel = np.tile(rmodel, len(self.corr_items[name].ells_to_model))
+
+                columns.append(fits.Column(
+                    name=name+'_RP', format='K',
+                    array=self.pad_array(ells, num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_RT', format='D',
+                    array=self.pad_array(rmodel, num_rows)
+                ))
 
             if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
                 columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
@@ -213,6 +238,15 @@ class Output:
                         card_name = 'hierarch ' + par
                         model_hdu.header[card_name] = val
 
+            for name, size in sizes_data.items():
+                card_name = 'hierarch ' + name + '_datasize'
+                model_hdu.header[card_name] = size
+                if self.data[name].use_multipoles:
+                    card_name = 'hierarch ' + name + '_multipoles'
+                    model_hdu.header[card_name] = True
+                    card_name = 'hierarch ' + name + '_nell'
+                    model_hdu.header[card_name] = self.data[name].nells
+
             model_hdus.append(model_hdu)
 
         return model_hdus
@@ -239,11 +273,11 @@ class Output:
 
         # Get parameter values and errors
         values = np.array([minimizer.values[name] for name in names])
-        errors = np.array([minimizer.errors[name] for name in names])
+        errors = np.sqrt(self.percival) * np.array([minimizer.errors[name] for name in names])
         num_pars = len(names)
 
         # Build the covariance matrix
-        cov_mat = np.array(minimizer.covariance)
+        cov_mat = self.percival * np.array(minimizer.covariance)
 
         cov_format = str(num_pars) + 'D'
         # Create the columns with the bestfit data
@@ -258,8 +292,10 @@ class Output:
 
         # Add all the attributes of the minimum to the header
         bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
+        bestfit_hdu.header['PVALUE'] = minimizer.p_value
         bestfit_hdu.header['VALID'] = minimizer.minuit.valid
         bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate
+        bestfit_hdu.header['PERCIVAL'] = self.percival
 
         bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
         bestfit_hdu.header.comments['TTYPE2'] = 'Bestfit values of sampled parameters'
@@ -268,6 +304,8 @@ class Output:
         bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
         bestfit_hdu.header.comments['VALID'] = 'Flag for valid fit'
         bestfit_hdu.header.comments['ACCURATE'] = 'Flag for accurate fit'
+        bestfit_hdu.header.comments['PVALUE'] = 'PTE as calculated by vega'
+        bestfit_hdu.header.comments['PERCIVAL'] = 'Applied to errors and covariance'
 
         return bestfit_hdu
 

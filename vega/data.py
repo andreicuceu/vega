@@ -3,8 +3,8 @@ from astropy.io import fits
 from scipy import sparse
 from scipy.sparse import csr_array
 
-from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
-from vega.coordinates import Coordinates
+from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
+from vega.coordinates import RtRpCoordinates, RMuCoordinates
 
 BLINDING_STRATEGIES = ['desi_y3']
 
@@ -41,6 +41,21 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
+        self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
+        self.weighted_multipoles = corr_item.config['model'].getboolean('weighted_multipoles', False)
+        self._multipole_matrix = None
+        self.averaging_matrix_multipoles = None
+        self._rmu_binning = None
+        if self.use_multipoles:
+            ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
+            ells_to_model = ells_to_model.split(',')
+            self.ells_to_model = [int(_) for _ in ells_to_model]
+            self.nells = len(self.ells_to_model)
+        else:
+            self.ells_to_model = None
+            self.nells = 0
+
+        self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -72,7 +87,7 @@ class Data:
             self.corr_item.init_cosmo(self.cosmo_params)
 
         if not self.has_distortion:
-            self._distortion_mat = np.eye(self.full_data_size)
+            self._distortion_mat = csr_array(np.eye(self.full_data_size))
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
@@ -336,11 +351,15 @@ class Data:
             elif 'DM' in hdul[1].columns.names:
                 self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
 
+        if self._apply_hartlap:
+            nsamples = header['NSAMPLES']
         # Read the covariance matrix
         # if not self.corr_item.low_mem_mode:
         if cov_path is not None:
             print(f'Reading covariance matrix file {cov_path}\n')
             with fits.open(find_file(cov_path)) as cov_hdul:
+                if self._apply_hartlap:
+                    nsamples = cov_hdul[1].header['NSAMPLES']
                 self._cov_mat = cov_hdul[1].data['CO']
         elif 'CO' in hdul[1].columns.names:
             self._cov_mat = hdul[1].data['CO']
@@ -363,9 +382,18 @@ class Data:
             self.nb = None
 
         # Initialize the data coordinates
-        self.data_coordinates = Coordinates(
+        if 'RMU_BIN' in header and header['RMU_BIN']:
+            coordinates_cls = RMuCoordinates
+            self._rmu_binning = True
+        elif self.use_multipoles:
+            raise Exception("Data must be in r,mu binning to use multipoles.")
+        else:
+            coordinates_cls = RtRpCoordinates
+            self._rmu_binning = False
+
+        self.data_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
-            rp_grid=hdul[1].data['RP'], rt_grid=hdul[1].data['RT'], z_grid=hdul[1].data['Z'],
+            hdul[1].data['RP'], hdul[1].data['RT'], hdul[1].data['Z'],
         )
 
         if dmat_path is None:
@@ -375,9 +403,9 @@ class Data:
                 z_grid_model = hdul[2].data['DMZ']
 
                 # Initialize the model coordinates
-                self.model_coordinates = Coordinates(
+                self.model_coordinates = coordinates_cls(
                     header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
-                    rp_grid=rp_grid_model, rt_grid=rt_grid_model, z_grid=z_grid_model
+                    rp_grid_model, rt_grid_model, z_grid_model
                 )
 
             self.coeff_binning_model = 1
@@ -400,6 +428,9 @@ class Data:
         # Compute the model mask
         self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
 
+        if self.use_multipoles:
+            self._convert_to_multipoles()
+
         # Compute data size
         self.full_data_size = len(self.data_vec)
 
@@ -409,6 +440,17 @@ class Data:
 
         self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
         self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
+
+        if self._apply_hartlap:
+            hartlap = (nsamples - 1) / (nsamples - self.data_size - 2)
+            print(f"Applying the Hartlap factor: C x {hartlap:.2f}.")
+
+            if hartlap <= 0:
+                raise Exception("Hartlap factor is non-positive.")
+            if hartlap > 1.1:
+                print(f"Warning: Large Hartlap correction.")
+
+            self._cov_mat *= hartlap
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
         if self._blinding_strat is None:
@@ -436,13 +478,20 @@ class Data:
             raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
 
         self.coeff_binning_model = header['COEFMOD']
-        self.model_coordinates = Coordinates(
+        if 'RMU_BIN' in header and header['RMU_BIN']:
+            coordinates_cls = RMuCoordinates
+        elif self.use_multipoles:
+            raise Exception("Data must be in r,mu binning to use multipoles.")
+        else:
+            coordinates_cls = RtRpCoordinates
+
+        self.model_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'],
             header['NP']*self.coeff_binning_model, header['NT']*self.coeff_binning_model,
-            rp_grid=hdul[2].data['RP'], rt_grid=hdul[2].data['RT'], z_grid=hdul[2].data['Z']
+            hdul[2].data['RP'], hdul[2].data['RT'], hdul[2].data['Z']
         )
 
-        self.dist_model_coordinates = Coordinates(
+        self.dist_model_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
 
         hdul.close()
@@ -610,7 +659,7 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_coordinates[tracers] = Coordinates(
+        self.metal_coordinates[tracers] = RtRpCoordinates(
             metal_hdul[1].header['RPMIN'], metal_hdul[1].header['RPMAX'],
             metal_hdul[1].header['RTMAX'], metal_hdul[1].header['NP'], metal_hdul[1].header['NT'],
             rp_grid=metal_hdul[2].data['RP_' + name],
@@ -703,6 +752,60 @@ class Data:
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
+
+    def _convert_to_multipoles(self):
+        is_x_corr = self.data_coordinates.rp_min < 0
+        nmu, nr = self.data_coordinates.mu_nbins, self.data_coordinates.r_nbins
+        n_out = nr * self.nells
+
+        mult_matrix = np.zeros((n_out, self.data_vec.size))
+
+        leg_ells = get_legendre_bins(self.ells_to_model, nmu, is_x_corr)
+
+        if self.weighted_multipoles:
+            weights = self.cov_mat.diagonal().copy()
+            w = weights > 0
+            weights[w] = 1.0 / weights[w]
+            weights[~w] = 0
+        else:
+            weights = np.ones(self.data_vec.size)
+
+        for i in range(n_out):
+            ell, j1 = i // nr, i % nr
+            we = weights[j1::nr]
+            we *= we.size / we.sum()
+            mult_matrix[i, j1::nr] = leg_ells[ell] * self.data_mask[j1::nr] * we
+        mult_matrix = csr_array(mult_matrix)
+        # mult_matrix = mult_matrix.dot(np.diag(self.data_mask))
+
+        self._org_data_mask = self.data_mask.copy()
+        self._data_vec = mult_matrix.dot(self._data_vec)
+        C1 = mult_matrix.dot(self._cov_mat).T
+        self._cov_mat = mult_matrix.dot(C1).T
+        data_mask_ell = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        self.nb = np.tile(self.nb.reshape(nmu, nr).sum(0), self.nells)
+
+        self._multipole_matrix = mult_matrix
+        self.averaging_matrix_multipoles = np.abs(self._multipole_matrix)
+        norm = self.averaging_matrix_multipoles.sum(axis=1)
+        self.averaging_matrix_multipoles  /= norm[:, None]
+
+        if self.has_distortion:
+            # Calculate the multipole matrix for the distortion model coordinates 
+            nmu, nr = self.dist_model_coordinates.mu_nbins, self.dist_model_coordinates.r_nbins
+            n_out = nr * self.nells
+            model_mask_ell = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+            mell = np.nonzero(model_mask_ell)[0]
+            M = self._multipole_matrix.toarray()
+
+            mult_matrix = np.zeros((n_out, nr * nmu))
+            for i, x in enumerate(np.nonzero(data_mask_ell)[0]):
+                mult_matrix[mell[i], self.model_mask] = M[x, self.data_mask]
+            mult_matrix = csr_array(mult_matrix)
+
+        self.data_mask = data_mask_ell
+        self.model_mask = model_mask_ell
+        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
 
     def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
         """Multiply undistorted templates with the distortion matrix and return

@@ -2,6 +2,7 @@
 import os.path
 import numpy as np
 import scipy.stats
+from scipy.sparse import block_array, eye_array
 from astropy.io import fits
 import configparser
 import copy
@@ -53,6 +54,9 @@ class VegaInterface:
         self.fiducial['save-components'] = write_cf or write_pk
         ini_files = self.main_config['data sets'].get('ini files').split()
         global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
+        self.apply_global_hartlap = self.main_config['data sets'].getboolean(
+            'apply-global-hartlap', False)
+        self._precival_corr = 1.0
 
         self.model_pk = self.main_config['control'].getboolean('model_pk', False)
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
@@ -151,7 +155,7 @@ class VegaInterface:
 
         # Read the global covariance
         cov_scale = self.main_config['control'].getfloat('cov_scale', None)
-        if global_cov_file is not None:
+        if global_cov_file is not None and global_cov_file:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
@@ -183,7 +187,9 @@ class VegaInterface:
                     raise RuntimeError('run_sampler called, but no sampler config found')
 
         # Initialize the output object
-        self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
+        self.output = Output(
+            self.main_config['output'], self.data, self.corr_items, self.analysis,
+            self.percival_correction)
 
         # Initialize the monte carlo flag
         self.monte_carlo = False
@@ -534,12 +540,26 @@ class VegaInterface:
         self.chisq = self.minimizer.fmin.fval
         self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
         self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
+        self.minimizer.p_value = self.p_value
         print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
               f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
+        print("Note that the Percival correction has to be manually applied.")
         print('----------------------------------------------------\n')
 
         if not self.minimizer.fmin.is_valid:
             print('Invalid fit!!! Check data, covariance, model and priors.')
+
+    @property
+    def percival_correction(self):
+        """Percival correction for the estimated parameter covariance.
+        Calculated only if using a global covariance with Hartlap correction.
+        Otherwise it is one.
+
+        Returns
+        -------
+        float
+        """
+        return self._precival_corr
 
     @property
     def bestfit(self):
@@ -786,6 +806,8 @@ class VegaInterface:
     def read_global_cov(self, global_cov_file, scale=None):
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
+            if self.apply_global_hartlap:
+                nsamples = hdul[1].header['NSAMPLES']
             self.global_cov = hdul[1].data['COV']
 
         if scale is not None:
@@ -799,8 +821,35 @@ class VegaInterface:
             self.full_data_mask.append(self.data[name].data_mask)
             self.full_model_mask.append(self.data[name].model_mask)
 
+        # Convert to multipoles
+        if any(self.data[name].use_multipoles for name in self.corr_items):
+            G = np.full((len(self.corr_items), len(self.corr_items)), None)
+            for i, name in enumerate(self.corr_items):
+                if self.data[name].use_multipoles:
+                    G[i, i] = self.data[name]._multipole_matrix
+                else:
+                    G[i, i] = eye_array(self.data[name].full_data_size)
+            G = block_array(G, format='csr')
+            self.global_cov = G.dot(G.dot(self.global_cov).T).T
+
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)
+
+        if self.apply_global_hartlap:
+            ndata = np.sum(self.full_data_mask)
+            hartlap = (nsamples - 1) / (nsamples - ndata - 2)
+            self._precival_corr = utils.percival_correction(
+                nsamples, ndata, len(self.sample_params['limits']))
+            print(f"Applying global Hartlap factor: C x {hartlap:.2f}. "
+                  f"Percival correction is {self._precival_corr:.2f}. "
+                  "This needs to be manually applied to the parameter cov.!")
+
+            if hartlap <= 0:
+                raise Exception("Hartlap factor is non-positive.")
+            if hartlap > 1.1:
+                print(f"Warning: Large Hartlap correction.")
+
+            self.global_cov *= hartlap
 
         # Construct combined templates for the mode marginalization
         # Following just updates the covariance matrix
