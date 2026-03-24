@@ -2,6 +2,10 @@
 History
 =======
 
+1.7.1 (2026-03-24)
+------------------
+* Minor bug fix in ConfigBuilder
+
 1.7.0 (2026-03-23)
 ------------------
 * Added UVB shotnoise and HeII reionization models
