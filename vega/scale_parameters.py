@@ -7,7 +7,7 @@ class ScaleParameters:
     Standard anisotropic BAO: ap = rp'/rp, at = rt'/rt
     Standard full-shape AP: aiso = at * cbrt(ap / at), 1 + epsilon = cbrt(ap / at)
     Lya AP: phi = at/ap, alpha = sqrt(ap * at)
-    DESI convenction: aiso = cbrt(ap * at**2), aap = ap / at
+    DESI convention: aiso = cbrt(ap * at**2), aap = ap / at
     See 2.1 of https://arxiv.org/pdf/2103.14075.pdf for more details.
     """
     _parametrisations = [
