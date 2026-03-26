@@ -145,9 +145,13 @@ class PowerSpectrum:
                 f'per binsize {self._name}': bin_size,
             }
 
-            los_smoothing = self._config.getboolean('mock-los-smoothing', False)
-            if los_smoothing:
-                smoothing_parameters[f'par binsize {self._name}'] *= 1.97
+            los_smoothing = self._config.get('mock-los-smoothing')
+            if los_smoothing == 'growth':
+                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['growth_rate']
+            elif los_smoothing == 'amplitude':
+                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['los_smooth_amp']
+            elif los_smoothing is not None:
+                raise ValueError(f'Unknown mock LOS smoothing option {los_smoothing}.')
 
             pk_full *= self.compute_Gk(smoothing_parameters)
 
