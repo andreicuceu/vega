@@ -65,6 +65,8 @@ class BuildConfig:
         self.options['UVB-fluctuations'] = options.get('UVB-fluctuations', False)
         self.options['UVB-SN-cross'] = options.get('UVB-SN-cross', False)
         self.options['HeII-reionization'] = options.get('HeII-reionization', False)
+        self.options['mock-bin-size'] = options.get('mock-bin-size', None)
+        self.options['mock-los-smoothing'] = options.get('mock-los-smoothing', None)
 
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
@@ -387,6 +389,15 @@ class BuildConfig:
             condition &= self.options['fullshape_smoothing_metals']
             if condition:
                 config['metals']['fullshape smoothing'] = self.options['fullshape_smoothing']
+
+        if self.options['mock-bin-size'] is not None:
+            config['model']['mock-bin-size'] = str(self.options['mock-bin-size'])
+            if self.options['metals'] is not None:
+                config['metals']['mock-bin-size'] = str(self.options['mock-bin-size'])
+            if self.options['mock-los-smoothing'] is not None:
+                config['model']['mock-los-smoothing'] = self.options['mock-los-smoothing']
+                if self.options['metals'] is not None:
+                    config['metals']['mock-los-smoothing'] = self.options['mock-los-smoothing']
 
         if self.name_extension is None:
             corr_path = self.config_path / '{}.ini'.format(name)
@@ -810,6 +821,9 @@ class BuildConfig:
                 if 'par_sigma_smooth_metals' in parameters:
                     new_params['par_sigma_smooth_metals'] = get_par('par_sigma_smooth_metals')
                     new_params['per_sigma_smooth_metals'] = get_par('per_sigma_smooth_metals')
+
+        if self.options['mock-los-smoothing'] == 'amplitude':
+            new_params['los_smooth_amp'] = get_par('los_smooth_amp')
 
         # DESI instrumental systematics amplitude
         if self.options['desi-instrumental-systematics']:
