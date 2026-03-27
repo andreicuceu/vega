@@ -150,6 +150,8 @@ class PowerSpectrum:
                 smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['growth_rate']
             elif los_smoothing == 'amplitude':
                 smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['los_smooth_amp']
+            elif los_smoothing == 'only-los':
+                smoothing_parameters[f'per binsize {self._name}'] = 0
             elif los_smoothing is not None:
                 raise ValueError(f'Unknown mock LOS smoothing option {los_smoothing}.')
 
