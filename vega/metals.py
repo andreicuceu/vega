@@ -269,7 +269,7 @@ class Metals:
 
             if is_cross_with_main_tracer:
                 bias_product = bias1 * bias2
-            elif self.separate_metal_auto_biases:
+            elif self.separate_metal_auto_biases and name1 != name2:
                 if f'bias_{name1}_{name2}' in local_pars:
                     bias_auto_factor = local_pars.get(f'bias_{name1}_{name2}', 1.0)
                 elif f'bias_{name2}_{name1}' in local_pars:
