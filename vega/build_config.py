@@ -95,6 +95,8 @@ class BuildConfig:
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
+        self.options['separate-metal-auto-biases'] = options.get(
+            'separate-metal-auto-biases', False)
         self.options['zmin'] = options.get('zmin', 0.0)
         self.options['zmax'] = options.get('zmax', 10.0)
 
@@ -306,6 +308,9 @@ class BuildConfig:
 
                 if 'fast_metals' in corr_info:
                     config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
+
+                if self.options['separate-metal-auto-biases']:
+                    config['model']['separate-metal-auto-biases'] = 'True'
 
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
