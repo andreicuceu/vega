@@ -72,15 +72,17 @@ class BuildConfig:
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
         self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
-        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', 0)
-        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', 0)
-        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', 0)
-        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', 0)
+
+        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', None)
+        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', None)
+        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', None)
+        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', None)
+
         self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
         self.options['marginalize-prior-sigma'] = options.get('marginalize-prior-sigma', 10.0)
-        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', False)
+        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', True)
         self.options['marginalize-match-data-bins'] = options.get(
-            'marginalize-match-data-bins', False)
+            'marginalize-match-data-bins', True)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -360,18 +362,36 @@ class BuildConfig:
                 config['model']['radiation effects'] = 'True'
 
         # Marginalize small scales
-        config['model']['marginalize-below-rtmax'] = str(self.options['marginalize-below-rtmax'])
-        config['model']['marginalize-above-rtmin'] = str(self.options['marginalize-above-rtmin'])
-        config['model']['marginalize-below-rpmax'] = str(self.options['marginalize-below-rpmax'])
-        config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
+        has_marg = False
+        if self.options['marginalize-below-rtmax'] is not None:
+            config['model']['marginalize-below-rtmax'] = str(
+                self.options['marginalize-below-rtmax'])
+            has_marg = True
+        if self.options['marginalize-above-rtmin'] is not None:
+            config['model']['marginalize-above-rtmin'] = str(
+                self.options['marginalize-above-rtmin'])
+            has_marg = True
+        if self.options['marginalize-below-rpmax'] is not None:
+            config['model']['marginalize-below-rpmax'] = str(
+                self.options['marginalize-below-rpmax'])
+            has_marg = True
+        if self.options['marginalize-above-rpmin'] is not None:
+            config['model']['marginalize-above-rpmin'] = str(
+                self.options['marginalize-above-rpmin'])
+            has_marg = True
+
+        # This should appear even if turned off to inform user
         config['model']['marginalize-all-rmin-cuts'] = str(
             self.options['marginalize-all-rmin-cuts'])
-        config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
-        config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
-        config['model']['marginalize-match-data-bins'] = str(
-            self.options['marginalize-match-data-bins'])
 
-        if 'skip-nl-model-in-peak' in self.options:
+        # These options are only needed if marginalization is turned on
+        if has_marg or self.options['marginalize-all-rmin-cuts']:
+            config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
+            config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
+            config['model']['marginalize-match-data-bins'] = str(
+                self.options['marginalize-match-data-bins'])
+
+        if self.options['skip-nl-model-in-peak']:
             config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
 
         # P(k) damping scale
