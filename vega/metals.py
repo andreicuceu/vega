@@ -46,9 +46,12 @@ class Metals:
         self.zmin = corr_item.config['data'].getfloat('zmin', 0.0)
         self.zmax = corr_item.config['data'].getfloat('zmax', 10.0)
 
+        self.separate_metal_auto_biases = corr_item.config['model'].getboolean(
+            'separate-metal-auto-biases', False)
+
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
-        if self.fast_metals:
+        if self.fast_metals or self.separate_metal_auto_biases:
             self.fast_metal_bias = True
 
         self.cache_xi_metal_metal = {}
@@ -60,7 +63,7 @@ class Metals:
 
         self.save_components = fiducial.get('save-components', False)
 
-        if self.save_components and self.fast_metals:
+        if self.save_components and (self.fast_metals or self.separate_metal_auto_biases):
             raise ValueError("Cannot save pk/cf components in fast_metals mode."
                              " Either turn fast_metals off, or turn off write_pk/write_cf.")
 
@@ -263,12 +266,29 @@ class Metals:
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
 
             is_cross_with_main_tracer = (name1 in self.main_tracers or name2 in self.main_tracers)
+
+            if is_cross_with_main_tracer:
+                bias_product = bias1 * bias2
+            elif self.separate_metal_auto_biases and name1 != name2:
+                if f'bias_{name1}_{name2}' in local_pars:
+                    bias_auto_factor = local_pars.get(f'bias_{name1}_{name2}', 1.0)
+                elif f'bias_{name2}_{name1}' in local_pars:
+                    bias_auto_factor = local_pars.get(f'bias_{name2}_{name1}', 1.0)
+                else:
+                    raise ValueError(
+                        f"Separate metal auto biases is on, but no bias_{name1}_{name2}"
+                        f" or bias_{name2}_{name1} parameter found for {corr_hash}."
+                    )
+                bias_product = bias1 * bias2 * bias_auto_factor
+            else:
+                bias_product = bias1 * bias2
+
             if self.fast_metals and is_cross_with_main_tracer:
-                xi_metals += bias1 * bias2 * self.compute_xi_metal_cross_main(
+                xi_metals += bias_product * self.compute_xi_metal_cross_main(
                     pk_lin, local_pars, corr_hash, beta1, beta2)
 
             elif self.fast_metals:
-                xi_metals += bias1 * bias2 * self.compute_xi_metal_metal(
+                xi_metals += bias_product * self.compute_xi_metal_metal(
                     pk_lin, local_pars, corr_hash)
 
             else:
@@ -280,7 +300,7 @@ class Metals:
                     component=component
                 )
                 if self.fast_metal_bias:
-                    xi_metals += bias1 * bias2 * xi
+                    xi_metals += bias_product * xi
                 else:
                     xi_metals += xi
 

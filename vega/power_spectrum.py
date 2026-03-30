@@ -138,6 +138,25 @@ class PowerSpectrum:
                 self.pk_Gk = self.compute_Gk(params)
             pk_full *= self.pk_Gk
 
+        if 'mock-bin-size' in self._config:
+            bin_size = self._config.getfloat('mock-bin-size')
+            smoothing_parameters = {
+                f'par binsize {self._name}': bin_size,
+                f'per binsize {self._name}': bin_size,
+            }
+
+            los_smoothing = self._config.get('mock-los-smoothing')
+            if los_smoothing == 'growth':
+                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['growth_rate']
+            elif los_smoothing == 'amplitude':
+                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['los_smooth_amp']
+            elif los_smoothing == 'only-los':
+                smoothing_parameters[f'per binsize {self._name}'] = 0
+            elif los_smoothing is not None:
+                raise ValueError(f'Unknown mock LOS smoothing option {los_smoothing}.')
+
+            pk_full *= self.compute_Gk(smoothing_parameters)
+
         # add non linear large scales
         if params['peak']:
             pk_full *= self.compute_peak_nl(params)

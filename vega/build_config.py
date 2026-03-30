@@ -65,20 +65,24 @@ class BuildConfig:
         self.options['UVB-fluctuations'] = options.get('UVB-fluctuations', False)
         self.options['UVB-SN-cross'] = options.get('UVB-SN-cross', False)
         self.options['HeII-reionization'] = options.get('HeII-reionization', False)
+        self.options['mock-bin-size'] = options.get('mock-bin-size', None)
+        self.options['mock-los-smoothing'] = options.get('mock-los-smoothing', None)
 
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
         self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
-        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', 0)
-        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', 0)
-        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', 0)
-        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', 0)
+
+        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', None)
+        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', None)
+        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', None)
+        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', None)
+
         self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
         self.options['marginalize-prior-sigma'] = options.get('marginalize-prior-sigma', 10.0)
-        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', False)
+        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', True)
         self.options['marginalize-match-data-bins'] = options.get(
-            'marginalize-match-data-bins', False)
+            'marginalize-match-data-bins', True)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -93,6 +97,8 @@ class BuildConfig:
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
+        self.options['separate-metal-auto-biases'] = options.get(
+            'separate-metal-auto-biases', False)
         self.options['zmin'] = options.get('zmin', 0.0)
         self.options['zmax'] = options.get('zmax', 10.0)
 
@@ -305,6 +311,9 @@ class BuildConfig:
                 if 'fast_metals' in corr_info:
                     config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
 
+                if self.options['separate-metal-auto-biases']:
+                    config['model']['separate-metal-auto-biases'] = 'True'
+
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
                     config['model']['new_metals'] = 'True'
@@ -353,18 +362,36 @@ class BuildConfig:
                 config['model']['radiation effects'] = 'True'
 
         # Marginalize small scales
-        config['model']['marginalize-below-rtmax'] = str(self.options['marginalize-below-rtmax'])
-        config['model']['marginalize-above-rtmin'] = str(self.options['marginalize-above-rtmin'])
-        config['model']['marginalize-below-rpmax'] = str(self.options['marginalize-below-rpmax'])
-        config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
+        has_marg = False
+        if self.options['marginalize-below-rtmax'] is not None:
+            config['model']['marginalize-below-rtmax'] = str(
+                self.options['marginalize-below-rtmax'])
+            has_marg = True
+        if self.options['marginalize-above-rtmin'] is not None:
+            config['model']['marginalize-above-rtmin'] = str(
+                self.options['marginalize-above-rtmin'])
+            has_marg = True
+        if self.options['marginalize-below-rpmax'] is not None:
+            config['model']['marginalize-below-rpmax'] = str(
+                self.options['marginalize-below-rpmax'])
+            has_marg = True
+        if self.options['marginalize-above-rpmin'] is not None:
+            config['model']['marginalize-above-rpmin'] = str(
+                self.options['marginalize-above-rpmin'])
+            has_marg = True
+
+        # This should appear even if turned off to inform user
         config['model']['marginalize-all-rmin-cuts'] = str(
             self.options['marginalize-all-rmin-cuts'])
-        config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
-        config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
-        config['model']['marginalize-match-data-bins'] = str(
-            self.options['marginalize-match-data-bins'])
 
-        if 'skip-nl-model-in-peak' in self.options:
+        # These options are only needed if marginalization is turned on
+        if has_marg or self.options['marginalize-all-rmin-cuts']:
+            config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
+            config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
+            config['model']['marginalize-match-data-bins'] = str(
+                self.options['marginalize-match-data-bins'])
+
+        if self.options['skip-nl-model-in-peak']:
             config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
 
         # P(k) damping scale
@@ -387,6 +414,15 @@ class BuildConfig:
             condition &= self.options['fullshape_smoothing_metals']
             if condition:
                 config['metals']['fullshape smoothing'] = self.options['fullshape_smoothing']
+
+        if self.options['mock-bin-size'] is not None:
+            config['model']['mock-bin-size'] = str(self.options['mock-bin-size'])
+            if self.options['metals'] is not None:
+                config['metals']['mock-bin-size'] = str(self.options['mock-bin-size'])
+            if self.options['mock-los-smoothing'] is not None:
+                config['model']['mock-los-smoothing'] = self.options['mock-los-smoothing']
+                if self.options['metals'] is not None:
+                    config['metals']['mock-los-smoothing'] = self.options['mock-los-smoothing']
 
         if self.name_extension is None:
             corr_path = self.config_path / '{}.ini'.format(name)
@@ -810,6 +846,9 @@ class BuildConfig:
                 if 'par_sigma_smooth_metals' in parameters:
                     new_params['par_sigma_smooth_metals'] = get_par('par_sigma_smooth_metals')
                     new_params['per_sigma_smooth_metals'] = get_par('per_sigma_smooth_metals')
+
+        if self.options['mock-los-smoothing'] == 'amplitude':
+            new_params['los_smooth_amp'] = get_par('los_smooth_amp')
 
         # DESI instrumental systematics amplitude
         if self.options['desi-instrumental-systematics']:
