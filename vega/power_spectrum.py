@@ -276,13 +276,14 @@ class PowerSpectrum:
             Effective bias and beta
         """
         # Check if we have an HCD bias for each component
-        hcd_bias_name = "bias_hcd_{}".format(self._name)
-        bias_hcd = params.get(hcd_bias_name, None)
+        bias_hcd = params.get(f"bias_hcd_{self._name}", None)
         if bias_hcd is None:
             bias_hcd = params['bias_hcd']
 
         # Get the other parameters
-        beta_hcd = params["beta_hcd"]
+        beta_hcd = params.get(f"beta_hcd_{self._name}", None)
+        if beta_hcd is None:
+            beta_hcd = params["beta_hcd"]
 
         # Check which model we need
         if 'Rogers' in self.hcd_model:
