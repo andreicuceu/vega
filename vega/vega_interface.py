@@ -349,9 +349,16 @@ class VegaInterface:
 
         if return_marg_coeff:
             corr_names = sorted(self.corr_items.keys())
-            marg_coeff_list = np.hstack([
-                marg_coeff[corr] for corr in corr_names
-            ])
+            corr_names = [corr for corr in corr_names if corr in marg_coeff]
+            if len(corr_names) > 1:
+                marg_coeff_list = np.hstack([
+                    marg_coeff[corr] for corr in corr_names
+                ])
+            elif len(corr_names) == 1:
+                marg_coeff_list = marg_coeff[corr_names[0]]
+            else:
+                marg_coeff_list = np.array([])
+
             return log_lik, marg_coeff_list
         return log_lik
 
