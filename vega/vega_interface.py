@@ -296,12 +296,12 @@ class VegaInterface:
 
         # Add priors
         chi2 += self.compute_prior_chi2(params)
-
         assert isinstance(chi2, float)
-        if not return_marg_coeff:
-            return chi2
 
-        return chi2, marg_coeff
+        if return_marg_coeff:
+            return chi2, marg_coeff
+
+        return chi2
 
     def log_lik(self, params=None, direct_pk=None, return_marg_coeff=False):
         """Compute full log likelihood for all components.
