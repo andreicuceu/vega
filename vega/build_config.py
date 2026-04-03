@@ -96,6 +96,7 @@ class BuildConfig:
         self.options['new_metals'] = options.get('new_metals', False)
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
+        self.options['rebin-metals'] = options.get('rebin-metals', None)
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
         self.options['separate-metal-auto-biases'] = options.get(
             'separate-metal-auto-biases', False)
@@ -325,8 +326,12 @@ class BuildConfig:
                     config['data']['zmax'] = str(self.options.get('zmax'))
 
                     config['metal-matrix'] = {}
-                    config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
-                        'rebin_factor', '3')
+                    if self.options['rebin-metals'] is not None:
+                        config['metal-matrix']['rebin_factor'] = str(self.options['rebin-metals'])
+                    else:
+                        config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
+                            'rebin_factor', '3')
+
                     config['metal-matrix']['alpha_LYA'] = self.options['metal-matrix'].get(
                         'alpha_LYA', '2.9')
                     config['metal-matrix']['alpha_SiII(1260)'] = self.options['metal-matrix'].get(
