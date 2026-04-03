@@ -33,6 +33,7 @@ class PowerSpectrum:
         self._config = config
         self.tracer1_name = copy.deepcopy(tracer1['name'])
         self.tracer2_name = copy.deepcopy(tracer2['name'])
+        self._corr_name = f'{self.tracer1_name}x{self.tracer2_name}'
         self.tracer1_type = copy.deepcopy(tracer1['type'])
         self.tracer2_type = copy.deepcopy(tracer2['type'])
 
@@ -276,12 +277,12 @@ class PowerSpectrum:
             Effective bias and beta
         """
         # Check if we have an HCD bias for each component
-        bias_hcd = params.get(f"bias_hcd_{self._name}", None)
+        bias_hcd = params.get(f"bias_hcd_{self._corr_name}", None)
         if bias_hcd is None:
             bias_hcd = params['bias_hcd']
 
         # Get the other parameters
-        beta_hcd = params.get(f"beta_hcd_{self._name}", None)
+        beta_hcd = params.get(f"beta_hcd_{self._corr_name}", None)
         if beta_hcd is None:
             beta_hcd = params["beta_hcd"]
 
