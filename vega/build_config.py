@@ -327,7 +327,8 @@ class BuildConfig:
 
                     config['metal-matrix'] = {}
                     if self.options['rebin-metals'] is not None:
-                        config['metal-matrix']['rebin_factor'] = str(self.options['rebin-metals'])
+                        config['metal-matrix']['rebin_factor'] = str(
+                            int(self.options['rebin-metals']))
                     else:
                         config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
                             'rebin_factor', '3')
