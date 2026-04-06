@@ -15,6 +15,7 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
+from vega.__init__ import __version__ as vega_version
 
 
 class VegaInterface:
@@ -38,6 +39,8 @@ class VegaInterface:
         main_path : string
             Path to main.ini config file
         """
+        print(f'Initializing Vega version {vega_version}')
+
         # Read the main config file
         self.main_config = configparser.ConfigParser()
         self.main_config.optionxform = lambda option: option
