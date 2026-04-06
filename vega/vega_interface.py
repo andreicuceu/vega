@@ -5,6 +5,7 @@ import scipy.stats
 from astropy.io import fits
 import configparser
 import copy
+from importlib.metadata import version
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -15,7 +16,6 @@ from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
-from vega.__init__ import __version__ as vega_version
 
 
 class VegaInterface:
@@ -39,7 +39,8 @@ class VegaInterface:
         main_path : string
             Path to main.ini config file
         """
-        print(f'Initializing Vega version {vega_version}')
+        package_version = version("vega")
+        print(f'Initializing Vega version {package_version}')
 
         # Read the main config file
         self.main_config = configparser.ConfigParser()
