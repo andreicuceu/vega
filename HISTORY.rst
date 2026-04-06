@@ -2,6 +2,13 @@
 History
 =======
 
+1.7.2 (2026-04-06)
+------------------
+* Added printing of vega version when initializing VegaInterface
+* Some protections for log_lik and marg_coeff behaviour
+* New modelling options for binning
+* New modelling options for HCDs
+
 1.7.1 (2026-03-24)
 ------------------
 * Minor bug fix in ConfigBuilder
