@@ -361,7 +361,7 @@ class VegaInterface:
         for prior in self.priors.values():
             log_lik += self._gaussian_lik_prior(prior[1])
 
-        if return_marg_coeff:
+        if return_marg_coeff and marg_coeff is not None:
             corr_names = sorted(self.corr_items.keys())
             corr_names = [corr for corr in corr_names if corr in marg_coeff]
             if len(corr_names) > 1:
@@ -374,6 +374,9 @@ class VegaInterface:
                 marg_coeff_list = np.array([])
 
             return log_lik, marg_coeff_list
+        elif return_marg_coeff:
+            return log_lik, None
+
         return log_lik
 
     def _get_lcl_prms(self, params=None):
