@@ -2,6 +2,10 @@
 History
 =======
 
+1.7.3 (2026-04-07)
+------------------
+* Some protections for log_lik and marg_coeff behaviour
+
 1.7.2 (2026-04-06)
 ------------------
 * Added printing of vega version when initializing VegaInterface
