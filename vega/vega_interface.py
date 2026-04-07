@@ -30,6 +30,7 @@ class VegaInterface:
     _blind = None
     _use_global_cov = False
     global_cov = None
+    _random_marg_coeff = None
 
     def __init__(self, main_path):
         """
@@ -262,11 +263,20 @@ class VegaInterface:
         except utils.VegaModelError:
             for name in self.corr_items:
                 self.models[name].PktoXi.cache_pars = None
-            return 1e100
+
+            if return_marg_coeff and self._random_marg_coeff is not None:
+                return 1e100, self._random_marg_coeff
+            elif return_marg_coeff:
+                return 1e100, None
+            else:
+                return 1e100
 
         # Get marginalization coefficients
         if return_marg_coeff or self.marginalize_in_fit:
             marg_coeff = self.compute_marg_coeff(model_cf)
+
+            if self._random_marg_coeff is None:
+                self._random_marg_coeff = marg_coeff
 
         if self.marginalize_in_fit:
             # Fit on the fly the template correction
