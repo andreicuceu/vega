@@ -5,7 +5,7 @@ import scipy.stats
 from astropy.io import fits
 import configparser
 import copy
-from importlib.metadata import version
+from importlib.metadata import version, PackageNotFoundError
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -40,8 +40,11 @@ class VegaInterface:
         main_path : string
             Path to main.ini config file
         """
-        package_version = version("vega")
-        print(f'Initializing Vega version {package_version}')
+        try:
+            package_version = version("vega")
+            print(f'Initializing Vega version {package_version}')
+        except PackageNotFoundError:
+            print('Vega version not found. Continuing initialization.')
 
         # Read the main config file
         self.main_config = configparser.ConfigParser()
