@@ -2,6 +2,10 @@
 History
 =======
 
+1.7.4 (2026-04-08)
+------------------
+* Catch PackageNotFoundError when initializing Vega
+
 1.7.3 (2026-04-07)
 ------------------
 * Some protections for log_lik and marg_coeff behaviour
