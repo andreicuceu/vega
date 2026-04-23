@@ -231,16 +231,25 @@ class VegaInterface:
         print(f'INFO: Score compression initialized.')  
 
     def _cca_compression(self, config):
+
+        ### Optional arguments ###
+        _num_cca_modes = config.getint('num-cca-modes', None)
+
         ### parameter covariance ###
-        _parameter_cov_file = config.get('cca-parameter-cov', None)
+        _parameter_cov_file = config.get('parameter-cov', None)
         if _parameter_cov_file is None:
             _parameter_cov = np.linalg.inv(self.fisher_matrix)
         else:
             _parameter_cov = np.load(_parameter_cov_file)['cov']
             print(f'INFO: Using parameter cov from: {_parameter_cov_file}')
 
-        ### Data-parameter covariance, linear approximation ###
-        _data_param_cov = self._full_jacobian @ _parameter_cov
+        ### data-parameter covariance ###
+        _data_param_cov_file = config.get('data-parameter-cov', None)
+        if _data_param_cov_file is None:
+            _data_param_cov = self._full_jacobian @ _parameter_cov
+        else:
+            _data_param_cov = np.load(_data_param_cov_file)['cov']
+            print(f'INFO: Using data-parameter cov from: {_data_param_cov_file}')
 
         ### Masked data covariance ###
         _masked_data_cov = self.global_cov[:, self.full_data_mask]
@@ -249,7 +258,7 @@ class VegaInterface:
         self._cca_mat, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
                                     _parameter_cov, 
                                     _data_param_cov,
-                                    num_modes=None)
+                                    num_modes=_num_cca_modes)
 
         ### Compressed covariance ###
         self.compressed_global_cov =  self._cca_mat.T @ _masked_data_cov @ self._cca_mat
