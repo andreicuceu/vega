@@ -4,7 +4,7 @@ from vega import VegaInterface
 import os
 import numpy as np
 
-def compress_data(config_path, cf_file, xcf_file, global_cov_file, outdir, name=None):
+def compress_data(config_path, cf_file, xcf_file, outdir, name=None):
     """Compute a compressed covariance matrix from input covariance matrix + data vectors.
 
     Parameters
@@ -20,21 +20,25 @@ def compress_data(config_path, cf_file, xcf_file, global_cov_file, outdir, name=
     -------
     None
     """
-    assert os.path.isfile(config_path), 'Config file does not exist'
-    config_templates = '/global/cfs/projectdirs/desi/users/cgordon/DESI/DR2/compression/configs/template'
-    main_cfg = config_templates + '/main.ini'
-    auto_cfg = config_templates + '/lyaxlya.ini'
-    cross_cfg = config_templates + '/lyaxqso.ini'
-    print('INFO: using config files in: ', config_templates)
+    assert os.path.isdir(config_path), 'Config file does not exist'
+    # config_templates = '/global/cfs/projectdirs/desi/users/cgordon/DESI/DR2/compression/configs/template'
+    main_cfg = config_path + '/main.ini'
+    auto_cfg = config_path + '/lyaxlya.ini'
+    cross_cfg = config_path + '/lyaxqso.ini'
+    print('INFO: using config files in: ', config_path)
     print('INFO: If you want to change masks, fiducial models etc.'
                 'use a different config setup')
 
-    # Get the config file paths
+    # Set the new config file paths
     auto_cfg_path = os.path.join(outdir, 'lyaxlya.ini')
     cross_cfg_path = os.path.join(outdir, 'lyaxqso.ini')
     main_cfg_path = os.path.join(outdir, 'main.ini')
 
-    # Read the config files
+    # for f in [auto_cfg_path, cross_cfg_path, main_cfg_path]:
+    #     if not os.path.exists(f):
+    #         raise FileNotFoundError(f'File {f} does not exist')
+
+    # Read the template config files
     auto_cfg_parser = configparser.ConfigParser()
     auto_cfg_parser.optionxform = lambda option: option
     cross_cfg_parser = configparser.ConfigParser()
@@ -52,12 +56,13 @@ def compress_data(config_path, cf_file, xcf_file, global_cov_file, outdir, name=
 
     # Change global covariance file
     main_cfg_parser['data sets']['ini files'] = auto_cfg_path + ' ' + cross_cfg_path
-    main_cfg_parser['data sets']['global-cov-file'] = global_cov_file
+    # main_cfg_parser['data sets']['global-cov-file'] = global_cov_file
 
     #check if outdir exists, if not create it
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
+    # Write the new config files
     with open(auto_cfg_path, 'w') as f:
         auto_cfg_parser.write(f, space_around_delimiters=True)
     with open(cross_cfg_path, 'w') as f:
@@ -66,9 +71,10 @@ def compress_data(config_path, cf_file, xcf_file, global_cov_file, outdir, name=
         main_cfg_parser.write(f, space_around_delimiters=True)
 
     # Initialize Vega
-    vega = VegaInterface(main_cfg_path)
+    vi = VegaInterface(main_cfg_path)
 
-    _xi_compressed = vega.score
+    # Compress the data vector
+    _xi_compressed = vi.compress(vi._full_datavec)
 
     if name is not None:
         name = '_' + name

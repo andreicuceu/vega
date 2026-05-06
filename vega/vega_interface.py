@@ -206,10 +206,16 @@ class VegaInterface:
             @ residual
         )  
 
+        ### number of compressed parameters ###
+        self.ndim_compressed = self.score.size
+
         ### Compressed covariance ###
         if self._mock2mock_cov is not None:
             _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
             self.compressed_global_cov = _mock2mock_cov
+
+            # Compute the hartlap factor for the mock2mock covariance
+            self._hartlap = (self.num_sims - self.ndim_compressed - 2) / (self.num_sims - 1)
         else:
             self.compressed_global_cov = (
             self._full_jacobian.T
@@ -222,11 +228,6 @@ class VegaInterface:
         )
 
         self.compressed_global_cov_logdet = np.linalg.slogdet(self.compressed_global_cov)[1]
-        
-        ### Metadata ###
-        self.ndim_compressed = self.score.size
-        if self._mock2mock_cov is not None:
-            self._hartlap = (self.num_sims - self.ndim_compressed - 2) / (self.num_sims - 1)
 
         print(f'INFO: Score compression initialized.')  
 
@@ -254,25 +255,40 @@ class VegaInterface:
         ### Masked data covariance ###
         _masked_data_cov = self.global_cov[:, self.full_data_mask]
         _masked_data_cov = _masked_data_cov[self.full_data_mask, :]
+
+        assert _masked_data_cov.shape[0] == _data_param_cov.shape[0], (
+            f'Masked data covariance and data-parameter covariance have incompatible shapes: '
+            f'{_masked_data_cov.shape} vs {_data_param_cov.shape}'
+        )
         
         self._cca_mat, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
                                     _parameter_cov, 
                                     _data_param_cov,
                                     num_modes=_num_cca_modes)
 
+        ### ndim ###
+        self.ndim_compressed = self._cca_vals.size
+        
         ### Compressed covariance ###
-        self.compressed_global_cov =  self._cca_mat.T @ _masked_data_cov @ self._cca_mat
+        if self._mock2mock_cov is not None:
+            _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
+            self.compressed_global_cov = _mock2mock_cov
+            print(f'INFO: Using mock-to-mock cov from: {self._mock2mock_cov}')
+
+            #set Hartlap correction factor for mock2mock covariance
+            self._hartlap = (self.num_sims - self.ndim_compressed - 2) / (self.num_sims - 1)
+        else:
+            self.compressed_global_cov = self._cca_mat.T @ _masked_data_cov @ self._cca_mat
 
         ### Compressed inverse cov ###
         self.compressed_global_invcov = np.linalg.inv(self.compressed_global_cov)
+        if self.compression_likelihood == 't-distribution':
+            self.compressed_global_invcov *= self._hartlap
 
-        ### log det for likelihood normalization ###
+        ### log det for likelihood normalization - does NOT feature hartlap. ###
         self.compressed_global_cov_logdet = np.linalg.slogdet(self.compressed_global_cov)[1]
 
-        ### Metadata ###
-        self.ndim_compressed = self._cca_vals.size
-
-        print(f'INFO: CCA compression initialized.') 
+        print(f'INFO: CCA compression initialized.')
 
     def _init_compression(self, config):
 
@@ -291,7 +307,7 @@ class VegaInterface:
             raise RuntimeError('Compression requires a global covariance'
                             'or mock-to-mock covariance to run compressed analysis')
 
-        self.compression_type = config.get('compression-type', 'score')  
+        self.compression_type = config.get('compression-type')  
 
         ### Compression code ###
         ### Load compression parameters ###
@@ -524,10 +540,12 @@ class VegaInterface:
                 log_norm -= 0.5 * self.ndim_compressed * np.log(2 * np.pi)
                 log_norm -= 0.5 * self.compressed_global_cov_logdet
             elif self.compression_likelihood == 't-distribution':
+                #sellentin and heavens (2015) prefactor and following likelihood
                 _pre_factor = loggamma(0.5 * self.num_sims)
                 _pre_factor -= 0.5 * self.ndim_compressed * np.log(np.pi * (self.num_sims - 1))
                 _pre_factor -= loggamma(0.5 * (self.num_sims - self.ndim_compressed))
 
+                #log norm
                 log_norm = _pre_factor - 0.5 * self.compressed_global_cov_logdet
             else:
                 raise  ValueError(
@@ -547,8 +565,8 @@ class VegaInterface:
                 log_norm -= 0.5 * self.masked_global_log_cov_det
 
         # Compute log lik
-        if self.compression_likelihood == 't-distribution':
-            log_lik -= 0.5 * self.num_sims * np.log(1 + chi2 / (self.num_sims - 1))
+        if (self.use_compression) and (self.compression_likelihood == 't-distribution'):
+                log_lik = log_norm - 0.5 * self.num_sims * np.log(1 + chi2 / (self.num_sims - 1))
         else:
             log_lik = log_norm - 0.5 * chi2
 
