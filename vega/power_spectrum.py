@@ -36,6 +36,7 @@ class PowerSpectrum:
         self._config = config
         self.tracer1_name = copy.deepcopy(tracer1['name'])
         self.tracer2_name = copy.deepcopy(tracer2['name'])
+        self._corr_name = f'{self.tracer1_name}x{self.tracer2_name}'
         self.tracer1_type = copy.deepcopy(tracer1['type'])
         self.tracer2_type = copy.deepcopy(tracer2['type'])
 
@@ -147,6 +148,25 @@ class PowerSpectrum:
             if self.pk_Gk is None:
                 self.pk_Gk = self.compute_Gk(params)
             pk_full *= self.pk_Gk
+
+        if 'mock-bin-size' in self._config:
+            bin_size = self._config.getfloat('mock-bin-size')
+            smoothing_parameters = {
+                f'par binsize {self._name}': bin_size,
+                f'per binsize {self._name}': bin_size,
+            }
+
+            los_smoothing = self._config.get('mock-los-smoothing')
+            if los_smoothing == 'growth':
+                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['growth_rate']
+            elif los_smoothing == 'amplitude':
+                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['los_smooth_amp']
+            elif los_smoothing == 'only-los':
+                smoothing_parameters[f'per binsize {self._name}'] = 0
+            elif los_smoothing is not None:
+                raise ValueError(f'Unknown mock LOS smoothing option {los_smoothing}.')
+
+            pk_full *= self.compute_Gk(smoothing_parameters)
 
         # add non linear large scales
         if params['peak']:
@@ -267,13 +287,14 @@ class PowerSpectrum:
             Effective bias and beta
         """
         # Check if we have an HCD bias for each component
-        hcd_bias_name = "bias_hcd_{}".format(self._name)
-        bias_hcd = params.get(hcd_bias_name, None)
+        bias_hcd = params.get(f"bias_hcd_{self._corr_name}", None)
         if bias_hcd is None:
             bias_hcd = params['bias_hcd']
 
         # Get the other parameters
-        beta_hcd = params["beta_hcd"]
+        beta_hcd = params.get(f"beta_hcd_{self._corr_name}", None)
+        if beta_hcd is None:
+            beta_hcd = params["beta_hcd"]
 
         # Check which model we need
         if 'Rogers' in self.hcd_model:

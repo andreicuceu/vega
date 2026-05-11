@@ -6,6 +6,7 @@ from scipy.sparse import block_array, eye_array
 from astropy.io import fits
 import configparser
 import copy
+from importlib.metadata import version, PackageNotFoundError
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -30,6 +31,7 @@ class VegaInterface:
     _blind = None
     _use_global_cov = False
     global_cov = None
+    _random_marg_coeff = None
 
     def __init__(self, main_path):
         """
@@ -39,6 +41,12 @@ class VegaInterface:
         main_path : string
             Path to main.ini config file
         """
+        try:
+            package_version = version("vega")
+            print(f'Initializing Vega version {package_version}')
+        except PackageNotFoundError:
+            print('Vega version not found. Continuing initialization.')
+
         # Read the main config file
         self.main_config = configparser.ConfigParser()
         self.main_config.optionxform = lambda option: option
@@ -264,11 +272,20 @@ class VegaInterface:
         except utils.VegaModelError:
             for name in self.corr_items:
                 self.models[name].PktoXi.cache_pars = None
-            return 1e100
+
+            if return_marg_coeff and self._random_marg_coeff is not None:
+                return 1e100, self._random_marg_coeff
+            elif return_marg_coeff:
+                return 1e100, None
+            else:
+                return 1e100
 
         # Get marginalization coefficients
         if return_marg_coeff or self.marginalize_in_fit:
             marg_coeff = self.compute_marg_coeff(model_cf)
+
+            if self._random_marg_coeff is None:
+                self._random_marg_coeff = marg_coeff
 
         if self.marginalize_in_fit:
             # Fit on the fly the template correction
@@ -302,12 +319,12 @@ class VegaInterface:
 
         # Add priors
         chi2 += self.compute_prior_chi2(params)
-
         assert isinstance(chi2, float)
-        if not return_marg_coeff:
-            return chi2
 
-        return chi2, marg_coeff
+        if return_marg_coeff:
+            return chi2, marg_coeff
+
+        return chi2
 
     def log_lik(self, params=None, direct_pk=None, return_marg_coeff=False):
         """Compute full log likelihood for all components.
@@ -353,12 +370,22 @@ class VegaInterface:
         for prior in self.priors.values():
             log_lik += self._gaussian_lik_prior(prior[1])
 
-        if return_marg_coeff:
+        if return_marg_coeff and marg_coeff is not None:
             corr_names = sorted(self.corr_items.keys())
-            marg_coeff_list = np.hstack([
-                marg_coeff[corr] for corr in corr_names
-            ])
+            corr_names = [corr for corr in corr_names if corr in marg_coeff]
+            if len(corr_names) > 1:
+                marg_coeff_list = np.hstack([
+                    marg_coeff[corr] for corr in corr_names
+                ])
+            elif len(corr_names) == 1:
+                marg_coeff_list = marg_coeff[corr_names[0]]
+            else:
+                marg_coeff_list = np.array([])
+
             return log_lik, marg_coeff_list
+        elif return_marg_coeff:
+            return log_lik, None
+
         return log_lik
 
     def _get_lcl_prms(self, params=None):

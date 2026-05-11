@@ -6,7 +6,7 @@ from scipy.sparse import csr_array
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
 from vega.coordinates import RtRpCoordinates, RMuCoordinates
 
-BLINDING_STRATEGIES = ['desi_y3']
+BLINDING_STRATEGIES = ['desi_y5']
 
 
 class Data:
@@ -337,7 +337,7 @@ class Data:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
 
-        elif self._blinding_strat in ['desi_m2', 'desi_y1']:
+        elif self._blinding_strat in ['desi_m2', 'desi_y1', 'desi_y3']:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
 

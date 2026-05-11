@@ -175,7 +175,7 @@ class VegaPlots:
         )
 
     def plot_data(
-        self, ax, x_bin, is_shell=False, data=None, cov_mat=None, cross_flag=False, label=None,
+        self, ax, x_bin, is_shell=False, data=None, cov_mat=None, cross_flag=False, data_label=None,
         corr_name='lyaxlya', data_fmt='o', data_color=None, scaling_power=2,
         use_local_coordinates=True, alpha=1.0, **kwargs
     ):
@@ -193,7 +193,7 @@ class VegaPlots:
             Covariance matrix as an array or a dictionary of components, by default None
         cross_flag : bool, optional
             Whether the plot is for a cross-correlation, by default False
-        label : str, optional
+        data_label : str, optional
             Label for the data points, by default None
         corr_name : str, optional
             Name of the correlation component, by default 'lyaxlya'
@@ -235,13 +235,13 @@ class VegaPlots:
         if is_shell:
             ax.errorbar(
                 x_grid, x_data * 1e3, yerr=np.sqrt(x_cov.diagonal()) * 1e3,
-                fmt=data_fmt, color=data_color, label=label, alpha=alpha, capsize=2
+                fmt=data_fmt, color=data_color, label=data_label, alpha=alpha, capsize=2
             )
         else:
             ax.errorbar(
                 x_grid, x_data * x_grid**scaling_power,
                 yerr=np.sqrt(x_cov.diagonal()) * x_grid**scaling_power,
-                fmt=data_fmt, color=data_color, label=label, alpha=alpha
+                fmt=data_fmt, color=data_color, label=data_label, alpha=alpha
             )
 
         return x_grid, x_data, x_cov
@@ -502,7 +502,7 @@ class VegaPlots:
             if not models_only:
                 data_shells.append(self.plot_data(
                     ax, r_bin, is_shell=True, data=data, cov_mat=cov_mat,
-                    cross_flag=cross_flag, label=label, corr_name=corr_name,
+                    cross_flag=cross_flag, data_label=label, corr_name=corr_name,
                     data_fmt=fmt, data_color=color, **kwargs
                 ))
 

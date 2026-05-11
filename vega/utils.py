@@ -355,13 +355,16 @@ def get_blinding(blind_pars, blinding_strat):
             'bao': None
         },
         'desi_y3': {
-            'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_16_06_2025.npz',
+            'full-shape': None,
             'bao': None
         }
     }
 
     if blinding_strat not in blinding_choices:
         raise ValueError(f'Unknown blinding version: {blinding_strat}.')
+
+    if blinding_strat == 'desi_y5':
+        raise ValueError('Blinding strategy desi_y5 is not implemented yet.')
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
     if blinding_file is None:
