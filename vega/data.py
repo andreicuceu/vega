@@ -6,7 +6,7 @@ from scipy.sparse import csr_array
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
 
-BLINDING_STRATEGIES = ['desi_y5']
+BLINDING_STRATEGIES = ['desi_dr3']
 
 
 class Data:
@@ -305,8 +305,8 @@ class Data:
             print(f'Strategy: {self._blinding_strat}')
 
             self._blind = True
-            # if self._blinding_strat == 'desi_y3':
-            #     assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
+            if self._blinding_strat == 'desi_dr3':
+                assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
 
             if 'DA_BLIND' in hdul[1].columns.names:
                 print(f'Warning! Running on blinded data {data_path}')
