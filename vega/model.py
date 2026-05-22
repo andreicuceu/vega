@@ -32,8 +32,11 @@ class Model:
         self._data = data
         data_has_distortion = (self._data is not None) and self._data.has_distortion
         data_is_multipoles = (self._data is not None) and self._data.use_multipoles
+        data_is_direct_multipoles = (
+            (self._data is not None) and self._data.is_direct_multipoles)
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
-        self._is_multipoles = corr_item.use_multipoles or data_is_multipoles
+        self._is_multipoles = (
+            corr_item.use_multipoles or data_is_multipoles or data_is_direct_multipoles)
         self._rmu_binning = self._data is not None and self._data._rmu_binning
 
         if self._rmu_binning:

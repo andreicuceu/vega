@@ -106,6 +106,11 @@ class VegaInterface:
         if 'per_sigma_smooth' in self.params:
             self.fiducial['per_sigma_smooth'] = self.params['per_sigma_smooth']
 
+        # Propagate z_eff to each component so that direct-multipoles components
+        # can build their model coordinate z_grid.
+        for corr_item in self.corr_items.values():
+            corr_item.z_eff = self.fiducial['z_eff']
+
         # Check if all correlations have data files
         self.data = {}
         self._has_data = True

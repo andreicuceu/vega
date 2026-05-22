@@ -79,6 +79,77 @@ class Coordinates:
         return mask
 
 
+class MultipoleCoordinates(Coordinates):
+    """Coordinate class for data already measured in multipoles.
+
+    Used when the input data file provides xi_ell(s) directly (e.g. a QSO
+    auto-correlation measured by pycorr / RascalC) rather than a 2D grid in
+    (rp, rt) or (r, mu) that Vega would project to multipoles internally.
+
+    This object represents only the *data* side.  The model is computed on a
+    separate 2D (r, mu) grid (stored as model_coordinates on the Data object)
+    and projected onto these s-bins via _multipole_matrix.
+    """
+
+    def __init__(self, s_grid, ells, z_eff=None):
+        """
+        Parameters
+        ----------
+        s_grid : 1D array
+            Separation bin centres for the data (after applying s cuts).
+        ells : list of int
+            Multipole orders present in the data vector, e.g. [0, 2, 4].
+        z_eff : float, optional
+            Effective redshift used to populate z_grid.
+        """
+        self.s_grid = np.asarray(s_grid, dtype=float)
+        self.ells = list(ells)
+        self.nells = len(ells)
+        ns = len(self.s_grid)
+
+        # Data-vector layout: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
+        r_tiled = np.tile(self.s_grid, self.nells)
+        zeros = np.zeros_like(r_tiled)
+
+        self.r_grid = r_tiled
+        self.mu_grid = zeros
+        self.rp_grid = r_tiled
+        self.rt_grid = zeros
+        self.r_regular_grid = r_tiled
+        self.mu_regular_grid = zeros
+        self.rp_regular_grid = r_tiled
+        self.rt_regular_grid = zeros
+
+        if z_eff is not None:
+            self.z_grid = np.full(len(r_tiled), float(z_eff))
+        else:
+            self.z_grid = None
+
+        ds = float(self.s_grid[1] - self.s_grid[0]) if ns > 1 else 4.0
+        self.rp_min = 0.
+        self.rp_max = float(self.s_grid.max())
+        self.rt_max = float(self.s_grid.max())
+        self.rp_nbins = ns
+        self.rt_nbins = ns
+        self.rp_binsize = ds
+        self.rt_binsize = ds
+
+    def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
+        """Return a boolean mask based on s-min / s-max cuts.
+
+        The mask is tiled across all multipoles so that it covers the full
+        concatenated data vector [xi_0, xi_2, ..., xi_L].
+        """
+        s_min = cuts_config.getfloat('s-min', 0.)
+        s_max = cuts_config.getfloat('s-max', 300.)
+        mask_1d = (self.s_grid >= s_min) & (self.s_grid < s_max)
+        return np.tile(mask_1d, self.nells)
+
+    def get_mask_to_other(self, other):
+        raise NotImplementedError(
+            'MultipoleCoordinates does not support get_mask_to_other')
+
+
 class RtRpCoordinates(Coordinates):
     """Class to handle Vega coordinate grids
     """

@@ -4,7 +4,7 @@ from scipy import sparse
 from scipy.sparse import csr_array
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
-from vega.coordinates import RtRpCoordinates, RMuCoordinates
+from vega.coordinates import RtRpCoordinates, RMuCoordinates, MultipoleCoordinates
 
 BLINDING_STRATEGIES = ['desi_y5']
 
@@ -42,11 +42,12 @@ class Data:
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
         self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
+        self.is_direct_multipoles = corr_item.is_direct_multipoles
         self.weighted_multipoles = corr_item.config['model'].getboolean('weighted_multipoles', False)
         self._multipole_matrix = None
         self.averaging_matrix_multipoles = None
         self._rmu_binning = None
-        if self.use_multipoles:
+        if self.use_multipoles or self.is_direct_multipoles:
             ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
             ells_to_model = ells_to_model.split(',')
             self.ells_to_model = [int(_) for _ in ells_to_model]
@@ -57,36 +58,44 @@ class Data:
 
         self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
 
-        # Read the data file and init the corrdinate grids
+        # Read the data file and init the coordinate grids
         data_path = corr_item.config['data'].get('filename')
-        dmat_path = corr_item.config['data'].get('distortion-file', None)
         cov_path = corr_item.config['data'].get('covariance-file', None)
         cov_rescale = corr_item.config['data'].getfloat('cov_rescale', None)
 
-        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
-        self.corr_item.init_coordinates(
-            self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
+        if self.is_direct_multipoles:
+            # New path: data already in multipole format (ASCII text)
+            self._read_multipole_data(
+                data_path, corr_item.config['cuts'], cov_path, cov_rescale)
+            self.corr_item.init_coordinates(
+                self.model_coordinates, self.model_coordinates, self.data_coordinates)
+        else:
+            dmat_path = corr_item.config['data'].get('distortion-file', None)
+            self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
+            self.corr_item.init_coordinates(
+                self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
-        # Read the metal file and init metals in the corr item
-        if 'metals' in corr_item.config:
-            if not corr_item.new_metals:
-                tracer_catalog, metal_correlations = self._init_metals(corr_item.config['metals'])
-            else:
-                metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
-                    corr_item.config['metals'])
-                metal_correlations = self._init_metal_correlations(
-                    corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
+            # Read the metal file and init metals in the corr item
+            if 'metals' in corr_item.config:
+                if not corr_item.new_metals:
+                    tracer_catalog, metal_correlations = self._init_metals(
+                        corr_item.config['metals'])
+                else:
+                    metals_in_tracer1, metals_in_tracer2, tracer_catalog = \
+                        self._init_metal_tracers(corr_item.config['metals'])
+                    metal_correlations = self._init_metal_correlations(
+                        corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
 
-            self.corr_item.init_metals(tracer_catalog, metal_correlations)
+                self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
-        # Check if we have broadband
-        if 'broadband' in corr_item.config:
-            self.corr_item.init_broadband(self.coeff_binning_model)
+            # Check if we have broadband
+            if 'broadband' in corr_item.config:
+                self.corr_item.init_broadband(self.coeff_binning_model)
 
         if self.cosmo_params is not None:
             self.corr_item.init_cosmo(self.cosmo_params)
 
-        if not self.has_distortion:
+        if not self.has_distortion and not self.is_direct_multipoles:
             self._distortion_mat = csr_array(np.eye(self.full_data_size))
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
@@ -293,6 +302,149 @@ class Data:
             Distortion matrix flag
         """
         return self._distortion_mat is not None
+
+    def _read_multipole_data(self, data_path, cuts_config, cov_path=None, cov_rescale=None):
+        """Read correlation-function multipoles from an ASCII text file.
+
+        Handles the 'direct multipoles' path where xi_ell(s) values are
+        already measured (e.g. QSO auto-correlation output from pycorr)
+        rather than a 2D (rp, rt) FITS file that Vega converts internally.
+
+        The data vector is concatenated as [xi_0(s), xi_2(s), ..., xi_L(s)].
+        An internal 2D (r, mu) model grid is constructed so that the existing
+        CorrelationFunction / PktoXi machinery can be reused; a multipole
+        projection matrix (_multipole_matrix) then maps model xi(r, mu) onto
+        the data xi_ell(s) values.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to the ASCII file.  Expected column order:
+            s_mid  s_avg  xi_0  xi_2  [xi_4 ...]  std_0  std_2  [std_4 ...]
+        cuts_config : ConfigParser
+            [cuts] section from the component config file.
+        cov_path : str, optional
+            Path to an ASCII RascalC covariance file (flat n×n matrix, one row
+            per line, ordered [xi_0 bins, xi_2 bins, ...]).
+        cov_rescale : float, optional
+            Multiplicative rescaling applied to the covariance matrix.
+        """
+        from scipy.sparse import csr_array as _csr
+
+        print(f'Reading multipole data file {data_path}\n')
+        raw = np.loadtxt(find_file(data_path), comments='#')
+
+        # Columns: s_mid, s_avg, xi_0, xi_2, [xi_4, ...], std_0, std_2, ...
+        s_mid_all = raw[:, 0]
+        s_avg_all = raw[:, 1]
+        xi_all = raw[:, 2:2 + self.nells]          # shape (n_s_all, nells)
+
+        # Apply separation cuts
+        s_min = cuts_config.getfloat('s-min', 0.)
+        s_max = cuts_config.getfloat('s-max', 300.)
+        mask_1d = (s_mid_all >= s_min) & (s_mid_all < s_max)
+
+        s_data = s_avg_all[mask_1d]                # measured bin centres
+        xi_cut = xi_all[mask_1d, :]
+        n_s = len(s_data)
+
+        # Data vector: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
+        self._data_vec = np.concatenate([xi_cut[:, i] for i in range(self.nells)])
+
+        # Read covariance (RascalC ASCII format: flat square matrix, one row/line)
+        if cov_path is not None:
+            print(f'Reading RascalC covariance file {cov_path}\n')
+            cov_full = np.loadtxt(find_file(cov_path), comments='#')
+            n_cov = cov_full.shape[0]
+            n_s_cov = n_cov // self.nells
+
+            if n_s_cov * self.nells != n_cov:
+                raise ValueError(
+                    f'Covariance size {n_cov} is not divisible by the number of '
+                    f'multipoles {self.nells}.  Check the covariance file and '
+                    f'model_multipoles setting.')
+
+            # Reconstruct the s-bin centres assumed by the covariance file.
+            # The cov covers the same s range as the cuts; its bins are inferred
+            # from their count and the cut boundaries.
+            ds_cov = (s_max - s_min) / n_s_cov
+            s_cov_centers = s_min + (np.arange(n_s_cov) + 0.5) * ds_cov
+
+            # Match data s_avg values to covariance bins (nearest neighbour)
+            cov_idx = np.array(
+                [np.argmin(np.abs(s_cov_centers - sv)) for sv in s_data])
+
+            # Build full index array across all multipoles
+            all_cov_idx = np.concatenate(
+                [cov_idx + ell_i * n_s_cov for ell_i in range(self.nells)])
+            self._cov_mat = cov_full[np.ix_(all_cov_idx, all_cov_idx)].copy()
+
+            if cov_rescale is not None:
+                self._cov_mat *= cov_rescale
+
+        # Blinding flags (multipole data are not blinded through Vega)
+        self._blind = False
+        self._blinding_strat = None
+        self.cosmo_params = None
+        self.nb = None
+
+        # Scale-cut bookkeeping (stored for plotting)
+        self.r_min_cut = s_min
+        self.r_max_cut = s_max
+        self.mu_min_cut = 0.
+        self.mu_max_cut = 1.
+
+        # Data coordinates: lightweight 1-D s-only object
+        z_eff = getattr(self.corr_item, 'z_eff', None)
+        self.data_coordinates = MultipoleCoordinates(s_data, self.ells_to_model, z_eff=z_eff)
+
+        # Data mask is all-True (data vector is already cut to [s_min, s_max))
+        self.data_mask = np.ones(self.nells * n_s, dtype=bool)
+
+        # Model coordinates: 2D (r, mu) grid.
+        # r bins match the data s values so the multipole matrix is block-diagonal.
+        # mu bins run from 0 to 1 (auto-correlation symmetry).
+        n_mu_model = cuts_config.getint('n_mu_model', 100)
+
+        mu_arr = (0.5 + np.arange(n_mu_model)) / n_mu_model  # centres, 0→1
+        r_mesh, mu_mesh = np.meshgrid(s_data, mu_arr)         # (n_mu, n_s)
+        r_flat = r_mesh.flatten()                              # mu-major order
+        mu_flat = mu_mesh.flatten()
+
+        z_grid_model = (np.full(len(r_flat), float(z_eff))
+                        if z_eff is not None else None)
+        self.model_coordinates = RtRpCoordinates.init_from_r_mu_grids(
+            r_flat, mu_flat, z_eff=z_eff)
+        if z_grid_model is not None:
+            self.model_coordinates.z_grid = z_grid_model
+        self.dist_model_coordinates = self.model_coordinates
+
+        # Model mask: all True (no scale cuts on the model grid itself)
+        self.model_mask = np.ones(n_s * n_mu_model, dtype=bool)
+
+        # Multipole projection matrix: maps xi(r, mu) on the model grid to
+        # xi_ell(s) on the data grid.
+        #
+        # RtRpCoordinates.init_from_r_mu_grids produces a meshgrid flattened in
+        # mu-major order: flat index k = mu_idx * n_s + r_idx.
+        # For data bin (ell_idx, s_j) the contributing model columns are
+        # k = 0*n_s+j, 1*n_s+j, ..., (n_mu-1)*n_s+j  i.e.  j::n_s.
+        leg_ells = get_legendre_bins(self.ells_to_model, n_mu_model, x_correlation=False)
+
+        n_data_total = self.nells * n_s
+        n_model_total = n_s * n_mu_model
+        mult_matrix = np.zeros((n_data_total, n_model_total))
+        for ell_idx in range(self.nells):
+            for j in range(n_s):
+                mult_matrix[ell_idx * n_s + j, j::n_s] = leg_ells[ell_idx]
+        self._multipole_matrix = _csr(mult_matrix)
+
+        # Signal to Model that it should apply _multipole_matrix
+        self.use_multipoles = True
+        self._rmu_binning = False
+
+        # full_data_size is used for identity-matrix fallbacks
+        self.full_data_size = len(self._data_vec)
 
     def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.

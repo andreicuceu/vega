@@ -53,6 +53,24 @@ class CorrelationItem:
             ells_to_model = ells_to_model.split(',')
             self.ells_to_model = [int(_) for _ in ells_to_model]
 
+        # True when the data file already contains multipoles (e.g. QSO auto
+        # from pycorr) rather than a 2D (rp, rt) or (r, mu) map.
+        self.is_direct_multipoles = config['data'].get('data_type', '') == 'multipoles'
+        if self.is_direct_multipoles:
+            if self.use_multipoles:
+                raise ValueError(
+                    "Cannot set both 'use_multipoles = True' in [model] and "
+                    "'data_type = multipoles' in [data] for the same component."
+                )
+            ells_to_model = config['model'].get('model_multipoles', '0,2')
+            self.ells_to_model = [int(e) for e in ells_to_model.split(',')]
+            # No distortion matrix for pre-measured multipoles
+            self.has_distortion = False
+
+        # Effective redshift – populated externally by VegaInterface so that
+        # _read_multipole_data can build the model coordinate z_grid.
+        self.z_eff = None
+
         self.test_flag = config['data'].getboolean('test', False)
 
         marg_rs = [
