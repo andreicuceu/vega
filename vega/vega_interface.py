@@ -853,14 +853,21 @@ class VegaInterface:
             self.full_data_mask.append(self.data[name].data_mask)
             self.full_model_mask.append(self.data[name].model_mask)
 
-        # Convert to multipoles
-        if any(self.data[name].use_multipoles for name in self.corr_items):
+        # Convert to multipoles if any forest component uses the 2D-r,mu→multipoles path.
+        # Components with is_direct_multipoles=True already have their covariance block
+        # in multipole space (from RascalC), so no transformation is needed for them.
+        needs_transform = any(
+            self.data[name].use_multipoles and not self.data[name].is_direct_multipoles
+            for name in self.corr_items
+        )
+        if needs_transform:
             G = np.full((len(self.corr_items), len(self.corr_items)), None)
             for i, name in enumerate(self.corr_items):
-                if self.data[name].use_multipoles:
-                    G[i, i] = self.data[name]._multipole_matrix
+                data_obj = self.data[name]
+                if data_obj.use_multipoles and not data_obj.is_direct_multipoles:
+                    G[i, i] = data_obj._multipole_matrix
                 else:
-                    G[i, i] = eye_array(self.data[name].full_data_size)
+                    G[i, i] = eye_array(data_obj.full_data_size)
             G = block_array(G, format='csr')
             self.global_cov = G.dot(G.dot(self.global_cov).T).T
 
