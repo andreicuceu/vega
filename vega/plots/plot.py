@@ -29,6 +29,9 @@ class VegaPlots:
         self.has_data = False
         self.cuts = {}
         self.mask = {}
+        # Per-component s-grid and ell list for direct-multipole components
+        self.s_grids = {}
+        self.multipole_ells = {}
 
         if vega_data is not None:
             for name, data in vega_data.items():
@@ -53,6 +56,8 @@ class VegaPlots:
                     self.rp_setup_model[name] = self.rp_setup_data[name]
                     self.rt_setup_model[name] = self.rt_setup_data[name]
                     self.r_setup_model[name] = self.r_setup_data[name]
+                    self.s_grids[name] = data.data_coordinates.s_grid.copy()
+                    self.multipole_ells[name] = list(data.data_coordinates.ells)
                     continue
 
                 self.mask[name] = data.dist_model_coordinates.get_mask_to_other(
@@ -659,6 +664,147 @@ class VegaPlots:
                                 data_label=data_label, **kwargs)
 
         self.fig = fig
+
+    def plot_multipoles(self, corr_name, models=None, labels=None, model_colors=None,
+                        s_power=2, figsize=(7, 8), xlim=None, ylim=None, title=None,
+                        data_color='k', data_fmt='o', data_ms=4, capsize=3,
+                        ell_labels=None, fig=None, **kwargs):
+        """Plot measured multipoles of a direct-multipole component with bestfit model.
+
+        Produces one panel per fitted multipole (e.g. two panels for ℓ=0 and ℓ=2),
+        displaying s^s_power × ξ_ℓ(s) vs s with data error bars and model curves.
+
+        Parameters
+        ----------
+        corr_name : str
+            Name of the direct-multipole correlation component (e.g. 'qsoxqso').
+        models : list of array or list of dict, optional
+            Model vectors to overplot. Each entry is either a flat 1-D array
+            (concatenated multipoles in the same order as the data) or a dict
+            mapping corr_name to such an array.
+        labels : list of str, optional
+            Legend labels for each model curve.
+        model_colors : list of str, optional
+            Line colours for the model curves. Defaults to ['r', 'b', 'g', 'C3'].
+        s_power : int, optional
+            Power of s used for display scaling: y = s^s_power × ξ_ℓ(s).
+            Default is 2.
+        figsize : tuple, optional
+            Figure size in inches. Default (7, 8).
+        xlim : tuple, optional
+            x-axis limits (s_min, s_max).
+        ylim : tuple or list of tuple, optional
+            y-axis limits. A single tuple applies to all panels; a list of
+            tuples sets limits per panel.
+        title : str, optional
+            Figure suptitle.
+        data_color : str, optional
+            Colour for data points. Default 'k'.
+        data_fmt : str, optional
+            Marker style for data points. Default 'o'.
+        data_ms : float, optional
+            Marker size. Default 4.
+        capsize : float, optional
+            Error bar cap size. Default 3.
+        ell_labels : list of str, optional
+            Panel labels for each ℓ. Defaults to r'$\\ell = {ell}$'.
+        fig : matplotlib.figure.Figure, optional
+            Existing figure to draw into. If None a new figure is created.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+        axs : list of matplotlib.axes.Axes
+        """
+        if corr_name not in self.s_grids:
+            raise ValueError(
+                f"'{corr_name}' is not a direct-multipole component or has not "
+                "been registered. Available direct-multipole components: "
+                f"{list(self.s_grids.keys())}")
+
+        s = self.s_grids[corr_name]
+        ells = self.multipole_ells[corr_name]
+        n_ells = len(ells)
+        n_s = len(s)
+
+        if model_colors is None:
+            model_colors = ['r', 'b', 'g', 'C3']
+        if labels is None and models is not None:
+            labels = [None] * len(models)
+        if ell_labels is None:
+            ell_labels = [rf'$\ell = {ell}$' for ell in ells]
+
+        # Reshape data vector from (n_ells * n_s,) → (n_ells, n_s)
+        data_vec = self.data[corr_name]
+        data_by_ell = data_vec.reshape(n_ells, n_s)
+
+        # Errors from covariance diagonal (block-diagonal: each ell block)
+        if corr_name in self.cov_mat:
+            cov_diag = np.diag(self.cov_mat[corr_name])
+            errors_by_ell = np.sqrt(cov_diag).reshape(n_ells, n_s)
+        else:
+            errors_by_ell = None
+
+        # Create figure
+        if fig is None:
+            fig, axs = plt.subplots(n_ells, 1, figsize=figsize, sharex=True)
+        else:
+            axs = np.array(fig.axes).flatten()
+        if n_ells == 1:
+            axs = [axs] if not hasattr(axs, '__len__') else list(axs)
+        else:
+            axs = list(axs)
+        self.fig = fig
+
+        for i, (ell, ax) in enumerate(zip(ells, axs)):
+            scale = s ** s_power
+            y_data = data_by_ell[i] * scale
+
+            if errors_by_ell is not None:
+                y_err = errors_by_ell[i] * scale
+                ax.errorbar(s, y_data, yerr=y_err, fmt=data_fmt, color=data_color,
+                            label='Data', capsize=capsize, ms=data_ms, zorder=3)
+            else:
+                ax.plot(s, y_data, data_fmt, color=data_color, label='Data',
+                        ms=data_ms, zorder=3)
+
+            # Overplot models
+            if models is not None:
+                for j, model in enumerate(models):
+                    model_vec = np.asarray(array_or_dict(model, corr_name))
+                    model_by_ell = model_vec.reshape(n_ells, n_s)
+                    y_model = model_by_ell[i] * scale
+                    color = model_colors[j % len(model_colors)]
+                    lbl = labels[j] if labels is not None else None
+                    ax.plot(s, y_model, '-', color=color, label=lbl, zorder=2)
+
+            ax.axhline(0, color='0.7', lw=0.8, ls='--', zorder=1)
+
+            if s_power == 0:
+                ylabel = rf'$\xi_{ell}(s)$'
+            else:
+                ylabel = (rf'$s^{s_power}\,\xi_{ell}(s)$'
+                          rf' $[(h^{{-1}}\,\mathrm{{Mpc}})^{s_power-1}]$')
+            ax.set_ylabel(ylabel)
+
+            # Per-panel y limits
+            if ylim is not None:
+                if isinstance(ylim[0], (int, float)):
+                    ax.set_ylim(ylim)
+                else:
+                    ax.set_ylim(ylim[i])
+
+            ax.legend(title=ell_labels[i], loc='upper right', fontsize=10,
+                      title_fontsize=11)
+
+        axs[-1].set_xlabel(r'$s\;[h^{-1}\,\mathrm{Mpc}]$')
+        if xlim is not None:
+            axs[-1].set_xlim(xlim)
+        if title is not None:
+            fig.suptitle(title, y=1.01)
+        fig.tight_layout()
+
+        return fig, axs
 
     def plot_4wedges(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), models=None, cov_mat=None,
                      labels=None, data=None, cross_flag=False, corr_name='lyaxlya',

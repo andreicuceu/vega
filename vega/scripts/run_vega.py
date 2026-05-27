@@ -45,9 +45,27 @@ def run_vega(config_path):
 
     num_pars = len(vega.sample_params['limits'])
     for name in vega.plots.data:
-        # Direct-multipole components (e.g. QSO auto measured in xi_ell) cannot
-        # be visualised with the standard rp/rt wedge/shell machinery.
+        # Direct-multipole components (e.g. QSO auto measured in xi_ell) get a
+        # dedicated multipole plot instead of wedges/shells.
         if vega.data[name].is_direct_multipoles:
+            bestfit_legend = f'Correlation: {name}, Total '
+            bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'
+            bestfit_legend += f': {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) '
+            bestfit_legend += f'= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}'
+            if not vega.bestfit.fmin.is_valid:
+                bestfit_legend = 'Invalid fit! Disregard these results.'
+
+            vega.plots.plot_multipoles(
+                corr_name=name,
+                models=[vega.bestfit_model[name]],
+                labels=['Best fit'],
+                model_colors=['r'],
+            )
+            vega.plots.fig.suptitle(bestfit_legend, fontsize=14, y=1.01)
+            vega.plots.fig.savefig(
+                f'{vega.output.outfile[:-5]}_{name}_multipoles.png',
+                dpi='figure', bbox_inches='tight', facecolor='white'
+            )
             continue
 
         # Get title
