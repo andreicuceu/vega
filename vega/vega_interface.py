@@ -548,12 +548,6 @@ class VegaInterface:
                 diff = corr_data.masked_data_vec \
                     - self.bestfit_model[name][corr_data.model_mask]
                 chisq = diff.T.dot(corr_data.inv_masked_cov.dot(diff))
-                if corr_data.is_direct_multipoles:
-                    print(f'DEBUG {name}: model_mask size={corr_data.model_mask.sum()}, '
-                          f'data vec norm={np.linalg.norm(corr_data.masked_data_vec):.4f}, '
-                          f'model norm={np.linalg.norm(self.bestfit_model[name][corr_data.model_mask]):.4f}, '
-                          f'diff norm={np.linalg.norm(diff):.4f}, '
-                          f'inv_cov max={corr_data.inv_masked_cov.max():.4e}')
 
             # Calculate best-fitting values for the marginalized templates.
             # This approximation ignores global_cov, hence correlations between
