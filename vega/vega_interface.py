@@ -869,8 +869,26 @@ class VegaInterface:
         self.full_data_mask = []
         self.full_model_mask = []
         for name in self.corr_items:
-            self.full_data_mask.append(self.data[name].data_mask)
-            self.full_model_mask.append(self.data[name].model_mask)
+            data_obj = self.data[name]
+            self.full_model_mask.append(data_obj.model_mask)
+
+            if data_obj.is_direct_multipoles and nell_cov is not None:
+                # The global-cov block for this component spans nell_cov * n_s
+                # entries (one block per multipole in the file), but we may be
+                # fitting only a subset of multipoles.  Build a boolean mask of
+                # size nell_cov * n_s that selects only the fitted ell-blocks,
+                # so that compute_masked_invcov sees the right global-cov rows/cols.
+                n_s = len(data_obj.data_coordinates.s_grid)
+                n_cov_block = nell_cov * n_s
+                ells_in_cov = list(range(0, 2 * nell_cov, 2))  # [0, 2, 4, ...]
+                ell_indices = [ells_in_cov.index(ell)
+                               for ell in self.corr_items[name].ells_to_model]
+                cov_block_mask = np.zeros(n_cov_block, dtype=bool)
+                for ell_i in ell_indices:
+                    cov_block_mask[ell_i * n_s:(ell_i + 1) * n_s] = True
+                self.full_data_mask.append(cov_block_mask)
+            else:
+                self.full_data_mask.append(data_obj.data_mask)
 
         # Convert to multipoles if any forest component uses the 2D-r,mu→multipoles path.
         # Components with is_direct_multipoles=True already have their covariance block
