@@ -45,6 +45,11 @@ def run_vega(config_path):
 
     num_pars = len(vega.sample_params['limits'])
     for name in vega.plots.data:
+        # Direct-multipole components (e.g. QSO auto measured in xi_ell) cannot
+        # be visualised with the standard rp/rt wedge/shell machinery.
+        if vega.data[name].is_direct_multipoles:
+            continue
+
         # Get title
         bestfit_legend = f'Correlation: {name}, Total '
         bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'
