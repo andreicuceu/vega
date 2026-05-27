@@ -178,7 +178,27 @@ class Output:
                 )
             ]
 
-            if not self.corr_items[name].use_multipoles:
+            if self.data[name].is_direct_multipoles:
+                # Direct-multipole component (e.g. QSO auto in xi_ell):
+                # _RP stores the multipole order; _RT stores the separation s.
+                ells_to_model = self.corr_items[name].ells_to_model
+                s_grid = self.data[name].data_coordinates.s_grid
+                ells_col = np.repeat(ells_to_model, len(s_grid))
+                s_col = np.tile(s_grid, len(ells_to_model))
+                columns.append(fits.Column(
+                    name=name+'_RP', format='K',
+                    array=self.pad_array(ells_col, num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_RT', format='D',
+                    array=self.pad_array(s_col, num_rows)
+                ))
+                z_eff = float(getattr(self.corr_items[name], 'z_eff', 0.) or 0.)
+                columns.append(fits.Column(
+                    name=name+'_Z', format='D',
+                    array=np.full(num_rows, z_eff)
+                ))
+            elif not self.corr_items[name].use_multipoles:
                 columns.append(fits.Column(
                     name=name+'_RP', format='D',
                     array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
@@ -187,6 +207,13 @@ class Output:
                     name=name+'_RT', format='D',
                     array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
                 ))
+                if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
+                    columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+                else:
+                    columns.append(fits.Column(
+                        name=name+'_Z', format='D',
+                        array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
+                    ))
             else:
                 nmu = self.corr_items[name].dist_model_coordinates.mu_nbins
                 nr = self.corr_items[name].dist_model_coordinates.r_nbins
@@ -203,14 +230,13 @@ class Output:
                     name=name+'_RT', format='D',
                     array=self.pad_array(rmodel, num_rows)
                 ))
-
-            if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
-                columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
-            else:
-                columns.append(fits.Column(
-                    name=name+'_Z', format='D',
-                    array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
-                ))
+                if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
+                    columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+                else:
+                    columns.append(fits.Column(
+                        name=name+'_Z', format='D',
+                        array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
+                    ))
 
             if self.data[name].nb is not None:
                 columns.append(fits.Column(
