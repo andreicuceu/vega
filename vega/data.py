@@ -419,8 +419,10 @@ class Data:
             self.model_coordinates.z_grid = z_grid_model
         self.dist_model_coordinates = self.model_coordinates
 
-        # Model mask: all True (no scale cuts on the model grid itself)
-        self.model_mask = np.ones(n_s * n_mu_model, dtype=bool)
+        # Model mask must match the OUTPUT of Model.compute(), which applies
+        # _multipole_matrix and returns a (n_ells * n_s)-element vector, not
+        # the (n_mu_model * n_s)-element internal grid.
+        self.model_mask = np.ones(self.nells * n_s, dtype=bool)
 
         # Multipole projection matrix: maps xi(r, mu) on the model grid to
         # xi_ell(s) on the data grid.
