@@ -841,6 +841,25 @@ class VegaInterface:
             if self.apply_global_hartlap:
                 nsamples = hdul[1].header['NSAMPLES']
             self.global_cov = hdul[1].data['COV']
+            hdr = hdul[1].header
+
+            # Validate direct-multipole components against provenance stored by
+            # build_global_cov.py.  The header records NELL (number of multipoles
+            # in the QSO auto block) and SMIN/SMAX (separation cuts), so we can
+            # catch mismatches before reaching the chi2 computation.
+            nell_cov = hdr.get('NELL', None)
+            if nell_cov is not None:
+                for name, data_obj in self.data.items():
+                    if not data_obj.is_direct_multipoles:
+                        continue
+                    if data_obj.nells > nell_cov:
+                        raise ValueError(
+                            f"Component '{name}' requests {data_obj.nells} "
+                            f"multipoles (ells={data_obj.ells_to_model}) but the "
+                            f"global covariance file only contains {nell_cov}. "
+                            f"Re-run build_global_cov.py with --n-multipoles "
+                            f"{data_obj.nells} or reduce model_multipoles in the "
+                            f"component config.")
 
         if scale is not None:
             print('Rescaling covariance by a factor of: ', scale)

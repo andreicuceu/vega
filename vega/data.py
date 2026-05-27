@@ -335,8 +335,11 @@ class Data:
         raw = np.loadtxt(find_file(data_path), comments='#')
 
         # Columns: s_mid, s_avg, xi_0, xi_2, [xi_4, ...], std_0, std_2, ...
+        # Infer how many multipoles are present in the file (each ell contributes
+        # one xi column and one std column, so total data columns = 2 * n_ells_file).
         s_mid_all = raw[:, 0]
         s_avg_all = raw[:, 1]
+        n_ells_file = (raw.shape[1] - 2) // 2
         xi_all = raw[:, 2:2 + self.nells]          # shape (n_s_all, nells)
 
         # Apply separation cuts
@@ -356,13 +359,17 @@ class Data:
             print(f'Reading RascalC covariance file {cov_path}\n')
             cov_full = np.loadtxt(find_file(cov_path), comments='#')
             n_cov = cov_full.shape[0]
-            n_s_cov = n_cov // self.nells
 
-            if n_s_cov * self.nells != n_cov:
+            # The covariance file may cover more multipoles than we are fitting
+            # (e.g. the file has ell=0,2,4 but model_multipoles = 0,2).
+            # Use the data-file column count to determine the number of multipoles
+            # in the covariance file, then extract only the fitted subset.
+            n_s_cov = n_cov // n_ells_file
+            if n_s_cov * n_ells_file != n_cov:
                 raise ValueError(
                     f'Covariance size {n_cov} is not divisible by the number of '
-                    f'multipoles {self.nells}.  Check the covariance file and '
-                    f'model_multipoles setting.')
+                    f'multipoles in the data file ({n_ells_file}). '
+                    f'Check the covariance file.')
 
             # Reconstruct the s-bin centres assumed by the covariance file.
             # The cov covers the same s range as the cuts; its bins are inferred
@@ -374,9 +381,14 @@ class Data:
             cov_idx = np.array(
                 [np.argmin(np.abs(s_cov_centers - sv)) for sv in s_data])
 
-            # Build full index array across all multipoles
+            # The data file multipoles are assumed to be in the standard order
+            # [0, 2, 4, ...]. Find the position of each fitted ell in that sequence.
+            ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+            ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+
+            # Build full index array selecting only the fitted multipole blocks
             all_cov_idx = np.concatenate(
-                [cov_idx + ell_i * n_s_cov for ell_i in range(self.nells)])
+                [cov_idx + ell_i * n_s_cov for ell_i in ell_file_indices])
             self._cov_mat = cov_full[np.ix_(all_cov_idx, all_cov_idx)].copy()
 
             if cov_rescale is not None:
