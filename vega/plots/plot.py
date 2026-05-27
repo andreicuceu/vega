@@ -45,6 +45,16 @@ class VegaPlots:
                 self.cuts[name] = {'r_min': data.r_min_cut,
                                    'r_max': data.r_max_cut}
 
+                # Direct-multipole components (e.g. QSO auto measured in xi_ell)
+                # cannot be visualised with the standard 2D rp/rt machinery.
+                # Use an all-True mask and mirror the data coordinate setup.
+                if getattr(data, 'is_direct_multipoles', False):
+                    self.mask[name] = np.ones(len(data.data_vec), dtype=bool)
+                    self.rp_setup_model[name] = self.rp_setup_data[name]
+                    self.rt_setup_model[name] = self.rt_setup_data[name]
+                    self.r_setup_model[name] = self.r_setup_data[name]
+                    continue
+
                 self.mask[name] = data.dist_model_coordinates.get_mask_to_other(
                     data.data_coordinates)
 
