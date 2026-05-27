@@ -247,6 +247,15 @@ class Output:
             model_hdu = fits.BinTableHDU.from_columns(columns)
             model_hdu.name = 'MODEL_' + name
 
+            # Record whether this component uses direct multipoles so that
+            # FitResults can reconstruct multipole plots without re-running Vega.
+            is_dm = self.data[name].is_direct_multipoles
+            model_hdu.header['IS_MULTI'] = (is_dm, 'True if data are pre-measured multipoles')
+            if is_dm:
+                model_hdu.header['NELL'] = (
+                    len(self.corr_items[name].ells_to_model),
+                    'Number of fitted multipoles')
+
             for par, val in params.items():
                 card_name = 'hierarch ' + par
                 model_hdu.header[card_name] = val

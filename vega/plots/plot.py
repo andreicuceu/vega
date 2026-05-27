@@ -69,6 +69,60 @@ class VegaPlots:
 
             self.has_data = True
 
+    @classmethod
+    def from_fit_results(cls, fit_results):
+        """Build a VegaPlots instance from a FitResults object (no re-running Vega).
+
+        Only direct-multipole components (is_multipoles=True in the FITS HDU) are
+        registered; standard 2D correlation components are ignored because the
+        wedge/shell plotting machinery requires the full Vega coordinate setup.
+
+        Parameters
+        ----------
+        fit_results : FitResults or str
+            A FitResults instance or a path to a Vega output FITS file.
+
+        Returns
+        -------
+        VegaPlots
+
+        Examples
+        --------
+        >>> from vega.postprocess.fit_results import FitResults
+        >>> from vega.plots.plot import VegaPlots
+        >>> plots = VegaPlots.from_fit_results('fit_output.fits')
+        >>> fig, axs = plots.plot_multipoles('qsoxqso')
+        """
+        from vega.postprocess.fit_results import FitResults as _FR  # avoid circular import
+
+        if isinstance(fit_results, str):
+            fit_results = _FR(fit_results)
+
+        obj = cls()  # empty instance – no vega_data
+
+        for name, co in fit_results.correlations.items():
+            if not co.is_multipoles:
+                continue
+
+            # Recover unique ells and s values from the _RP / _RT columns
+            mask = co.data_mask
+            ells_col = co.rp[mask].astype(int)
+            s_col = co.rt[mask]
+            ells = sorted(set(ells_col.tolist()))
+            n_ells = len(ells)
+            n_s = mask.sum() // n_ells
+            # s values for the first ell block
+            s_grid = s_col[:n_s]
+
+            obj.data[name] = co.data[mask]
+            # Rebuild a diagonal covariance from stored variances
+            obj.cov_mat[name] = np.diag(co.variance[mask])
+            obj.s_grids[name] = s_grid
+            obj.multipole_ells[name] = ells
+            obj.has_data = True
+
+        return obj
+
     def initialize_coordinates(self, coordinates):
         rp_setup = (coordinates.rp_min, coordinates.rp_max, coordinates.rp_nbins)
         rt_setup = (0., coordinates.rt_max, coordinates.rt_nbins)

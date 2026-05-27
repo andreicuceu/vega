@@ -20,9 +20,9 @@ class CorrelationOutput:
     rp: ArrayLike
     rt: ArrayLike
     z: ArrayLike
-    ndata: int
-    is_multipoles: bool
-    nell: int
+    ndata: int = 0 
+    is_multipoles: bool = False
+    nell: int = 0
 
     size: Union[int, None] = None
     chisq: Union[float, None] = None
@@ -89,6 +89,8 @@ class FitResults:
             chisq = hdu.header.get('HIERARCH CHISQ', None)
             reduced_chisq = hdu.header.get('HIERARCH REDUCED_CHISQ', None)
             p_value = hdu.header.get('HIERARCH P_VALUE', None)
+            is_multipoles = hdu.header.get('IS_MULTI', False)
+            nell = hdu.header.get('NELL', 0)
 
             bestfit_marg_coeff = []
             if 'HIERARCH marg_coeff_0' in hdu.header:
@@ -103,7 +105,8 @@ class FitResults:
             self.correlations[lowercase_name] = CorrelationOutput(
                 model, model_mask, data, data_mask, variance, rp, rt, z,
                 size=size, chisq=chisq, reduced_chisq=reduced_chisq,
-                p_value=p_value, bestfit_marg_coeff=bestfit_marg_coeff
+                p_value=p_value, bestfit_marg_coeff=bestfit_marg_coeff,
+                is_multipoles=is_multipoles, nell=nell,
             )
 
         self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_data_points - self.num_pars)
