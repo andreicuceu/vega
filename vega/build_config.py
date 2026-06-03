@@ -18,8 +18,9 @@ class BuildConfig:
     _params_template = None
     recognised_correlations = [
         'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
-        'civxciv', 'civxqso', 'civxlya'
+        'lyaxdla', 'lybxdla', 'lyaxsbla', 'lybxsbla',
+        'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya', 
     ]
 
     def __init__(self, options={}, overwrite=False):
@@ -758,9 +759,9 @@ class BuildConfig:
 
                 if bias_eta is None:
                     bias_eta = bias * beta / growth_rate
-            elif name == 'QSO':
-                bias = parameters.get('bias_QSO', self.get_qso_bias(self.zeff_in))
-                beta = parameters.get('beta_QSO', None)
+            elif (name == 'QSO') or (name == 'DLA') or (name == 'SBLA'):
+                bias = parameters.get(f'bias_{name}', self.get_qso_bias(self.zeff_in))
+                beta = parameters.get(f'beta_{name}', None)
                 bias_eta = 1
 
                 if beta is None:
