@@ -703,7 +703,12 @@ class BuildConfig:
         def get_par(name):
             if name not in parameters and name not in self._params_template:
                 raise ValueError('Unknown parameter: {}, please pass a default value.'.format(name))
-            return parameters.get(name, self._params_template[name])
+            # this is needed for parameters that do not have template values but that are present
+            # in the parameters dictionary
+            try: 
+                return parameters[name]
+            except KeyError:
+                return self._params_template[name]
 
         new_params = {}
 
