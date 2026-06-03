@@ -805,11 +805,11 @@ class BuildConfig:
             if self.options['velocity_dispersion'] == 'lorentz':
                 for name in self.corr_names:
                     if name in ["QSO", "DLA", "SBLA"]:
-                        new_params[f'sigma_velo_disp_lorentz_{name}'] = get_par(f'sigma_velo_disp_lorentz_{{name}}')
+                        new_params[f'sigma_velo_disp_lorentz_{name}'] = get_par(f'sigma_velo_disp_lorentz_{name}')
             else:
                 for name in self.corr_names:
                     if name in ["QSO", "DLA", "SBLA"]:
-                        new_params[f'sigma_velo_disp_gauss_{name}'] = get_par(f'sigma_velo_disp_gauss_{{name}}')
+                        new_params[f'sigma_velo_disp_gauss_{name}'] = get_par(f'sigma_velo_disp_gauss_{name}')
 
         # QSO radiation effects
         if self.options['radiation_effects']:
