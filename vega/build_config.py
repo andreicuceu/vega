@@ -18,8 +18,9 @@ class BuildConfig:
     _params_template = None
     recognised_correlations = [
         'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
-        'civxciv', 'civxqso', 'civxlya'
+        'lyaxdla', 'lybxdla', 'lyaxsbla', 'lybxsbla',
+        'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya', 
     ]
 
     def __init__(self, options={}, overwrite=False):
@@ -566,6 +567,7 @@ class BuildConfig:
 
         # Write the parameters
         self.parameters = parameters
+        
         config['parameters'] = {}
         for name, value in self.parameters.items():
             config['parameters'][name] = str(value)
@@ -694,7 +696,12 @@ class BuildConfig:
         def get_par(name):
             if name not in parameters and name not in self._params_template:
                 raise ValueError('Unknown parameter: {}, please pass a default value.'.format(name))
-            return parameters.get(name, self._params_template[name])
+            # this is needed for parameters that do not have template values but that are present
+            # in the parameters dictionary
+            try: 
+                return parameters[name]
+            except KeyError:
+                return self._params_template[name]
 
         new_params = {}
 
@@ -758,9 +765,9 @@ class BuildConfig:
 
                 if bias_eta is None:
                     bias_eta = bias * beta / growth_rate
-            elif name == 'QSO':
-                bias = parameters.get('bias_QSO', self.get_qso_bias(self.zeff_in))
-                beta = parameters.get('beta_QSO', None)
+            elif (name == 'QSO') or (name == 'DLA') or (name == 'SBLA'):
+                bias = parameters.get(f'bias_{name}', self.get_qso_bias(self.zeff_in))
+                beta = parameters.get(f'beta_{name}', None)
                 bias_eta = 1
 
                 if beta is None:
@@ -770,7 +777,7 @@ class BuildConfig:
 
             add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
-            new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+            new_params[f'alpha_{name}'] = get_par(f'alpha_{name}')
 
         # Small scale non-linear model
         if self.options['small_scale_nl']:
@@ -794,9 +801,13 @@ class BuildConfig:
         # Velocity dispersion parameters
         if self.options['velocity_dispersion'] is not None:
             if self.options['velocity_dispersion'] == 'lorentz':
-                new_params['sigma_velo_disp_lorentz_QSO'] = get_par('sigma_velo_disp_lorentz_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        new_params[f'sigma_velo_disp_lorentz_{name}'] = get_par(f'sigma_velo_disp_lorentz_{name}')
             else:
-                new_params['sigma_velo_disp_gauss_QSO'] = get_par('sigma_velo_disp_gauss_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        new_params[f'sigma_velo_disp_gauss_{name}'] = get_par(f'sigma_velo_disp_gauss_{name}')
 
         # QSO radiation effects
         if self.options['radiation_effects']:
