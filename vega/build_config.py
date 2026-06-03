@@ -566,7 +566,15 @@ class BuildConfig:
                 config['priors'][par] = prior
 
         # Write the parameters
+        print("parameters in _build_main_config")
+        print(parameters)
         self.parameters = parameters
+        print("self.parameters in build_main_config")
+        print(self.parameters)
+        for key in parameters:
+            if key not in self.parameters:
+                print(f"Missing key {key}")
+
         config['parameters'] = {}
         for name, value in self.parameters.items():
             config['parameters'][name] = str(value)
@@ -771,7 +779,7 @@ class BuildConfig:
 
             add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
-            new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+            new_params[f'alpha_{name}'] = get_par(f'alpha_{name}')
 
         # Small scale non-linear model
         if self.options['small_scale_nl']:
@@ -795,9 +803,13 @@ class BuildConfig:
         # Velocity dispersion parameters
         if self.options['velocity_dispersion'] is not None:
             if self.options['velocity_dispersion'] == 'lorentz':
-                new_params['sigma_velo_disp_lorentz_QSO'] = get_par('sigma_velo_disp_lorentz_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        new_params[f'sigma_velo_disp_lorentz_{name}'] = get_par(f'sigma_velo_disp_lorentz_{{name}}')
             else:
-                new_params['sigma_velo_disp_gauss_QSO'] = get_par('sigma_velo_disp_gauss_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        new_params[f'sigma_velo_disp_gauss_{name}'] = get_par(f'sigma_velo_disp_gauss_{{name}}')
 
         # QSO radiation effects
         if self.options['radiation_effects']:
