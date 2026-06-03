@@ -566,15 +566,8 @@ class BuildConfig:
                 config['priors'][par] = prior
 
         # Write the parameters
-        print("parameters in _build_main_config")
-        print(parameters)
         self.parameters = parameters
-        print("self.parameters in build_main_config")
-        print(self.parameters)
-        for key in parameters:
-            if key not in self.parameters:
-                print(f"Missing key {key}")
-
+        
         config['parameters'] = {}
         for name, value in self.parameters.items():
             config['parameters'][name] = str(value)
