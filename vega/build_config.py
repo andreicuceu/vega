@@ -100,6 +100,7 @@ class BuildConfig:
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
         self.options['separate-metal-auto-biases'] = options.get(
             'separate-metal-auto-biases', False)
+        self.options['single-metal-beta'] = options.get('single-metal-beta', False)
         self.options['zmin'] = options.get('zmin', 0.0)
         self.options['zmax'] = options.get('zmax', 10.0)
 
@@ -314,6 +315,9 @@ class BuildConfig:
 
                 if self.options['separate-metal-auto-biases']:
                     config['model']['separate-metal-auto-biases'] = 'True'
+
+                if self.options['single-metal-beta']:
+                    config['model']['single-metal-beta'] = 'True'
 
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
