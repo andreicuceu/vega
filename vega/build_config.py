@@ -696,9 +696,12 @@ class BuildConfig:
             self._params_template = config['parameters']
 
         def get_par(name):
-            if name not in parameters and name not in self._params_template:
+            if name in parameters:
+                return parameters[name]
+            elif name not in self._params_template:
                 raise ValueError('Unknown parameter: {}, please pass a default value.'.format(name))
-            return parameters.get(name, self._params_template[name])
+            else:
+                return self._params_template[name]
 
         new_params = {}
 
