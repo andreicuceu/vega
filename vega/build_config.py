@@ -829,8 +829,12 @@ class BuildConfig:
                     new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
                 else:
                     new_params['bias_{}'.format(name)] = get_par('bias_{}'.format(name))
+
                 new_params['beta_{}'.format(name)] = get_par('beta_{}'.format(name))
                 new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+
+            if self.options['single-metal-beta']:
+                new_params['beta_metals'] = get_par('beta_metals')
 
         # Full-shape smoothing
         if self.options['fullshape_smoothing'] is not None:
