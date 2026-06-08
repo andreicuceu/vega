@@ -179,18 +179,20 @@ class Output:
             ]
 
             if self.data[name].is_direct_multipoles:
-                # Direct-multipole component (e.g. QSO auto in xi_ell):
-                # _RP stores the multipole order; _RT stores the separation s.
+                # Direct-multipole component (e.g. QSO auto in xi_ell): use the
+                # same multipole convention as use_multipoles components so that
+                # FitResults dispatches to CorrelationOutputElls.
+                # _ELL stores the multipole order; _R stores the separation s.
                 ells_to_model = self.corr_items[name].ells_to_model
                 s_grid = self.data[name].data_coordinates.s_grid
                 ells_col = np.repeat(ells_to_model, len(s_grid))
                 s_col = np.tile(s_grid, len(ells_to_model))
                 columns.append(fits.Column(
-                    name=name+'_RP', format='K',
+                    name=name+'_ELL', format='K',
                     array=self.pad_array(ells_col, num_rows)
                 ))
                 columns.append(fits.Column(
-                    name=name+'_RT', format='D',
+                    name=name+'_R', format='D',
                     array=self.pad_array(s_col, num_rows)
                 ))
                 z_eff = float(getattr(self.corr_items[name], 'z_eff', 0.) or 0.)
@@ -223,11 +225,11 @@ class Output:
                 rmodel = np.tile(rmodel, len(self.corr_items[name].ells_to_model))
 
                 columns.append(fits.Column(
-                    name=name+'_RP', format='K',
+                    name=name+'_ELL', format='K',
                     array=self.pad_array(ells, num_rows)
                 ))
                 columns.append(fits.Column(
-                    name=name+'_RT', format='D',
+                    name=name+'_R', format='D',
                     array=self.pad_array(rmodel, num_rows)
                 ))
                 if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
@@ -246,15 +248,6 @@ class Output:
 
             model_hdu = fits.BinTableHDU.from_columns(columns)
             model_hdu.name = 'MODEL_' + name
-
-            # Record whether this component uses direct multipoles so that
-            # FitResults can reconstruct multipole plots without re-running Vega.
-            is_dm = self.data[name].is_direct_multipoles
-            model_hdu.header['IS_MULTI'] = (is_dm, 'True if data are pre-measured multipoles')
-            if is_dm:
-                model_hdu.header['NELL'] = (
-                    len(self.corr_items[name].ells_to_model),
-                    'Number of fitted multipoles')
 
             for par, val in params.items():
                 card_name = 'hierarch ' + par

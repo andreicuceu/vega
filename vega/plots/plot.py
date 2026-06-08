@@ -73,9 +73,10 @@ class VegaPlots:
     def from_fit_results(cls, fit_results):
         """Build a VegaPlots instance from a FitResults object (no re-running Vega).
 
-        Only direct-multipole components (is_multipoles=True in the FITS HDU) are
-        registered; standard 2D correlation components are ignored because the
-        wedge/shell plotting machinery requires the full Vega coordinate setup.
+        Only multipole components (those stored as CorrelationOutputElls in the
+        FITS file) are registered; standard 2D correlation components are ignored
+        because the wedge/shell plotting machinery requires the full Vega
+        coordinate setup.
 
         Parameters
         ----------
@@ -93,7 +94,8 @@ class VegaPlots:
         >>> plots = VegaPlots.from_fit_results('fit_output.fits')
         >>> fig, axs = plots.plot_multipoles('qsoxqso')
         """
-        from vega.postprocess.fit_results import FitResults as _FR  # avoid circular import
+        # avoid circular import
+        from vega.postprocess.fit_results import FitResults as _FR, CorrelationOutputElls
 
         if isinstance(fit_results, str):
             fit_results = _FR(fit_results)
@@ -101,13 +103,13 @@ class VegaPlots:
         obj = cls()  # empty instance – no vega_data
 
         for name, co in fit_results.correlations.items():
-            if not co.is_multipoles:
+            if not isinstance(co, CorrelationOutputElls):
                 continue
 
-            # Recover unique ells and s values from the _RP / _RT columns
+            # Recover unique ells and s values from the _ELL / _R columns
             mask = co.data_mask
-            ells_col = co.rp[mask].astype(int)
-            s_col = co.rt[mask]
+            ells_col = co.ells[mask].astype(int)
+            s_col = co.r[mask]
             ells = sorted(set(ells_col.tolist()))
             n_ells = len(ells)
             n_s = mask.sum() // n_ells
