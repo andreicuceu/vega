@@ -196,11 +196,11 @@ class Output:
                 rmodel = np.tile(rmodel, len(self.corr_items[name].ells_to_model))
 
                 columns.append(fits.Column(
-                    name=name+'_RP', format='K',
+                    name=name+'_ELL', format='K',
                     array=self.pad_array(ells, num_rows)
                 ))
                 columns.append(fits.Column(
-                    name=name+'_RT', format='D',
+                    name=name+'_R', format='D',
                     array=self.pad_array(rmodel, num_rows)
                 ))
 

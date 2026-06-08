@@ -11,7 +11,7 @@ from vega.parameters.param_utils import build_names
 
 
 @dataclass
-class CorrelationOutput:
+class CorrelationOutputRtRp:
     model: ArrayLike
     model_mask: ArrayLike
     data: ArrayLike
@@ -21,13 +21,89 @@ class CorrelationOutput:
     rt: ArrayLike
     z: ArrayLike
 
-    is_multipoles: Union[bool, None] = None
-    nell: Union[int, None] = None
     size: Union[int, None] = None
     chisq: Union[float, None] = None
     reduced_chisq: Union[float, None] = None
     p_value: Union[float, None] = None
     bestfit_marg_coeff: Union[ArrayLike, None] = None
+
+
+@dataclass
+class CorrelationOutputElls:
+    model: ArrayLike
+    model_mask: ArrayLike
+    data: ArrayLike
+    data_mask: ArrayLike
+    variance: ArrayLike
+    ells: ArrayLike
+    r: ArrayLike
+    z: ArrayLike
+    nell: int
+
+    size: Union[int, None] = None
+    chisq: Union[float, None] = None
+    reduced_chisq: Union[float, None] = None
+    p_value: Union[float, None] = None
+    bestfit_marg_coeff: Union[ArrayLike, None] = None
+
+
+def readBestfitMargCoeff(hdu):
+    bestfit_marg_coeff = []
+    if 'HIERARCH marg_coeff_0' in hdu.header:
+        i = 0
+        while f'HIERARCH marg_coeff_{i}' in hdu.header:
+            bestfit_marg_coeff.append(hdu.header[f'HIERARCH marg_coeff_{i}'])
+            i += 1
+    return np.array(bestfit_marg_coeff)
+
+
+def makeCorrelationOutputRtRp(corr_name, hdu):
+    model = hdu.data[corr_name + '_MODEL']
+    model_mask = hdu.data[corr_name + '_MODEL_MASK']
+    data = hdu.data[corr_name + '_DATA']
+    data_mask = hdu.data[corr_name + '_MASK']
+
+    variance = hdu.data[corr_name + '_VAR']
+    rp = hdu.data[corr_name + '_RP']
+    rt = hdu.data[corr_name + '_RT']
+    z = hdu.data[corr_name + '_Z']
+
+    chisq = hdu.header.get('HIERARCH CHISQ', None)
+    reduced_chisq = hdu.header.get('HIERARCH REDUCED_CHISQ', None)
+    p_value = hdu.header.get('HIERARCH P_VALUE', None)
+    size = hdu.header.get(f"HIERARCH {corr_name}_datasize", data.size)
+
+    bestfit_marg_coeff = readBestfitMargCoeff(hdu)
+    return CorrelationOutputRtRp(
+        model, model_mask, data, data_mask, variance, rp, rt, z,
+        size=size, chisq=chisq, reduced_chisq=reduced_chisq,
+        p_value=p_value, bestfit_marg_coeff=bestfit_marg_coeff
+    )
+
+
+def makeCorrelationOutputElls(corr_name, hdu):
+    model = hdu.data[corr_name + '_MODEL']
+    model_mask = hdu.data[corr_name + '_MODEL_MASK']
+    data = hdu.data[corr_name + '_DATA']
+    data_mask = hdu.data[corr_name + '_MASK']
+
+    variance = hdu.data[corr_name + '_VAR']
+    ells = hdu.data[corr_name + '_ELL']
+    r = hdu.data[corr_name + '_R']
+    z = hdu.data[corr_name + '_Z']
+
+    chisq = hdu.header.get('HIERARCH CHISQ', None)
+    reduced_chisq = hdu.header.get('HIERARCH REDUCED_CHISQ', None)
+    p_value = hdu.header.get('HIERARCH P_VALUE', None)
+    size = hdu.header.get(f"HIERARCH {corr_name}_datasize", data.size)
+    nell = hdu.header.get(f"HIERARCH {corr_name}_nell", None)
+
+    bestfit_marg_coeff = readBestfitMargCoeff(hdu)
+    return CorrelationOutputElls(
+        model, model_mask, data, data_mask, variance, ells, r, z, nell,
+        size=size, chisq=chisq, reduced_chisq=reduced_chisq,
+        p_value=p_value, bestfit_marg_coeff=bestfit_marg_coeff
+    )
 
 
 class FitResults:
@@ -72,43 +148,18 @@ class FitResults:
         self.num_data_points = 0
         for hdu in model_hdus:
             corr_name = hdu.name.split('_', 1)[1]
-
-            model = hdu.data[corr_name + '_MODEL']
-            model_mask = hdu.data[corr_name + '_MODEL_MASK']
-            data = hdu.data[corr_name + '_DATA']
-            data_mask = hdu.data[corr_name + '_MASK']
-            self.num_data_points += len(data[data_mask])
-
-            variance = hdu.data[corr_name + '_VAR']
-            rp = hdu.data[corr_name + '_RP']
-            rt = hdu.data[corr_name + '_RT']
-            z = hdu.data[corr_name + '_Z']
-
-            # size = hdu.header.get('HIERARCH SIZE', None)
-            chisq = hdu.header.get('HIERARCH CHISQ', None)
-            reduced_chisq = hdu.header.get('HIERARCH REDUCED_CHISQ', None)
-            p_value = hdu.header.get('HIERARCH P_VALUE', None)
-
-            size = hdu.header.get(f"HIERARCH {corr_name}_datasize", data.size)
-            is_multipoles = hdu.header.get(f"HIERARCH {corr_name}_multipoles", None)
-            nell = hdu.header.get(f"HIERARCH {corr_name}_nell", None)
-
-            bestfit_marg_coeff = []
-            if 'HIERARCH marg_coeff_0' in hdu.header:
-                i = 0
-                while f'HIERARCH marg_coeff_{i}' in hdu.header:
-                    bestfit_marg_coeff.append(hdu.header[f'HIERARCH marg_coeff_{i}'])
-                    i += 1
-            bestfit_marg_coeff = np.array(bestfit_marg_coeff)
-
             lowercase_name = corr_name.lower()
-            self.marg_coeff[lowercase_name] = bestfit_marg_coeff
-            self.correlations[lowercase_name] = CorrelationOutput(
-                model, model_mask, data, data_mask, variance, rp, rt, z,
-                is_multipoles, nell,
-                size=size, chisq=chisq, reduced_chisq=reduced_chisq,
-                p_value=p_value, bestfit_marg_coeff=bestfit_marg_coeff
-            )
+            is_multipoles = hdu.header.get(f"HIERARCH {corr_name}_multipoles", None)
+
+            this_corr = None
+            if is_multipoles:
+                this_corr = makeCorrelationOutputElls(corr_name, hdu)
+            else:
+                this_corr = makeCorrelationOutputRtRp(corr_name, hdu)
+
+            self.num_data_points += len(this_corr.data[this_corr.data_mask])
+            self.marg_coeff[lowercase_name] = this_corr.bestfit_marg_coeff
+            self.correlations[lowercase_name] = this_corr
 
         self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_data_points - self.num_pars)
         self.reduced_chisq = self.chisq / (self.num_data_points - self.num_pars)
@@ -137,21 +188,9 @@ class FitResults:
             rt = hdu_data[corr_name + '_RT']
             z = hdu_data[corr_name + '_Z']
 
-            if f"{corr_name}_datasize" in hdu.header:
-                ndata = hdu.header[f"{corr_name}_datasize"]
-            else:
-                ndata = data.size
-
-            if f"{corr_name}_multipoles" in hdu.header:
-                is_multipoles = hdu.header[f"{corr_name}_multipoles"]
-                nell = hdu.header[f"{corr_name}_nell"]
-            else:
-                is_multipoles = False
-                nell = -1
-
-            self.correlations[corr_name] = CorrelationOutput(
-                model, model_mask, data, data_mask, variance, rp, rt, z,
-                ndata, is_multipoles, nell)
+            self.correlations[corr_name] = CorrelationOutputRtRp(
+                model, model_mask, data, data_mask, variance, rp, rt, z
+            )
 
         self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_data_points - self.num_pars)
         self.reduced_chisq = self.chisq / (self.num_data_points - self.num_pars)
