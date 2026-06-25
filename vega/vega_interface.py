@@ -873,19 +873,26 @@ class VegaInterface:
             self.full_model_mask.append(data_obj.model_mask)
 
             if data_obj.is_direct_multipoles and nell_cov is not None:
-                # The global-cov block for this component spans nell_cov * n_s
-                # entries (one block per multipole in the file), but we may be
-                # fitting only a subset of multipoles.  Build a boolean mask of
-                # size nell_cov * n_s that selects only the fitted ell-blocks,
-                # so that compute_masked_invcov sees the right global-cov rows/cols.
-                n_s = len(data_obj.data_coordinates.s_grid)
-                n_cov_block = nell_cov * n_s
-                ells_in_cov = list(range(0, 2 * nell_cov, 2))  # [0, 2, 4, ...]
-                ell_indices = [ells_in_cov.index(ell)
-                               for ell in self.corr_items[name].ells_to_model]
+                # The external global covariance stores the FULL, uncut RascalC
+                # block for this component: nell_cov ell-blocks, each spanning
+                # the full set of s-bins (n_s_full).  The per-component data
+                # vector, by contrast, is already restricted to the fitted ells
+                # and the [s-min, s-max) cut.  Build a boolean mask over the full
+                # block that selects exactly the fitted (ell, s) bins, in the
+                # same ell-major / ascending-s order as masked_data_vec, so that
+                # compute_masked_invcov picks the right global-cov rows/cols.
+                if nell_cov != data_obj._mp_n_ells_file:
+                    raise ValueError(
+                        f"Component '{name}': global covariance NELL={nell_cov} "
+                        f"does not match the {data_obj._mp_n_ells_file} multipoles "
+                        f"in the data file. Rebuild the global covariance with "
+                        f"--n-multipoles {data_obj._mp_n_ells_file}.")
+                n_s_full = data_obj._mp_n_s_full
+                s_cut = data_obj._mp_full_s_mask          # (n_s_full,) bool
+                n_cov_block = nell_cov * n_s_full
                 cov_block_mask = np.zeros(n_cov_block, dtype=bool)
-                for ell_i in ell_indices:
-                    cov_block_mask[ell_i * n_s:(ell_i + 1) * n_s] = True
+                for ell_i in data_obj._mp_ell_file_indices:
+                    cov_block_mask[ell_i * n_s_full:(ell_i + 1) * n_s_full] = s_cut
                 self.full_data_mask.append(cov_block_mask)
             else:
                 self.full_data_mask.append(data_obj.data_mask)
@@ -910,6 +917,14 @@ class VegaInterface:
 
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)
+
+        if self.full_data_mask.size != self.global_cov.shape[0]:
+            raise ValueError(
+                f"Global covariance dimension ({self.global_cov.shape[0]}) does "
+                f"not match the total data layout ({self.full_data_mask.size}). "
+                f"Check that the global-cov file was built with the same "
+                f"components, multipoles (NELL), and full (uncut) s-grid as the "
+                f"data files.")
 
         if self.apply_global_hartlap:
             ndata = np.sum(self.full_data_mask)

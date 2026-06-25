@@ -351,6 +351,19 @@ class Data:
         xi_cut = xi_all[mask_1d, :]
         n_s = len(s_data)
 
+        # Bookkeeping for the global-covariance path.  The external global
+        # covariance (built by build_global_cov.py) stores the FULL, uncut
+        # RascalC block: n_ells_file ell-blocks, each spanning the full set of
+        # s-bins.  read_global_cov therefore needs the full s-grid size, the
+        # boolean cut mask over it, and the file-order indices of the fitted
+        # multipoles so it can select exactly the fitted (ell, s) bins.
+        ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+        self._mp_n_s_full = len(s_mid_all)
+        self._mp_full_s_mask = mask_1d.copy()
+        self._mp_n_ells_file = n_ells_file
+        self._mp_ell_file_indices = [ells_in_file.index(ell)
+                                     for ell in self.ells_to_model]
+
         # Data vector: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
         self._data_vec = np.concatenate([xi_cut[:, i] for i in range(self.nells)])
 
