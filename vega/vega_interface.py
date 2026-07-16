@@ -619,7 +619,6 @@ class VegaInterface:
         fiducial['k'] = hdul[1].data['K']
         fiducial['pk_full'] = hdul[1].data['PK']
         fiducial['pk_smooth'] = hdul[1].data['PKSB']
-        fiducial['h'] = hdul[1].header['H0'] / 100
         fiducial['DM'] = hdul[1].header['DM']
         fiducial['DH'] = hdul[1].header['DH']
 

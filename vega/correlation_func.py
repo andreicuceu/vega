@@ -206,25 +206,23 @@ class CorrelationFunction:
         return xi, rescaled_r, rescaled_mu
 
     def _compute_data_template_correction(self):
-        # OmegaM ratio between cf cosmo and template cosmo
-        r_omega_m = self._cosmo.Omega_m / self._Omega_m
-        # Change to within some rounding?
-        if r_omega_m == 1:
-            self._at_dt = 1
-            self._ap_dt = 1
-            self._apply_data_template_correction = False
-        else:
-            print('Warning: Data cosmology (Om) is not consistent with template cosmology,'
-                '\nComputing data-temp correction assuming Omh^2 is preserved.')
-            self._template_cosmo = picca_constants.Cosmo(Om=self._Omega_m)
-        
-            # They should at least be at the same redshift.
-            self._at_dt = self._fiducial['DM'] / self._cosmo.get_dist_m(self._z_eff)
-            self._ap_dt = self._fiducial['DH'] / self._cosmo.get_dist_hubble(self._z_eff)
+        """Automatically compute a scale factor to correct between any difference 
+                between catalogue cosmology (normally picca) and template cosmology"""
 
-            # flag
-            print(f'Applying data-template correction; ap_dt = {self._ap_dt} and at_dt = {self._at_dt}')
+        # Calculate shifts given the fiducial and catalogue cosmology
+        self._at_dt = self._fiducial['DM'] / self._cosmo.get_dist_m(self._z_fid)
+        self._ap_dt = self._fiducial['DH'] / self._cosmo.get_dist_hubble(self._z_fid)
 
+        _lim = 0.01
+        if abs(1 - self._ap_dt) > _lim or abs(1 - self._at_dt) > _lim:
+            print('Warning: Catalogue cosmology differs strongly with template cosmology')
+
+        print(f'Applying data-template correction; ap_dt = {self._ap_dt} and at_dt = {self._at_dt}')
+
+        # Extra check if z_eff and z_fid differ by a lot
+        _z_diff = abs(self._z_eff - self._z_fid)
+        if _z_diff > 0.025:
+            print('Warning: z_eff and z_fid differ by: ', _z_diff)
 
     @staticmethod
     def _rescale_coords(r, mu, ap, at, delta_rp=0.):
