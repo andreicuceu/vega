@@ -4,7 +4,8 @@ from vega import VegaInterface
 import os
 import numpy as np
 
-def compress_data(config_path, cf_file, xcf_file, outdir, name=None):
+def compress_data(config_path, cf_file, xcf_file, outdir,
+                 skip_compression, name=None, cov_name=None):
     """Compute a compressed covariance matrix from input covariance matrix + data vectors.
 
     Parameters
@@ -58,10 +59,18 @@ def compress_data(config_path, cf_file, xcf_file, outdir, name=None):
     main_cfg_parser['data sets']['ini files'] = auto_cfg_path + ' ' + cross_cfg_path
     # main_cfg_parser['data sets']['global-cov-file'] = global_cov_file
 
+    # Change fit outdir
+    main_cfg_parser['output']['filename'] = outdir + f'/{name}.fits'
+
+    #cov name
+    if cov_name is not None:
+        main_cfg_parser['compression']['mock-to-mock-cov'] = cov_name
+
     #check if outdir exists, if not create it
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
+    print('Writing new config files to: ', outdir)
     # Write the new config files
     with open(auto_cfg_path, 'w') as f:
         auto_cfg_parser.write(f, space_around_delimiters=True)
@@ -69,6 +78,11 @@ def compress_data(config_path, cf_file, xcf_file, outdir, name=None):
         cross_cfg_parser.write(f, space_around_delimiters=True)
     with open(main_cfg_path, 'w') as f:
         main_cfg_parser.write(f, space_around_delimiters=True)
+
+
+    if skip_compression:
+        print('Skipping compression')
+        return
 
     # Initialize Vega
     vi = VegaInterface(main_cfg_path)

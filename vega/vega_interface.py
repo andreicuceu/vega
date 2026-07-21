@@ -233,9 +233,6 @@ class VegaInterface:
 
     def _cca_compression(self, config):
 
-        ### Optional arguments ###
-        _num_cca_modes = config.getint('num-cca-modes', None)
-
         ### parameter covariance ###
         _parameter_cov_file = config.get('parameter-cov', None)
         if _parameter_cov_file is None:
@@ -260,6 +257,12 @@ class VegaInterface:
             f'Masked data covariance and data-parameter covariance have incompatible shapes: '
             f'{_masked_data_cov.shape} vs {_data_param_cov.shape}'
         )
+
+        ### Optional arguments ###
+        # Number of modes to retain. Default is num_modes = num_params.
+        # Extra Nk modes usually used for goodness-of-fit.
+        _num_cca_modes = config.getint('num-cca-modes', _parameter_cov.shape[0])
+
         
         self._cca_mat, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
                                     _parameter_cov, 

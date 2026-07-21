@@ -34,7 +34,9 @@ if __name__ == '__main__':
     'and compressed data vector will be saved.')
     parser.add_argument('--config-dir','-i', type=str, required=True, help='Path to vega template config directory')
     parser.add_argument('--name', type=str, required=False, help='Optional name for output file')
-
+    parser.add_argument('--cov-name', type=str, required=False, help='Optional path to sample compressed covariance for doing fits')
+    parser.add_argument('--skip-compression', action='store_true', help='Skip compression, just write configs.')
     args = parser.parse_args()
 
-    compress_data(args.config_dir, args.cf, args.xcf, args.outdir, name=args.name)
+    compress_data(args.config_dir, args.cf, args.xcf, args.outdir, 
+                    skip_compression=args.skip_compression, name=args.name, cov_name=args.cov_name)
