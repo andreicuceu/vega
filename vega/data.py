@@ -324,8 +324,9 @@ class Data:
         cuts_config : ConfigParser
             [cuts] section from the component config file.
         cov_path : str, optional
-            Path to an ASCII RascalC covariance file (flat n×n matrix, one row
-            per line, ordered [xi_0 bins, xi_2 bins, ...]).
+            Path to an ASCII multipole covariance file (flat n×n matrix, one row
+            per line, ordered [xi_0 bins, xi_2 bins, ...]).  The same layout is
+            used for data covariances (e.g. RascalC) and mock-stack covariances.
         cov_rescale : float, optional
             Multiplicative rescaling applied to the covariance matrix.
         """
@@ -352,9 +353,9 @@ class Data:
         n_s = len(s_data)
 
         # Bookkeeping for the global-covariance path.  The external global
-        # covariance (built by build_global_cov.py) stores the FULL, uncut
-        # RascalC block: n_ells_file ell-blocks, each spanning the full set of
-        # s-bins.  read_global_cov therefore needs the full s-grid size, the
+        # covariance (built by lyatools/scripts/build_global_cov3x2.py) stores
+        # the FULL, uncut QSO auto multipole block: n_ells_file ell-blocks,
+        # each spanning the full set of s-bins.  read_global_cov therefore needs the full s-grid size, the
         # boolean cut mask over it, and the file-order indices of the fitted
         # multipoles so it can select exactly the fitted (ell, s) bins.
         ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
@@ -367,9 +368,9 @@ class Data:
         # Data vector: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
         self._data_vec = np.concatenate([xi_cut[:, i] for i in range(self.nells)])
 
-        # Read covariance (RascalC ASCII format: flat square matrix, one row/line)
+        # Read covariance (ASCII multipole format: flat square matrix, one row/line)
         if cov_path is not None:
-            print(f'Reading RascalC covariance file {cov_path}\n')
+            print(f'Reading multipole covariance file {cov_path}\n')
             cov_full = np.loadtxt(find_file(cov_path), comments='#')
             n_cov = cov_full.shape[0]
 
