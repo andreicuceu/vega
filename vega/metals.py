@@ -1,6 +1,5 @@
 import copy
 
-import numpy as np
 from astropy.io import fits
 from picca import constants as picca_constants
 from scipy.sparse import csr_matrix
@@ -9,6 +8,7 @@ from scipy.interpolate import RegularGridInterpolator
 from . import coordinates
 from . import correlation_func as corr_func
 from . import pktoxi, power_spectrum, utils
+from . import redshift_weights
 
 
 class Metals:
@@ -382,58 +382,23 @@ class Metals:
 
     @staticmethod
     def rebin(vector, rebin_factor):
-        """Rebin a vector by a factor of rebin_factor.
-
-        Parameters
-        ----------
-        vector : 1D Array
-            Vector to rebin
-        rebin_factor : int
-            Rebinning factor
-
-        Returns
-        -------
-        1D Array
-            Rebinned vector
-        """
-        size = vector.size
-        return vector[:(size // rebin_factor) * rebin_factor].reshape(
-            (size // rebin_factor), rebin_factor).mean(-1)
+        """Rebin a vector by a factor of rebin_factor."""
+        return redshift_weights.rebin(vector, rebin_factor)
 
     def get_forest_weights(self, main_tracer):
         assert main_tracer['type'] == 'continuous'
-        with fits.open(main_tracer['weights-path']) as hdul:
-            stack_table = hdul[1].data
-
-        wave = 10**stack_table["LOGLAM"]
-        weights = stack_table["WEIGHT"]
-
-        rebin_factor = self.metal_matrix_config.getint('rebin_factor', None)
-        if rebin_factor is not None:
-            wave = self.rebin(wave, rebin_factor)
-            weights = self.rebin(weights, rebin_factor)
-
-        return wave, weights
+        rebin_factor = self.metal_matrix_config.getint('rebin_factor', fallback=None)
+        return redshift_weights.get_forest_weights(
+            main_tracer['weights-path'], rebin_factor=rebin_factor)
 
     def get_qso_weights(self, tracer):
         assert tracer['type'] == 'discrete'
-        with fits.open(tracer['weights-path']) as hdul:
-            z_qso_cat = hdul[1].data['Z']
-
-        z_ref = self.metal_matrix_config.getfloat('z_ref_objects', 2.25)
-        z_evol = self.metal_matrix_config.getfloat('z_evol_objects', 1.44)
-        qso_z_bins = self.metal_matrix_config.getint('z_bins_objects', 1000)
-        weights_qso_cat = ((1. + z_qso_cat) / (1. + z_ref))**(z_evol - 1.)
-
-        zbins = qso_z_bins
-        histo_w, zbins = np.histogram(z_qso_cat, bins=zbins, weights=weights_qso_cat)
-        histo_wz, _ = np.histogram(z_qso_cat, bins=zbins, weights=weights_qso_cat*z_qso_cat)
-        selection = histo_w > 0
-        z_qso = histo_wz[selection] / histo_w[selection]  # weighted mean in bins
-        weights_qso = histo_w[selection]
-
-        return z_qso, weights_qso
-
+        return redshift_weights.get_qso_weights(
+            tracer['weights-path'],
+            z_ref=self.metal_matrix_config.getfloat('z_ref_objects', 2.25),
+            z_evol=self.metal_matrix_config.getfloat('z_evol_objects', 1.44),
+            z_bins=self.metal_matrix_config.getint('z_bins_objects', 1000),
+        )
     def get_rp_pairs(self, z1, z2):
         if np.any(z1 < 0) or np.any(z2 < 0):
             raise ValueError(

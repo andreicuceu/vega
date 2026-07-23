@@ -5,6 +5,7 @@ from astropy.table import Table
 from scipy.special import expn
 
 from . import utils
+from . import redshift_weights
 
 
 class CorrelationFunction:
@@ -19,7 +20,8 @@ class CorrelationFunction:
     """
     def __init__(
         self, config, fiducial, coordinates, scale_params,
-        tracer1, tracer2, cosmo=None, metal_corr=False
+        tracer1, tracer2, cosmo=None, metal_corr=False,
+        full_config=None, use_catalog_bias_evolution=False
     ):
         """
 
@@ -39,8 +41,13 @@ class CorrelationFunction:
             Config of tracer 2
         metal_corr : bool, optional
             Whether this is a metal correlation, by default False
+        full_config : ConfigParser, optional
+            Full component config (for metal-matrix weight options)
+        use_catalog_bias_evolution : bool, optional
+            If True, average bias evolution over tracer weight catalogs
         """
         self._config = config
+        self._full_config = full_config
         self._r = coordinates.r_grid
         self._mu = coordinates.mu_grid
         self._z = coordinates.z_grid
@@ -54,7 +61,13 @@ class CorrelationFunction:
         self._scale_params = scale_params
         self._metal_corr = metal_corr
         self._use_new_bias_evol = config.getboolean('new-bias-evolution', False)
+        self._use_catalog_bias_evol = bool(use_catalog_bias_evolution) and not metal_corr
         self._rescale_coords_systematics = config.getboolean('rescale-coords-systematics', False)
+
+        # Catalog bias evolution state (filled in init_bias_evol when enabled)
+        self._catalog_weights = None  # {1: (z, w, z_eff), 2: (z, w, z_eff)}
+        self.z_eff_LYA = None
+        self.z_eff_QSO = None
 
         # Initialize the bias evolution
         self.init_bias_evol(tracer1['type'], tracer2['type'], cosmo)
@@ -234,6 +247,22 @@ class CorrelationFunction:
         return rescaled_r, rescaled_mu
 
     def init_bias_evol(self, type1, type2, cosmo=None):
+        # Catalog-averaged bias evolution for QSO-involving correlations
+        if self._use_catalog_bias_evol:
+            involves_qso = (type1 == 'discrete') or (type2 == 'discrete')
+            if not involves_qso:
+                # Forest autos: keep classic pair-mean evolution (backward compatible)
+                self._use_catalog_bias_evol = False
+            else:
+                if self._use_new_bias_evol:
+                    print("WARNING: catalog-bias-evolution supersedes new-bias-evolution; "
+                          "disabling geometric z_Q/z_F split.")
+                    self._use_new_bias_evol = False
+                self._init_catalog_bias_evol()
+                # Still define classic relative evolution as fallback for growth grids etc.
+                self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+                return
+
         # For auto-correlations use mean redshift and return
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
         if type1 == type2:
@@ -259,6 +288,37 @@ class CorrelationFunction:
         self._rel_z_evol_1 = rel_z_evol_q if type1 == 'discrete' else rel_z_evol_f
         self._rel_z_evol_2 = rel_z_evol_q if type2 == 'discrete' else rel_z_evol_f
 
+    def _init_catalog_bias_evol(self):
+        """Load per-tracer catalog weights and compute z_eff_LYA / z_eff_QSO."""
+        self._catalog_weights = {}
+        for side, tracer in ((1, self._tracer1), (2, self._tracer2)):
+            absorber = tracer.get('name', 'LYA')
+            # Metal / region names still map through ABSORBER_IGM for continuous
+            if tracer['type'] == 'continuous' and absorber not in ('LYA', 'LYB'):
+                absorber = 'LYA'
+            z_arr, w_arr = redshift_weights.load_tracer_redshift_weights(
+                tracer, config=self._full_config, absorber_name=absorber
+                if absorber in ('LYA', 'LYB') else 'LYA')
+            z_mean = redshift_weights.weighted_mean_z(z_arr, w_arr)
+
+            if tracer['type'] == 'discrete':
+                self.z_eff_QSO = z_mean
+                pivot = z_mean
+            else:
+                # Continuous forest side: use as z_eff_LYA (A or B region stack)
+                self.z_eff_LYA = z_mean
+                pivot = z_mean
+
+            self._catalog_weights[side] = {
+                'tracer': tracer,
+                'z': z_arr,
+                'weights': w_arr,
+                'z_eff': pivot,
+            }
+
+        print(f"INFO: catalog-bias-evolution for {self._corr_name}: "
+              f"z_eff_LYA={self.z_eff_LYA}, z_eff_QSO={self.z_eff_QSO}")
+
     def compute_bias_evol(self, params):
         """Compute bias evolution for the correlation function.
 
@@ -269,9 +329,12 @@ class CorrelationFunction:
 
         Returns
         -------
-        ND Array
+        ND Array or float
             Bias evolution for tracer
         """
+        if self._use_catalog_bias_evol and self._catalog_weights is not None:
+            return self._compute_catalog_bias_evol(params)
+
         # Get the relative redshift evolution
         if self._use_new_bias_evol:
             rel_z_evol_1, rel_z_evol_2 = self._rel_z_evol_1, self._rel_z_evol_2
@@ -283,6 +346,35 @@ class CorrelationFunction:
         bias_evol *= self._get_tracer_evol(params, self._tracer2['name'], rel_z_evol_2)
 
         return bias_evol
+
+    def _compute_catalog_bias_evol(self, params):
+        """Product of catalog-averaged F factors for each tracer side."""
+        factor = 1.0
+        for side in (1, 2):
+            info = self._catalog_weights[side]
+            tracer = info['tracer']
+            name = tracer['name']
+            handle_name = f'z evol {name}'
+            if handle_name in self._config:
+                evol_model = self._config.get(handle_name, 'standard')
+            else:
+                evol_model = self._config.get('z evol', 'standard')
+
+            if 'croom' in evol_model:
+                # Average Croom factor over the catalog redshifts
+                assert name == "QSO"
+                p0 = params["croom_par0"]
+                p1 = params["croom_par1"]
+                z = info['z']
+                w = info['weights']
+                num = p0 + p1 * (1. + z)**2
+                den = p0 + p1 * (1. + info['z_eff'])**2
+                factor *= float(np.sum(w * (num / den)) / np.sum(w))
+            else:
+                alpha = params[f'alpha_{name}']
+                factor *= redshift_weights.catalog_bias_evolution_factor(
+                    info['z'], info['weights'], alpha, info['z_eff'])
+        return factor
 
     def _get_tracer_evol(self, params, tracer_name, rel_z_evol):
         """Compute tracer bias evolution.

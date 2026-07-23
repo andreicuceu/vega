@@ -41,11 +41,35 @@ class CorrelationItem:
             self.has_data = False
 
         self.new_metals = config['model'].getboolean('new_metals', False)
-        if self.new_metals:
+        self.catalog_bias_evolution = config['model'].getboolean(
+            'catalog-bias-evolution', False)
+
+        # True when the data file already contains multipoles (e.g. QSO auto
+        # from pycorr) rather than a 2D (rp, rt) or (r, mu) map.
+        self.is_direct_multipoles = config['data'].get('data_type', '') == 'multipoles'
+
+        # Load weights-tracer paths whenever metals, multipoles, or catalog
+        # bias evolution needs them (not only when new_metals is True).
+        need_weights = (
+            self.new_metals or self.is_direct_multipoles or self.catalog_bias_evolution)
+        if need_weights:
             self.tracer1['weights-path'] = config['data'].get('weights-tracer1')
             self.tracer2['weights-path'] = config['data'].get('weights-tracer2', None)
             if self.tracer2['weights-path'] is None:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
+
+        if self.is_direct_multipoles and self.tracer1.get('weights-path') is None:
+            raise ValueError(
+                f"Component '{self.name}' has data_type=multipoles but no "
+                "weights-tracer1 was provided in [data]."
+            )
+        if self.catalog_bias_evolution and (
+                self.tracer1.get('weights-path') is None
+                or self.tracer2.get('weights-path') is None):
+            raise ValueError(
+                f"Component '{self.name}' has catalog-bias-evolution=True but "
+                "weights-tracer1/2 are missing in [data]."
+            )
 
         self.use_multipoles = config['model'].getboolean('use_multipoles', False)
         if self.use_multipoles:
@@ -53,9 +77,6 @@ class CorrelationItem:
             ells_to_model = ells_to_model.split(',')
             self.ells_to_model = [int(_) for _ in ells_to_model]
 
-        # True when the data file already contains multipoles (e.g. QSO auto
-        # from pycorr) rather than a 2D (rp, rt) or (r, mu) map.
-        self.is_direct_multipoles = config['data'].get('data_type', '') == 'multipoles'
         if self.is_direct_multipoles:
             if self.use_multipoles:
                 raise ValueError(
@@ -70,6 +91,9 @@ class CorrelationItem:
         # Effective redshift – populated externally by VegaInterface so that
         # _read_multipole_data can build the model coordinate z_grid.
         self.z_eff = None
+        # Catalog-computed pivots (filled when catalog bias evolution / multipoles run)
+        self.z_eff_LYA = None
+        self.z_eff_QSO = None
 
         self.test_flag = config['data'].getboolean('test', False)
 

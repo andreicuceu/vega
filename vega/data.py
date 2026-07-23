@@ -5,6 +5,7 @@ from scipy.sparse import csr_array
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
 from vega.coordinates import RtRpCoordinates, RMuCoordinates, MultipoleCoordinates
+from vega import redshift_weights
 
 BLINDING_STRATEGIES = ['desi_dr3']
 
@@ -420,9 +421,24 @@ class Data:
         self.mu_min_cut = 0.
         self.mu_max_cut = 1.
 
-        # Data coordinates: lightweight 1-D s-only object
+        # Data coordinates: lightweight 1-D s-only object.
+        # For QSO multipoles, prefer catalog-weighted mean redshift from
+        # weights-tracer over the global fit zeff.
         z_eff = getattr(self.corr_item, 'z_eff', None)
-        self.data_coordinates = MultipoleCoordinates(s_data, self.ells_to_model, z_eff=z_eff)
+        z_model = z_eff
+        if (self.corr_item.tracer1.get('weights-path') is not None
+                and self.corr_item.tracer1['type'] == 'discrete'):
+            z_arr, w_arr = redshift_weights.load_tracer_redshift_weights(
+                self.corr_item.tracer1, config=self.corr_item.config)
+            z_qso = redshift_weights.weighted_mean_z(z_arr, w_arr)
+            self.corr_item.z_eff_QSO = z_qso
+            z_model = z_qso
+            print(f"INFO: {self.corr_item.name} multipole z_grid from catalog "
+                  f"weighted mean z_eff_QSO = {z_qso:.6f} "
+                  f"(global zeff = {z_eff})")
+
+        self.data_coordinates = MultipoleCoordinates(
+            s_data, self.ells_to_model, z_eff=z_model)
 
         # Data mask is all-True (data vector is already cut to [s_min, s_max))
         self.data_mask = np.ones(self.nells * n_s, dtype=bool)
@@ -437,10 +453,10 @@ class Data:
         r_flat = r_mesh.flatten()                              # mu-major order
         mu_flat = mu_mesh.flatten()
 
-        z_grid_model = (np.full(len(r_flat), float(z_eff))
-                        if z_eff is not None else None)
+        z_grid_model = (np.full(len(r_flat), float(z_model))
+                        if z_model is not None else None)
         self.model_coordinates = RtRpCoordinates.init_from_r_mu_grids(
-            r_flat, mu_flat, z_eff=z_eff)
+            r_flat, mu_flat, z_eff=z_model)
         if z_grid_model is not None:
             self.model_coordinates.z_grid = z_grid_model
         self.dist_model_coordinates = self.model_coordinates
