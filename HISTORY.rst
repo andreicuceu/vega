@@ -2,6 +2,11 @@
 History
 =======
 
+1.7.5 (2026-07-29)
+------------------
+* Version used for DESI DR2 full-shape KP
+* Minor updates to metal parameters
+
 1.7.4 (2026-04-08)
 ------------------
 * Catch PackageNotFoundError when initializing Vega
