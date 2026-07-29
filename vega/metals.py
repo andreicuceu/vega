@@ -48,6 +48,7 @@ class Metals:
 
         self.separate_metal_auto_biases = corr_item.config['model'].getboolean(
             'separate-metal-auto-biases', False)
+        self.single_metal_beta = corr_item.config['model'].getboolean('single-metal-beta', False)
 
         self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
         self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
@@ -262,6 +263,12 @@ class Metals:
         self.cache_xi_metal_cross_main = {}  # clear cache each time compute is called
         for corr_hash in self._corr_item.metal_correlations:
             name1, name2 = corr_hash
+
+            if self.single_metal_beta:
+                if name1 not in self.main_tracers:
+                    local_pars[f'beta_{name1}'] = local_pars['beta_metals']
+                if name2 not in self.main_tracers:
+                    local_pars[f'beta_{name2}'] = local_pars['beta_metals']
 
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
 
