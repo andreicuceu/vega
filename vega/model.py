@@ -30,13 +30,19 @@ class Model:
         assert corr_item.model_coordinates is not None
 
         self._data = data
-        data_has_distortion = False
-        if self._data is not None:
-            data_has_distortion = self._data.has_distortion
+        data_has_distortion = (self._data is not None) and self._data.has_distortion
+        data_is_multipoles = (self._data is not None) and self._data.use_multipoles
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
+        self._is_multipoles = corr_item.use_multipoles or data_is_multipoles
+        self._rmu_binning = self._data is not None and self._data._rmu_binning
 
-        corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
-        corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
+        if self._rmu_binning:
+            corr_item.config['model']['bin_size_r'] = str(corr_item.data_coordinates.r_binsize)
+            # mu smoothing does not make sense
+            # corr_item.config['model']['bin_size_mu'] = str(corr_item.data_coordinates.mu_binsize)
+        else:
+            corr_item.config['model']['bin_size_rp'] = str(corr_item.data_coordinates.rp_binsize)
+            corr_item.config['model']['bin_size_rt'] = str(corr_item.data_coordinates.rt_binsize)
 
         self.save_components = fiducial.get('save-components', False)
         if self.save_components:
@@ -55,11 +61,19 @@ class Model:
         # Initialize main Power Spectrum object
         self.Pk_core = power_spectrum.PowerSpectrum(
             corr_item.config['model'], fiducial,
-            corr_item.tracer1, corr_item.tracer2, corr_item.name
+            corr_item.tracer1, corr_item.tracer2, corr_item.name,
+            self._rmu_binning
         )
 
+        # if self._rmu_binning and self.Pk_core.use_Gk:
+        #     dmu_smooth_xiell = corr_item.data_coordinates.mu_binsize
+        # else:
+        # Turn off mu smoothing as I think it is included in Legendre decomp.
+        dmu_smooth_xiell = 0
+
         # Initialize the Pk to Xi transform
-        self.PktoXi = pktoxi.PktoXi.init_from_Pk(self.Pk_core, corr_item.config['model'])
+        self.PktoXi = pktoxi.PktoXi.init_from_Pk(
+            self.Pk_core, corr_item.config['model'], dmu_smooth_xiell=dmu_smooth_xiell)
 
         # Initialize main Correlation function object
         self.Xi_core = corr_func.CorrelationFunction(
@@ -141,7 +155,10 @@ class Model:
 
         # Apply the distortion matrix
         if self._has_distortion_mat:
+            # multipole matrix included.
             xi_model = self._data.distortion_mat.dot(xi_model)
+        elif self._is_multipoles:
+            xi_model = self._data._multipole_matrix.dot(xi_model)
 
         # Apply post distortion broadband
         if self.broadband is not None:

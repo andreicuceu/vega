@@ -29,6 +29,50 @@ def sinc(x):
     return np.sin(x)/x
 
 
+def bin_averaged_legendre(mu, ell, dmu):
+    mu1 = np.clip(mu - dmu / 2., -1., 1.)
+    mu2 = np.clip(mu + dmu / 2., -1., 1.)
+    legint = np.polynomial.legendre.Legendre.basis(ell).integ()
+    return (legint(mu2) - legint(mu1)) / (mu2 - mu1)
+
+
+def get_legendre_bins(ells, nmu, x_correlation):
+    """Return mu-bin averaged Legendre multipoles.
+    Args:
+        ells: list(int)
+            List of multipoles
+        nmu: int
+            Number of mu bins
+        x_correlation: bool
+            True if cross-correlations. mu's start from -1.
+
+    Returns:
+        leg_ells: list(np.ndarray)
+            Bin averaged Legendre multipoles. Array of size nmu.
+    """
+    mu1 = -1.0 if x_correlation else 0.0
+    mue = np.linspace(mu1, 1.0, nmu + 1)
+    f = 0.5 if x_correlation else 1.0
+
+    leg_ells = [
+        np.polynomial.legendre.Legendre.basis(ell).integ()(mue)
+        * f * (2 * ell + 1)
+        for ell in ells]
+    leg_ells = [le[1:] - le[:-1] for le in leg_ells]
+
+    return leg_ells
+
+
+def percival_correction(nsamples, nbins, nparams):
+    """Percival 2014 correction of the estimated parameter covariance.
+    MNRAS, Volume 439, Issue 3, p.2531-2541
+    """
+    a = nsamples - nbins
+    denom = (a - 1) * (a - 4)
+    A, B = 2.0 / denom, (a - 2.0) / denom
+    return (1.0 + B * (nbins - nparams)) / (1.0 + A + B * (nparams - 1))
+
+
 def _tracer_bias_beta(params, name):
     """Get the bias and beta values for a tracer
 
