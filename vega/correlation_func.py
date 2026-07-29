@@ -3,6 +3,8 @@ from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from astropy.table import Table
 from scipy.special import expn
+from picca import constants as picca_constants
+
 
 from . import utils
 
@@ -55,6 +57,8 @@ class CorrelationFunction:
         self._metal_corr = metal_corr
         self._use_new_bias_evol = config.getboolean('new-bias-evolution', False)
         self._rescale_coords_systematics = config.getboolean('rescale-coords-systematics', False)
+        self._cosmo = cosmo
+        self._fiducial = fiducial
 
         # Initialize the bias evolution
         self.init_bias_evol(tracer1['type'], tracer2['type'], cosmo)
@@ -70,6 +74,7 @@ class CorrelationFunction:
         self._z_fid = fiducial['z_fiducial']
         self._Omega_m = fiducial.get('Omega_m', None)
         self._Omega_de = fiducial.get('Omega_de', None)
+        self._hubble = fiducial.get('h', None)
         if not config.getboolean('old_growth_func', False):
             self.xi_growth = self.compute_growth(
                 self._z, self._z_fid, self._Omega_m, self._Omega_de)
@@ -111,6 +116,9 @@ class CorrelationFunction:
 
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
+
+        # Compute additional scaling for differences between catalogue and template cosmology
+        self._compute_data_template_correction()
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -188,12 +196,33 @@ class CorrelationFunction:
         ap, at = self._scale_params.get_ap_at(
             params, corr_name=self._corr_name, metal_corr=self._metal_corr)
 
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
+        # Rescale coordinates
+        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, 
+        ap * self._ap_dt, at * self._at_dt, delta_rp)
 
         # Compute correlation function
         xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)
 
         return xi, rescaled_r, rescaled_mu
+
+    def _compute_data_template_correction(self):
+        """Automatically compute a scale factor to correct between any difference 
+                between catalogue cosmology (normally picca) and template cosmology"""
+
+        # Calculate shifts given the fiducial and catalogue cosmology
+        self._at_dt = self._fiducial['DM'] / self._cosmo.get_dist_m(self._z_fid)
+        self._ap_dt = self._fiducial['DH'] / self._cosmo.get_dist_hubble(self._z_fid)
+
+        _lim = 0.01
+        if abs(1 - self._ap_dt) > _lim or abs(1 - self._at_dt) > _lim:
+            print('Warning: Catalogue cosmology differs strongly with template cosmology')
+
+        print(f'Applying data-template correction; ap_dt = {self._ap_dt} and at_dt = {self._at_dt}')
+
+        # Extra check if z_eff and z_fid differ by a lot
+        _z_diff = abs(self._z_eff - self._z_fid)
+        if _z_diff > 0.025:
+            print('Warning: z_eff and z_fid differ by: ', _z_diff)
 
     @staticmethod
     def _rescale_coords(r, mu, ap, at, delta_rp=0.):

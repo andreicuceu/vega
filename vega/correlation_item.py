@@ -142,6 +142,10 @@ class CorrelationItem:
                 Or=cosmo_params['Omega_r'], wl=cosmo_params['wl'], verbose=False
             )
 
+        # define the parameter attributes (a bit hacky)
+        for key in cosmo_params:
+            setattr(self.cosmo, key, cosmo_params[key])
+
     def check_if_blind_corr(self, blind_tracers):
         if 'all' in blind_tracers:
             return True
