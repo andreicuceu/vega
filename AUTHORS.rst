@@ -10,5 +10,9 @@ Development Lead
 Contributors
 ------------
 
+* Naim Goksel Karacayli 
 * Ignasi Pérez-Ràfols
-* David Kirkby <dkirkby@uci.edu>
+* David Kirkby
+* Julien Guy
+* Hiram Herrera
+* Andreu Font-Ribera
