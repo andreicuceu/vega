@@ -4,6 +4,19 @@ import numpy as np
 class BroadbandPolynomials:
     """ Class for computing broadband polynomials. """
     def __init__(self, bb_input, cf_name, model_coordinates, dist_model_coordinates):
+        """Initialize broadband polynomials from config.
+
+        Parameters
+        ----------
+        bb_input : dict
+            Broadband configuration items from the config file
+        cf_name : str
+            Name of the correlation function
+        model_coordinates : Coordinates
+            Undistorted model coordinate grid
+        dist_model_coordinates : Coordinates
+            Distorted model coordinate grid
+        """
         self.model_coordinates = model_coordinates
         self.dist_model_coordinates = dist_model_coordinates
 
@@ -59,7 +72,23 @@ class BroadbandPolynomials:
             self.bb_terms[f'{bb[1]}-{bb[0]}'] += [bb_term]
 
     def compute(self, params, pos_type):
-        assert pos_type in list(self.bb_terms.keys())
+        """Compute the total broadband polynomial for a given position type.
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters containing broadband coefficients
+        pos_type : str
+            Position type key: one of 'pre-add', 'pre-mul', 'post-add', 'post-mul'
+
+        Returns
+        -------
+        float or 1D Array
+            Total broadband polynomial value(s) for the given position type
+        """
+        assert pos_type in list(self.bb_terms.keys()), (
+            f"pos_type must be one of {list(self.bb_terms.keys())}, got '{pos_type}'"
+        )
 
         if 'pre' in pos_type:
             coordinates = self.model_coordinates

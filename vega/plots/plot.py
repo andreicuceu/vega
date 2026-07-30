@@ -7,6 +7,8 @@ from .utils import array_or_dict
 
 
 class VegaPlots:
+    """Plotting module for Vega correlation function data and models."""
+
     def __init__(self, vega_data=None):
         """Initialize plotting module with the vega internal info
 
@@ -55,6 +57,18 @@ class VegaPlots:
             self.has_data = True
 
     def initialize_coordinates(self, coordinates):
+        """Extract (min, max, nbins) tuples from a Coordinates object for wedge initialization.
+
+        Parameters
+        ----------
+        coordinates : Coordinates
+            Vega coordinates object
+
+        Returns
+        -------
+        tuple, tuple, tuple
+            rp_setup, rt_setup, r_setup each as (min, max, nbins)
+        """
         rp_setup = (coordinates.rp_min, coordinates.rp_max, coordinates.rp_nbins)
         rt_setup = (0., coordinates.rt_max, coordinates.rt_nbins)
         r_setup = rt_setup
@@ -359,6 +373,17 @@ class VegaPlots:
 
     @staticmethod
     def postprocess_fig(fig, xlim=(0, 180), ylim=None):
+        """Apply standard grid, xlim, and optional ylim to every axis in a figure.
+
+        Parameters
+        ----------
+        fig : plt.Figure
+            Figure to postprocess
+        xlim : tuple, optional
+            x-axis limits, by default (0, 180)
+        ylim : array-like, optional
+            1D (ymin, ymax) applied to all axes, or 2D with one row per axis, by default None
+        """
         for ax in fig.axes:
             ax.grid()
             ax.set_xlim(xlim[0], xlim[1])
@@ -522,7 +547,10 @@ class VegaPlots:
         self, ax, data_shells, model_shells, data_fmts=None, colors=None, alpha=1.0,
         var_latex=r"\theta", set_ylabel=True, **kwargs
     ):
-        assert len(data_shells) == len(model_shells)
+        assert len(data_shells) == len(model_shells), (
+            "data_shells and model_shells must have the same number of entries, "
+            f"got {len(data_shells)} and {len(model_shells)}"
+        )
 
         max_residual = 0
         for i, (data_shell, model_shell) in enumerate(zip(data_shells, model_shells)):
@@ -787,6 +815,21 @@ class VegaPlots:
         self, model, angle_var='theta', r_bins=None, corr_name='lyaxlya',
         var_latex=r'\theta'
     ):
+        """Plot data and model in four radial shells with residuals.
+
+        Parameters
+        ----------
+        model : array or dict
+            Model correlation function
+        angle_var : str, optional
+            Angle variable for the x-axis: 'theta', 'mu', or 'mu2', by default 'theta'
+        r_bins : array, optional
+            Five bin edges defining the four shells, by default None (auto-computed)
+        corr_name : str, optional
+            Name of the correlation component, by default 'lyaxlya'
+        var_latex : str, optional
+            LaTeX label for the x-axis variable, by default r'\\theta'
+        """
         if r_bins is None:
             rmin = self.cuts[corr_name]['r_min']
             rmax = self.cuts[corr_name]['r_max']

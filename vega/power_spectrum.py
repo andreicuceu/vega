@@ -1,5 +1,6 @@
-import numpy as np
 import copy
+
+import numpy as np
 from numba import njit, float64
 from . import utils
 
@@ -308,6 +309,16 @@ class PowerSpectrum:
         return bias_eff, beta_eff
 
     def _compute_hcd_cached(self, func, L0_hcd, *args):
+        """Compute and cache the HCD model F(k) if L0_hcd has changed.
+
+        Parameters
+        ----------
+        func : callable
+            HCD model function to call
+        L0_hcd : float
+            Characteristic HCD length scale; used as the cache key
+        *args : additional arguments passed to func
+        """
         if L0_hcd != self._L0_hcd_cache or self._F_hcd is None:
             self._F_hcd = func(L0_hcd, *args)
             self._L0_hcd_cache = L0_hcd

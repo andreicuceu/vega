@@ -5,21 +5,20 @@ from .wedges import Wedge
 
 class RtWedge(Wedge):
     """
-    Computes a perpendicualr distance bin for a 2D function
+    Computes a perpendicular distance bin for a 2D function
     """
 
     def __init__(self, rp=(0., 200., 50),
                  rt=(0., 200., 50),
                  rt_cut=(0., 4.0)):
-        """Initialize computation of a wedge
+        """Initialize computation of a perpendicular distance wedge.
+
         Parameters
         ----------
         rp : tuple, optional
             (Min, Max, Size) for r_parallel, by default (0., 200., 50)
         rt : tuple, optional
             (Min, Max, Size) for r_transverse, by default (0., 200., 50)
-        r : tuple, optional
-            (Min, Max, Size) for radius, by default (0., 200., 50)
         rt_cut: tuple, optional
             (Min, Max) for r_transverse cuts, by default (0., 4.0)
         """

@@ -1,11 +1,12 @@
 """Main module."""
 import os.path
-import numpy as np
-import scipy.stats
-from astropy.io import fits
 import configparser
 import copy
 from importlib.metadata import version, PackageNotFoundError
+
+import numpy as np
+import scipy.stats
+from astropy.io import fits
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -90,7 +91,10 @@ class VegaInterface:
         use_template_growth_rate = self.main_config['control'].getboolean(
             'use_template_growth_rate', True)
         if use_template_growth_rate and 'growth_rate' in self.fiducial:
-            assert 'growth_rate' not in self.sample_params['limits']
+            assert 'growth_rate' not in self.sample_params['limits'], (
+                "use_template_growth_rate is True, but growth_rate is in the sample params. "
+                "Remove growth_rate from [sample] or set use_template_growth_rate = False."
+            )
             self.params['growth_rate'] = self.fiducial['growth_rate']
         elif 'growth_rate' not in self.fiducial:
             print('WARNING: No growth rate specified in the template file. Using input value.')
@@ -383,13 +387,30 @@ class VegaInterface:
         return log_lik
 
     def _get_lcl_prms(self, params=None):
+        """Build a local copy of computation parameters, applying blinding if needed.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Additional or override parameters to merge in, by default None
+
+        Returns
+        -------
+        dict
+            Combined computation parameters with blinding applied if active
+        """
         local_params = copy.deepcopy(self.params)
         if params is not None:
             local_params |= params
 
-        assert self._blind is not None
+        assert self._blind is not None, (
+            "Blinding flag is not set. Call _init_blinding() before computing the model."
+        )
         if self._rnsps is not None:
-            assert self._blind
+            assert self._blind, (
+                "Blinding offsets (_rnsps) are set but blinding flag is False. "
+                "This is an inconsistent state."
+            )
             local_params = utils.apply_blinding(local_params, self._rnsps)
 
             # Enforce blinding
@@ -400,6 +421,18 @@ class VegaInterface:
         return local_params
 
     def compute_prior_chi2(self, params=None):
+        """Compute the Gaussian prior chi2 contribution for all configured priors.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Computation parameters to evaluate the priors at, by default None
+
+        Returns
+        -------
+        float
+            Sum of Gaussian chi2 contributions from all priors
+        """
         local_params = self._get_lcl_prms(params)
 
         chi2 = 0
@@ -413,6 +446,21 @@ class VegaInterface:
         return chi2
 
     def get_fiducial_for_monte_carlo(self, print_func=print):
+        """Compute the fiducial model used to generate Monte Carlo mocks.
+
+        Optionally starts from an existing fit or runs a new minimization to
+        set the template parameters before computing the fiducial model.
+
+        Parameters
+        ----------
+        print_func : callable, optional
+            Function used for log output, by default print
+
+        Returns
+        -------
+        dict
+            Fiducial model correlation functions keyed by component name
+        """
         mc_params = self.mc_config['params']
         mc_start_from_fit = self.main_config['control'].get('mc_start_from_fit', None)
 
@@ -455,6 +503,20 @@ class VegaInterface:
         return fiducial_model
 
     def initialize_monte_carlo(self, scale=None, print_func=print):
+        """Prepare all data objects with Monte Carlo mocks and reset the minimizer.
+
+        Parameters
+        ----------
+        scale : float, optional
+            Covariance rescaling factor for the mocks. Read from config if None, by default None
+        print_func : callable, optional
+            Function used for log output, by default print
+
+        Returns
+        -------
+        dict
+            Dictionary of mock data vectors keyed by component name
+        """
         # Get the fiducial model
         fiducial_model = self.get_fiducial_for_monte_carlo(print_func)
 
@@ -482,6 +544,19 @@ class VegaInterface:
         return mocks
 
     def compute_marg_coeff(self, model_cf):
+        """Compute the best-fit coefficients for the marginalization templates.
+
+        Parameters
+        ----------
+        model_cf : dict
+            Model correlation functions keyed by component name
+
+        Returns
+        -------
+        dict
+            Best-fit template coefficients keyed by component name (only for components
+            that have marginalization configured)
+        """
         bestfit_marg_coeff = {}
         for name in self.corr_items:
             if not self.corr_items[name].marginalize_small_scales:
@@ -811,6 +886,15 @@ class VegaInterface:
             raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
     def read_global_cov(self, global_cov_file, scale=None):
+        """Read the joint covariance matrix from file and prepare it for chi2 computation.
+
+        Parameters
+        ----------
+        global_cov_file : str
+            Path to the fits file containing the global covariance matrix
+        scale : float, optional
+            Rescaling factor applied to the covariance, by default None
+        """
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             self.global_cov = hdul[1].data['COV']

@@ -6,6 +6,20 @@ from .shell import Shell
 
 
 def array_or_dict(input_obj, corr_name='lyalya_lyalya'):
+    """Return input_obj directly if it is an array, or look up corr_name if it is a dict.
+
+    Parameters
+    ----------
+    input_obj : array or dict
+        Either a data/covariance array or a dictionary keyed by correlation name
+    corr_name : str, optional
+        Key to use when input_obj is a dict, by default 'lyalya_lyalya'
+
+    Returns
+    -------
+    array
+        The resolved array
+    """
     if isinstance(input_obj, dict):
         return input_obj[corr_name]
 

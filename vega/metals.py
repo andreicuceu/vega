@@ -209,6 +209,28 @@ class Metals:
     def compute_metal_corr_slow(
         self, pars, pk_lin, corr_hash, fast_metals, add_metal_dmat=True, component=None
     ):
+        """Compute a single metal correlation function, optionally applying the metal matrix.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_lin : array
+            Linear power spectrum
+        corr_hash : tuple
+            (name1, name2) tracer name pair
+        fast_metals : bool
+            If True, use the fast metals approximation (no bias factors in P(k))
+        add_metal_dmat : bool, optional
+            Whether to apply the metal distortion matrix, by default True
+        component : str, optional
+            Component key for saving ('peak', 'smooth', or 'full'), by default None
+
+        Returns
+        -------
+        1D Array
+            Metal correlation function, optionally distorted
+        """
         pk = self.Pk_metal[corr_hash].compute(pk_lin, pars, fast_metals=fast_metals)
         self.PktoXi[corr_hash].cache_pars = None
         xi = self.Xi_metal[corr_hash].compute(pk, pk_lin, self.PktoXi[corr_hash], pars)
@@ -365,7 +387,21 @@ class Metals:
             (size // rebin_factor), rebin_factor).mean(-1)
 
     def get_forest_weights(self, main_tracer):
-        assert main_tracer['type'] == 'continuous'
+        """Read wavelength and weight arrays from the stacked delta file for a forest tracer.
+
+        Parameters
+        ----------
+        main_tracer : dict
+            Tracer config dict with at least 'type' and 'weights-path' keys
+
+        Returns
+        -------
+        array, array
+            Wavelength array and corresponding weight array
+        """
+        assert main_tracer['type'] == 'continuous', (
+            f"get_forest_weights expects a continuous tracer, got '{main_tracer['type']}'"
+        )
         with fits.open(main_tracer['weights-path']) as hdul:
             stack_table = hdul[1].data
 
@@ -380,7 +416,21 @@ class Metals:
         return wave, weights
 
     def get_qso_weights(self, tracer):
-        assert tracer['type'] == 'discrete'
+        """Read QSO redshifts and compute weighted redshift bins from the catalog file.
+
+        Parameters
+        ----------
+        tracer : dict
+            Tracer config dict with at least 'type' and 'weights-path' keys
+
+        Returns
+        -------
+        array, array
+            Weighted mean redshifts per bin and corresponding weight sums
+        """
+        assert tracer['type'] == 'discrete', (
+            f"get_qso_weights expects a discrete tracer, got '{tracer['type']}'"
+        )
         with fits.open(tracer['weights-path']) as hdul:
             z_qso_cat = hdul[1].data['Z']
 
@@ -399,6 +449,20 @@ class Metals:
         return z_qso, weights_qso
 
     def get_rp_pairs(self, z1, z2):
+        """Compute line-of-sight separation pairs and mean comoving distances.
+
+        Parameters
+        ----------
+        z1 : array
+            Redshifts of tracer 1
+        z2 : array
+            Redshifts of tracer 2
+
+        Returns
+        -------
+        array, array
+            rp_pairs (all z1-z2 pair separations) and mean_distance (mean comoving distances)
+        """
         if np.any(z1 < 0) or np.any(z2 < 0):
             raise ValueError(
                 "Attempting to compute distance to a negative redshift")
@@ -414,12 +478,45 @@ class Metals:
         return rp_pairs, mean_distance
 
     def get_forest_weight_scaling(self, z, true_abs, assumed_abs):
+        """Compute the weight scaling factor due to assuming a wrong absorber identity.
+
+        Parameters
+        ----------
+        z : array
+            Redshift at the true absorber wavelength
+        true_abs : str
+            Name of the true absorber (e.g. 'SiIII(1207)')
+        assumed_abs : str
+            Name of the assumed absorber (e.g. 'LYA')
+
+        Returns
+        -------
+        array
+            Weight scaling factor at each redshift
+        """
         true_alpha = self.metal_matrix_config.getfloat(f'alpha_{true_abs}')
         assumed_alpha = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs}', 2.9)
         scaling = (1 + z)**(true_alpha + assumed_alpha - 2)
         return scaling
 
     def compute_metal_dmat(self, true_abs_1, true_abs_2):
+        """Compute the 2D metal distortion matrix for a given absorber pair.
+
+        Builds a full (rp, rt) distortion matrix by combining separate 1D
+        rp and rt distortion matrices computed from the stacked delta files.
+
+        Parameters
+        ----------
+        true_abs_1 : str
+            Name of the true absorber for tracer 1
+        true_abs_2 : str
+            Name of the true absorber for tracer 2
+
+        Returns
+        -------
+        csr_matrix, array, array, array
+            Distortion matrix and effective rp, rt, z grids
+        """
         # Initialize tracer 1 redshift and weights
         if self.main_tracer_types[0] == 'continuous':
             wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
@@ -557,6 +654,23 @@ class Metals:
         return dmat, full_rp_eff, full_rt_eff, full_z_eff
 
     def compute_metal_rp_dmat(self, true_abs_1, true_abs_2):
+        """Compute the rp-only metal distortion matrix for a given absorber pair.
+
+        Builds a 1D rp distortion matrix only (no rt mixing), applied separately
+        for each rt bin. Faster than the full 2D compute_metal_dmat.
+
+        Parameters
+        ----------
+        true_abs_1 : str
+            Name of the true absorber for tracer 1
+        true_abs_2 : str
+            Name of the true absorber for tracer 2
+
+        Returns
+        -------
+        array, array, array, array
+            rp distortion matrix and effective rp, rt, z grids
+        """
         # Initialize tracer 1 redshift and weights
         if self.main_tracer_types[0] == 'continuous':
             wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)

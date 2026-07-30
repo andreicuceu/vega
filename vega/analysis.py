@@ -37,6 +37,8 @@ class Analysis:
         mc_config : dict, optional
             Monte Carlo config with the model and sample parameters,
             by default None
+        global_cov : 2D array, optional
+            Global covariance matrix covering all correlations, by default None
         """
         self.config = main_config
         self._chi2_func = chi2_func
@@ -176,7 +178,10 @@ class Analysis:
         array
             Global masked MC data vector
         """
-        assert self._global_cov is not None
+        assert self._global_cov is not None, (
+            "create_global_monte_carlo requires a global covariance matrix. "
+            "Pass global_cov to Analysis.__init__."
+        )
 
         if seed is not None:
             np.random.seed(seed)
@@ -231,6 +236,10 @@ class Analysis:
             Starting seed, by default 0
         scale : float/dict, optional
             Scaling for the covariance, by default None
+        forecast : bool, optional
+            If True, skip adding noise to mocks (forecast mode), by default False
+        run_mc_fits : bool, optional
+            If True, minimize on each mock, by default True
         """
         assert self.mc_config is not None, 'No Monte Carlo config provided'
 

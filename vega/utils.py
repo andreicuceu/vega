@@ -1,12 +1,13 @@
-import numpy as np
-from scipy.integrate import quad
-from numba import njit, float64
 import os.path
 from pathlib import Path
 from functools import lru_cache
+
+import numpy as np
+from scipy.integrate import quad
+from scipy.interpolate import interp1d
+from numba import njit, float64
 from cachetools import cached, LRUCache
 from cachetools.keys import hashkey
-from scipy.interpolate import interp1d
 
 import vega
 
@@ -26,6 +27,18 @@ VEGA_BLINDED_PARS = {
 
 @njit
 def sinc(x):
+    """Compute the unnormalized sinc function sin(x)/x.
+
+    Parameters
+    ----------
+    x : float or array
+        Input value(s)
+
+    Returns
+    -------
+    float or array
+        sin(x) / x
+    """
     return np.sin(x)/x
 
 
@@ -96,6 +109,18 @@ def bias_beta(params, tracer1_name, tracer2_name):
 
 
 def convert_instance_to_dictionary(inst):
+    """Convert an object's public attributes to a dictionary.
+
+    Parameters
+    ----------
+    inst : object
+        Any Python object
+
+    Returns
+    -------
+    dict
+        Dictionary of non-dunder attribute names to their values
+    """
     dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith('__'))
     return dic
 
@@ -348,6 +373,20 @@ def get_blinding(blind_pars, blinding_strat):
 
 
 def apply_blinding(params, blinding):
+    """Apply blinding offsets to the given parameters dictionary in-place.
+
+    Parameters
+    ----------
+    params : dict
+        Computation parameters to blind
+    blinding : dict
+        Blinding offsets keyed by parameter name
+
+    Returns
+    -------
+    dict
+        The modified params dictionary
+    """
     for par, val in blinding.items():
         params[par] += (np.pi - np.exp(val**2))
 

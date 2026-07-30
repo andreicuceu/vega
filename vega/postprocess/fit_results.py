@@ -1,9 +1,10 @@
+from dataclasses import dataclass
+from typing import Union
+
 import numpy as np
 import scipy.stats as stats
 from astropy.io import fits
 from getdist import MCSamples
-from dataclasses import dataclass
-from typing import Union
 from numpy.typing import ArrayLike
 
 from vega.utils import find_file
@@ -30,6 +31,17 @@ class CorrelationOutput:
 
 class FitResults:
     def __init__(self, path, results_only=False, no_chain=False):
+        """Read a Vega bestfit HDF5 output file and populate fit results.
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to the Vega output FITS file
+        results_only : bool, optional
+            If True, skip reading correlation HDUs, by default False
+        no_chain : bool, optional
+            If True, skip building a Gaussian approximation chain, by default False
+        """
         hdul = fits.open(find_file(path))
 
         self.chisq = hdul['BESTFIT'].header['FVAL']
@@ -54,11 +66,34 @@ class FitResults:
 
     @staticmethod
     def make_chain(names, mean, cov):
+        """Build a Gaussian approximation chain from the bestfit mean and covariance.
+
+        Parameters
+        ----------
+        names : array-like of str
+            Parameter names
+        mean : 1D array
+            Bestfit parameter values
+        cov : 2D array
+            Parameter covariance matrix
+
+        Returns
+        -------
+        MCSamples
+            GetDist samples object with 100 000 Gaussian draws
+        """
         labels = build_names(names)
         gaussian_samples = np.random.multivariate_normal(mean, cov, size=100000)
         return MCSamples(samples=gaussian_samples, names=names, labels=list(labels.values()))
 
     def read_correlations(self, hdul):
+        """Read per-correlation model and data arrays from a Vega output FITS file.
+
+        Parameters
+        ----------
+        hdul : fits.HDUList
+            Open FITS file from a Vega run
+        """
         model_hdus = [hdu for hdu in hdul if hdu.name.startswith('MODEL')]
         if len(model_hdus) == 0:
             raise ValueError('No model HDUs found in the fit results file.')
@@ -107,6 +142,13 @@ class FitResults:
         self.reduced_chisq = self.chisq / (self.num_data_points - self.num_pars)
 
     def old_read_correlations(self, hdu):
+        """Read correlations from the legacy single-HDU 'MODEL' format.
+
+        Parameters
+        ----------
+        hdu : fits.BinTableHDU
+            The single MODEL HDU from an older Vega output file
+        """
         if len(hdu.data.columns) % 9 != 0:
             raise ValueError('Vega output format has changed. Please update fit reader.')
 

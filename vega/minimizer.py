@@ -1,7 +1,8 @@
-import iminuit
 import time
 import copy
 from sys import stdout
+
+import iminuit
 
 
 class Minimizer:
@@ -103,6 +104,13 @@ class Minimizer:
 
     @property
     def params(self):
+        """iminuit parameter objects after minimization.
+
+        Returns
+        -------
+        iminuit.util.Params
+            Parameter objects with bestfit values and errors
+        """
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')
@@ -110,6 +118,13 @@ class Minimizer:
 
     @property
     def values(self):
+        """Best-fit parameter values after minimization.
+
+        Returns
+        -------
+        dict
+            Parameter name to best-fit value mapping
+        """
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')
@@ -117,6 +132,13 @@ class Minimizer:
 
     @property
     def errors(self):
+        """Parameter errors (HESSE) after minimization.
+
+        Returns
+        -------
+        dict
+            Parameter name to error mapping
+        """
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')
@@ -124,6 +146,13 @@ class Minimizer:
 
     @property
     def covariance(self):
+        """Covariance matrix after minimization.
+
+        Returns
+        -------
+        iminuit.util.Matrix
+            Covariance matrix
+        """
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')
@@ -131,6 +160,13 @@ class Minimizer:
 
     @property
     def fmin(self):
+        """Minimum function value information after minimization.
+
+        Returns
+        -------
+        iminuit.util.FMin
+            Object containing bestfit chi2 and convergence flags
+        """
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')
@@ -138,6 +174,13 @@ class Minimizer:
 
     @property
     def minuit(self):
+        """The underlying iminuit.Minuit object after minimization.
+
+        Returns
+        -------
+        iminuit.Minuit
+            The iminuit minimizer object
+        """
         if not self._run_flag:
             print('Run Minimizer.minimize() before asking for results')
             raise RuntimeError('Tried to access minimization results before minimization.')

@@ -1,7 +1,8 @@
+from functools import reduce
+
 import numpy as np
 from scipy.sparse import coo_array
 from picca import constants as picca_constants
-from functools import reduce
 
 
 class CorrelationItem:
@@ -135,6 +136,13 @@ class CorrelationItem:
                                        else dist_model_coordinates)
 
     def init_cosmo(self, cosmo_params):
+        """Initialize the picca cosmology object from the given parameters.
+
+        Parameters
+        ----------
+        cosmo_params : dict
+            Dictionary with keys Omega_m, Omega_k, Omega_r, wl
+        """
         self.cosmo_params = cosmo_params
 
         self.cosmo = picca_constants.Cosmo(
@@ -143,6 +151,18 @@ class CorrelationItem:
             )
 
     def check_if_blind_corr(self, blind_tracers):
+        """Check whether this correlation should be blinded.
+
+        Parameters
+        ----------
+        blind_tracers : list
+            List of tracer names to blind, or ['all'] to blind everything
+
+        Returns
+        -------
+        bool
+            True if this correlation should be blinded
+        """
         if 'all' in blind_tracers:
             return True
 
