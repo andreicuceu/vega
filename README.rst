@@ -21,13 +21,12 @@ Vega is a tool for computing 3D correlation function models for tracers used by 
 Installation
 ------------
 
-We recommend to start by creating a fresh conda environment. The following code will create this and also install all the dependencies:
+We recommend to start by creating a fresh conda environment:
 
 .. code-block:: console
 
-    conda create --name vega pip ipython jupyter jupyterlab ipykernel numpy scipy astropy numba h5py setuptools "iminuit>=2.0.0" cachetools matplotlib
+    conda create --name vega python=3.13
     conda activate vega
-    pip install mcfit
 
 You can either clone the public repository:
 
@@ -48,23 +47,28 @@ Once you have a copy of the source, you can install it with:
     cd vega
     pip install -e .
 
+If you want to install the development version with all optional dependencies, you should run:
+
+.. code-block:: console
+
+    pip install -e .[dev]
+
 If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
 
 .. code-block:: console
 
     python -m ipykernel install --user --name vega --display-name Vega
 
-Both of the samplers and a few other modules in Vega need mpi4py. If you are at NERSC, you should install this using the NERSC-specific command:
+The sampler and a few other modules in Vega need mpi4py. If you are at NERSC, you should install this using the NERSC-specific command:
 
 .. code-block:: console
 
     MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 
-Vega currently has interfaces for two samplers: `Polychord`_ and `PocoMC`_. You do not need to install either of them to run the iminuit minimizer. Alternatively, if you only want to use one of the samplers, you only need to install that one (see instructions below).
+Vega currently has interfaces for one sampler: `Polychord`_. You do not need to install it to run the iminuit minimizer. You can find the instructions for installing at NERSC Polychord below.
 
 .. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
-.. _PocoMC: https://github.com/minaskar/pocomc
 
 Installing Polychord
 --------------------
@@ -114,23 +118,23 @@ Finally, you should add this line to your :code:`.bashrc` file, or at the beginn
 
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
-Installing PocoMC
------------------
+.. Installing PocoMC
+.. -----------------
 
-Here are instructions for installing PocoMC at NERSC. First, install Pytorch in CPU mode (see `this`_ for more details):
+.. Here are instructions for installing PocoMC at NERSC. First, install Pytorch in CPU mode (see `this`_ for more details):
 
-.. code-block:: console
+.. .. code-block:: console
 
-    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+..     pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-Finally, install `PocoMC`_:
+.. Finally, install `PocoMC`_:
 
-.. code-block:: console
+.. .. code-block:: console
 
-    pip install pocomc
+..     pip install pocomc
 
-.. _this: https://pytorch.org/get-started/locally/
-.. _PocoMC: https://github.com/minaskar/pocomc
+.. .. _this: https://pytorch.org/get-started/locally/
+.. .. _PocoMC: https://github.com/minaskar/pocomc
 
 Usage
 -----
@@ -179,7 +183,7 @@ Vega also has a FitResults module for analysing the results of a fit. You can fi
 Credits
 -------
 
-This package is based on picca fitter2 found here: https://github.com/igmhub/picca/tree/master/py/picca/fitter2, and was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
+This package is based on picca fitter2 found here: https://github.com/igmhub/picca/tree/v4/py/picca/fitter2, and was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
