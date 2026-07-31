@@ -2,6 +2,14 @@
 History
 =======
 
+1.7.6 (2026-07-31)
+------------------
+* Migrated package setup from setup.py to modern pyproject.toml standard.
+* Replaced flake8/isort with Ruff and implemented pre-commit hooks (need to be activated).
+* Updated CI/CD pipeline to use modern GitHub Actions with dependency caching.
+* Refactored documentation to use sphinx-book-theme and MyST-NB for Jupyter notebook rendering.
+* Replaced hardcoded version strings with dynamic setuptools_scm versioning.
+
 1.7.5 (2026-07-29)
 ------------------
 * Version used for DESI DR2 full-shape KP
