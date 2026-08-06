@@ -180,3 +180,38 @@ class Coordinates:
         mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
 
         return mask
+
+    def get_mask_marginalization_scales(self, cuts_config, marginalization_cuts):
+        """Build mask to for bins that are marginalized
+
+        Parameters
+        ----------
+        marginalization_cuts : dict
+            Dictionary with the small-scale marginalization cuts
+
+        Returns
+        -------
+        Array
+            Mask
+        """
+        mask = np.ones_like(self.rp_regular_grid, dtype=bool)
+
+        if 'rtmax' in marginalization_cuts:
+            rtmax = marginalization_cuts['rtmax']
+            mask &= self.rt_regular_grid < rtmax
+        if 'rtmin' in marginalization_cuts:
+            rtmin = marginalization_cuts['rtmin']
+            mask &= self.rt_regular_grid > rtmin
+        if 'rpmax' in marginalization_cuts:
+            rpmax = marginalization_cuts['rpmax']
+            mask &= np.abs(self.rp_regular_grid) < rpmax
+        if 'rpmin' in marginalization_cuts:
+            rpmin = marginalization_cuts['rpmin']
+            mask &= np.abs(self.rp_regular_grid) > rpmin
+
+        if 'all-rmin' in marginalization_cuts:
+            mask = ~self.get_mask_scale_cuts(
+                cuts_config, small_scale_mask=True
+            )
+
+        return mask

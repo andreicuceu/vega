@@ -2,6 +2,7 @@ import os.path
 import sys
 from pathlib import Path
 
+import numpy as np
 from mpi4py import MPI
 
 from vega import VegaInterface
@@ -11,11 +12,30 @@ from vega.parameters.param_utils import build_names
 class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
-    def __init__(self, sampler_config, limits, log_lik_func):
+    def __init__(self, sampler_config, limits, log_lik_func, derived_dict=None):
+        """Initialize the sampler interface.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            Sampler section from the main config, containing path, name, and sampler settings
+        limits : dict
+            Dictionary mapping parameter names to (min, max) prior limit tuples
+        log_lik_func : callable
+            Log-likelihood function that accepts a parameter dict
+        derived_dict : dict, optional
+            Dictionary mapping correlation names to number of marginalized coefficients
+        """
         self.limits = limits
         self.names = list(limits.keys())
         self.num_params = len(limits)
-        self.num_derived = 0
+        self.derived_dict = None
+        if derived_dict is not None:
+            self.derived_dict = derived_dict
+            self.num_derived = np.sum([num_marg for num_marg in derived_dict.values()])
+        else:
+            self.num_derived = 0
+
         self.log_lik = log_lik_func
 
         self.getdist_latex = sampler_config.getboolean('getdist_latex', True)
@@ -44,6 +64,13 @@ class Sampler:
         self.get_sampler_settings(sampler_config, self.num_params, self.num_derived)
 
     def write_parnames(self, parnames_path):
+        """Write a getdist-compatible .paramnames file for all sampled and derived parameters.
+
+        Parameters
+        ----------
+        parnames_path : Path
+            Output path for the .paramnames file
+        """
         mpi_comm = MPI.COMM_WORLD
         cpu_rank = mpi_comm.Get_rank()
 
@@ -51,6 +78,16 @@ class Sampler:
             print('Writing parameter names')
             sys.stdout.flush()
             latex_names = build_names(list(self.names))
+
+            if self.derived_dict is not None:
+                corr_names = sorted(self.derived_dict.keys())
+                for corr in corr_names:
+                    num_marg = self.derived_dict[corr]
+                    for i in range(num_marg):
+                        name = f'{corr}_marg_{i}'
+                        latex_name = r'M_{\rm ' + f'{corr}' + '}^{' + f'{i}' + '}'
+                        latex_names[name] = latex_name
+
             with open(parnames_path, 'w') as f:
                 for name, latex in latex_names.items():
                     if self.getdist_latex:
@@ -63,7 +100,25 @@ class Sampler:
         mpi_comm.barrier()
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
+        """Extract sampler-specific settings from the config. Must be implemented in subclasses.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            Sampler section from the main config
+        num_params : int
+            Number of sampled parameters
+        num_derived : int
+            Number of derived parameters
+        """
         raise NotImplementedError('This method should be implemented in the child class')
 
     def run(self, log_lik_func):
+        """Run the sampler. Must be implemented in subclasses.
+
+        Parameters
+        ----------
+        log_lik_func : callable
+            Log-likelihood function that accepts a parameter dict
+        """
         raise NotImplementedError('This method should be implemented in the child class')

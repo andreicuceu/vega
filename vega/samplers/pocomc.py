@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 import pocomc
-from multiprocessing import Pool
 from scipy.stats import uniform
 
 from vega.samplers.sampler_interface import Sampler
@@ -12,9 +11,31 @@ class PocoMC(Sampler):
     """ Interface between Vega and the PocoMC sampler """
 
     def __init__(self, sampler_config, limits, log_lik_func):
+        """Initialize PocoMC sampler interface.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            PocoMC section from the main config
+        limits : dict
+            Dictionary mapping parameter names to (min, max) prior limit tuples
+        log_lik_func : callable
+            Log-likelihood function that accepts a parameter dict
+        """
         super().__init__(sampler_config, limits, log_lik_func)
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
+        """Extract PocoMC settings from the config and build the prior distribution.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            PocoMC section from the main config
+        num_params : int
+            Number of sampled parameters
+        num_derived : int
+            Number of derived parameters (unused by PocoMC)
+        """
         # Initialize the pocomc settings
         self.precondition = sampler_config.getboolean('precondition', True)
         self.dynamic = sampler_config.getboolean('dynamic', False)
@@ -34,6 +55,13 @@ class PocoMC(Sampler):
         )
 
     def write_chain(self, pocomc_sampler):
+        """Write the posterior chain and evidence to disk.
+
+        Parameters
+        ----------
+        pocomc_sampler : pocomc.Sampler
+            Completed PocoMC sampler instance
+        """
         # Get the weighted posterior samples
         samples, weights, logl, logp = pocomc_sampler.posterior()
 

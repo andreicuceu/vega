@@ -1,32 +1,45 @@
-import numpy as np
-from scipy.integrate import quad
-from numba import njit, float64
 import os.path
 from pathlib import Path
 from functools import lru_cache
-from cachetools import cached, LRUCache
-from cachetools.keys import hashkey
+
+import numpy as np
+from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.linalg import cholesky, solve_triangular, svd
+from numba import njit, float64
+from cachetools import cached, LRUCache
+from cachetools.keys import hashkey
 
 import vega
 
 CACHE_SMOOTHING = LRUCache(128)
 
 BLIND_FIXED_PARS = [
-    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full', 'alpha_full'
+    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full',  # 'alpha_full'
 ]
 
 # Dictionary with blinded parameters and the tracers for which they are blinded
 VEGA_BLINDED_PARS = {
     'phi_smooth': ['all'],
     'growth_rate': ['all'],
-    'alpha_smooth': ['all'],
+    # 'alpha_smooth': ['all'],
 }
 
 
 @njit
 def sinc(x):
+    """Compute the unnormalized sinc function sin(x)/x.
+
+    Parameters
+    ----------
+    x : float or array
+        Input value(s)
+
+    Returns
+    -------
+    float or array
+        sin(x) / x
+    """
     return np.sin(x)/x
 
 
@@ -97,6 +110,18 @@ def bias_beta(params, tracer1_name, tracer2_name):
 
 
 def convert_instance_to_dictionary(inst):
+    """Convert an object's public attributes to a dictionary.
+
+    Parameters
+    ----------
+    inst : object
+        Any Python object
+
+    Returns
+    -------
+    dict
+        Dictionary of non-dunder attribute names to their values
+    """
     dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith('__'))
     return dic
 
@@ -300,7 +325,7 @@ def get_blinding(blind_pars, blinding_strat):
 
     if ('ap' in blind_pars) or ('at' in blind_pars) or ('alpha' in blind_pars):
         blinding_type = 'bao'
-    elif ('growth' in blind_pars) or ('phi_smooth' in blind_pars):
+    elif ('growth_rate' in blind_pars) or ('phi_smooth' in blind_pars):
         blinding_type = 'full-shape'
     else:
         raise ValueError(f'No blinding implemented for parameters {blind_pars}')
@@ -312,12 +337,16 @@ def get_blinding(blind_pars, blinding_strat):
             'bao': None
         },
         'desi_y3': {
-            'full-shape': Path(blind_dir) / 'full-shape-blinding' / 'dr2_fs_blinding_16_06_2025.npz',
+            'full-shape': None,
+            'bao': None
         }
     }
 
     if blinding_strat not in blinding_choices:
         raise ValueError(f'Unknown blinding version: {blinding_strat}.')
+
+    if blinding_strat == 'desi_y5':
+        raise ValueError('Blinding strategy desi_y5 is not implemented yet.')
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
     if blinding_file is None:
@@ -345,6 +374,20 @@ def get_blinding(blind_pars, blinding_strat):
 
 
 def apply_blinding(params, blinding):
+    """Apply blinding offsets to the given parameters dictionary in-place.
+
+    Parameters
+    ----------
+    params : dict
+        Computation parameters to blind
+    blinding : dict
+        Blinding offsets keyed by parameter name
+
+    Returns
+    -------
+    dict
+        The modified params dictionary
+    """
     for par, val in blinding.items():
         params[par] += (np.pi - np.exp(val**2))
 

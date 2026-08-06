@@ -1,11 +1,12 @@
-import os
-import git
 import copy
-import numpy as np
-from pathlib import Path
-from astropy.io import fits
-from datetime import datetime
+import os
 from configparser import ConfigParser
+from datetime import datetime
+from pathlib import Path
+
+import git
+import numpy as np
+from astropy.io import fits
 
 import vega
 from vega.utils import find_file
@@ -18,8 +19,9 @@ class BuildConfig:
     _params_template = None
     recognised_correlations = [
         'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
-        'civxciv', 'civxqso', 'civxlya'
+        'lyaxdla', 'lybxdla', 'lyaxsbla', 'lybxsbla',
+        'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya', 
     ]
 
     def __init__(self, options={}, overwrite=False):
@@ -62,16 +64,27 @@ class BuildConfig:
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
         self.options['bao_broadening'] = options.get('bao_broadening', False)
         self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
-        self.options['uv_background'] = options.get('uv_background', False)
+        self.options['UVB-fluctuations'] = options.get('UVB-fluctuations', False)
+        self.options['UVB-SN-cross'] = options.get('UVB-SN-cross', False)
+        self.options['HeII-reionization'] = options.get('HeII-reionization', False)
+        self.options['mock-bin-size'] = options.get('mock-bin-size', None)
+        self.options['mock-los-smoothing'] = options.get('mock-los-smoothing', None)
+
         self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
         self.options['radiation_effects'] = options.get('radiation_effects', False)
         self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
         self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
-        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', 0)
-        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', 0)
-        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', 0)
-        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', 0)
+
+        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', None)
+        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', None)
+        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', None)
+        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', None)
+
         self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
+        self.options['marginalize-prior-sigma'] = options.get('marginalize-prior-sigma', 10.0)
+        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', True)
+        self.options['marginalize-match-data-bins'] = options.get(
+            'marginalize-match-data-bins', True)
 
         self.options['hcd_model'] = options.get('hcd_model', None)
         self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
@@ -85,7 +98,13 @@ class BuildConfig:
         self.options['new_metals'] = options.get('new_metals', False)
         self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
         self.options['metal-matrix'] = options.get('metal-matrix', {})
+        self.options['rebin-metals'] = options.get('rebin-metals', None)
         self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
+        self.options['separate-metal-auto-biases'] = options.get(
+            'separate-metal-auto-biases', False)
+        self.options['single-metal-beta'] = options.get('single-metal-beta', False)
+        self.options['zmin'] = options.get('zmin', 0.0)
+        self.options['zmax'] = options.get('zmax', 10.0)
 
         metals = options.get('metals', None)
         if metals is not None:
@@ -209,6 +228,8 @@ class BuildConfig:
             Name of the correlation. Must be the same as corresponding template file name
         corr_info : dict
             Correlation information. The paths to the data and metal files are required.
+        git_hash : str
+            Git hash of the current Vega version, written as a comment to the config file
 
         Returns
         -------
@@ -267,8 +288,16 @@ class BuildConfig:
 
         # Things that require at least one tracer to be continuous
         if type1 == 'continuous' or type2 == 'continuous':
-            if self.options['uv_background']:
-                config['model']['add uv'] = 'True'
+
+            if self.options['UVB-fluctuations']:
+                config['model']['UVB-fluctuations'] = 'True'
+
+                # UV shotnoise is added to auto by default, and to cross only with extra flag
+                if type1 == type2 or self.options['UVB-SN-cross']:
+                    config['model']['UVB-shotnoise'] = 'True'
+
+            if self.options['HeII-reionization']:
+                config['model']['HeII-reionization'] = 'True'
 
             if self.options['hcd_model'] is not None:
                 assert self.options['hcd_model'] in ['fvoigt', 'Rogers2018', 'sinc']
@@ -288,6 +317,12 @@ class BuildConfig:
                 if 'fast_metals' in corr_info:
                     config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
 
+                if self.options['separate-metal-auto-biases']:
+                    config['model']['separate-metal-auto-biases'] = 'True'
+
+                if self.options['single-metal-beta']:
+                    config['model']['single-metal-beta'] = 'True'
+
                 new_metals_flag = self.options.get('new_metals', False)
                 if new_metals_flag:
                     config['model']['new_metals'] = 'True'
@@ -295,10 +330,17 @@ class BuildConfig:
 
                     config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
                     config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
+                    config['data']['zmin'] = str(self.options.get('zmin'))
+                    config['data']['zmax'] = str(self.options.get('zmax'))
 
                     config['metal-matrix'] = {}
-                    config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
-                        'rebin_factor', '3')
+                    if self.options['rebin-metals'] is not None:
+                        config['metal-matrix']['rebin_factor'] = str(
+                            int(self.options['rebin-metals']))
+                    else:
+                        config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
+                            'rebin_factor', '3')
+
                     config['metal-matrix']['alpha_LYA'] = self.options['metal-matrix'].get(
                         'alpha_LYA', '2.9')
                     config['metal-matrix']['alpha_SiII(1260)'] = self.options['metal-matrix'].get(
@@ -334,14 +376,36 @@ class BuildConfig:
                 config['model']['radiation effects'] = 'True'
 
         # Marginalize small scales
-        config['model']['marginalize-below-rtmax'] = str(self.options['marginalize-below-rtmax'])
-        config['model']['marginalize-above-rtmin'] = str(self.options['marginalize-above-rtmin'])
-        config['model']['marginalize-below-rpmax'] = str(self.options['marginalize-below-rpmax'])
-        config['model']['marginalize-above-rpmin'] = str(self.options['marginalize-above-rpmin'])
+        has_marg = False
+        if self.options['marginalize-below-rtmax'] is not None:
+            config['model']['marginalize-below-rtmax'] = str(
+                self.options['marginalize-below-rtmax'])
+            has_marg = True
+        if self.options['marginalize-above-rtmin'] is not None:
+            config['model']['marginalize-above-rtmin'] = str(
+                self.options['marginalize-above-rtmin'])
+            has_marg = True
+        if self.options['marginalize-below-rpmax'] is not None:
+            config['model']['marginalize-below-rpmax'] = str(
+                self.options['marginalize-below-rpmax'])
+            has_marg = True
+        if self.options['marginalize-above-rpmin'] is not None:
+            config['model']['marginalize-above-rpmin'] = str(
+                self.options['marginalize-above-rpmin'])
+            has_marg = True
+
+        # This should appear even if turned off to inform user
         config['model']['marginalize-all-rmin-cuts'] = str(
             self.options['marginalize-all-rmin-cuts'])
 
-        if 'skip-nl-model-in-peak' in self.options:
+        # These options are only needed if marginalization is turned on
+        if has_marg or self.options['marginalize-all-rmin-cuts']:
+            config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
+            config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
+            config['model']['marginalize-match-data-bins'] = str(
+                self.options['marginalize-match-data-bins'])
+
+        if self.options['skip-nl-model-in-peak']:
             config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
 
         # P(k) damping scale
@@ -364,6 +428,15 @@ class BuildConfig:
             condition &= self.options['fullshape_smoothing_metals']
             if condition:
                 config['metals']['fullshape smoothing'] = self.options['fullshape_smoothing']
+
+        if self.options['mock-bin-size'] is not None:
+            config['model']['mock-bin-size'] = str(self.options['mock-bin-size'])
+            if self.options['metals'] is not None:
+                config['metals']['mock-bin-size'] = str(self.options['mock-bin-size'])
+            if self.options['mock-los-smoothing'] is not None:
+                config['model']['mock-los-smoothing'] = self.options['mock-los-smoothing']
+                if self.options['metals'] is not None:
+                    config['metals']['mock-los-smoothing'] = self.options['mock-los-smoothing']
 
         if self.name_extension is None:
             corr_path = self.config_path / '{}.ini'.format(name)
@@ -445,12 +518,14 @@ class BuildConfig:
 
         # Check the effective redshift
         self.zeff_in = fit_info.get('zeff', None)
-        zeff_rmin = fit_info.get('zeff_rmin', 0.)
-        zeff_rmax = fit_info.get('zeff_rmax', 300.)
+        zeff_rmin = float(fit_info.get('zeff_rmin', 0.))
+        zeff_rmax = float(fit_info.get('zeff_rmax', 300.))
 
         if self.zeff_in is None:
             zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
             self.zeff_in = zeff_comp
+
+        self.zeff_in = float(self.zeff_in)
 
         # Write the paths to the correlation configs
         config['data sets'] = {}
@@ -499,6 +574,7 @@ class BuildConfig:
 
         # Write the parameters
         self.parameters = parameters
+        
         config['parameters'] = {}
         for name, value in self.parameters.items():
             config['parameters'][name] = str(value)
@@ -519,6 +595,7 @@ class BuildConfig:
         if self.run_sampler:
             config['control']['run_sampler'] = 'True'
             config['control']['sampler'] = self.sampler
+            config['control']['low_mem_mode'] = fit_info.get('low_mem_mode', 'False')
             if self.sampler == 'Polychord':
                 config['Polychord'] = {}
                 config['Polychord']['path'] = str(self.sampler_out_path)
@@ -565,7 +642,16 @@ class BuildConfig:
                     fit_info['monte_carlo']['global_cov_rescale'])
 
             if 'mc_output' in fit_info['monte_carlo']:
-                config['control']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+                config['output']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+
+            if 'num_mc_mocks' in fit_info['monte_carlo']:
+                config['control']['num_mc_mocks'] = str(fit_info['monte_carlo']['num_mc_mocks'])
+
+            if 'mc_seed' in fit_info['monte_carlo']:
+                config['control']['mc_seed'] = str(fit_info['monte_carlo']['mc_seed'])
+
+            if 'run_mc_fits' in fit_info['monte_carlo']:
+                config['control']['run_mc_fits'] = str(fit_info['monte_carlo']['run_mc_fits'])
 
             config['monte carlo'] = copy.deepcopy(config['sample'])
             config['sample'] = {}
@@ -615,9 +701,12 @@ class BuildConfig:
             self._params_template = config['parameters']
 
         def get_par(name):
-            if name not in parameters and name not in self._params_template:
+            if name in parameters:
+                return parameters[name]
+            elif name not in self._params_template:
                 raise ValueError('Unknown parameter: {}, please pass a default value.'.format(name))
-            return parameters.get(name, self._params_template[name])
+            else:
+                return self._params_template[name]
 
         new_params = {}
 
@@ -630,8 +719,8 @@ class BuildConfig:
             new_params['alpha'] = get_par('alpha')
             if self.options['full_shape']:
                 new_params['phi_full'] = get_par('phi_full')
-                if self.options['full_shape_alpha']:
-                    new_params['alpha_full'] = get_par('alpha_full')
+            if self.options['full_shape_alpha']:
+                new_params['alpha_full'] = get_par('alpha_full')
             if self.options['smooth_scaling']:
                 new_params['phi_smooth'] = get_par('phi_smooth')
                 new_params['alpha_smooth'] = get_par('alpha_smooth')
@@ -681,9 +770,9 @@ class BuildConfig:
 
                 if bias_eta is None:
                     bias_eta = bias * beta / growth_rate
-            elif name == 'QSO':
-                bias = parameters.get('bias_QSO', self.get_qso_bias(self.zeff_in))
-                beta = parameters.get('beta_QSO', None)
+            elif (name == 'QSO') or (name == 'DLA') or (name == 'SBLA'):
+                bias = parameters.get(f'bias_{name}', self.get_qso_bias(self.zeff_in))
+                beta = parameters.get(f'beta_{name}', None)
                 bias_eta = 1
 
                 if beta is None:
@@ -693,7 +782,7 @@ class BuildConfig:
 
             add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
-            new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+            new_params[f'alpha_{name}'] = get_par(f'alpha_{name}')
 
         # Small scale non-linear model
         if self.options['small_scale_nl']:
@@ -717,9 +806,15 @@ class BuildConfig:
         # Velocity dispersion parameters
         if self.options['velocity_dispersion'] is not None:
             if self.options['velocity_dispersion'] == 'lorentz':
-                new_params['sigma_velo_disp_lorentz_QSO'] = get_par('sigma_velo_disp_lorentz_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        key = f'sigma_velo_disp_lorentz_{name}'
+                        new_params[key] = get_par(key)
             else:
-                new_params['sigma_velo_disp_gauss_QSO'] = get_par('sigma_velo_disp_gauss_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        key = f'sigma_velo_disp_gauss_{name}'
+                        new_params[key] = get_par(key)
 
         # QSO radiation effects
         if self.options['radiation_effects']:
@@ -729,10 +824,17 @@ class BuildConfig:
             new_params['qso_rad_decrease'] = get_par('qso_rad_decrease')
 
         # UV background parameters
-        if self.options['uv_background']:
+        if self.options['UVB-fluctuations']:
             new_params['bias_gamma'] = get_par('bias_gamma')
             new_params['bias_prim'] = get_par('bias_prim')
             new_params['lambda_uv'] = get_par('lambda_uv')
+            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
+
+        if self.options['HeII-reionization']:
+            new_params['bias_gamma_e'] = get_par('bias_gamma_e')
+            new_params['bias_prim'] = get_par('bias_prim')
+            new_params['lambda_HeII'] = get_par('lambda_HeII')
+            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
 
         # Metals
         if self.options['metals'] is not None:
@@ -741,8 +843,12 @@ class BuildConfig:
                     new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
                 else:
                     new_params['bias_{}'.format(name)] = get_par('bias_{}'.format(name))
+
                 new_params['beta_{}'.format(name)] = get_par('beta_{}'.format(name))
                 new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+
+            if self.options['single-metal-beta']:
+                new_params['beta_metals'] = get_par('beta_metals')
 
         # Full-shape smoothing
         if self.options['fullshape_smoothing'] is not None:
@@ -765,6 +871,12 @@ class BuildConfig:
                 if 'par_sigma_smooth_LYA' in parameters:
                     new_params['par_sigma_smooth_LYA'] = get_par('par_sigma_smooth_LYA')
                     new_params['per_sigma_smooth_LYA'] = get_par('per_sigma_smooth_LYA')
+                if 'par_sigma_smooth_metals' in parameters:
+                    new_params['par_sigma_smooth_metals'] = get_par('par_sigma_smooth_metals')
+                    new_params['per_sigma_smooth_metals'] = get_par('per_sigma_smooth_metals')
+
+        if self.options['mock-los-smoothing'] == 'amplitude':
+            new_params['los_smooth_amp'] = get_par('los_smooth_amp')
 
         # DESI instrumental systematics amplitude
         if self.options['desi-instrumental-systematics']:

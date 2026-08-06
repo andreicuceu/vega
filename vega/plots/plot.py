@@ -7,6 +7,8 @@ from .utils import array_or_dict
 
 
 class VegaPlots:
+    """Plotting module for Vega correlation function data and models."""
+
     def __init__(self, vega_data=None):
         """Initialize plotting module with the vega internal info
 
@@ -35,7 +37,7 @@ class VegaPlots:
                 cross_flag = data.tracer1['type'] != data.tracer2['type']
                 self.cross_flag[name] = cross_flag
                 self.data[name] = data.data_vec
-                if data.has_cov_mat:
+                if data.has_cov_mat_org:
                     self.cov_mat[name] = data.cov_mat_org
 
                 # Initialize data coordinates
@@ -55,6 +57,18 @@ class VegaPlots:
             self.has_data = True
 
     def initialize_coordinates(self, coordinates):
+        """Extract (min, max, nbins) tuples from a Coordinates object for wedge initialization.
+
+        Parameters
+        ----------
+        coordinates : Coordinates
+            Vega coordinates object
+
+        Returns
+        -------
+        tuple, tuple, tuple
+            rp_setup, rt_setup, r_setup each as (min, max, nbins)
+        """
         rp_setup = (coordinates.rp_min, coordinates.rp_max, coordinates.rp_nbins)
         rt_setup = (0., coordinates.rt_max, coordinates.rt_nbins)
         r_setup = rt_setup
@@ -175,7 +189,7 @@ class VegaPlots:
         )
 
     def plot_data(
-        self, ax, x_bin, is_shell=False, data=None, cov_mat=None, cross_flag=False, label=None,
+        self, ax, x_bin, is_shell=False, data=None, cov_mat=None, cross_flag=False, data_label=None,
         corr_name='lyaxlya', data_fmt='o', data_color=None, scaling_power=2,
         use_local_coordinates=True, alpha=1.0, **kwargs
     ):
@@ -193,7 +207,7 @@ class VegaPlots:
             Covariance matrix as an array or a dictionary of components, by default None
         cross_flag : bool, optional
             Whether the plot is for a cross-correlation, by default False
-        label : str, optional
+        data_label : str, optional
             Label for the data points, by default None
         corr_name : str, optional
             Name of the correlation component, by default 'lyaxlya'
@@ -235,13 +249,13 @@ class VegaPlots:
         if is_shell:
             ax.errorbar(
                 x_grid, x_data * 1e3, yerr=np.sqrt(x_cov.diagonal()) * 1e3,
-                fmt=data_fmt, color=data_color, label=label, alpha=alpha, capsize=2
+                fmt=data_fmt, color=data_color, label=data_label, alpha=alpha, capsize=2
             )
         else:
             ax.errorbar(
                 x_grid, x_data * x_grid**scaling_power,
                 yerr=np.sqrt(x_cov.diagonal()) * x_grid**scaling_power,
-                fmt=data_fmt, color=data_color, label=label, alpha=alpha
+                fmt=data_fmt, color=data_color, label=data_label, alpha=alpha
             )
 
         return x_grid, x_data, x_cov
@@ -359,6 +373,17 @@ class VegaPlots:
 
     @staticmethod
     def postprocess_fig(fig, xlim=(0, 180), ylim=None):
+        """Apply standard grid, xlim, and optional ylim to every axis in a figure.
+
+        Parameters
+        ----------
+        fig : plt.Figure
+            Figure to postprocess
+        xlim : tuple, optional
+            x-axis limits, by default (0, 180)
+        ylim : array-like, optional
+            1D (ymin, ymax) applied to all axes, or 2D with one row per axis, by default None
+        """
         for ax in fig.axes:
             ax.grid()
             ax.set_xlim(xlim[0], xlim[1])
@@ -502,7 +527,7 @@ class VegaPlots:
             if not models_only:
                 data_shells.append(self.plot_data(
                     ax, r_bin, is_shell=True, data=data, cov_mat=cov_mat,
-                    cross_flag=cross_flag, label=label, corr_name=corr_name,
+                    cross_flag=cross_flag, data_label=label, corr_name=corr_name,
                     data_fmt=fmt, data_color=color, **kwargs
                 ))
 
@@ -522,7 +547,10 @@ class VegaPlots:
         self, ax, data_shells, model_shells, data_fmts=None, colors=None, alpha=1.0,
         var_latex=r"\theta", set_ylabel=True, **kwargs
     ):
-        assert len(data_shells) == len(model_shells)
+        assert len(data_shells) == len(model_shells), (
+            "data_shells and model_shells must have the same number of entries, "
+            f"got {len(data_shells)} and {len(model_shells)}"
+        )
 
         max_residual = 0
         for i, (data_shell, model_shell) in enumerate(zip(data_shells, model_shells)):
@@ -787,6 +815,21 @@ class VegaPlots:
         self, model, angle_var='theta', r_bins=None, corr_name='lyaxlya',
         var_latex=r'\theta'
     ):
+        """Plot data and model in four radial shells with residuals.
+
+        Parameters
+        ----------
+        model : array or dict
+            Model correlation function
+        angle_var : str, optional
+            Angle variable for the x-axis: 'theta', 'mu', or 'mu2', by default 'theta'
+        r_bins : array, optional
+            Five bin edges defining the four shells, by default None (auto-computed)
+        corr_name : str, optional
+            Name of the correlation component, by default 'lyaxlya'
+        var_latex : str, optional
+            LaTeX label for the x-axis variable, by default r'\\theta'
+        """
         if r_bins is None:
             rmin = self.cuts[corr_name]['r_min']
             rmax = self.cuts[corr_name]['r_max']

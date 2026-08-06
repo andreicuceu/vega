@@ -2,6 +2,63 @@
 History
 =======
 
+1.7.6 (2026-07-31)
+------------------
+* Migrated package setup from setup.py to modern pyproject.toml standard.
+* Replaced flake8/isort with Ruff and implemented pre-commit hooks (need to be activated).
+* Updated CI/CD pipeline to use modern GitHub Actions with dependency caching.
+* Refactored documentation to use sphinx-book-theme and MyST-NB for Jupyter notebook rendering.
+* Replaced hardcoded version strings with dynamic setuptools_scm versioning.
+
+1.7.5 (2026-07-29)
+------------------
+* Version used for DESI DR2 full-shape KP
+* Minor updates to metal parameters
+
+1.7.4 (2026-04-08)
+------------------
+* Catch PackageNotFoundError when initializing Vega
+
+1.7.3 (2026-04-07)
+------------------
+* Some protections for log_lik and marg_coeff behaviour
+
+1.7.2 (2026-04-06)
+------------------
+* Added printing of vega version when initializing VegaInterface
+* Some protections for log_lik and marg_coeff behaviour
+* New modelling options for binning
+* New modelling options for HCDs
+
+1.7.1 (2026-03-24)
+------------------
+* Minor bug fix in ConfigBuilder
+
+1.7.0 (2026-03-23)
+------------------
+* Added UVB shotnoise and HeII reionization models
+* Updated some flag names for consistency
+* Added support for the redshift bin analysis
+
+1.6.3 (2026-03-11)
+------------------
+* Added new options for small-scale marginalization:
+    - Option to fit the marginalized bins
+    - Option to marginalize over data bins instead of model bins
+    - Option to fit marginalized parameters at every step of the likelihood instead of marginalizing in the covariance matrix.
+
+1.6.2 (2026-03-04)
+------------------
+* Updates and improvements to the small-scale marginaliztion functionality
+* Improvements to the sampler performance
+* Add SSM parameters as derived parameters in PolyChord
+
+1.6.1 (2026-02-23)
+------------------
+* Unblind DR2 alpha_smooth parameter
+* Add support for alpha_full analyses while phi is still fitted separately
+* Some minor fixes to the low memory mode for sampler runs
+
 1.6.0 (2026-01-06)
 ------------------
 * Add analytic marginalization over small-scale marginalization parameters
@@ -77,22 +134,16 @@ Previous configuration can still be used, as the new one is quite slow to initia
 
 * This is the version used to run the DESI Y1 BAO analysis
 * New template: Planck18/DESI-2024_z_2.33.fits
-* The growth_rate parameter is now automatically read from the template file by default. 
-This means the value passed will be ignored from now on. There is a way to turn this off by setting
-use_template_growth_rate=False option in [control].
+* The growth_rate parameter is now automatically read from the template file by default. This means the value passed will be ignored from now on. There is a way to turn this off by setting use_template_growth_rate=False option in [control].
 * Added option to use bias_metal (instead of bias_eta_metal) in ConfigBuilder
 * Defaults values updated: beta_CIV=0.5, alpha_CIV=0
 * We now recommand sampling bias_metal instead of bias_eta_metal
-* Smoothing parameters are now fixed to input value for metal correlations. This fixes the bug
-that made fits fail when varying smoothing parameters with fast_metals turned on. (only matters for mocks)
+* Smoothing parameters are now fixed to input value for metal correlations. This fixes the bug that made fits fail when varying smoothing parameters with fast_metals turned on. (only matters for mocks)
 * Growth rate is now fixed for metal correlations by default (only matters for full-shape analyses).
-* Fixed a bug where the DESI instrumental systematics model was being added twice.
-This only impacts the value of the fitted amplitude for that model.
+* Fixed a bug where the DESI instrumental systematics model was being added twice. This only impacts the value of the fitted amplitude for that model.
 * Monte Carlo mocks now support the use of the full covariance matrix.
-* Added option to turn off extrapolation when doing the FHT to go from xi to pk in the make_template script.
-We recommend turning this off when computing templates for non-Planck cosmologies.
-* Added example config files for the DESI Y1 analysis under examples/DESI_data_setup for runs on data,
-and under examples/DESI_mock_setup for runs on mocks.
+* Added option to turn off extrapolation when doing the FHT to go from xi to pk in the make_template script. We recommend turning this off when computing templates for non-Planck cosmologies.
+* Added example config files for the DESI Y1 analysis under examples/DESI_data_setup for runs on data, and under examples/DESI_mock_setup for runs on mocks.
 
 0.6.3 (2023-12-10)
 ------------------

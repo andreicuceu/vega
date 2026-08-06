@@ -1,13 +1,12 @@
 import numpy as np
 from astropy.io import fits
-from scipy import linalg
 from scipy import sparse
 from scipy.sparse import csr_array
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
 from vega.coordinates import Coordinates
 
-BLINDING_STRATEGIES = ['desi_y3']
+BLINDING_STRATEGIES = ['desi_dr3']
 
 
 class Data:
@@ -28,13 +27,16 @@ class Data:
     model_coordinates = None
     data_coordinates = None
 
-    def __init__(self, corr_item):
+    def __init__(self, corr_item, marginalize_in_fit=False):
         """Read the data and initialize the coordinate grids.
 
         Parameters
         ----------
         corr_item : CorrelationItem
             Item object with the component config
+        marginalize_in_fit : bool, optional
+            If True, the marginalization covariance update is deferred to the fit
+            instead of being added to the covariance matrix, by default False
         """
         # First save the tracer info
         self.corr_item = corr_item
@@ -77,39 +79,53 @@ class Data:
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
-        self.variance = self.cov_mat.diagonal()
+        if self.corr_item.low_mem_mode:
+            self.variance = np.ones(self.full_data_size)
+        else:
+            self.variance = self.cov_mat.diagonal()
+
+        # self.cov_mat_org = self.cov_mat
+        self.cov_mat_org = None
+        self.marg_templates = None
+        self.cov_marg_update = None
+        self.marg_diff2coeff_matrix = None
+        self.num_marg_modes = 0
+        if not self.corr_item.low_mem_mode:
+            self.cov_mat_org = self.cov_mat.copy()
 
         if corr_item.marginalize_small_scales:
-            self.cov_mat_org = self.cov_mat.copy()
-            print('Updating covariance with marginalization templates.')
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
+
+            # if not self.corr_item.low_mem_mode:
+            # print('Updating covariance with marginalization templates.')
             ntemps = self.marg_templates.shape[1]
 
             # Invert the matrix but do not save it
+            self._inv_masked_cov = None
             _inv_masked_cov = self.inv_masked_cov
             self._inv_masked_cov = None
 
-            self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            if not marginalize_in_fit:
+                self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
+            else:
+                self.cov_marg_update = None
 
             # Construct solution matrix, G becomes an ndarray
             templates_masked = self.marg_templates[self.model_mask, :]
             G = templates_masked.T.dot(_inv_masked_cov)
+            A = templates_masked.T.dot(G.T).T
 
-            S = np.diag(np.full(
-                ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
-            ))
-            Ainv = np.linalg.inv(templates_masked.T.dot(G.T).T + S)
+            if not (self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins):
+                S = np.diag(np.full(
+                    ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
+                ))
+                A = A + S  # should be positive definite
 
+            Ainv = np.linalg.inv(A)
             # When multiplied by data - bestfit model, the below matrix will
             # give the coefficients for each template. Total marginalized model
             # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
             self.marg_diff2coeff_matrix = Ainv.dot(G)
-        else:
-            self.cov_mat_org = self.cov_mat
-            self.marg_templates = None
-            self.cov_marg_update = None
-            self.marg_diff2coeff_matrix = None
-            self.num_marg_modes = 0
 
         self._cholesky = None
         self._scale = 1.
@@ -160,9 +176,19 @@ class Data:
             Masked data vector (xi[mask])
         """
         if self._masked_data_vec is None:
-            self._masked_data_vec = np.zeros(self.data_mask.sum())
-            self._masked_data_vec[:] = self.data_vec[self.data_mask]
+            self._masked_data_vec = self.data_vec[self.data_mask]
         return self._masked_data_vec
+
+    @property
+    def data_size(self):
+        """Data size property
+
+        Returns
+        -------
+        int
+            Data size (number of bins after masking)
+        """
+        return self.masked_data_vec.size
 
     @property
     def cov_mat(self):
@@ -235,6 +261,17 @@ class Data:
         return self._cov_mat is not None
 
     @property
+    def has_cov_mat_org(self):
+        """Original covariance matrix flag
+
+        Returns
+        -------
+        bool
+            Covariance matrix flag
+        """
+        return self.cov_mat_org is not None
+
+    @property
     def has_distortion(self):
         """Distortion matrix flag
 
@@ -254,6 +291,12 @@ class Data:
             Path to fits data file
         cuts_config : ConfigParser
             cuts section from the config file
+        dmat_path : string, optional
+            Path to a separate distortion matrix file, by default None
+        cov_path : string, optional
+            Path to a separate covariance matrix file, by default None
+        cov_rescale : float, optional
+            Rescaling factor applied to the covariance matrix, by default None
         """
         print(f'Reading data file {data_path}\n')
         hdul = fits.open(find_file(data_path))
@@ -271,8 +314,8 @@ class Data:
             print(f'Strategy: {self._blinding_strat}')
 
             self._blind = True
-            # if self._blinding_strat == 'desi_y3':
-            #     assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
+            if self._blinding_strat == 'desi_dr3':
+                assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
 
             if 'DA_BLIND' in hdul[1].columns.names:
                 print(f'Warning! Running on blinded data {data_path}')
@@ -288,7 +331,7 @@ class Data:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
 
-        elif self._blinding_strat in ['desi_m2', 'desi_y1']:
+        elif self._blinding_strat in ['desi_m2', 'desi_y1', 'desi_y3']:
             self._blind = False
             self._data_vec = hdul[1].data['DA']
 
@@ -303,16 +346,16 @@ class Data:
                 self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
 
         # Read the covariance matrix
-        if not self.corr_item.low_mem_mode:
-            if cov_path is not None:
-                print(f'Reading covariance matrix file {cov_path}\n')
-                with fits.open(find_file(cov_path)) as cov_hdul:
-                    self._cov_mat = cov_hdul[1].data['CO']
-            elif 'CO' in hdul[1].columns.names:
-                self._cov_mat = hdul[1].data['CO']
+        # if not self.corr_item.low_mem_mode:
+        if cov_path is not None:
+            print(f'Reading covariance matrix file {cov_path}\n')
+            with fits.open(find_file(cov_path)) as cov_hdul:
+                self._cov_mat = cov_hdul[1].data['CO']
+        elif 'CO' in hdul[1].columns.names:
+            self._cov_mat = hdul[1].data['CO']
 
-            if cov_rescale is not None:
-                self._cov_mat *= cov_rescale
+        if cov_rescale is not None:
+            self._cov_mat *= cov_rescale
 
         # Get the cosmological parameters
         if "OMEGAM" in header:
@@ -367,7 +410,6 @@ class Data:
         self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
 
         # Compute data size
-        self.data_size = len(self.masked_data_vec)
         self.full_data_size = len(self.data_vec)
 
         # Read the cuts we need to save for plotting
@@ -378,6 +420,15 @@ class Data:
         self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
+        """Warn if the blinding strategy of the distortion matrix does not match the data.
+
+        Parameters
+        ----------
+        blinding_flag : str
+            Blinding strategy read from the distortion matrix header
+        dmat_path : str
+            Path to the distortion matrix file (used in warning messages)
+        """
         if self._blinding_strat is None:
             if not (blinding_flag == 'none' or blinding_flag == 'None'):
                 print(f'Warning: Data has no blinding, but distortion matrix at {dmat_path} '
@@ -388,6 +439,13 @@ class Data:
                       f'the flag of the distortion matrix at {dmat_path}')
 
     def _read_dmat(self, dmat_path):
+        """Read a separate distortion matrix file and initialize coordinate grids.
+
+        Parameters
+        ----------
+        dmat_path : str
+            Path to the distortion matrix fits file
+        """
         print(f'Reading distortion matrix file {dmat_path}\n')
         hdul = fits.open(find_file(dmat_path))
         header = hdul[1].header
@@ -415,7 +473,21 @@ class Data:
         hdul.close()
 
     def _init_metal_tracers(self, metal_config):
-        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
+        """Parse metal tracer names and build the tracer catalog.
+
+        Parameters
+        ----------
+        metal_config : ConfigParser
+            metals section from the config file
+
+        Returns
+        -------
+        list or None, list or None, dict
+            metals_in_tracer1, metals_in_tracer2, tracer_catalog
+        """
+        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config), (
+            "The metals config must specify 'in tracer1' and/or 'in tracer2'"
+        )
 
         # Read metal tracers
         metals_in_tracer1 = None
@@ -441,6 +513,22 @@ class Data:
         return metals_in_tracer1, metals_in_tracer2, tracer_catalog
 
     def _init_metal_correlations(self, metal_config, metals_in_tracer1, metals_in_tracer2):
+        """Build the list of metal correlation pairs to compute.
+
+        Parameters
+        ----------
+        metal_config : ConfigParser
+            metals section from the config file
+        metals_in_tracer1 : list or None
+            Metal absorber names contributing to tracer 1
+        metals_in_tracer2 : list or None
+            Metal absorber names contributing to tracer 2
+
+        Returns
+        -------
+        list
+            List of (name1, name2) tuples for each metal correlation to compute
+        """
         metal_correlations = []
         if 'in tracer2' in metal_config:
             for metal in metals_in_tracer2:
@@ -480,7 +568,8 @@ class Data:
         list
             list of all metal correlations we need to compute
         """
-        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(metal_config)
+        metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
+            metal_config)
 
         self.metal_mats = {}
         self.metal_coordinates = {}
@@ -639,9 +728,9 @@ class Data:
             if self.cholesky_masked_cov:
                 masked_cov = self.cov_mat[:, self.data_mask]
                 masked_cov = masked_cov[self.data_mask, :]
-                self._cholesky = linalg.cholesky(self._scale * masked_cov)
+                self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
             else:
-                self._cholesky = linalg.cholesky(self._scale * self.cov_mat)
+                self._cholesky = np.linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
         if seed is not None:
@@ -698,6 +787,26 @@ class Data:
 
         templates = self.corr_item.get_undist_xi_marg_templates()
         templates = self.distortion_mat.dot(templates)
+
+        if self.corr_item.fit_marg_scales:
+            # Update masks
+            self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
+                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
+            self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
+                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+
+            if self.data_mask.sum() != self.model_mask.sum():
+                raise ValueError(
+                    "Data and model masks should be the same after marginalization scale cuts."
+                    " The most likely reason is a mismatch in rp-min between the data and"
+                    " the model coordinates. Check that 'rp-min = -300' for cross-correlations, "
+                    " or set it to the smallest rp in your distortion matrix."
+                )
+
+            # Recompute masked data vector and size
+            self._masked_data_vec = None
+            _ = self.masked_data_vec
 
         if not return_AAT:
             return templates

@@ -1,5 +1,6 @@
-from pathlib import Path
 import os.path
+from pathlib import Path
+
 from astropy.io import fits
 import numpy as np
 import h5py
@@ -122,6 +123,22 @@ class Output:
 
     @staticmethod
     def pad_array(array, size_to_match, pad_value=np.nan):
+        """Pad an array to a target length with a constant value.
+
+        Parameters
+        ----------
+        array : array
+            Input array to pad
+        size_to_match : int
+            Target length
+        pad_value : float, optional
+            Fill value for the padding, by default np.nan
+
+        Returns
+        -------
+        array
+            Array padded to size_to_match
+        """
         return np.pad(array, (0, size_to_match - len(array)), constant_values=pad_value)
 
     def _model_hdus(self, corr_funcs, params, bestfit_corr_stats=None):
@@ -423,8 +440,19 @@ class Output:
         return columns
 
     def write_monte_carlo(self, cpu_id=None):
-        assert self.analysis is not None
-        assert self.analysis.has_monte_carlo
+        """Write Monte Carlo bestfit results and mock data vectors to a fits file.
+
+        Parameters
+        ----------
+        cpu_id : int, optional
+            CPU rank used for the output filename when running in parallel, by default None
+        """
+        assert self.analysis is not None, (
+            "Output.write_monte_carlo requires an Analysis object"
+        )
+        assert self.analysis.has_monte_carlo, (
+            "No Monte Carlo results found. Run Analysis.run_monte_carlo() first."
+        )
 
         primary_hdu = fits.PrimaryHDU()
         hdu_list = [primary_hdu]
@@ -520,6 +548,20 @@ class Output:
 
     @staticmethod
     def _write_bestfit_hdf(bf_group, minimizer):
+        """Write bestfit parameter values, errors, and covariance to an HDF5 group.
+
+        Parameters
+        ----------
+        bf_group : h5py.Group
+            HDF5 group to write to
+        minimizer : Minimizer
+            Minimizer object after minimization was done
+
+        Returns
+        -------
+        h5py.Group
+            The group with attributes written
+        """
         # Write the parameters values
         for param, value in minimizer.values.items():
             error = minimizer.errors[param]
@@ -537,6 +579,20 @@ class Output:
 
     @staticmethod
     def _write_scan_hdf(scan_group, scan_results):
+        """Write chi2 scan results to an HDF5 group.
+
+        Parameters
+        ----------
+        scan_group : h5py.Group
+            HDF5 group to write to
+        scan_results : list
+            List of result dictionaries from the chi2 scan
+
+        Returns
+        -------
+        h5py.Group
+            The group with scan data written
+        """
         # Get list of parameters and results
         params = list(scan_results[0].keys())
         results = []

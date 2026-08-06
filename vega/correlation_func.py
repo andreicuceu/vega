@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
+from scipy.special import expn
 from astropy.table import Table
 
 from . import utils
@@ -16,8 +17,10 @@ class CorrelationFunction:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, coordinates, scale_params,
-                 tracer1, tracer2, cosmo=None, metal_corr=False):
+    def __init__(
+        self, config, fiducial, coordinates, scale_params,
+        tracer1, tracer2, cosmo=None, metal_corr=False
+    ):
         """
 
         Parameters
@@ -34,6 +37,8 @@ class CorrelationFunction:
             Config of tracer 1
         tracer2 : dict
             Config of tracer 2
+        cosmo : picca.Cosmo, optional
+            Cosmology object for bias evolution, by default None
         metal_corr : bool, optional
             Whether this is a metal correlation, by default False
         """
@@ -44,10 +49,14 @@ class CorrelationFunction:
         self._multipole = config.getint('single_multipole', -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2
+        self._is_auto = (
+            (self._tracer1['type'] == 'continuous') and (self._tracer2['type'] == 'continuous'))
+        self._corr_name = f'{tracer1["name"]}x{tracer2["name"]}'
         self._z_eff = fiducial['z_eff']
         self._scale_params = scale_params
         self._metal_corr = metal_corr
         self._use_new_bias_evol = config.getboolean('new-bias-evolution', False)
+        self._rescale_coords_systematics = config.getboolean('rescale-coords-systematics', False)
 
         # Initialize the bias evolution
         self.init_bias_evol(tracer1['type'], tracer2['type'], cosmo)
@@ -95,6 +104,13 @@ class CorrelationFunction:
                 raise ValueError('You asked for relativistic effects or standard asymmetry,'
                                  ' but they only work for the cross')
 
+        self.uv_shotnoise_flag = False
+        self._uv_shotnoise_tau = None
+        self._uv_shotnoise_A = None
+        if 'UVB-shotnoise' in self._config:
+            self.uv_shotnoise_flag = self._config.getboolean('UVB-shotnoise')
+            self._uv_shotnoise_tau, self._uv_shotnoise_A = self.compute_shotnoise_A()
+
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
 
@@ -118,7 +134,7 @@ class CorrelationFunction:
             Output correlation function
         """
         # Compute the core
-        xi = self.compute_core(pk, PktoXi_obj, params)
+        xi, rescaled_r, rescaled_mu = self.compute_core(pk, PktoXi_obj, params)
 
         # Add bias evolution
         xi *= self.compute_bias_evol(params)
@@ -128,7 +144,7 @@ class CorrelationFunction:
 
         # Add QSO radiation modeling for cross
         if self.radiation_flag and not params['peak']:
-            xi += self.compute_qso_radiation(params)
+            xi += self.compute_qso_radiation(params, rescaled_r, rescaled_mu)
 
         # Add relativistic effects
         if self.relativistic_flag:
@@ -137,6 +153,10 @@ class CorrelationFunction:
         # Add standard asymmetry
         if self.asymmetry_flag:
             xi += self.compute_xi_asymmetry(pk_lin, PktoXi_obj, params)
+
+        # Add UV shotnoise
+        if self.uv_shotnoise_flag:
+            xi += self.compute_uv_shotnoise(params, rescaled_r, rescaled_mu)
 
         return xi
 
@@ -167,14 +187,15 @@ class CorrelationFunction:
             delta_rp = params.get(self._delta_rp_name, 0.)
 
         # Get rescaled Xi coordinates
-        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
+        ap, at = self._scale_params.get_ap_at(
+            params, corr_name=self._corr_name, metal_corr=self._metal_corr)
 
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
         # Compute correlation function
         xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)
 
-        return xi
+        return xi, rescaled_r, rescaled_mu
 
     @staticmethod
     def _rescale_coords(r, mu, ap, at, delta_rp=0.):
@@ -215,6 +236,18 @@ class CorrelationFunction:
         return rescaled_r, rescaled_mu
 
     def init_bias_evol(self, type1, type2, cosmo=None):
+        """Initialize bias evolution arrays for the correlation function.
+
+        Parameters
+        ----------
+        type1 : str
+            Type of tracer 1 ('continuous' or 'discrete')
+        type2 : str
+            Type of tracer 2 ('continuous' or 'discrete')
+        cosmo : picca.Cosmo, optional
+            Cosmology object for computing separate redshifts in cross-correlations,
+            by default None
+        """
         # For auto-correlations use mean redshift and return
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
         if type1 == type2:
@@ -370,6 +403,24 @@ class CorrelationFunction:
         return growth**2
 
     def compute_growth_old(self, z_grid=None, z_fid=None, Omega_m=None, Omega_de=None):
+        """Compute growth factor using the old integration approach (deprecated).
+
+        Parameters
+        ----------
+        z_grid : array, optional
+            Redshift grid, by default uses stored grid
+        z_fid : float, optional
+            Fiducial redshift for normalization, by default uses stored value
+        Omega_m : float, optional
+            Matter density, by default uses stored value
+        Omega_de : float, optional
+            Dark energy density, by default uses stored value
+
+        Returns
+        -------
+        ND Array
+            Growth factor squared, normalized to the fiducial redshift
+        """
         def hubble(z, Omega_m, Omega_de):
             return np.sqrt(Omega_m*(1+z)**3 + Omega_de + (1-Omega_m-Omega_de)*(1+z)**2)
 
@@ -392,7 +443,7 @@ class CorrelationFunction:
         growth = D1(z_grid) / D1(z_fid)
         return growth**2
 
-    def compute_qso_radiation(self, params):
+    def compute_qso_radiation(self, params, rescaled_r, rescaled_mu):
         """Model the contribution of QSO radiation to the cross
         (the transverse proximity effect)
 
@@ -400,6 +451,10 @@ class CorrelationFunction:
         ----------
         params : dict
             Computation parameters
+        rescaled_r : ND Array
+            Rescaled r coordinates of Xi
+        rescaled_mu : ND Array
+            Rescaled mu coordinates of Xi
 
         Returns
         -------
@@ -411,8 +466,14 @@ class CorrelationFunction:
 
         # Compute the shifted r and mu grids
         delta_rp = params.get(self._delta_rp_name, 0.)
-        rp = self._r * self._mu + delta_rp
-        rt = self._r * np.sqrt(1 - self._mu**2)
+
+        if self._rescale_coords_systematics:
+            rp = rescaled_r * rescaled_mu + delta_rp
+            rt = rescaled_r * np.sqrt(1 - rescaled_mu**2)
+        else:
+            rp = self._r * self._mu + delta_rp
+            rt = self._r * np.sqrt(1 - self._mu**2)
+
         r_shift = np.sqrt(rp**2 + rt**2)
         mu_shift = rp / r_shift
 
@@ -532,3 +593,94 @@ class CorrelationFunction:
         correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
         return correction
+
+    @staticmethod
+    def compute_shotnoise_A(ntau=100, nrho=10000):
+        """Compute the UV shotnoise amplitude function A(tau).
+
+        Implements Eq. 19 of Gontcho A Gontcho et al. (arXiv:1404.7425).
+
+        Parameters
+        ----------
+        ntau : int, optional
+            Number of tau grid points, by default 100
+        nrho : int, optional
+            Number of rho integration points, by default 10000
+
+        Returns
+        -------
+        array, array
+            tau grid and corresponding A(tau) values
+        """
+        # compute function of Eq. 19 of Gontcho A Gontcho et al, arxiv:1404.7425
+        tau = np.linspace(0.01, 5, ntau)
+        a = np.zeros(tau.size)
+        rho = np.linspace(0.0001, 10, nrho)
+        drho = rho[1]-rho[0]
+        for i, t in enumerate(tau):
+            a[i] = -np.sum(
+                drho * np.exp(-rho) / rho * (
+                    expn(1, rho * np.sqrt(1 + (t/rho)**2)) - expn(1, rho * np.abs(1 - t/rho))
+                )
+            )
+        return tau, a
+
+    def uv_A(self, tau):
+        """Interpolate the UV shotnoise amplitude A at given tau values.
+
+        Parameters
+        ----------
+        tau : array
+            Optical depth values (r / lambda_uv)
+
+        Returns
+        -------
+        array
+            Interpolated A(tau) values
+        """
+        if self._uv_shotnoise_A is None:
+            print("compute_shotnoise_A")
+            self._uv_shotnoise_tau, self._uv_shotnoise_A = self.compute_shotnoise_A()
+
+        return np.interp(
+            tau, self._uv_shotnoise_tau, self._uv_shotnoise_A, left=self._uv_shotnoise_A[0], right=0
+        )
+
+    def compute_uv_shotnoise(self, params, rescaled_r, rescaled_mu):
+        """Compute the UV background shotnoise contribution to the correlation function.
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters including uv_shotnoise_amp and lambda_uv
+        rescaled_r : array
+            Rescaled r coordinates (after AP distortion)
+        rescaled_mu : array
+            Rescaled mu coordinates (after AP distortion)
+
+        Returns
+        -------
+        array
+            UV shotnoise contribution to the correlation function
+        """
+        shotnoise_amp = params["uv_shotnoise_amp"]
+        # lambda0 = 1/kappa0 is the mean free path of ionizing photons
+        # in Gontcho A Gontcho et al, arxiv:1404.7425
+        lambda_uv = params["lambda_uv"]
+        if 'bias_gamma' in params:
+            bias_gamma = params["bias_gamma"]
+        elif 'bias_gamma_e' in params:
+            bias_gamma = params["bias_gamma_e"]
+        else:
+            raise ValueError(
+                "You asked for UV shotnoise, but bias_gamma or bias_gamma_e is"
+                " not in the parameters."
+            )
+
+        # r (before distortion)
+        if self._rescale_coords_systematics:
+            r = np.sqrt(rescaled_r**2 + rescaled_mu**2)
+        else:
+            r = self._r
+
+        return bias_gamma**2 * shotnoise_amp * lambda_uv / r * self.uv_A(r / lambda_uv)

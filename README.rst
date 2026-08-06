@@ -11,23 +11,23 @@ Vega
 .. image:: https://codecov.io/gh/andreicuceu/Vega/branch/master/graph/badge.svg
         :target: https://codecov.io/gh/andreicuceu/Vega
 
+Vega is a tool for computing 3D correlation function and power spectrum models primarily for Lyman-α (Lyα) forest analyses. It is built to be modular and highly flexible in terms of the tracers being used. So far, Vega has been used to analyze the Lyα forest auto-correlation and its cross-correlation with galaxies and quasars (e.g., `Gerardi et al. 2022 <https://doi.org/10.1093/mnras/stac3257>`__, `Gordon et al. 2023 <https://doi.org/10.1088/1475-7516/2023/11/045>`__, `Herrera-Alcantar et al. 2025 <https://doi.org/10.1088/1475-7516/2025/12/053>`__, `Karaçaylı et al. 2026 <https://doi.org/10.48550/arXiv.2603.04281>`__), as well as auto- and cross-correlations of metal lines such as CIV and SiIV (e.g., `Guy et al. 2025 <https://doi.org/10.1088/1475-7516/2025/01/140>`__, `Bault et al. 2026 <https://doi.org/10.48550/arXiv.2601.08103>`__), Damped Lyman-α (DLA) absorbers (`Pérez-Ràfols et al. 2023 <https://doi.org/10.1093/mnras/stad1994>`__), and Strong Blended Lyman-α (SBLA) absorbers (`Pérez-Ràfols et al. 2023 <https://doi.org/10.1093/mnras/stad1994>`__). 
 
-Vega is a tool for computing 3D correlation function models for tracers used by the Ly-α forest group (such as Ly-α flux, Quasar positions or different metal lines) and for fitting data produced by `picca <https://github.com/igmhub/picca>`__ primarily to measure Baryon Acoustic Oscillations (BAO).
+Vega is currently being used by the Lyα forest working group in DESI to measure Baryon Acoustic Oscillations (BAO) and perform full-shape analyses of Lyα forest auto- and cross-correlations (e.g., `DESI et al. 2025a <https://doi.org/10.1088/1475-7516/2025/01/124>`__, `DESI et al. 2025b <https://doi.org/10.1103/2wwn-xjm5>`__, `Cuceu et al. 2025 <https://doi.org/10.48550/arXiv.2509.15308>`__).
 
 * Free software: GPL-3.0 License
 * Documentation: https://vega.readthedocs.io.
-* Referencing: If you use Vega in a publication please give the link to this repository (https://github.com/andreicuceu/vega). Right now there is no Vega paper. The best descriptions of what the code does are found in Cuceu et al. 2022 (https://arxiv.org/abs/2209.12931) and du Mas des Bourboux et al. 2020 (https://arxiv.org/abs/2007.08995).
+* Referencing: If you use Vega in a publication, please give the link to this repository (https://github.com/andreicuceu/vega). The best descriptions of what the code does are found in `Cuceu et al. (2022) <https://doi.org/10.1093/mnras/stad1546>`__ and `Cuceu et al. (2025) <https://doi.org/10.48550/arXiv.2509.15308>`__.
 
 Installation
 ------------
 
-We recommend to start by creating a fresh conda environment. The following code will create this and also install all the dependencies:
+We recommend to start by creating a fresh conda environment:
 
 .. code-block:: console
 
-    conda create --name vega pip ipython jupyter jupyterlab ipykernel numpy scipy astropy numba h5py setuptools "iminuit>=2.0.0" cachetools matplotlib
+    conda create --name vega python=3.13
     conda activate vega
-    pip install mcfit
 
 You can either clone the public repository:
 
@@ -48,23 +48,28 @@ Once you have a copy of the source, you can install it with:
     cd vega
     pip install -e .
 
+If you want to install the development version with all optional dependencies, you should run:
+
+.. code-block:: console
+
+    pip install -e .[dev]
+
 If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
 
 .. code-block:: console
 
     python -m ipykernel install --user --name vega --display-name Vega
 
-Both of the samplers and a few other modules in Vega need mpi4py. If you are at NERSC, you should install this using the NERSC-specific command:
+The sampler and a few other modules in Vega need mpi4py. If you are at NERSC, you should install this using the NERSC-specific command:
 
 .. code-block:: console
 
     MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 
-Vega currently has interfaces for two samplers: `Polychord`_ and `PocoMC`_. You do not need to install either of them to run the iminuit minimizer. Alternatively, if you only want to use one of the samplers, you only need to install that one (see instructions below).
+Vega currently has interfaces for one sampler: `Polychord`_. You do not need to install it to run the iminuit minimizer. You can find the instructions for installing at NERSC Polychord below.
 
 .. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
-.. _PocoMC: https://github.com/minaskar/pocomc
 
 Installing Polychord
 --------------------
@@ -114,23 +119,23 @@ Finally, you should add this line to your :code:`.bashrc` file, or at the beginn
 
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
-Installing PocoMC
------------------
+.. Installing PocoMC
+.. -----------------
 
-Here are instructions for installing PocoMC at NERSC. First, install Pytorch in CPU mode (see `this`_ for more details):
+.. Here are instructions for installing PocoMC at NERSC. First, install Pytorch in CPU mode (see `this`_ for more details):
 
-.. code-block:: console
+.. .. code-block:: console
 
-    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+..     pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-Finally, install `PocoMC`_:
+.. Finally, install `PocoMC`_:
 
-.. code-block:: console
+.. .. code-block:: console
 
-    pip install pocomc
+..     pip install pocomc
 
-.. _this: https://pytorch.org/get-started/locally/
-.. _PocoMC: https://github.com/minaskar/pocomc
+.. .. _this: https://pytorch.org/get-started/locally/
+.. .. _PocoMC: https://github.com/minaskar/pocomc
 
 Usage
 -----
@@ -179,7 +184,7 @@ Vega also has a FitResults module for analysing the results of a fit. You can fi
 Credits
 -------
 
-This package is based on picca fitter2 found here: https://github.com/igmhub/picca/tree/master/py/picca/fitter2, and was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
+This package is based on picca fitter2 found here: https://github.com/igmhub/picca/tree/v4/py/picca/fitter2, and was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage

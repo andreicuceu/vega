@@ -1,5 +1,9 @@
 """Main module."""
 import os.path
+import configparser
+import copy
+from importlib.metadata import version, PackageNotFoundError
+
 import numpy as np
 import scipy.stats
 from astropy.io import fits
@@ -33,6 +37,7 @@ class VegaInterface:
     _blind = None
     _use_global_cov = False
     global_cov = None
+    _random_marg_coeff = None
 
     def __init__(self, main_path):
         """
@@ -42,6 +47,12 @@ class VegaInterface:
         main_path : string
             Path to main.ini config file
         """
+        try:
+            package_version = version("vega")
+            print(f'Initializing Vega version {package_version}')
+        except PackageNotFoundError:
+            print('Vega version not found. Continuing initialization.')
+
         # Read the main config file
         self.main_config = configparser.ConfigParser()
         self.main_config.optionxform = lambda option: option
@@ -62,6 +73,11 @@ class VegaInterface:
         self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
         self.low_mem_mode &= global_cov_file is not None
 
+        self.marginalize_in_fit = self.main_config['control'].getboolean(
+            'marginalize-in-fit', False)
+        if self.marginalize_in_fit:
+            print("Marginalizing in fit")
+
         # Initialize the individual components
         self.corr_items = {}
         for path in ini_files:
@@ -81,7 +97,10 @@ class VegaInterface:
         use_template_growth_rate = self.main_config['control'].getboolean(
             'use_template_growth_rate', True)
         if use_template_growth_rate and 'growth_rate' in self.fiducial:
-            assert 'growth_rate' not in self.sample_params['limits']
+            assert 'growth_rate' not in self.sample_params['limits'], (
+                "use_template_growth_rate is True, but growth_rate is in the sample params. "
+                "Remove growth_rate from [sample] or set use_template_growth_rate = False."
+            )
             self.params['growth_rate'] = self.fiducial['growth_rate']
         elif 'growth_rate' not in self.fiducial:
             print('WARNING: No growth rate specified in the template file. Using input value.')
@@ -103,7 +122,7 @@ class VegaInterface:
         # Initialize the data
         for name, corr_item in self.corr_items.items():
             if self._has_data:
-                self.data[name] = data.Data(corr_item)
+                self.data[name] = data.Data(corr_item, marginalize_in_fit=self.marginalize_in_fit)
             else:
                 self.data[name] = None
 
@@ -172,6 +191,12 @@ class VegaInterface:
             self.chi2, self.sample_params, self.main_config,
             self.corr_items, self.data, self.mc_config, self.global_cov
         )
+
+        # Check for analytic marginalization configuration
+        self.corr_num_marg_modes = {}
+        if self._has_data:
+            for name in self.corr_items:
+                self.corr_num_marg_modes[name] = self.data[name].num_marg_modes
 
         # Check for sampler
         self.run_sampler = False
@@ -455,7 +480,6 @@ class VegaInterface:
         return model_cf
 
     def chi2(self, params=None, direct_pk=None):
-        #alter function for compression
         """Compute full chi2 for all components.
 
         Parameters
@@ -478,7 +502,26 @@ class VegaInterface:
         except utils.VegaModelError:
             for name in self.corr_items:
                 self.models[name].PktoXi.cache_pars = None
-            return 1e100
+
+            if return_marg_coeff and self._random_marg_coeff is not None:
+                return 1e100, self._random_marg_coeff
+            elif return_marg_coeff:
+                return 1e100, None
+            else:
+                return 1e100
+
+        # Get marginalization coefficients
+        if return_marg_coeff or self.marginalize_in_fit:
+            marg_coeff = self.compute_marg_coeff(model_cf)
+
+            if self._random_marg_coeff is None:
+                self._random_marg_coeff = marg_coeff
+
+        if self.marginalize_in_fit:
+            # Fit on the fly the template correction
+            for name in self.data:
+                if self.data[name].marg_templates is not None:
+                    model_cf[name] += self.data[name].marg_templates.dot(marg_coeff[name])
 
         # Compute chisq for the case where we use the global covariance
         if self._use_global_cov:
@@ -511,11 +554,14 @@ class VegaInterface:
 
         # Add priors
         chi2 += self.compute_prior_chi2(params)
-
         assert isinstance(chi2, float)
+
+        if return_marg_coeff:
+            return chi2, marg_coeff
+
         return chi2
 
-    def log_lik(self, params=None, direct_pk=None):
+    def log_lik(self, params=None, direct_pk=None, return_marg_coeff=False):
         """Compute full log likelihood for all components.
 
         Parameters
@@ -533,7 +579,10 @@ class VegaInterface:
         assert self._has_data
 
         # Get the full chi2
-        chi2 = self.chi2(params, direct_pk)
+        if return_marg_coeff:
+            chi2, marg_coeff = self.chi2(params, direct_pk, return_marg_coeff)
+        else:
+            chi2 = self.chi2(params, direct_pk)
 
         # Compute the normalization for each component
         log_norm = 0
@@ -577,16 +626,49 @@ class VegaInterface:
         for prior in self.priors.values():
             log_lik += self._gaussian_lik_prior(prior[1])
 
+        if return_marg_coeff and marg_coeff is not None:
+            corr_names = sorted(self.corr_items.keys())
+            corr_names = [corr for corr in corr_names if corr in marg_coeff]
+            if len(corr_names) > 1:
+                marg_coeff_list = np.hstack([
+                    marg_coeff[corr] for corr in corr_names
+                ])
+            elif len(corr_names) == 1:
+                marg_coeff_list = marg_coeff[corr_names[0]]
+            else:
+                marg_coeff_list = np.array([])
+
+            return log_lik, marg_coeff_list
+        elif return_marg_coeff:
+            return log_lik, None
+
         return log_lik
 
     def _get_lcl_prms(self, params=None):
+        """Build a local copy of computation parameters, applying blinding if needed.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Additional or override parameters to merge in, by default None
+
+        Returns
+        -------
+        dict
+            Combined computation parameters with blinding applied if active
+        """
         local_params = copy.deepcopy(self.params)
         if params is not None:
             local_params |= params
 
-        assert self._blind is not None
+        assert self._blind is not None, (
+            "Blinding flag is not set. Call _init_blinding() before computing the model."
+        )
         if self._rnsps is not None:
-            assert self._blind
+            assert self._blind, (
+                "Blinding offsets (_rnsps) are set but blinding flag is False. "
+                "This is an inconsistent state."
+            )
             local_params = utils.apply_blinding(local_params, self._rnsps)
 
             # Enforce blinding
@@ -597,6 +679,18 @@ class VegaInterface:
         return local_params
 
     def compute_prior_chi2(self, params=None):
+        """Compute the Gaussian prior chi2 contribution for all configured priors.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Computation parameters to evaluate the priors at, by default None
+
+        Returns
+        -------
+        float
+            Sum of Gaussian chi2 contributions from all priors
+        """
         local_params = self._get_lcl_prms(params)
 
         chi2 = 0
@@ -610,6 +704,21 @@ class VegaInterface:
         return chi2
 
     def get_fiducial_for_monte_carlo(self, print_func=print):
+        """Compute the fiducial model used to generate Monte Carlo mocks.
+
+        Optionally starts from an existing fit or runs a new minimization to
+        set the template parameters before computing the fiducial model.
+
+        Parameters
+        ----------
+        print_func : callable, optional
+            Function used for log output, by default print
+
+        Returns
+        -------
+        dict
+            Fiducial model correlation functions keyed by component name
+        """
         mc_params = self.mc_config['params']
         mc_start_from_fit = self.main_config['control'].get('mc_start_from_fit', None)
 
@@ -652,6 +761,20 @@ class VegaInterface:
         return fiducial_model
 
     def initialize_monte_carlo(self, scale=None, print_func=print):
+        """Prepare all data objects with Monte Carlo mocks and reset the minimizer.
+
+        Parameters
+        ----------
+        scale : float, optional
+            Covariance rescaling factor for the mocks. Read from config if None, by default None
+        print_func : callable, optional
+            Function used for log output, by default print
+
+        Returns
+        -------
+        dict
+            Dictionary of mock data vectors keyed by component name
+        """
         # Get the fiducial model
         fiducial_model = self.get_fiducial_for_monte_carlo(print_func)
 
@@ -677,6 +800,41 @@ class VegaInterface:
         self.monte_carlo = True
 
         return mocks
+
+    def compute_marg_coeff(self, model_cf):
+        """Compute the best-fit coefficients for the marginalization templates.
+
+        Parameters
+        ----------
+        model_cf : dict
+            Model correlation functions keyed by component name
+
+        Returns
+        -------
+        dict
+            Best-fit template coefficients keyed by component name (only for components
+            that have marginalization configured)
+        """
+        bestfit_marg_coeff = {}
+        for name in self.corr_items:
+            if not self.corr_items[name].marginalize_small_scales:
+                pass
+
+            corr_data = self.data[name]
+            if self.monte_carlo:
+                diff = corr_data.masked_mc_mock \
+                    - model_cf[name][corr_data.model_mask]
+            else:
+                diff = corr_data.masked_data_vec \
+                    - model_cf[name][corr_data.model_mask]
+
+            # Calculate best-fitting values for the marginalized templates.
+            # This approximation ignores global_cov, hence correlations between
+            # CFs. Bestfit_model is updated in-place.
+            if corr_data.marg_diff2coeff_matrix is not None:
+                bestfit_marg_coeff[name] = corr_data.marg_diff2coeff_matrix.dot(diff)
+
+        return bestfit_marg_coeff
 
     def minimize(self):
         """Minimize the chi2 over the sampled parameters.
@@ -986,6 +1144,15 @@ class VegaInterface:
             raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
     def read_global_cov(self, global_cov_file, scale=None):
+        """Read the joint covariance matrix from file and prepare it for chi2 computation.
+
+        Parameters
+        ----------
+        global_cov_file : str
+            Path to the fits file containing the global covariance matrix
+        scale : float, optional
+            Rescaling factor applied to the covariance, by default None
+        """
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             self.global_cov = hdul[1].data['COV']
@@ -1021,7 +1188,8 @@ class VegaInterface:
 
                 if self.corr_items[name].marginalize_small_scales:
                     M1 = self.global_cov[j:j + ndata, j:j + ndata]
-                    M1[np.ix_(wd, wd)] += data.cov_marg_update
+                    if data.cov_marg_update is not None:
+                        M1[np.ix_(wd, wd)] += data.cov_marg_update
 
                     if self.low_mem_mode:
                         del data.cov_marg_update

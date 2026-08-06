@@ -23,8 +23,9 @@ class Shell:
             Variable to use for the angle from ['theta', 'mu', 'mu2'], by default 'theta'
         angle_range : tuple, optional
             (Min, Max) for angle variable defined above, by default (0, np.pi/2)
-        num_bins_fraction : int, optional
-            _description_, by default 50
+        num_bins_fraction : float, optional
+            Controls the number of angle bins: num_bins = ceil(n_masked / num_bins_fraction),
+            by default 50
         r : tuple, optional
             (Min, Max) for isotropic separation bin, by default (30, 45)
         scaling : int, optional
@@ -146,10 +147,16 @@ class Shell:
 
     @staticmethod
     def get_bin_centers(bin_limits):
-        """Computes array of bin centers given an array of bin limits
+        """Compute array of bin centers given an array of bin limits.
+
         Parameters
         ----------
         bin_limits : 1D array
             Array with the limits of the bins. Size = Num_Bins + 1
+
+        Returns
+        -------
+        1D array
+            Array of bin centers. Size = Num_Bins
         """
         return (bin_limits[1:] + bin_limits[:-1]) / 2

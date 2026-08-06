@@ -8,8 +8,21 @@ from vega.samplers.sampler_interface import Sampler
 class Polychord(Sampler):
     ''' Interface between Vega and the nested sampler PolyChord '''
 
-    def __init__(self, sampler_config, limits, log_lik_func):
-        super().__init__(sampler_config, limits, log_lik_func)
+    def __init__(self, sampler_config, limits, log_lik_func, derived_dict=None):
+        """Initialize Polychord sampler interface.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            Polychord section from the main config
+        limits : dict
+            Dictionary mapping parameter names to (min, max) prior limit tuples
+        log_lik_func : callable
+            Log-likelihood function that accepts a parameter dict
+        derived_dict : dict, optional
+            Dictionary mapping correlation names to number of marginalized coefficients
+        """
+        super().__init__(sampler_config, limits, log_lik_func, derived_dict=derived_dict)
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
         """Extract polychord settings and create the settings object.
@@ -96,8 +109,8 @@ class Polychord(Sampler):
             for i, name in enumerate(self.names):
                 params[name] = theta[i]
 
-            log_lik = self.log_lik(params)
-            return log_lik, []
+            log_lik, marg_coeff = self.log_lik(params, return_marg_coeff=True)
+            return log_lik, marg_coeff
 
         def prior(hypercube):
             """ Uniform prior """

@@ -1,7 +1,8 @@
+from functools import reduce
+
 import numpy as np
 from scipy.sparse import coo_array
 from picca import constants as picca_constants
-from functools import reduce
 
 
 class CorrelationItem:
@@ -65,6 +66,10 @@ class CorrelationItem:
         marginalize_all = config['model'].getboolean("marginalize-all-rmin-cuts", False)
         if marginalize_all:
             self.marginalize_small_scales['all-rmin'] = True
+
+        self.marginalize_match_data_bins = config['model'].getboolean(
+            "marginalize-match-data-bins", False)
+        self.fit_marg_scales = config['model'].getboolean("fit-marginalized-scales", False)
 
         self.has_metals = False
         self.has_bb = False
@@ -131,6 +136,13 @@ class CorrelationItem:
                                        else dist_model_coordinates)
 
     def init_cosmo(self, cosmo_params):
+        """Initialize the picca cosmology object from the given parameters.
+
+        Parameters
+        ----------
+        cosmo_params : dict
+            Dictionary with keys Omega_m, Omega_k, Omega_r, wl
+        """
         self.cosmo_params = cosmo_params
 
         self.cosmo = picca_constants.Cosmo(
@@ -139,6 +151,18 @@ class CorrelationItem:
             )
 
     def check_if_blind_corr(self, blind_tracers):
+        """Check whether this correlation should be blinded.
+
+        Parameters
+        ----------
+        blind_tracers : list
+            List of tracer names to blind, or ['all'] to blind everything
+
+        Returns
+        -------
+        bool
+            True if this correlation should be blinded
+        """
         if 'all' in blind_tracers:
             return True
 
@@ -219,11 +243,33 @@ class CorrelationItem:
                 "based on scale cuts."
             )
 
-        N = self.model_coordinates.rt_regular_grid.size
-        d = np.ones(common_idx.size)
+        if self.marginalize_match_data_bins:
+            rp = self.model_coordinates.rp_grid[common_idx]
+            rt = self.model_coordinates.rt_grid[common_idx]
+            dist_rp = self.dist_model_coordinates.rp_grid
+            dist_rt = self.dist_model_coordinates.rt_grid
+            indices_in_data_bins = (
+                (dist_rp[None, :] - rp[:, None])**2 + (dist_rt[None, :] - rt[:, None])**2
+            ).argmin(axis=1)
 
-        templates = coo_array(
-            (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
-        ).tocsr().T
+            unique_indices_in_data_bins = np.unique(indices_in_data_bins)
+            # Vectorized construction of COO data: Map each element
+            # of indices_in_data_bins to its position in unique_indices_in_data_bins
+            row_indices = np.searchsorted(unique_indices_in_data_bins, indices_in_data_bins)
+            d = np.ones(common_idx.size, dtype=float)
+            templates = coo_array(
+                (d, (row_indices, common_idx)),
+                shape=(
+                    unique_indices_in_data_bins.size,
+                    self.model_coordinates.rt_regular_grid.size,
+                )
+            ).tocsr().T
+        else:
+            N = self.model_coordinates.rt_regular_grid.size
+            d = np.ones(common_idx.size, dtype=float)
+
+            templates = coo_array(
+                (d, (np.arange(d.size), common_idx)), shape=(d.size, N)
+            ).tocsr().T
 
         return templates
