@@ -482,7 +482,7 @@ def compute_cca_weights(data_cov, param_cov, data_param_cov, num_modes):
 
     # --- SVD of whitened matrix ---
     U, s, Vt = svd(M, full_matrices=True)
-   
+
     # --- Transform back to original data space ---
     W = solve_triangular(chol_d.T, U, lower=False)[:, :num_modes]
 
@@ -491,7 +491,7 @@ def compute_cca_weights(data_cov, param_cov, data_param_cov, num_modes):
         print(f'Warning: Cutting {abs(mode_diff)} modes from compressed data')
     if mode_diff > 0:
         print(f'Warning: Adding {abs(mode_diff)} extra modes to compressed data')
-        
+
     return W, s
 
 

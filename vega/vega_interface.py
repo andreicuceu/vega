@@ -7,11 +7,7 @@ from importlib.metadata import version, PackageNotFoundError
 import numpy as np
 import scipy.stats
 from astropy.io import fits
-import configparser
-import copy
 from scipy.special import loggamma
-from scipy.linalg import cholesky, solve_triangular, svd
-
 
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
@@ -208,7 +204,7 @@ class VegaInterface:
                     raise ValueError('Sampler not recognized. Please use Polychord or PocoMC.')
                 if self.sampler not in self.main_config:
                     raise RuntimeError('run_sampler called, but no sampler config found')
-        
+
         # Initialize the output object
         self.output = Output(self.main_config['output'], self.data, self.corr_items, self.analysis)
 
@@ -222,14 +218,14 @@ class VegaInterface:
 
     def _score_compression(self):
         residual = self._full_datavec - self._full_fidmod
-    
+
         ### Compute score vector ###
 
         self.score = (
             self._full_jacobian.T
             @ self.masked_global_invcov
             @ residual
-        )  
+        )
 
         ### number of compressed parameters ###
         self.ndim_compressed = self.score.size
@@ -254,7 +250,7 @@ class VegaInterface:
 
         self.compressed_global_cov_logdet = np.linalg.slogdet(self.compressed_global_cov)[1]
 
-        print(f'INFO: Score compression initialized.')  
+        print(f'INFO: Score compression initialized.')
 
     def _cca_compression(self, config):
 
@@ -288,15 +284,15 @@ class VegaInterface:
         # Extra Nk modes usually used for goodness-of-fit.
         _num_cca_modes = config.getint('num-cca-modes', _parameter_cov.shape[0])
 
-        
-        self._cca_mat, self._cca_vals = utils.compute_cca_weights(_masked_data_cov, 
-                                    _parameter_cov, 
+
+        self._cca_mat, self._cca_vals = utils.compute_cca_weights(_masked_data_cov,
+                                    _parameter_cov,
                                     _data_param_cov,
                                     num_modes=_num_cca_modes)
 
         ### ndim ###
         self.ndim_compressed = self._cca_vals.size
-        
+
         ### Compressed covariance ###
         if self._mock2mock_cov is not None:
             _mock2mock_cov = np.load(self._mock2mock_cov)['cov']
@@ -335,7 +331,7 @@ class VegaInterface:
             raise RuntimeError('Compression requires a global covariance'
                             'or mock-to-mock covariance to run compressed analysis')
 
-        self.compression_type = config.get('compression-type')  
+        self.compression_type = config.get('compression-type')
 
         ### Compression code ###
         ### Load compression parameters ###
@@ -392,9 +388,9 @@ class VegaInterface:
         self._full_fidmod = np.concatenate(full_model_blocks)[self.full_model_mask]
 
         ### Compute Fisher information matrix ###
-        self.fisher_matrix = (self._full_jacobian.T @ 
-                        self.masked_global_invcov @ 
-                        self._full_jacobian)  
+        self.fisher_matrix = (self._full_jacobian.T @
+                        self.masked_global_invcov @
+                        self._full_jacobian)
 
         ### Load specific compression type ###
         if self.compression_type == 'score':
@@ -407,7 +403,7 @@ class VegaInterface:
     def compress(self, vec):
         """
         Compress a vector with either score or cca compression.
-        
+
         :param vec: vector to compress
         :return: compressed vector (dimension <= N_params)
 
@@ -417,7 +413,7 @@ class VegaInterface:
             return self._full_jacobian.T @ self.masked_global_invcov @ (vec - self._full_fidmod)
         elif self.compression_type == 'cca':
             return self._cca_mat.T @ vec
-    
+
     def compute_compressed_model(self, params=None, run_init=True, direct_pk=None, marg_coeff=None):
 
         print('INFO: Computing compressed model')
@@ -425,7 +421,7 @@ class VegaInterface:
             raise ValueError('Compression not initialized')
 
         #compute model for given set of parameters (compressed?)
-        model = self.compute_model(params=params, 
+        model = self.compute_model(params=params,
                                      run_init=run_init, direct_pk=direct_pk,
                                        marg_coeff=marg_coeff)
 
@@ -479,7 +475,7 @@ class VegaInterface:
 
         return model_cf
 
-    def chi2(self, params=None, direct_pk=None):
+    def chi2(self, params=None, direct_pk=None, return_marg_coeff=False):
         """Compute full chi2 for all components.
 
         Parameters
@@ -592,7 +588,7 @@ class VegaInterface:
                 log_norm -= 0.5 * self.ndim_compressed * np.log(2 * np.pi)
                 log_norm -= 0.5 * self.compressed_global_cov_logdet
             elif self.compression_likelihood == 't-distribution':
-                #sellentin and heavens (2015) prefactor and following likelihood
+                #Sellentin and Heavens (2015) prefactor and likelihood
                 _pre_factor = loggamma(0.5 * self.num_sims)
                 _pre_factor -= 0.5 * self.ndim_compressed * np.log(np.pi * (self.num_sims - 1))
                 _pre_factor -= loggamma(0.5 * (self.num_sims - self.ndim_compressed))
