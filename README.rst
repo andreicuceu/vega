@@ -5,7 +5,7 @@ Vega
 .. image:: https://github.com/andreicuceu/vega/actions/workflows/python_package.yml/badge.svg?branch=master
     :target: https://github.com/andreicuceu/vega/actions/workflows/python_package.yml
 
-.. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
+.. image:: https://readthedocs.org/projects/vega/badge/?version=latest
         :target: https://vega.readthedocs.io/en/latest/?badge=latest
 
 .. image:: https://codecov.io/gh/andreicuceu/Vega/branch/master/graph/badge.svg
