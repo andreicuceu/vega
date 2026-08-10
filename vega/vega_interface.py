@@ -513,7 +513,7 @@ class VegaInterface:
 
             for name, corr_item in self.corr_items.items():
                 if fiducial_model[name].size != self.data[name].full_data_size:
-                    if fiducial_model[name].size != self.dist_model_coordinates.rp_grid.size:
+                    if fiducial_model[name].size != corr_item.dist_model_coordinates.rp_grid.size:
                         raise ValueError("Could not match fiducial model to data or model size.")
                     mask = corr_item.dist_model_coordinates.get_mask_to_other(
                         corr_item.data_coordinates)
