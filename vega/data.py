@@ -519,6 +519,9 @@ class Data:
         self.dist_model_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
 
+        if not self.dist_model_coordinates.is_same_binning(self.data_coordinates):
+            raise Exception("Distortion matrix coordinates do not match data coordinates.")
+
         hdul.close()
 
     def _init_metal_tracers(self, metal_config):
@@ -785,24 +788,17 @@ class Data:
         if seed is not None:
             np.random.seed(seed)
 
-        masked_fiducial = fiducial_model
-        if fiducial_model.size != self.full_data_size:
-            if fiducial_model.size != self.dist_model_coordinates.rp_grid.size:
-                raise ValueError("Could not match fiducial model to data or model size.")
-            mask = self.dist_model_coordinates.get_mask_to_other(self.data_coordinates)
-            masked_fiducial = fiducial_model[mask]
-
         if forecast:
-            self.mc_mock = masked_fiducial
+            self.mc_mock = fiducial_model
         else:
             self.mc_mock = np.full(self.full_data_size, np.nan)
             if self.cholesky_masked_cov:
                 ran_vec = np.random.randn(self.data_mask.sum())
                 self.mc_mock[self.data_mask] = \
-                    masked_fiducial[self.data_mask] + self._cholesky.dot(ran_vec)
+                    fiducial_model[self.data_mask] + self._cholesky.dot(ran_vec)
             else:
                 ran_vec = np.random.randn(self.full_data_size)
-                self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
+                self.mc_mock = fiducial_model + self._cholesky.dot(ran_vec)
 
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 

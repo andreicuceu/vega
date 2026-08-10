@@ -5,6 +5,9 @@ class Coordinates:
     def get_mask_to_other(self, other):
         raise NotImplementedError
 
+    def is_same_binning(self, other):
+        raise NotImplementedError
+
     def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
         """Build mask to apply scale cuts
 
@@ -221,6 +224,24 @@ class RtRpCoordinates(Coordinates):
         mask &= (self.rt_grid <= other.rt_max)
         return mask
 
+    def is_same_binning(self, other):
+        """Check if the current coordinates have the same binning as the other coordinates.
+
+        Parameters
+        ----------
+        other : Coordinates
+            Other coordinates
+
+        Returns
+        -------
+        bool
+            True if the binning is the same, False otherwise
+        """
+        return (
+            np.isclose(self.rp_binsize, other.rp_binsize)
+            and np.isclose(self.rt_binsize, other.rt_binsize)
+        )
+
 
 class RMuCoordinates(Coordinates):
     """Class to handle Vega coordinate grids
@@ -358,3 +379,21 @@ class RMuCoordinates(Coordinates):
         mask = (self.mu_grid >= other.mu_min) & (self.mu_grid <= other.mu_max)
         mask &= (self.r_grid <= other.r_max)
         return mask
+
+    def is_same_binning(self, other):
+        """Check if the current coordinates have the same binning as the other coordinates.
+
+        Parameters
+        ----------
+        other : Coordinates
+            Other coordinates
+
+        Returns
+        -------
+        bool
+            True if the binning is the same, False otherwise
+        """
+        return (
+            np.isclose(self.r_binsize, other.r_binsize)
+            and np.isclose(self.mu_binsize, other.mu_binsize)
+        )
