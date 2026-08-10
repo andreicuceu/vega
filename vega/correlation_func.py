@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
-from astropy.table import Table
 from scipy.special import expn
+from astropy.table import Table
 
 from . import utils
 
@@ -37,6 +37,8 @@ class CorrelationFunction:
             Config of tracer 1
         tracer2 : dict
             Config of tracer 2
+        cosmo : picca.Cosmo, optional
+            Cosmology object for bias evolution, by default None
         metal_corr : bool, optional
             Whether this is a metal correlation, by default False
         """
@@ -234,6 +236,18 @@ class CorrelationFunction:
         return rescaled_r, rescaled_mu
 
     def init_bias_evol(self, type1, type2, cosmo=None):
+        """Initialize bias evolution arrays for the correlation function.
+
+        Parameters
+        ----------
+        type1 : str
+            Type of tracer 1 ('continuous' or 'discrete')
+        type2 : str
+            Type of tracer 2 ('continuous' or 'discrete')
+        cosmo : picca.Cosmo, optional
+            Cosmology object for computing separate redshifts in cross-correlations,
+            by default None
+        """
         # For auto-correlations use mean redshift and return
         self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
         if type1 == type2:
@@ -389,6 +403,24 @@ class CorrelationFunction:
         return growth**2
 
     def compute_growth_old(self, z_grid=None, z_fid=None, Omega_m=None, Omega_de=None):
+        """Compute growth factor using the old integration approach (deprecated).
+
+        Parameters
+        ----------
+        z_grid : array, optional
+            Redshift grid, by default uses stored grid
+        z_fid : float, optional
+            Fiducial redshift for normalization, by default uses stored value
+        Omega_m : float, optional
+            Matter density, by default uses stored value
+        Omega_de : float, optional
+            Dark energy density, by default uses stored value
+
+        Returns
+        -------
+        ND Array
+            Growth factor squared, normalized to the fiducial redshift
+        """
         def hubble(z, Omega_m, Omega_de):
             return np.sqrt(Omega_m*(1+z)**3 + Omega_de + (1-Omega_m-Omega_de)*(1+z)**2)
 
@@ -564,6 +596,22 @@ class CorrelationFunction:
 
     @staticmethod
     def compute_shotnoise_A(ntau=100, nrho=10000):
+        """Compute the UV shotnoise amplitude function A(tau).
+
+        Implements Eq. 19 of Gontcho A Gontcho et al. (arXiv:1404.7425).
+
+        Parameters
+        ----------
+        ntau : int, optional
+            Number of tau grid points, by default 100
+        nrho : int, optional
+            Number of rho integration points, by default 10000
+
+        Returns
+        -------
+        array, array
+            tau grid and corresponding A(tau) values
+        """
         # compute function of Eq. 19 of Gontcho A Gontcho et al, arxiv:1404.7425
         tau = np.linspace(0.01, 5, ntau)
         a = np.zeros(tau.size)
@@ -578,6 +626,18 @@ class CorrelationFunction:
         return tau, a
 
     def uv_A(self, tau):
+        """Interpolate the UV shotnoise amplitude A at given tau values.
+
+        Parameters
+        ----------
+        tau : array
+            Optical depth values (r / lambda_uv)
+
+        Returns
+        -------
+        array
+            Interpolated A(tau) values
+        """
         if self._uv_shotnoise_A is None:
             print("compute_shotnoise_A")
             self._uv_shotnoise_tau, self._uv_shotnoise_A = self.compute_shotnoise_A()
@@ -587,6 +647,22 @@ class CorrelationFunction:
         )
 
     def compute_uv_shotnoise(self, params, rescaled_r, rescaled_mu):
+        """Compute the UV background shotnoise contribution to the correlation function.
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters including uv_shotnoise_amp and lambda_uv
+        rescaled_r : array
+            Rescaled r coordinates (after AP distortion)
+        rescaled_mu : array
+            Rescaled mu coordinates (after AP distortion)
+
+        Returns
+        -------
+        array
+            UV shotnoise contribution to the correlation function
+        """
         shotnoise_amp = params["uv_shotnoise_amp"]
         # lambda0 = 1/kappa0 is the mean free path of ionizing photons
         # in Gontcho A Gontcho et al, arxiv:1404.7425

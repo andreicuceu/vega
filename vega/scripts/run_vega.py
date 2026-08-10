@@ -5,6 +5,13 @@ from vega import VegaInterface
 
 
 def run_vega(config_path):
+    """Run a complete Vega fit: minimize, optionally scan, write output, and save diagnostic plots.
+
+    Parameters
+    ----------
+    config_path : str or Path
+        Path to the main Vega configuration file
+    """
     # Initialize Vega
     vega = VegaInterface(config_path)
 

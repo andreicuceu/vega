@@ -1,0 +1,112 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vega"
+dynamic = ["version"]
+description = "A tool for computing 3D correlation function models for tracers used by the Ly-α forest group and for fitting data."
+readme = "README.rst"
+license = {text = "GPL-3.0"}
+authors = [
+    {name = "Andrei Cuceu", email = "andreicuceu@gmail.com"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "astropy",
+    "numba",
+    "h5py",
+    "iminuit>=2.0.0",
+    "cachetools",
+    "matplotlib",
+    "mcfit",
+    "getdist",
+    "picca"
+]
+
+[project.urls]
+Homepage = "https://github.com/andreicuceu/vega"
+Repository = "https://github.com/andreicuceu/vega"
+Documentation = "https://vega.readthedocs.io"
+"Bug Tracker" = "https://github.com/andreicuceu/vega/issues"
+
+[project.optional-dependencies]
+# Install with: pip install .[mpi]
+mpi = [
+    "mpi4py"
+]
+# Install with: pip install .[samplers]
+samplers = [
+    "pocomc"
+]
+# Install with: pip install .[dev]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+    "pre-commit",
+    "tox"
+]
+# Install with: pip install .[docs]
+docs = [
+    "sphinx",
+    "sphinx-book-theme",
+    "myst-nb"
+]
+
+# (Optional) If you want to turn the scripts in your bin/ folder into terminal commands
+# [project.scripts]
+# run_vega = "vega.cli:main" # Example: points to a main() function in vega/cli.py
+
+[tool.setuptools.packages.find]
+include = ["vega*"]
+exclude = ["tests*", "docs*", "examples*"]
+
+[tool.setuptools]
+script-files = [
+    "bin/run_vega.py",
+    "bin/run_vega_mpi.py",
+    "bin/run_vega_mc_mpi.py",
+    "bin/run_vega_mc_fits_mpi.py",
+    "bin/make_configs.py",
+    "bin/make_template.py",
+]
+
+# Automatically infer version from git tags (e.g., v1.2.0)
+[tool.setuptools_scm]
+
+# Modern, blazing fast linter and formatter (Replaces flake8, isort, black)
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "--cov=vega --cov-report=term-missing"
+testpaths = [
+    "tests",
+]

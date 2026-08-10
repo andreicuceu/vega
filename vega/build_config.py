@@ -1,11 +1,12 @@
-import os
-import git
 import copy
-import numpy as np
-from pathlib import Path
-from astropy.io import fits
-from datetime import datetime
+import os
 from configparser import ConfigParser
+from datetime import datetime
+from pathlib import Path
+
+import git
+import numpy as np
+from astropy.io import fits
 
 import vega
 from vega.utils import find_file
@@ -227,6 +228,8 @@ class BuildConfig:
             Name of the correlation. Must be the same as corresponding template file name
         corr_info : dict
             Correlation information. The paths to the data and metal files are required.
+        git_hash : str
+            Git hash of the current Vega version, written as a comment to the config file
 
         Returns
         -------
@@ -805,11 +808,13 @@ class BuildConfig:
             if self.options['velocity_dispersion'] == 'lorentz':
                 for name in self.corr_names:
                     if name in ["QSO", "DLA", "SBLA"]:
-                        new_params[f'sigma_velo_disp_lorentz_{name}'] = get_par(f'sigma_velo_disp_lorentz_{name}')
+                        key = f'sigma_velo_disp_lorentz_{name}'
+                        new_params[key] = get_par(key)
             else:
                 for name in self.corr_names:
                     if name in ["QSO", "DLA", "SBLA"]:
-                        new_params[f'sigma_velo_disp_gauss_{name}'] = get_par(f'sigma_velo_disp_gauss_{name}')
+                        key = f'sigma_velo_disp_gauss_{name}'
+                        new_params[key] = get_par(key)
 
         # QSO radiation effects
         if self.options['radiation_effects']:

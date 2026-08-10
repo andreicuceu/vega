@@ -27,6 +27,12 @@ class PktoXi:
             Wavenumber grid of power spectrum
         muk_grid : ND Array
             k_parallel / k grid for input power spectrum
+        name1 : str
+            Name of tracer 1
+        name2 : str
+            Name of tracer 2
+        config : ConfigParser
+            model section of the config file
         dmu_smooth_xiell: float
             Mu bin spacing that smooths Legendre polynomials. Might be useful
             in r,mu grid.
@@ -65,9 +71,35 @@ class PktoXi:
 
     @classmethod
     def init_from_Pk(cls, pk, config, dmu_smooth_xiell=0):
+        """Construct a PktoXi instance from a PowerSpectrum object.
+
+        Parameters
+        ----------
+        pk : PowerSpectrum
+        config : ConfigParser
+            Power spectrum object supplying the k and muk grids and tracer names
+            model section of the config file
+        Returns
+
+        PktoXi
+        -------
+            Initialized PktoXi instance
+        """
         return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config, dmu_smooth_xiell)
 
     def compute_pk_ells(self, pk):
+        """Decompose the 2D power spectrum into Legendre multipoles.
+
+        Parameters
+        ----------
+        pk : ND Array
+            2D power spectrum over the (muk, k) grid
+
+        Returns
+        -------
+        2D Array
+            Array of shape (n_ells, n_k) with Pk multipoles Pk_ell(k)
+        """
         pk_ell_arr = np.zeros([len(self.ell_vals), len(self.k_grid)])
         for i, ell in enumerate(self.ell_vals):
             # Compute the Pk_ell multipole
@@ -143,6 +175,21 @@ class PktoXi:
 
     @cached(cache=cache, key=lambda self, pk, ell_vals, *cache_pars: hashkey(ell_vals, *cache_pars))
     def compute_xi_ell(self, pk, ell_vals, *cache_pars):
+        """Compute and cache interpolated Xi multipoles from a 2D power spectrum.
+
+        Parameters
+        ----------
+        pk : ND Array
+            2D power spectrum over the (muk, k) grid
+        ell_vals : tuple
+            Multipole values to compute
+        *cache_pars : additional parameters used as cache key
+
+        Returns
+        -------
+        dict
+            Dictionary mapping each ell to a scipy interpolation object for Xi_ell(log r)
+        """
         xi_ell_interp = {}
         for ell in ell_vals:
             # Compute the Pk_ell multipole
@@ -157,6 +204,22 @@ class PktoXi:
         return xi_ell_interp
 
     def compute_xi(self, xi_ell_interp, r_grid, mu_grid):
+        """Evaluate the full correlation function from cached multipole interpolations.
+
+        Parameters
+        ----------
+        xi_ell_interp : dict
+            Dictionary mapping each ell to a Xi_ell(log r) interpolation (from compute_xi_ell)
+        r_grid : 1D Array
+            Grid of r coordinates for the output correlation
+        mu_grid : 1D Array
+            Grid of mu coordinates for the output correlation
+
+        Returns
+        -------
+        1D Array
+            Output correlation function
+        """
         # Initialize the Xi_ell array
         xi_ell_arr = np.zeros([len(self.ell_vals), len(r_grid)])
         for ell in self.ell_vals:
