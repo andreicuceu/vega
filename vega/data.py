@@ -43,7 +43,6 @@ class Data:
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
-        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
         self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
 
         self.use_multipoles = corr_item.use_multipoles
@@ -777,30 +776,20 @@ class Data:
 
         # Compute cholesky decomposition
         if (self._cholesky is None or self._recompute) and not forecast:
-            if self.cholesky_masked_cov:
-                masked_cov = self.cov_mat[:, self.data_mask]
-                masked_cov = masked_cov[self.data_mask, :]
-                self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
-            else:
-                self._cholesky = np.linalg.cholesky(self._scale * self.cov_mat)
+            masked_cov = self.cov_mat[:, self.data_mask]
+            masked_cov = masked_cov[self.data_mask, :]
+            self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
 
         # Create the mock
         if seed is not None:
             np.random.seed(seed)
 
-        if forecast:
-            self.mc_mock = fiducial_model
-        else:
-            self.mc_mock = np.full(self.full_data_size, np.nan)
-            if self.cholesky_masked_cov:
-                ran_vec = np.random.randn(self.data_mask.sum())
-                self.mc_mock[self.data_mask] = \
-                    fiducial_model[self.data_mask] + self._cholesky.dot(ran_vec)
-            else:
-                ran_vec = np.random.randn(self.full_data_size)
-                self.mc_mock = fiducial_model + self._cholesky.dot(ran_vec)
-
-        self.masked_mc_mock = self.mc_mock[self.data_mask]
+        self.mc_mock = fiducial_model
+        if not forecast:
+            ran_vec = np.random.randn(self.data_mask.sum())
+            assert ran_vec.size == self.mc_mock.size, \
+                "Random vector size does not match Monte Carlo mock size"
+            self.mc_mock += self._cholesky.dot(ran_vec)
 
         return self.mc_mock
 

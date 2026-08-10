@@ -197,11 +197,11 @@ class Analysis:
                 scale = 1
             self._cholesky_global_cov = np.linalg.cholesky(scale * masked_cov)
 
-        full_fiducial_model = np.concatenate([fiducial_model[name] for name in self._data])
-
-        self.current_mc_mock = full_fiducial_model[full_data_mask]
+        self.current_mc_mock = np.concatenate([fiducial_model[name] for name in self._data])
         if not forecast:
             ran_vec = np.random.randn(full_data_mask.sum())
+            assert ran_vec.size == self.current_mc_mock.size, \
+                "Random vector size does not match Monte Carlo mock size"
             self.current_mc_mock += self._cholesky_global_cov.dot(ran_vec)
 
         return self.current_mc_mock

@@ -503,6 +503,8 @@ class VegaInterface:
                     fiducial_model[name] = hdul[1].data['DA']
                 assert fiducial_model[name].size == self.data[name].full_data_size, \
                     f"Input fiducial model size for {name} does not match data size"
+
+                fiducial_model[name] = fiducial_model[name][self.data[name].data_mask]
         else:
             use_full_pk = self.main_config['control'].getboolean('use_full_pk_for_mc', False)
             if use_full_pk:
@@ -511,13 +513,8 @@ class VegaInterface:
             else:
                 fiducial_model = self.compute_model(mc_params, run_init=False)
 
-            for name, corr_item in self.corr_items.items():
-                if fiducial_model[name].size != self.data[name].full_data_size:
-                    if fiducial_model[name].size != corr_item.dist_model_coordinates.rp_grid.size:
-                        raise ValueError("Could not match fiducial model to data or model size.")
-                    mask = corr_item.dist_model_coordinates.get_mask_to_other(
-                        corr_item.data_coordinates)
-                    fiducial_model[name] = fiducial_model[name][mask]
+            for name in self.corr_items.keys():
+                fiducial_model[name] = fiducial_model[name][self.data[name].model_mask]
 
         return fiducial_model
 
