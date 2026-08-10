@@ -887,12 +887,6 @@ class BuildConfig:
             if 'BB' in name and name not in new_params:
                 new_params[name] = value
 
-        # Marginalize small scales
-        if self.options.get('marginalize-small-scales', False):
-            for name, value in parameters.items():
-                if 'bias_xi' in name and name not in new_params:
-                    new_params[name] = value
-
         self._parameters = new_params
 
     @staticmethod
