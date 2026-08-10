@@ -83,6 +83,10 @@ def percival_correction(nsamples, nbins, nparams):
     a = nsamples - nbins
     denom = (a - 1) * (a - 4)
     A, B = 2.0 / denom, (a - 2.0) / denom
+    if a <= 4:
+        raise ValueError(
+            "Number of samples must be greater than number of bins + 4 for Percival correction.")
+
     return (1.0 + B * (nbins - nparams)) / (1.0 + A + B * (nparams - 1))
 
 
