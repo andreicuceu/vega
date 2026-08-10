@@ -26,6 +26,7 @@ class Model:
         """
         self._corr_item = corr_item
         self._model_pk = corr_item.model_pk
+        self.fiducial = fiducial
 
         assert corr_item.model_coordinates is not None
 
@@ -90,7 +91,10 @@ class Model:
         self._instrumental_systematics_flag = corr_item.config['model'].getboolean(
             'desi-instrumental-systematics', False)
 
-    def _compute_model(self, pars, pk_lin, component='smooth', xi_metals=None):
+        # Needed if passing pk model directly
+        self._pktoxi_alternative = None
+
+    def _compute_model(self, pars, pk_input, component='smooth', xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
 
@@ -101,11 +105,11 @@ class Model:
         ----------
         pars : dict
             Computation parameters
-        pk_lin : 1D Array
-            Linear power spectrum
+        pk_input : 1D Array
+            Input (usually linear) power spectrum
         component : str, optional
             Name of pk component, used as key for dictionary of saved
-            components ('peak' or 'smooth' or 'full'), by default 'smooth'
+            components ('peak' or 'smooth' or 'full' or 'full_2D'), by default 'smooth'
         xi_metals : 1D Array, optional
             Metal correlation functions, by default None
 
@@ -114,15 +118,26 @@ class Model:
         1D Array
             Model correlation function for the specified component
         """
-        # Compute core model correlation function
-        pk_model = self.Pk_core.compute(pk_lin, pars)
+        if component == 'full_2D':
+            pk_model = pk_input
 
-        if self._model_pk:
-            return self.PktoXi.compute_pk_ells(pk_model)
+            if self._model_pk:
+                return self._pktoxi_alternative.compute_pk_ells(pk_model)
 
-        # Protect against old caches that have not been cleaned
-        self.PktoXi.cache_pars = None
-        xi_model = self.Xi_core.compute(pk_model, pk_lin, self.PktoXi, pars)
+            # Protect against old caches that have not been cleaned
+            self._pktoxi_alternative.cache_pars = None
+            xi_model = self.Xi_core.compute(
+                pk_model, self.fiducial['pk_full'], self._pktoxi_alternative, pars)
+        else:
+            # Compute core model correlation function
+            pk_model = self.Pk_core.compute(pk_input, pars)
+
+            if self._model_pk:
+                return self.PktoXi.compute_pk_ells(pk_model)
+
+            # Protect against old caches that have not been cleaned
+            self.PktoXi.cache_pars = None
+            xi_model = self.Xi_core.compute(pk_model, pk_input, self.PktoXi, pars)
 
         # Save the components
         if self.save_components:
@@ -134,7 +149,10 @@ class Model:
             if self.no_metal_decomp and xi_metals is not None:
                 xi_model += xi_metals
             elif not self.no_metal_decomp:
-                xi_model += self.metals.compute(pars, pk_lin, component)
+                if component == 'full_2D':
+                    xi_model += self.metals.compute(pars, self.fiducial['pk_full'], component)
+                else:
+                    xi_model += self.metals.compute(pars, pk_input, component)
 
                 # Merge saved metal components into the member dictionaries
                 if self.save_components:
@@ -223,3 +241,34 @@ class Model:
         xi_full = self._compute_model(pars, pk_full, 'full')
 
         return xi_full
+
+    def compute_from_input_pk_model(self, pars, k_grid, muk_grid, pk_model):
+        """Compute the correlation function model directly from an input 2D power spectrum.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        k_grid : 1D Array
+            Wavenumber grid
+        muk_grid : 1D Array
+            Cosine of the angle between the wavevector and the line of sight
+        pk_model : 2D Array
+            Input 2D power spectrum
+
+        Returns
+        -------
+        2D Array
+            Full 2D correlation function
+        """
+        if self._pktoxi_alternative is None:
+            assert pk_model.shape[0] == k_grid.size, "Mismatch between pk_model and k_grid sizes"
+            assert pk_model.shape[1] == muk_grid.size, \
+                "Mismatch between pk_model and muk_grid sizes"
+
+            self._pktoxi_alternative = pktoxi.PktoXi(
+                k_grid, muk_grid, self._corr_item.config['model'])
+
+        xi_model = self._compute_model(pars, pk_model, 'full_2D')
+
+        return xi_model
