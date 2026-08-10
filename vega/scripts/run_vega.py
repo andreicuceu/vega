@@ -52,6 +52,8 @@ def run_vega(config_path):
 
     num_pars = len(vega.sample_params['limits'])
     for name in vega.plots.data:
+        if vega.data[name].use_multipoles:
+            continue  # skip multipoles until a plotting routine is implemented
         # Get title
         bestfit_legend = f'Correlation: {name}, Total '
         bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'

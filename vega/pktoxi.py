@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 from numpy import fft
 from scipy import special
@@ -6,7 +8,7 @@ from mcfit import P2xi
 from cachetools import cached, LRUCache
 from cachetools.keys import hashkey
 
-from vega.utils import VegaBoundsError
+from vega.utils import VegaBoundsError, bin_averaged_legendre
 
 
 class PktoXi:
@@ -14,8 +16,10 @@ class PktoXi:
     """
     cache = LRUCache(128)
 
-    def __init__(self, k_grid, muk_grid, name1, name2, config):
-        """Initialize the FFTLog and the Legendre polynomials.
+    def __init__(
+            self, k_grid, muk_grid, name1, name2, config, dmu_smooth_xiell=0
+    ):
+        """Initialize the FFTLog and the Legendre polynomials
 
         Parameters
         ----------
@@ -29,6 +33,9 @@ class PktoXi:
             Name of tracer 2
         config : ConfigParser
             model section of the config file
+        dmu_smooth_xiell: float
+            Mu bin spacing that smooths Legendre polynomials. Might be useful
+            in r,mu grid.
         """
         self.name1 = name1
         self.name2 = name2
@@ -54,27 +61,31 @@ class PktoXi:
             # Precompute the Legendre polynomials used to decompose Pk into Pk_ell
             self.legendre_pk[ell] = special.legendre(ell)(self.muk_grid)
             # We don't know the mu grid for Xi in advance, so just initialize
-            self.legendre_xi[ell] = special.legendre(ell)
+            if dmu_smooth_xiell > 0:
+                self.legendre_xi[ell] = partial(
+                    bin_averaged_legendre, ell=ell, dmu=dmu_smooth_xiell)
+            else:
+                self.legendre_xi[ell] = special.legendre(ell)                
 
         self.cache_pars = None
 
     @classmethod
-    def init_from_Pk(cls, pk, config):
+    def init_from_Pk(cls, pk, config, dmu_smooth_xiell=0):
         """Construct a PktoXi instance from a PowerSpectrum object.
 
         Parameters
         ----------
         pk : PowerSpectrum
-            Power spectrum object supplying the k and muk grids and tracer names
         config : ConfigParser
+            Power spectrum object supplying the k and muk grids and tracer names
             model section of the config file
-
         Returns
-        -------
+
         PktoXi
+        -------
             Initialized PktoXi instance
         """
-        return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config)
+        return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config, dmu_smooth_xiell)
 
     def compute_pk_ells(self, pk):
         """Decompose the 2D power spectrum into Legendre multipoles.
