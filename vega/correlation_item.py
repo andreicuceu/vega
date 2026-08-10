@@ -49,10 +49,12 @@ class CorrelationItem:
                 self.tracer2['weights-path'] = self.tracer1['weights-path']
 
         self.use_multipoles = config['model'].getboolean('use_multipoles', False)
+        self.weighted_multipoles = config['model'].getboolean('weighted_multipoles', False)
         if self.use_multipoles:
             ells_to_model = config['model'].get('model_multipoles', "0,2")
             ells_to_model = ells_to_model.split(',')
             self.ells_to_model = [int(_) for _ in ells_to_model]
+            self.nells = len(self.ells_to_model)
 
         self.test_flag = config['data'].getboolean('test', False)
 

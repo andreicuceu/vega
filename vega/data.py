@@ -44,21 +44,21 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
-        self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
-        self.weighted_multipoles = corr_item.config['model'].getboolean('weighted_multipoles', False)
-        self._multipole_matrix = None
-        self.averaging_matrix_multipoles = None
+        self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
+
+        self.use_multipoles = corr_item.use_multipoles
         self._rmu_binning = None
         if self.use_multipoles:
-            ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
-            ells_to_model = ells_to_model.split(',')
-            self.ells_to_model = [int(_) for _ in ells_to_model]
-            self.nells = len(self.ells_to_model)
+            self.weighted_multipoles = corr_item.weighted_multipoles
+            self.ells_to_model = corr_item.ells_to_model
+            self.nells = corr_item.nells
+
+            # Needed for computation
+            self.averaging_matrix_multipoles = None
+            self._multipole_matrix = None
         else:
             self.ells_to_model = None
             self.nells = 0
-
-        self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
 
         # Read the data file and init the corrdinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -455,9 +455,9 @@ class Data:
             print(f"Applying the Hartlap factor: C x {hartlap:.2f}.")
 
             if hartlap <= 0:
-                raise Exception("Hartlap factor is non-positive.")
+                raise ValueError("Hartlap factor is non-positive.")
             if hartlap > 1.1:
-                print(f"Warning: Large Hartlap correction.")
+                print(f"Warning: Large Hartlap correction: {hartlap:.2f}.")
 
             self._cov_mat *= hartlap
 

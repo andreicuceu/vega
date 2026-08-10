@@ -648,8 +648,11 @@ class VegaInterface:
         self.minimizer.p_value = self.p_value
         print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
               f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
-        print("Note that the Percival correction has to be manually applied.")
         print('----------------------------------------------------\n')
+
+        if self.percival_correction != 1.0:
+            print(f"Percival correction factor: {self.percival_correction:.3f}")
+            print("Note that the Percival correction has to be manually applied.")
 
         if not self.minimizer.fmin.is_valid:
             print('Invalid fit!!! Check data, covariance, model and priors.')
@@ -959,9 +962,9 @@ class VegaInterface:
                   "This needs to be manually applied to the parameter cov.!")
 
             if hartlap <= 0:
-                raise Exception("Hartlap factor is non-positive.")
+                raise ValueError("Hartlap factor is non-positive.")
             if hartlap > 1.1:
-                print(f"Warning: Large Hartlap correction.")
+                print(f"Warning: Large Hartlap correction: {hartlap:.2f}")
 
             self.global_cov *= hartlap
 
