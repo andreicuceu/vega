@@ -204,6 +204,16 @@ class Analysis:
                 "Random vector size does not match Monte Carlo mock size"
             self.current_mc_mock += self._cholesky_global_cov.dot(ran_vec)
 
+        # Save both the full and concatenated Monte Carlo mocks
+        self.unpacked_mc_mock = {}
+        idx = 0
+        for name in fiducial_model:
+            size = fiducial_model[name].size
+            assert idx + size <= self.current_mc_mock.size, \
+                "Index exceeds the size of the Monte Carlo mock"
+            self.unpacked_mc_mock[name] = self.current_mc_mock[idx:idx + size]
+            idx += size
+
         return self.current_mc_mock
 
     def run_monte_carlo(

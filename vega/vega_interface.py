@@ -618,8 +618,13 @@ class VegaInterface:
             self.total_data_size += data_size
 
             if self.monte_carlo and self._use_global_cov:
-                # TODO Figure out a better way to handle this
-                chisq = 0
+                diff = self.analysis.unpacked_mc_mock[name] \
+                    - self.bestfit_model[name][corr_data.model_mask]
+                print(
+                    'Do not trust individual chi^2 values when using'
+                    ' the global covariance in Monte Carlo mode.'
+                )
+                chisq = diff.T.dot(corr_data.inv_masked_cov.dot(diff))
             elif self.monte_carlo:
                 diff = corr_data.masked_mc_mock \
                     - self.bestfit_model[name][corr_data.model_mask]
