@@ -151,10 +151,7 @@ class Model:
             if self.no_metal_decomp and xi_metals is not None:
                 xi_model += xi_metals
             elif not self.no_metal_decomp:
-                if component == 'full_2D':
-                    xi_model += self.metals.compute(pars, self.fiducial['pk_full'], component)
-                else:
-                    xi_model += self.metals.compute(pars, pk_input, component)
+                xi_model += self.metals.compute(pars, pk_input, component)
 
                 # Merge saved metal components into the member dictionaries
                 if self.save_components:
@@ -244,7 +241,7 @@ class Model:
 
         return xi_full
 
-    def compute_from_input_pk_model(self, pars, k_grid, muk_grid, pk_model):
+    def compute_from_input_pk_model(self, pars, k_grid, muk_grid, pk_model, no_metals=False):
         """Compute the correlation function model directly from an input 2D power spectrum.
 
         Parameters
@@ -257,6 +254,8 @@ class Model:
             Cosine of the angle between the wavevector and the line of sight
         pk_model : 2D Array
             Input 2D power spectrum
+        no_metals : bool, optional
+            If True, the metal contribution will be ignored. Default is False.
 
         Returns
         -------
@@ -273,6 +272,10 @@ class Model:
         self._pktoxi_alternative = pktoxi.PktoXi(
             k_grid, muk_grid, self._corr_item.config['model'])
 
-        xi_model = self._compute_model(pars, pk_model, 'full_2D')
+        xi_metals = None
+        if self._corr_item.has_metals and self.no_metal_decomp and not no_metals:
+            xi_metals = self.metals.compute(pars, self.fiducial['pk_full'], 'full')
+
+        xi_model = self._compute_model(pars, pk_model, 'full_2D', xi_metals=xi_metals)
 
         return xi_model
