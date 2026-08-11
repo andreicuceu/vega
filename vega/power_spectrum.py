@@ -55,7 +55,7 @@ class PowerSpectrum:
         else:
             self._bin_size_rp = config.getfloat('bin_size_rp')
             self._bin_size_rt = config.getfloat('bin_size_rt')
-        
+
         # Damping scale for P(k) - used to match EFT behavior
         self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
         self.pk_damping_power = config.getint('pk-damping-power', 2)

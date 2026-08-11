@@ -17,7 +17,7 @@ class PktoXi:
     cache = LRUCache(128)
 
     def __init__(
-            self, k_grid, muk_grid, name1, name2, config, dmu_smooth_xiell=0
+            self, k_grid, muk_grid, config, dmu_smooth_xiell=0
     ):
         """Initialize the FFTLog and the Legendre polynomials
 
@@ -27,18 +27,12 @@ class PktoXi:
             Wavenumber grid of power spectrum
         muk_grid : ND Array
             k_parallel / k grid for input power spectrum
-        name1 : str
-            Name of tracer 1
-        name2 : str
-            Name of tracer 2
         config : ConfigParser
             model section of the config file
         dmu_smooth_xiell: float
             Mu bin spacing that smooths Legendre polynomials. Might be useful
             in r,mu grid.
         """
-        self.name1 = name1
-        self.name2 = name2
         self.k_grid = k_grid
         self.muk_grid = muk_grid
         self.dmuk = 1 / len(muk_grid)
@@ -65,7 +59,7 @@ class PktoXi:
                 self.legendre_xi[ell] = partial(
                     bin_averaged_legendre, ell=ell, dmu=dmu_smooth_xiell)
             else:
-                self.legendre_xi[ell] = special.legendre(ell)                
+                self.legendre_xi[ell] = special.legendre(ell)
 
         self.cache_pars = None
 
@@ -85,7 +79,7 @@ class PktoXi:
         -------
             Initialized PktoXi instance
         """
-        return cls(pk.k_grid, pk.muk_grid, pk.tracer1_name, pk.tracer2_name, config, dmu_smooth_xiell)
+        return cls(pk.k_grid, pk.muk_grid, config, dmu_smooth_xiell)
 
     def compute_pk_ells(self, pk):
         """Decompose the 2D power spectrum into Legendre multipoles.
@@ -159,8 +153,8 @@ class PktoXi:
             xi_ell = np.zeros(len(r_grid))
             try:
                 xi_ell[mask] = xi_interp(np.log(r_grid[mask]))
-            except ValueError:
-                raise VegaBoundsError
+            except ValueError as exc:
+                raise VegaBoundsError from exc
 
             # If only one multipole was required we are done
             if not single_ell < 0:
