@@ -262,9 +262,12 @@ class Model:
             Full 2D correlation function
         """
         if self._pktoxi_alternative is None:
-            assert pk_model.shape[0] == k_grid.size, "Mismatch between pk_model and k_grid sizes"
-            assert pk_model.shape[1] == muk_grid.size, \
+            assert pk_model.shape[1] == k_grid.size, "Mismatch between pk_model and k_grid sizes"
+            assert pk_model.shape[0] == muk_grid.size, \
                 "Mismatch between pk_model and muk_grid sizes"
+
+            if len(muk_grid.shape) == 1:
+                muk_grid = muk_grid[:, None]
 
             self._pktoxi_alternative = pktoxi.PktoXi(
                 k_grid, muk_grid, self._corr_item.config['model'])
