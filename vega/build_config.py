@@ -59,6 +59,7 @@ class BuildConfig:
         self.options['full_shape'] = options.get('full_shape', False)
         self.options['full_shape_alpha'] = options.get('full_shape_alpha', False)
         self.options['smooth_scaling'] = options.get('smooth_scaling', False)
+        self.options['model-binning'] = options.get('model-binning', True)
 
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
@@ -272,6 +273,8 @@ class BuildConfig:
             config['parameters']['per binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
 
         # Write the model options
+        config['model']['model binning'] = str(self.options['model-binning'])
+
         # Things that require LYA
         if tracer1 == 'LYA' and tracer2 == 'LYA':
             if self.options['small_scale_nl']:
