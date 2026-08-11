@@ -744,9 +744,11 @@ class VegaPlots:
         plt.tight_layout()
         self.fig = fig
 
-    def plot_4wedge_panel(self, mu_bins=(0, 0.5, 0.8, 0.95, 1), model=None, cov_mat=None,
-                          data=None, cross_flag=False, corr_name='lyaxlya', colors=None,
-                          data_only=False, title=None, figsize=(8, 6), fig=None, **kwargs):
+    def plot_4wedge_panel(
+        self, mu_bins=(0, 0.5, 0.8, 0.95, 1), model=None, cov_mat=None,
+        data=None, cross_flag=False, corr_name='lyaxlya', colors=None,
+        data_only=False, model_only=False, title=None, figsize=(8, 6), fig=None, **kwargs
+):
         """Plot the correlations into four wedges on one panel
 
         Parameters
@@ -767,6 +769,8 @@ class VegaPlots:
             List of colors for the wedges, by default None
         data_only : bool, optional
             Whether to only plot data and ignore the models, by default False
+        model_only : bool, optional
+            Whether to only plot the model and ignore the data, by default False
         title : string, optional
             Title for plot, by default None
         figsize : (float, float), optional
@@ -794,7 +798,7 @@ class VegaPlots:
 
             _ = self.plot_wedge(ax, mu_bin, models=[model], cov_mat=cov_mat, labels=[label],
                                 model_colors=[color], data_color=color, data=data,
-                                cross_flag=cross_flag, corr_name=corr_name, models_only=False,
+                                cross_flag=cross_flag, corr_name=corr_name, models_only=model_only,
                                 data_only=data_only, data_label=data_label,
                                 no_postprocess=True, **kwargs)
 
