@@ -37,6 +37,8 @@ class Analysis:
         mc_config : dict, optional
             Monte Carlo config with the model and sample parameters,
             by default None
+        global_cov : 2D array, optional
+            Global covariance matrix covering all correlations, by default None
         """
         self.config = main_config
         self._chi2_func = chi2_func
@@ -176,20 +178,17 @@ class Analysis:
         array
             Global masked MC data vector
         """
-        assert self._global_cov is not None
+        assert self._global_cov is not None, (
+            "create_global_monte_carlo requires a global covariance matrix. "
+            "Pass global_cov to Analysis.__init__."
+        )
 
         if seed is not None:
             np.random.seed(seed)
 
-        # TODO The corr items need to have an imposed order
-        full_data_mask = []
-        full_model_mask = []
-        for name in self._corr_items:
-            full_data_mask.append(self._data[name].data_mask)
-            full_model_mask.append(self._data[name].model_mask)
-
-        full_data_mask = np.concatenate(full_data_mask)
-        full_model_mask = np.concatenate(full_model_mask)
+        full_data_mask = np.concatenate([
+            self._data[name].data_mask for name in self._corr_items
+        ])
 
         if self._cholesky_global_cov is None:
             masked_cov = self._global_cov[:, full_data_mask]
@@ -198,30 +197,22 @@ class Analysis:
                 scale = 1
             self._cholesky_global_cov = np.linalg.cholesky(scale * masked_cov)
 
-        # TODO The corr items need to have an imposed order
-        full_fiducial_model = np.concatenate([fiducial_model[name] for name in self._data])
-        masked_fiducial = full_fiducial_model[full_model_mask]
-        # Naim comment:  unsure about the purpose of the below code
-        # masked_fiducial = []
-        # for name, data in self._data.items():
-        #     mask = data.dist_model_coordinates.get_mask_to_other(data.data_coordinates)
-        #     if data.data_mask.size == fiducial_model[name].size:
-        #         masked_fiducial.append(fiducial_model[name])
-        #     elif mask.size == fiducial_model[name].size:
-        #         masked_fiducial.append(fiducial_model[name][mask])
-        #     else:
-        #         raise ValueError('Input fiducial has unknown size. '
-        #                          'It must match the data or the model.')
-        # masked_fiducial = np.concatenate(masked_fiducial)
-
-        if forecast:
-            self.current_mc_mock = masked_fiducial
-            # self.current_mc_mock = masked_fiducial[full_data_mask]
-        else:
+        self.current_mc_mock = np.concatenate([fiducial_model[name] for name in self._data])
+        if not forecast:
             ran_vec = np.random.randn(full_data_mask.sum())
-            # self.current_mc_mock = masked_fiducial[full_data_mask] + self._cholesky_global_cov.dot(
-            self.current_mc_mock = masked_fiducial + self._cholesky_global_cov.dot(
-                ran_vec)
+            assert ran_vec.size == self.current_mc_mock.size, \
+                "Random vector size does not match Monte Carlo mock size"
+            self.current_mc_mock += self._cholesky_global_cov.dot(ran_vec)
+
+        # Save both the full and concatenated Monte Carlo mocks
+        self.unpacked_mc_mock = {}
+        idx = 0
+        for name in fiducial_model:
+            size = fiducial_model[name].size
+            assert idx + size <= self.current_mc_mock.size, \
+                "Index exceeds the size of the Monte Carlo mock"
+            self.unpacked_mc_mock[name] = self.current_mc_mock[idx:idx + size]
+            idx += size
 
         return self.current_mc_mock
 
@@ -240,6 +231,10 @@ class Analysis:
             Starting seed, by default 0
         scale : float/dict, optional
             Scaling for the covariance, by default None
+        forecast : bool, optional
+            If True, skip adding noise to mocks (forecast mode), by default False
+        run_mc_fits : bool, optional
+            If True, minimize on each mock, by default True
         """
         assert self.mc_config is not None, 'No Monte Carlo config provided'
 

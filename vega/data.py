@@ -35,6 +35,9 @@ class Data:
         ----------
         corr_item : CorrelationItem
             Item object with the component config
+        marginalize_in_fit : bool, optional
+            If True, the marginalization covariance update is deferred to the fit
+            instead of being added to the covariance matrix, by default False
         """
         # First save the tracer info
         self.corr_item = corr_item
@@ -42,22 +45,23 @@ class Data:
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
         self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
-        self.use_multipoles = corr_item.config['model'].getboolean('use_multipoles', False)
+        self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
+
+        self.use_multipoles = corr_item.use_multipoles
         self.is_direct_multipoles = corr_item.is_direct_multipoles
-        self.weighted_multipoles = corr_item.config['model'].getboolean('weighted_multipoles', False)
-        self._multipole_matrix = None
-        self.averaging_matrix_multipoles = None
         self._rmu_binning = None
         if self.use_multipoles or self.is_direct_multipoles:
-            ells_to_model = corr_item.config['model'].get('model_multipoles', "0,2")
-            ells_to_model = ells_to_model.split(',')
-            self.ells_to_model = [int(_) for _ in ells_to_model]
+            self.ells_to_model = corr_item.ells_to_model
             self.nells = len(self.ells_to_model)
+            if self.use_multipoles:
+                self.weighted_multipoles = corr_item.weighted_multipoles
+
+            # Needed for computation
+            self.averaging_matrix_multipoles = None
+            self._multipole_matrix = None
         else:
             self.ells_to_model = None
             self.nells = 0
-
-        self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
 
         # Read the data file and init the coordinate grids
         data_path = corr_item.config['data'].get('filename')
@@ -499,6 +503,12 @@ class Data:
             Path to fits data file
         cuts_config : ConfigParser
             cuts section from the config file
+        dmat_path : string, optional
+            Path to a separate distortion matrix file, by default None
+        cov_path : string, optional
+            Path to a separate covariance matrix file, by default None
+        cov_rescale : float, optional
+            Rescaling factor applied to the covariance matrix, by default None
         """
         print(f'Reading data file {data_path}\n')
         hdul = fits.open(find_file(data_path))
@@ -642,13 +652,22 @@ class Data:
             print(f"Applying the Hartlap factor: C x {hartlap:.2f}.")
 
             if hartlap <= 0:
-                raise Exception("Hartlap factor is non-positive.")
+                raise ValueError("Hartlap factor is non-positive.")
             if hartlap > 1.1:
-                print(f"Warning: Large Hartlap correction.")
+                print(f"Warning: Large Hartlap correction: {hartlap:.2f}.")
 
             self._cov_mat *= hartlap
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
+        """Warn if the blinding strategy of the distortion matrix does not match the data.
+
+        Parameters
+        ----------
+        blinding_flag : str
+            Blinding strategy read from the distortion matrix header
+        dmat_path : str
+            Path to the distortion matrix file (used in warning messages)
+        """
         if self._blinding_strat is None:
             if not (blinding_flag == 'none' or blinding_flag == 'None'):
                 print(f'Warning: Data has no blinding, but distortion matrix at {dmat_path} '
@@ -659,6 +678,13 @@ class Data:
                       f'the flag of the distortion matrix at {dmat_path}')
 
     def _read_dmat(self, dmat_path):
+        """Read a separate distortion matrix file and initialize coordinate grids.
+
+        Parameters
+        ----------
+        dmat_path : str
+            Path to the distortion matrix fits file
+        """
         print(f'Reading distortion matrix file {dmat_path}\n')
         hdul = fits.open(find_file(dmat_path))
         header = hdul[1].header
@@ -690,10 +716,27 @@ class Data:
         self.dist_model_coordinates = coordinates_cls(
             header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
 
+        if not self.dist_model_coordinates.is_same_binning(self.data_coordinates):
+            raise Exception("Distortion matrix coordinates do not match data coordinates.")
+
         hdul.close()
 
     def _init_metal_tracers(self, metal_config):
-        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config)
+        """Parse metal tracer names and build the tracer catalog.
+
+        Parameters
+        ----------
+        metal_config : ConfigParser
+            metals section from the config file
+
+        Returns
+        -------
+        list or None, list or None, dict
+            metals_in_tracer1, metals_in_tracer2, tracer_catalog
+        """
+        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config), (
+            "The metals config must specify 'in tracer1' and/or 'in tracer2'"
+        )
 
         # Read metal tracers
         metals_in_tracer1 = None
@@ -719,6 +762,22 @@ class Data:
         return metals_in_tracer1, metals_in_tracer2, tracer_catalog
 
     def _init_metal_correlations(self, metal_config, metals_in_tracer1, metals_in_tracer2):
+        """Build the list of metal correlation pairs to compute.
+
+        Parameters
+        ----------
+        metal_config : ConfigParser
+            metals section from the config file
+        metals_in_tracer1 : list or None
+            Metal absorber names contributing to tracer 1
+        metals_in_tracer2 : list or None
+            Metal absorber names contributing to tracer 2
+
+        Returns
+        -------
+        list
+            List of (name1, name2) tuples for each metal correlation to compute
+        """
         metal_correlations = []
         if 'in tracer2' in metal_config:
             for metal in metals_in_tracer2:

@@ -5,6 +5,13 @@ from vega import VegaInterface
 
 
 def run_vega(config_path):
+    """Run a complete Vega fit: minimize, optionally scan, write output, and save diagnostic plots.
+
+    Parameters
+    ----------
+    config_path : str or Path
+        Path to the main Vega configuration file
+    """
     # Initialize Vega
     vega = VegaInterface(config_path)
 
@@ -66,6 +73,10 @@ def run_vega(config_path):
                 f'{vega.output.outfile[:-5]}_{name}_multipoles.png',
                 dpi='figure', bbox_inches='tight', facecolor='white'
             )
+            continue
+
+        # Forest components projected from 2D (r, mu) to multipoles: no wedge plot yet.
+        if vega.data[name].use_multipoles:
             continue
 
         # Get title

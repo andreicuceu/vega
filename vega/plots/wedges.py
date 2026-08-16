@@ -117,11 +117,16 @@ class Wedge:
 
     @staticmethod
     def get_bin_centers(bin_limits):
-        """Computes array of bin centers given an array of bin limits
+        """Compute array of bin centers given an array of bin limits.
 
         Parameters
         ----------
         bin_limits : 1D array
             Array with the limits of the bins. Size = Num_Bins + 1
+
+        Returns
+        -------
+        1D array
+            Array of bin centers. Size = Num_Bins
         """
         return (bin_limits[1:] + bin_limits[:-1]) / 2

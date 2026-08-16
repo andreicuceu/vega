@@ -1,11 +1,12 @@
-import os
-import git
 import copy
-import numpy as np
-from pathlib import Path
-from astropy.io import fits
-from datetime import datetime
+import os
 from configparser import ConfigParser
+from datetime import datetime
+from pathlib import Path
+
+import git
+import numpy as np
+from astropy.io import fits
 
 import vega
 from vega.utils import find_file
@@ -18,8 +19,9 @@ class BuildConfig:
     _params_template = None
     recognised_correlations = [
         'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-        'lyaxdla', 'lybxdla', 'qsoxqso', 'qsoxdla', 'dlaxdla',
-        'civxciv', 'civxqso', 'civxlya'
+        'lyaxdla', 'lybxdla', 'lyaxsbla', 'lybxsbla',
+        'qsoxqso', 'qsoxdla', 'dlaxdla',
+        'civxciv', 'civxqso', 'civxlya', 
     ]
 
     def __init__(self, options={}, overwrite=False):
@@ -57,6 +59,7 @@ class BuildConfig:
         self.options['full_shape'] = options.get('full_shape', False)
         self.options['full_shape_alpha'] = options.get('full_shape_alpha', False)
         self.options['smooth_scaling'] = options.get('smooth_scaling', False)
+        self.options['model-binning'] = options.get('model-binning', True)
 
         self.options['small_scale_nl'] = options.get('small_scale_nl', False)
         self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
@@ -226,6 +229,8 @@ class BuildConfig:
             Name of the correlation. Must be the same as corresponding template file name
         corr_info : dict
             Correlation information. The paths to the data and metal files are required.
+        git_hash : str
+            Git hash of the current Vega version, written as a comment to the config file
 
         Returns
         -------
@@ -268,6 +273,8 @@ class BuildConfig:
             config['parameters']['per binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
 
         # Write the model options
+        config['model']['model binning'] = str(self.options['model-binning'])
+
         # Things that require LYA
         if tracer1 == 'LYA' and tracer2 == 'LYA':
             if self.options['small_scale_nl']:
@@ -570,6 +577,7 @@ class BuildConfig:
 
         # Write the parameters
         self.parameters = parameters
+        
         config['parameters'] = {}
         for name, value in self.parameters.items():
             config['parameters'][name] = str(value)
@@ -765,9 +773,9 @@ class BuildConfig:
 
                 if bias_eta is None:
                     bias_eta = bias * beta / growth_rate
-            elif name == 'QSO':
-                bias = parameters.get('bias_QSO', self.get_qso_bias(self.zeff_in))
-                beta = parameters.get('beta_QSO', None)
+            elif (name == 'QSO') or (name == 'DLA') or (name == 'SBLA'):
+                bias = parameters.get(f'bias_{name}', self.get_qso_bias(self.zeff_in))
+                beta = parameters.get(f'beta_{name}', None)
                 bias_eta = 1
 
                 if beta is None:
@@ -777,7 +785,7 @@ class BuildConfig:
 
             add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
-            new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+            new_params[f'alpha_{name}'] = get_par(f'alpha_{name}')
 
         # Small scale non-linear model
         if self.options['small_scale_nl']:
@@ -801,9 +809,15 @@ class BuildConfig:
         # Velocity dispersion parameters
         if self.options['velocity_dispersion'] is not None:
             if self.options['velocity_dispersion'] == 'lorentz':
-                new_params['sigma_velo_disp_lorentz_QSO'] = get_par('sigma_velo_disp_lorentz_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        key = f'sigma_velo_disp_lorentz_{name}'
+                        new_params[key] = get_par(key)
             else:
-                new_params['sigma_velo_disp_gauss_QSO'] = get_par('sigma_velo_disp_gauss_QSO')
+                for name in self.corr_names:
+                    if name in ["QSO", "DLA", "SBLA"]:
+                        key = f'sigma_velo_disp_gauss_{name}'
+                        new_params[key] = get_par(key)
 
         # QSO radiation effects
         if self.options['radiation_effects']:
@@ -875,12 +889,6 @@ class BuildConfig:
         for name, value in parameters.items():
             if 'BB' in name and name not in new_params:
                 new_params[name] = value
-
-        # Marginalize small scales
-        if self.options.get('marginalize-small-scales', False):
-            for name, value in parameters.items():
-                if 'bias_xi' in name and name not in new_params:
-                    new_params[name] = value
 
         self._parameters = new_params
 

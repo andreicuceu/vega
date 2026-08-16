@@ -1,8 +1,8 @@
 import os.path
 import sys
-import numpy as np
 from pathlib import Path
 
+import numpy as np
 from mpi4py import MPI
 
 from vega import VegaInterface
@@ -13,6 +13,19 @@ class Sampler:
     ''' Interface between Vega and the nested sampler PolyChord '''
 
     def __init__(self, sampler_config, limits, log_lik_func, derived_dict=None):
+        """Initialize the sampler interface.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            Sampler section from the main config, containing path, name, and sampler settings
+        limits : dict
+            Dictionary mapping parameter names to (min, max) prior limit tuples
+        log_lik_func : callable
+            Log-likelihood function that accepts a parameter dict
+        derived_dict : dict, optional
+            Dictionary mapping correlation names to number of marginalized coefficients
+        """
         self.limits = limits
         self.names = list(limits.keys())
         self.num_params = len(limits)
@@ -51,6 +64,13 @@ class Sampler:
         self.get_sampler_settings(sampler_config, self.num_params, self.num_derived)
 
     def write_parnames(self, parnames_path):
+        """Write a getdist-compatible .paramnames file for all sampled and derived parameters.
+
+        Parameters
+        ----------
+        parnames_path : Path
+            Output path for the .paramnames file
+        """
         mpi_comm = MPI.COMM_WORLD
         cpu_rank = mpi_comm.Get_rank()
 
@@ -80,7 +100,25 @@ class Sampler:
         mpi_comm.barrier()
 
     def get_sampler_settings(self, sampler_config, num_params, num_derived):
+        """Extract sampler-specific settings from the config. Must be implemented in subclasses.
+
+        Parameters
+        ----------
+        sampler_config : ConfigParser
+            Sampler section from the main config
+        num_params : int
+            Number of sampled parameters
+        num_derived : int
+            Number of derived parameters
+        """
         raise NotImplementedError('This method should be implemented in the child class')
 
     def run(self, log_lik_func):
+        """Run the sampler. Must be implemented in subclasses.
+
+        Parameters
+        ----------
+        log_lik_func : callable
+            Log-likelihood function that accepts a parameter dict
+        """
         raise NotImplementedError('This method should be implemented in the child class')

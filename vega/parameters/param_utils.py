@@ -11,6 +11,18 @@ composites = {
 
 
 def build_names(params):
+    """Build a dictionary of LaTeX label strings for the given parameter names.
+
+    Parameters
+    ----------
+    params : iterable
+        Parameter names to look up or construct
+
+    Returns
+    -------
+    dict
+        Mapping of parameter name to LaTeX label string
+    """
     latex_names_path = 'vega/parameters/latex_names.txt'
     latex_names_path = find_file(latex_names_path)
     latex_full = get_latex(latex_names_path)
@@ -53,6 +65,18 @@ def build_names(params):
 
 
 def get_latex(path):
+    """Read a two-column text file and return a name-to-LaTeX mapping.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the text file (lines starting with '#' are comments)
+
+    Returns
+    -------
+    dict
+        Mapping of parameter name to LaTeX string
+    """
     with open(path) as f:
         content = f.readlines()
 
@@ -74,6 +98,13 @@ def get_latex(path):
 
 
 def get_default_values():
+    """Read default parameter limits and errors from the default_values.txt file.
+
+    Returns
+    -------
+    dict
+        Mapping of parameter name to {'limits': (min, max), 'error': float}
+    """
     values_path = 'vega/parameters/default_values.txt'
     with open(find_file(values_path)) as f:
         content = f.readlines()

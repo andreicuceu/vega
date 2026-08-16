@@ -8,6 +8,10 @@ import configparser
 import copy
 from importlib.metadata import version, PackageNotFoundError
 
+import numpy as np
+import scipy.stats
+from astropy.io import fits
+
 from . import correlation_item, data, utils
 from vega.scale_parameters import ScaleParameters
 from vega.model import Model
@@ -94,7 +98,10 @@ class VegaInterface:
         use_template_growth_rate = self.main_config['control'].getboolean(
             'use_template_growth_rate', True)
         if use_template_growth_rate and 'growth_rate' in self.fiducial:
-            assert 'growth_rate' not in self.sample_params['limits']
+            assert 'growth_rate' not in self.sample_params['limits'], (
+                "use_template_growth_rate is True, but growth_rate is in the sample params. "
+                "Remove growth_rate from [sample] or set use_template_growth_rate = False."
+            )
             self.params['growth_rate'] = self.fiducial['growth_rate']
         elif 'growth_rate' not in self.fiducial:
             print('WARNING: No growth rate specified in the template file. Using input value.')
@@ -394,13 +401,30 @@ class VegaInterface:
         return log_lik
 
     def _get_lcl_prms(self, params=None):
+        """Build a local copy of computation parameters, applying blinding if needed.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Additional or override parameters to merge in, by default None
+
+        Returns
+        -------
+        dict
+            Combined computation parameters with blinding applied if active
+        """
         local_params = copy.deepcopy(self.params)
         if params is not None:
             local_params |= params
 
-        assert self._blind is not None
+        assert self._blind is not None, (
+            "Blinding flag is not set. Call _init_blinding() before computing the model."
+        )
         if self._rnsps is not None:
-            assert self._blind
+            assert self._blind, (
+                "Blinding offsets (_rnsps) are set but blinding flag is False. "
+                "This is an inconsistent state."
+            )
             local_params = utils.apply_blinding(local_params, self._rnsps)
 
             # Enforce blinding
@@ -411,6 +435,18 @@ class VegaInterface:
         return local_params
 
     def compute_prior_chi2(self, params=None):
+        """Compute the Gaussian prior chi2 contribution for all configured priors.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Computation parameters to evaluate the priors at, by default None
+
+        Returns
+        -------
+        float
+            Sum of Gaussian chi2 contributions from all priors
+        """
         local_params = self._get_lcl_prms(params)
 
         chi2 = 0
@@ -424,6 +460,21 @@ class VegaInterface:
         return chi2
 
     def get_fiducial_for_monte_carlo(self, print_func=print):
+        """Compute the fiducial model used to generate Monte Carlo mocks.
+
+        Optionally starts from an existing fit or runs a new minimization to
+        set the template parameters before computing the fiducial model.
+
+        Parameters
+        ----------
+        print_func : callable, optional
+            Function used for log output, by default print
+
+        Returns
+        -------
+        dict
+            Fiducial model correlation functions keyed by component name
+        """
         mc_params = self.mc_config['params']
         mc_start_from_fit = self.main_config['control'].get('mc_start_from_fit', None)
 
@@ -455,6 +506,10 @@ class VegaInterface:
                 fiducial_path = self.main_config['control'].get(f'mc_fiducial_{name}')
                 with fits.open(utils.find_file(fiducial_path)) as hdul:
                     fiducial_model[name] = hdul[1].data['DA']
+                assert fiducial_model[name].size == self.data[name].full_data_size, \
+                    f"Input fiducial model size for {name} does not match data size"
+
+                fiducial_model[name] = fiducial_model[name][self.data[name].data_mask]
         else:
             use_full_pk = self.main_config['control'].getboolean('use_full_pk_for_mc', False)
             if use_full_pk:
@@ -463,9 +518,26 @@ class VegaInterface:
             else:
                 fiducial_model = self.compute_model(mc_params, run_init=False)
 
+            for name in self.corr_items.keys():
+                fiducial_model[name] = fiducial_model[name][self.data[name].model_mask]
+
         return fiducial_model
 
     def initialize_monte_carlo(self, scale=None, print_func=print):
+        """Prepare all data objects with Monte Carlo mocks and reset the minimizer.
+
+        Parameters
+        ----------
+        scale : float, optional
+            Covariance rescaling factor for the mocks. Read from config if None, by default None
+        print_func : callable, optional
+            Function used for log output, by default print
+
+        Returns
+        -------
+        dict
+            Dictionary of mock data vectors keyed by component name
+        """
         # Get the fiducial model
         fiducial_model = self.get_fiducial_for_monte_carlo(print_func)
 
@@ -493,6 +565,19 @@ class VegaInterface:
         return mocks
 
     def compute_marg_coeff(self, model_cf):
+        """Compute the best-fit coefficients for the marginalization templates.
+
+        Parameters
+        ----------
+        model_cf : dict
+            Model correlation functions keyed by component name
+
+        Returns
+        -------
+        dict
+            Best-fit template coefficients keyed by component name (only for components
+            that have marginalization configured)
+        """
         bestfit_marg_coeff = {}
         for name in self.corr_items:
             if not self.corr_items[name].marginalize_small_scales:
@@ -538,8 +623,13 @@ class VegaInterface:
             self.total_data_size += data_size
 
             if self.monte_carlo and self._use_global_cov:
-                # TODO Figure out a better way to handle this
-                chisq = 0
+                diff = self.analysis.unpacked_mc_mock[name] \
+                    - self.bestfit_model[name][corr_data.model_mask]
+                print(
+                    'Do not trust individual chi^2 values when using'
+                    ' the global covariance in Monte Carlo mode.'
+                )
+                chisq = diff.T.dot(corr_data.inv_masked_cov.dot(diff))
             elif self.monte_carlo:
                 diff = corr_data.masked_mc_mock \
                     - self.bestfit_model[name][corr_data.model_mask]
@@ -575,8 +665,11 @@ class VegaInterface:
         self.minimizer.p_value = self.p_value
         print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
               f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
-        print("Note that the Percival correction has to be manually applied.")
         print('----------------------------------------------------\n')
+
+        if self.percival_correction != 1.0:
+            print(f"Percival correction factor: {self.percival_correction:.3f}")
+            print("Note that the Percival correction has to be manually applied.")
 
         if not self.minimizer.fmin.is_valid:
             print('Invalid fit!!! Check data, covariance, model and priors.')
@@ -836,6 +929,15 @@ class VegaInterface:
             raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
 
     def read_global_cov(self, global_cov_file, scale=None):
+        """Read the joint covariance matrix from file and prepare it for chi2 computation.
+
+        Parameters
+        ----------
+        global_cov_file : str
+            Path to the fits file containing the global covariance matrix
+        scale : float, optional
+            Rescaling factor applied to the covariance, by default None
+        """
         print(f'INFO: Reading global covariance from {global_cov_file}')
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             if self.apply_global_hartlap:
@@ -940,9 +1042,9 @@ class VegaInterface:
                   "This needs to be manually applied to the parameter cov.!")
 
             if hartlap <= 0:
-                raise Exception("Hartlap factor is non-positive.")
+                raise ValueError("Hartlap factor is non-positive.")
             if hartlap > 1.1:
-                print(f"Warning: Large Hartlap correction.")
+                print(f"Warning: Large Hartlap correction: {hartlap:.2f}")
 
             self.global_cov *= hartlap
 

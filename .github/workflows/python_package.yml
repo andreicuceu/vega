@@ -1,48 +1,73 @@
-name: Pytest
+name: CI
 
 on:
-  [push, pull_request]
-env:
-  SETUP_XVFB: True
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
-  build:
+  # lint:
+  #   name: Code Quality (Ruff)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+      
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.11"
+  #         cache: "pip"
+          
+  #     - name: Install Ruff
+  #       run: pip install ruff
+        
+  #     - name: Check formatting
+  #       run: ruff format --check .
+        
+  #     - name: Lint code
+  #       run: ruff check .
 
+  test:
+    name: Test on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[ci skip]')"
-
-    timeout-minutes: 60
+    # needs: lint # Only run tests if linting passes
     strategy:
+      fail-fast: false # If one Python version fails, let the others finish
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
+      
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@master
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+          cache: "pip"
+          
+      - name: Install system dependencies (MPI)
+        # mpi4py requires system-level MPI headers to compile successfully on Ubuntu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openmpi-bin libopenmpi-dev
+          
+      - name: Install Vega and dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install wheel flake8 pytest pytest-cov
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install -e .
-      - name: Lint with flake8
+          # Installs the package in editable mode with dev and mpi extras
+          pip install -e .[dev,mpi]
+          
+      - name: Run tests with pytest
         run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - name: Test with pytest and gen report
-        timeout-minutes: 30
-        run: |
-          pytest --cov=./ --cov-report=xml
-      - name: Upload coverage to Codecov
+          # Generates an XML report for Codecov
+          pytest tests/ --cov=vega --cov-report=xml
+          
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
-          env_vars: OS,PYTHON
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           verbose: true
