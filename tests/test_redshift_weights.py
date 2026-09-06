@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from vega.utils import find_file
+
 _RW_PATH = Path(__file__).resolve().parents[1] / 'vega' / 'redshift_weights.py'
 _spec = importlib.util.spec_from_file_location('vega_redshift_weights', _RW_PATH)
 rw = importlib.util.module_from_spec(_spec)
@@ -51,3 +53,23 @@ def test_rebin():
     assert out.shape == (4,)
     assert out[0] == pytest.approx(0.5)
     assert out[1] == pytest.approx(2.5)
+
+
+def test_qso_catalog_weights():
+    """QSO catalog fixture yields stable catalog-weighted z_eff."""
+    z, w = rw.get_qso_weights(find_file('data/qsoauto_zcat.fits'))
+    z_eff = rw.weighted_mean_z(z, w)
+    assert z.shape == w.shape
+    assert np.all(w > 0)
+    assert 1.77 < z.min() and z.max() < 3.8
+    assert z_eff == pytest.approx(2.376196, rel=1e-5)
+
+
+def test_load_tracer_redshift_weights():
+    tracer = {
+        'name': 'QSO',
+        'type': 'discrete',
+        'weights-path': find_file('data/qsoauto_zcat.fits'),
+    }
+    z, w = rw.load_tracer_redshift_weights(tracer)
+    assert rw.weighted_mean_z(z, w) == pytest.approx(2.376196, rel=1e-5)
