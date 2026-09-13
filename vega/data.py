@@ -345,9 +345,15 @@ class Data:
         # one xi column and one std column, so total data columns = 2 * n_ells_file).
         s_mid_all = raw[:, 0]
         s_avg_all = raw[:, 1]
-        n_ells_file = (raw.shape[1] - 2) // 2
-        xi_all = raw[:, 2:2 + self.nells]          # shape (n_s_all, nells)
-
+        n_extra = raw.shape[1] - 2
+        if n_extra % 2 != 0:
+            raise ValueError(
+                f"Expected xi/std column pairs after s_mid/s_avg, got {n_extra} extra columns.")
+        n_ells_file = n_extra // 2
+        xi_file = raw[:, 2:2 + n_ells_file]
+        ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+        ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+        xi_all = xi_file[:, ell_file_indices]          # shape (n_s_all, nells)
         # Apply separation cuts
         s_min = cuts_config.getfloat('s-min', 0.)
         s_max = cuts_config.getfloat('s-max', 300.)
