@@ -113,6 +113,11 @@ class VegaInterface:
         if 'per_sigma_smooth' in self.params:
             self.fiducial['per_sigma_smooth'] = self.params['per_sigma_smooth']
 
+        # Propagate z_eff to each component so that direct-multipoles components
+        # can build their model coordinate z_grid.
+        for corr_item in self.corr_items.values():
+            corr_item.z_eff = self.fiducial['z_eff']
+
         # Check if all correlations have data files
         self.data = {}
         self._has_data = True
@@ -938,6 +943,27 @@ class VegaInterface:
             if self.apply_global_hartlap:
                 nsamples = hdul[1].header['NSAMPLES']
             self.global_cov = hdul[1].data['COV']
+            hdr = hdul[1].header
+
+            # Validate direct-multipole components against provenance stored by
+            # lyatools/scripts/build_global_cov3x2.py.  The header records NELL
+            # (number of multipoles in the QSO auto block) and SMIN/SMAX
+            # (separation cuts), so we can catch mismatches before reaching the
+            # chi2 computation.
+            nell_cov = hdr.get('NELL', None)
+            if nell_cov is not None:
+                for name, data_obj in self.data.items():
+                    if not data_obj.is_direct_multipoles:
+                        continue
+                    if data_obj.nells > nell_cov:
+                        raise ValueError(
+                            f"Component '{name}' requests {data_obj.nells} "
+                            f"multipoles (ells={data_obj.ells_to_model}) but the "
+                            f"global covariance file only contains {nell_cov}. "
+                            f"Re-run lyatools/scripts/build_global_cov3x2.py with "
+                            f"--n-multipoles "
+                            f"{data_obj.nells} or reduce model_multipoles in the "
+                            f"component config.")
 
         if scale is not None:
             print('Rescaling covariance by a factor of: ', scale)
@@ -947,22 +973,64 @@ class VegaInterface:
         self.full_data_mask = []
         self.full_model_mask = []
         for name in self.corr_items:
-            self.full_data_mask.append(self.data[name].data_mask)
-            self.full_model_mask.append(self.data[name].model_mask)
+            data_obj = self.data[name]
+            self.full_model_mask.append(data_obj.model_mask)
 
-        # Convert to multipoles
-        if any(self.data[name].use_multipoles for name in self.corr_items):
+            if data_obj.is_direct_multipoles and nell_cov is not None:
+                # The external global covariance stores the FULL, uncut QSO auto
+                # multipole block for this component: nell_cov ell-blocks, each
+                # spanning the full set of s-bins (n_s_full).  The per-component data
+                # vector, by contrast, is already restricted to the fitted ells
+                # and the [s-min, s-max) cut.  Build a boolean mask over the full
+                # block that selects exactly the fitted (ell, s) bins, in the
+                # same ell-major / ascending-s order as masked_data_vec, so that
+                # compute_masked_invcov picks the right global-cov rows/cols.
+                if nell_cov != data_obj._mp_n_ells_file:
+                    raise ValueError(
+                        f"Component '{name}': global covariance NELL={nell_cov} "
+                        f"does not match the {data_obj._mp_n_ells_file} multipoles "
+                        f"in the data file. Rebuild the global covariance with "
+                        f"lyatools/scripts/build_global_cov3x2.py and "
+                        f"--n-multipoles {data_obj._mp_n_ells_file}.")
+                n_s_full = data_obj._mp_n_s_full
+                s_cut = data_obj._mp_full_s_mask          # (n_s_full,) bool
+                n_cov_block = nell_cov * n_s_full
+                cov_block_mask = np.zeros(n_cov_block, dtype=bool)
+                for ell_i in data_obj._mp_ell_file_indices:
+                    cov_block_mask[ell_i * n_s_full:(ell_i + 1) * n_s_full] = s_cut
+                self.full_data_mask.append(cov_block_mask)
+            else:
+                self.full_data_mask.append(data_obj.data_mask)
+
+        # Convert to multipoles if any forest component uses the 2D-r,mu→multipoles path.
+        # Components with is_direct_multipoles=True already have their covariance block
+        # in multipole space (from a RascalC or mock-stack covariance), so no
+        # transformation is needed for them.
+        needs_transform = any(
+            self.data[name].use_multipoles and not self.data[name].is_direct_multipoles
+            for name in self.corr_items
+        )
+        if needs_transform:
             G = np.full((len(self.corr_items), len(self.corr_items)), None)
             for i, name in enumerate(self.corr_items):
-                if self.data[name].use_multipoles:
-                    G[i, i] = self.data[name]._multipole_matrix
+                data_obj = self.data[name]
+                if data_obj.use_multipoles and not data_obj.is_direct_multipoles:
+                    G[i, i] = data_obj._multipole_matrix
                 else:
-                    G[i, i] = eye_array(self.data[name].full_data_size)
+                    G[i, i] = eye_array(data_obj.full_data_size)
             G = block_array(G, format='csr')
             self.global_cov = G.dot(G.dot(self.global_cov).T).T
 
         self.full_data_mask = np.concatenate(self.full_data_mask)
         self.full_model_mask = np.concatenate(self.full_model_mask)
+
+        if self.full_data_mask.size != self.global_cov.shape[0]:
+            raise ValueError(
+                f"Global covariance dimension ({self.global_cov.shape[0]}) does "
+                f"not match the total data layout ({self.full_data_mask.size}). "
+                f"Check that the global-cov file was built with the same "
+                f"components, multipoles (NELL), and full (uncut) s-grid as the "
+                f"data files.")
 
         if self.apply_global_hartlap:
             ndata = np.sum(self.full_data_mask)

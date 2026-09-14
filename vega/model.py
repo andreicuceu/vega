@@ -35,8 +35,11 @@ class Model:
         self._data = data
         data_has_distortion = (self._data is not None) and self._data.has_distortion
         data_is_multipoles = (self._data is not None) and self._data.use_multipoles
+        data_is_direct_multipoles = (
+            (self._data is not None) and self._data.is_direct_multipoles)
         self._has_distortion_mat = corr_item.has_distortion and data_has_distortion
-        self._is_multipoles = corr_item.use_multipoles or data_is_multipoles
+        self._is_multipoles = (
+            corr_item.use_multipoles or data_is_multipoles or data_is_direct_multipoles)
         self._rmu_binning = self._data is not None and self._data._rmu_binning
 
         if self._rmu_binning:
@@ -79,10 +82,24 @@ class Model:
             self.Pk_core, corr_item.config['model'], dmu_smooth_xiell=dmu_smooth_xiell)
 
         # Initialize main Correlation function object
+        involves_qso = (
+            corr_item.tracer1['type'] == 'discrete'
+            or corr_item.tracer2['type'] == 'discrete')
+        use_catalog_bias = involves_qso and (
+            corr_item.is_direct_multipoles or corr_item.catalog_bias_evolution)
+
         self.Xi_core = corr_func.CorrelationFunction(
             corr_item.config['model'], fiducial, corr_item.model_coordinates,
-            scale_params, corr_item.tracer1, corr_item.tracer2, cosmo=corr_item.cosmo
+            scale_params, corr_item.tracer1, corr_item.tracer2, cosmo=corr_item.cosmo,
+            full_config=corr_item.config,
+            use_catalog_bias_evolution=use_catalog_bias,
         )
+
+        # Propagate calculated pivots to the correlation item for output
+        if self.Xi_core.z_eff_LYA is not None:
+            corr_item.z_eff_LYA = self.Xi_core.z_eff_LYA
+        if self.Xi_core.z_eff_QSO is not None:
+            corr_item.z_eff_QSO = self.Xi_core.z_eff_QSO
 
         # Initialize metals if needed
         self.metals = None

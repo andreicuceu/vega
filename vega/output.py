@@ -91,6 +91,21 @@ class Output:
                              ' Reinitialize with a valid vega.data object.')
 
         primary_hdu = fits.PrimaryHDU()
+        # Record catalog-computed effective redshifts when available
+        z_eff_lya = None
+        z_eff_qso = None
+        for item in self.corr_items.values():
+            if getattr(item, 'z_eff_LYA', None) is not None:
+                z_eff_lya = item.z_eff_LYA
+            if getattr(item, 'z_eff_QSO', None) is not None:
+                z_eff_qso = item.z_eff_QSO
+        if z_eff_lya is not None:
+            primary_hdu.header['ZEFFLYA'] = z_eff_lya
+            primary_hdu.header.comments['ZEFFLYA'] = 'Catalog-weighted z_eff_LYA'
+        if z_eff_qso is not None:
+            primary_hdu.header['ZEFFQSO'] = z_eff_qso
+            primary_hdu.header.comments['ZEFFQSO'] = 'Catalog-weighted z_eff_QSO'
+
         model_hdus = self._model_hdus(corr_funcs, params, bestfit_corr_stats)
         hdu_list = [primary_hdu] + model_hdus
 
@@ -195,7 +210,31 @@ class Output:
                 )
             ]
 
-            if not self.corr_items[name].use_multipoles:
+            if self.data[name].is_direct_multipoles:
+                # Direct-multipole component (e.g. QSO auto in xi_ell): use the
+                # same multipole convention as use_multipoles components so that
+                # FitResults dispatches to CorrelationOutputElls.
+                # _ELL stores the multipole order; _R stores the separation s.
+                ells_to_model = self.corr_items[name].ells_to_model
+                s_grid = self.data[name].data_coordinates.s_grid
+                ells_col = np.repeat(ells_to_model, len(s_grid))
+                s_col = np.tile(s_grid, len(ells_to_model))
+                columns.append(fits.Column(
+                    name=name+'_ELL', format='K',
+                    array=self.pad_array(ells_col, num_rows)
+                ))
+                columns.append(fits.Column(
+                    name=name+'_R', format='D',
+                    array=self.pad_array(s_col, num_rows)
+                ))
+                z_out = float(getattr(self.corr_items[name], 'z_eff_QSO', None)
+                              or getattr(self.corr_items[name], 'z_eff', 0.)
+                              or 0.)
+                columns.append(fits.Column(
+                    name=name+'_Z', format='D',
+                    array=np.full(num_rows, z_out)
+                ))
+            elif not self.corr_items[name].use_multipoles:
                 columns.append(fits.Column(
                     name=name+'_RP', format='D',
                     array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
@@ -204,6 +243,13 @@ class Output:
                     name=name+'_RT', format='D',
                     array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
                 ))
+                if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
+                    columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+                else:
+                    columns.append(fits.Column(
+                        name=name+'_Z', format='D',
+                        array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
+                    ))
             else:
                 nmu = self.corr_items[name].dist_model_coordinates.mu_nbins
                 nr = self.corr_items[name].dist_model_coordinates.r_nbins
@@ -220,14 +266,13 @@ class Output:
                     name=name+'_R', format='D',
                     array=self.pad_array(rmodel, num_rows)
                 ))
-
-            if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
-                columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
-            else:
-                columns.append(fits.Column(
-                    name=name+'_Z', format='D',
-                    array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
-                ))
+                if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
+                    columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+                else:
+                    columns.append(fits.Column(
+                        name=name+'_Z', format='D',
+                        array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
+                    ))
 
             if self.data[name].nb is not None:
                 columns.append(fits.Column(
@@ -237,6 +282,13 @@ class Output:
 
             model_hdu = fits.BinTableHDU.from_columns(columns)
             model_hdu.name = 'MODEL_' + name
+
+            if getattr(self.corr_items[name], 'z_eff_LYA', None) is not None:
+                model_hdu.header['ZEFFLYA'] = self.corr_items[name].z_eff_LYA
+                model_hdu.header.comments['ZEFFLYA'] = 'Catalog-weighted z_eff_LYA'
+            if getattr(self.corr_items[name], 'z_eff_QSO', None) is not None:
+                model_hdu.header['ZEFFQSO'] = self.corr_items[name].z_eff_QSO
+                model_hdu.header.comments['ZEFFQSO'] = 'Catalog-weighted z_eff_QSO'
 
             for par, val in params.items():
                 card_name = 'hierarch ' + par

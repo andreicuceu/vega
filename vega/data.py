@@ -4,7 +4,8 @@ from scipy import sparse
 from scipy.sparse import csr_array
 
 from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det, get_legendre_bins
-from vega.coordinates import RtRpCoordinates, RMuCoordinates
+from vega.coordinates import RtRpCoordinates, RMuCoordinates, MultipoleCoordinates
+from vega import redshift_weights
 
 BLINDING_STRATEGIES = ['desi_dr3']
 
@@ -43,14 +44,17 @@ class Data:
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
         self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
+        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
         self._apply_hartlap = corr_item.config['data'].getboolean('apply_hartlap', False)
 
         self.use_multipoles = corr_item.use_multipoles
+        self.is_direct_multipoles = corr_item.is_direct_multipoles
         self._rmu_binning = None
-        if self.use_multipoles:
-            self.weighted_multipoles = corr_item.weighted_multipoles
+        if self.use_multipoles or self.is_direct_multipoles:
             self.ells_to_model = corr_item.ells_to_model
-            self.nells = corr_item.nells
+            self.nells = len(self.ells_to_model)
+            if self.use_multipoles:
+                self.weighted_multipoles = corr_item.weighted_multipoles
 
             # Needed for computation
             self.averaging_matrix_multipoles = None
@@ -59,36 +63,44 @@ class Data:
             self.ells_to_model = None
             self.nells = 0
 
-        # Read the data file and init the corrdinate grids
+        # Read the data file and init the coordinate grids
         data_path = corr_item.config['data'].get('filename')
-        dmat_path = corr_item.config['data'].get('distortion-file', None)
         cov_path = corr_item.config['data'].get('covariance-file', None)
         cov_rescale = corr_item.config['data'].getfloat('cov_rescale', None)
 
-        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
-        self.corr_item.init_coordinates(
-            self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
+        if self.is_direct_multipoles:
+            # New path: data already in multipole format (ASCII text)
+            self._read_multipole_data(
+                data_path, corr_item.config['cuts'], cov_path, cov_rescale)
+            self.corr_item.init_coordinates(
+                self.model_coordinates, self.model_coordinates, self.data_coordinates)
+        else:
+            dmat_path = corr_item.config['data'].get('distortion-file', None)
+            self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
+            self.corr_item.init_coordinates(
+                self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
 
-        # Read the metal file and init metals in the corr item
-        if 'metals' in corr_item.config:
-            if not corr_item.new_metals:
-                tracer_catalog, metal_correlations = self._init_metals(corr_item.config['metals'])
-            else:
-                metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
-                    corr_item.config['metals'])
-                metal_correlations = self._init_metal_correlations(
-                    corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
+            # Read the metal file and init metals in the corr item
+            if 'metals' in corr_item.config:
+                if not corr_item.new_metals:
+                    tracer_catalog, metal_correlations = self._init_metals(
+                        corr_item.config['metals'])
+                else:
+                    metals_in_tracer1, metals_in_tracer2, tracer_catalog = \
+                        self._init_metal_tracers(corr_item.config['metals'])
+                    metal_correlations = self._init_metal_correlations(
+                        corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
 
-            self.corr_item.init_metals(tracer_catalog, metal_correlations)
+                self.corr_item.init_metals(tracer_catalog, metal_correlations)
 
-        # Check if we have broadband
-        if 'broadband' in corr_item.config:
-            self.corr_item.init_broadband(self.coeff_binning_model)
+            # Check if we have broadband
+            if 'broadband' in corr_item.config:
+                self.corr_item.init_broadband(self.coeff_binning_model)
 
         if self.cosmo_params is not None:
             self.corr_item.init_cosmo(self.cosmo_params)
 
-        if not self.has_distortion:
+        if not self.has_distortion and not self.is_direct_multipoles:
             self._distortion_mat = csr_array(np.eye(self.full_data_size))
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
@@ -295,6 +307,198 @@ class Data:
             Distortion matrix flag
         """
         return self._distortion_mat is not None
+
+    def _read_multipole_data(self, data_path, cuts_config, cov_path=None, cov_rescale=None):
+        """Read correlation-function multipoles from an ASCII text file.
+
+        Handles the 'direct multipoles' path where xi_ell(s) values are
+        already measured (e.g. QSO auto-correlation output from pycorr)
+        rather than a 2D (rp, rt) FITS file that Vega converts internally.
+
+        The data vector is concatenated as [xi_0(s), xi_2(s), ..., xi_L(s)].
+        An internal 2D (r, mu) model grid is constructed so that the existing
+        CorrelationFunction / PktoXi machinery can be reused; a multipole
+        projection matrix (_multipole_matrix) then maps model xi(r, mu) onto
+        the data xi_ell(s) values.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to the ASCII file.  Expected column order:
+            s_mid  s_avg  xi_0  xi_2  [xi_4 ...]  std_0  std_2  [std_4 ...]
+        cuts_config : ConfigParser
+            [cuts] section from the component config file.
+        cov_path : str, optional
+            Path to an ASCII multipole covariance file (flat n×n matrix, one row
+            per line, ordered [xi_0 bins, xi_2 bins, ...]).  The same layout is
+            used for data covariances (e.g. RascalC) and mock-stack covariances.
+        cov_rescale : float, optional
+            Multiplicative rescaling applied to the covariance matrix.
+        """
+        from scipy.sparse import csr_array as _csr
+
+        print(f'Reading multipole data file {data_path}\n')
+        raw = np.loadtxt(find_file(data_path), comments='#')
+
+        # Columns: s_mid, s_avg, xi_0, xi_2, [xi_4, ...], std_0, std_2, ...
+        # Infer how many multipoles are present in the file (each ell contributes
+        # one xi column and one std column, so total data columns = 2 * n_ells_file).
+        s_mid_all = raw[:, 0]
+        s_avg_all = raw[:, 1]
+        n_extra = raw.shape[1] - 2
+        if n_extra % 2 != 0:
+            raise ValueError(
+                f"Expected xi/std column pairs after s_mid/s_avg, got {n_extra} extra columns.")
+        n_ells_file = n_extra // 2
+        xi_file = raw[:, 2:2 + n_ells_file]
+        ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+        ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+        xi_all = xi_file[:, ell_file_indices]          # shape (n_s_all, nells)
+        # Apply separation cuts
+        s_min = cuts_config.getfloat('s-min', 0.)
+        s_max = cuts_config.getfloat('s-max', 300.)
+        mask_1d = (s_mid_all >= s_min) & (s_mid_all < s_max)
+
+        s_data = s_avg_all[mask_1d]                # measured bin centres
+        xi_cut = xi_all[mask_1d, :]
+        n_s = len(s_data)
+
+        # Bookkeeping for the global-covariance path.  The external global
+        # covariance (built by lyatools/scripts/build_global_cov3x2.py) stores
+        # the FULL, uncut QSO auto multipole block: n_ells_file ell-blocks,
+        # each spanning the full set of s-bins.  read_global_cov therefore needs the full s-grid size, the
+        # boolean cut mask over it, and the file-order indices of the fitted
+        # multipoles so it can select exactly the fitted (ell, s) bins.
+        ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+        self._mp_n_s_full = len(s_mid_all)
+        self._mp_full_s_mask = mask_1d.copy()
+        self._mp_n_ells_file = n_ells_file
+        self._mp_ell_file_indices = [ells_in_file.index(ell)
+                                     for ell in self.ells_to_model]
+
+        # Data vector: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
+        self._data_vec = np.concatenate([xi_cut[:, i] for i in range(self.nells)])
+
+        # Read covariance (ASCII multipole format: flat square matrix, one row/line)
+        if cov_path is not None:
+            print(f'Reading multipole covariance file {cov_path}\n')
+            cov_full = np.loadtxt(find_file(cov_path), comments='#')
+            n_cov = cov_full.shape[0]
+
+            # The covariance file may cover more multipoles than we are fitting
+            # (e.g. the file has ell=0,2,4 but model_multipoles = 0,2).
+            # Use the data-file column count to determine the number of multipoles
+            # in the covariance file, then extract only the fitted subset.
+            n_s_cov = n_cov // n_ells_file
+            if n_s_cov * n_ells_file != n_cov:
+                raise ValueError(
+                    f'Covariance size {n_cov} is not divisible by the number of '
+                    f'multipoles in the data file ({n_ells_file}). '
+                    f'Check the covariance file.')
+
+            # Reconstruct the s-bin centres assumed by the covariance file.
+            # The cov covers the same s range as the cuts; its bins are inferred
+            # from their count and the cut boundaries.
+            ds_cov = (s_max - s_min) / n_s_cov
+            s_cov_centers = s_min + (np.arange(n_s_cov) + 0.5) * ds_cov
+
+            # Match data s_avg values to covariance bins (nearest neighbour)
+            cov_idx = np.array(
+                [np.argmin(np.abs(s_cov_centers - sv)) for sv in s_data])
+
+            # The data file multipoles are assumed to be in the standard order
+            # [0, 2, 4, ...]. Find the position of each fitted ell in that sequence.
+            ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+            ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+
+            # Build full index array selecting only the fitted multipole blocks
+            all_cov_idx = np.concatenate(
+                [cov_idx + ell_i * n_s_cov for ell_i in ell_file_indices])
+            self._cov_mat = cov_full[np.ix_(all_cov_idx, all_cov_idx)].copy()
+
+            if cov_rescale is not None:
+                self._cov_mat *= cov_rescale
+
+        # Blinding flags (multipole data are not blinded through Vega)
+        self._blind = False
+        self._blinding_strat = None
+        self.cosmo_params = None
+        self.nb = None
+
+        # Scale-cut bookkeeping (stored for plotting)
+        self.r_min_cut = s_min
+        self.r_max_cut = s_max
+        self.mu_min_cut = 0.
+        self.mu_max_cut = 1.
+
+        # Data coordinates: lightweight 1-D s-only object.
+        # For QSO multipoles, prefer catalog-weighted mean redshift from
+        # weights-tracer over the global fit zeff.
+        z_eff = getattr(self.corr_item, 'z_eff', None)
+        z_model = z_eff
+        if (self.corr_item.tracer1.get('weights-path') is not None
+                and self.corr_item.tracer1['type'] == 'discrete'):
+            z_arr, w_arr = redshift_weights.load_tracer_redshift_weights(
+                self.corr_item.tracer1, config=self.corr_item.config)
+            z_qso = redshift_weights.weighted_mean_z(z_arr, w_arr)
+            self.corr_item.z_eff_QSO = z_qso
+            z_model = z_qso
+            print(f"INFO: {self.corr_item.name} multipole z_grid from catalog "
+                  f"weighted mean z_eff_QSO = {z_qso:.6f} "
+                  f"(global zeff = {z_eff})")
+
+        self.data_coordinates = MultipoleCoordinates(
+            s_data, self.ells_to_model, z_eff=z_model)
+
+        # Data mask is all-True (data vector is already cut to [s_min, s_max))
+        self.data_mask = np.ones(self.nells * n_s, dtype=bool)
+
+        # Model coordinates: 2D (r, mu) grid.
+        # r bins match the data s values so the multipole matrix is block-diagonal.
+        # mu bins run from 0 to 1 (auto-correlation symmetry).
+        n_mu_model = cuts_config.getint('n_mu_model', 100)
+
+        mu_arr = (0.5 + np.arange(n_mu_model)) / n_mu_model  # centres, 0→1
+        r_mesh, mu_mesh = np.meshgrid(s_data, mu_arr)         # (n_mu, n_s)
+        r_flat = r_mesh.flatten()                              # mu-major order
+        mu_flat = mu_mesh.flatten()
+
+        z_grid_model = (np.full(len(r_flat), float(z_model))
+                        if z_model is not None else None)
+        self.model_coordinates = RtRpCoordinates.init_from_r_mu_grids(
+            r_flat, mu_flat, z_eff=z_model)
+        if z_grid_model is not None:
+            self.model_coordinates.z_grid = z_grid_model
+        self.dist_model_coordinates = self.model_coordinates
+
+        # Model mask must match the OUTPUT of Model.compute(), which applies
+        # _multipole_matrix and returns a (n_ells * n_s)-element vector, not
+        # the (n_mu_model * n_s)-element internal grid.
+        self.model_mask = np.ones(self.nells * n_s, dtype=bool)
+
+        # Multipole projection matrix: maps xi(r, mu) on the model grid to
+        # xi_ell(s) on the data grid.
+        #
+        # RtRpCoordinates.init_from_r_mu_grids produces a meshgrid flattened in
+        # mu-major order: flat index k = mu_idx * n_s + r_idx.
+        # For data bin (ell_idx, s_j) the contributing model columns are
+        # k = 0*n_s+j, 1*n_s+j, ..., (n_mu-1)*n_s+j  i.e.  j::n_s.
+        leg_ells = get_legendre_bins(self.ells_to_model, n_mu_model, x_correlation=False)
+
+        n_data_total = self.nells * n_s
+        n_model_total = n_s * n_mu_model
+        mult_matrix = np.zeros((n_data_total, n_model_total))
+        for ell_idx in range(self.nells):
+            for j in range(n_s):
+                mult_matrix[ell_idx * n_s + j, j::n_s] = leg_ells[ell_idx]
+        self._multipole_matrix = _csr(mult_matrix)
+
+        # Signal to Model that it should apply _multipole_matrix
+        self.use_multipoles = True
+        self._rmu_binning = False
+
+        # full_data_size is used for identity-matrix fallbacks
+        self.full_data_size = len(self._data_vec)
 
     def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.
@@ -776,20 +980,37 @@ class Data:
 
         # Compute cholesky decomposition
         if (self._cholesky is None or self._recompute) and not forecast:
-            masked_cov = self.cov_mat[:, self.data_mask]
-            masked_cov = masked_cov[self.data_mask, :]
-            self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
+            if self.cholesky_masked_cov:
+                masked_cov = self.cov_mat[:, self.data_mask]
+                masked_cov = masked_cov[self.data_mask, :]
+                self._cholesky = np.linalg.cholesky(self._scale * masked_cov)
+            else:
+                self._cholesky = np.linalg.cholesky(self._scale * self.cov_mat)
 
         # Create the mock
         if seed is not None:
             np.random.seed(seed)
 
-        self.mc_mock = fiducial_model
-        if not forecast:
-            ran_vec = np.random.randn(self.data_mask.sum())
-            assert ran_vec.size == self.mc_mock.size, \
-                "Random vector size does not match Monte Carlo mock size"
-            self.mc_mock += self._cholesky.dot(ran_vec)
+        masked_fiducial = fiducial_model
+        if fiducial_model.size != self.full_data_size:
+            if fiducial_model.size != self.dist_model_coordinates.rp_grid.size:
+                raise ValueError("Could not match fiducial model to data or model size.")
+            mask = self.dist_model_coordinates.get_mask_to_other(self.data_coordinates)
+            masked_fiducial = fiducial_model[mask]
+
+        if forecast:
+            self.mc_mock = masked_fiducial
+        else:
+            self.mc_mock = np.full(self.full_data_size, np.nan)
+            if self.cholesky_masked_cov:
+                ran_vec = np.random.randn(self.data_mask.sum())
+                self.mc_mock[self.data_mask] = \
+                    masked_fiducial[self.data_mask] + self._cholesky.dot(ran_vec)
+            else:
+                ran_vec = np.random.randn(self.full_data_size)
+                self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
+
+        self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
 
