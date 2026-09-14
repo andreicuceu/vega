@@ -55,11 +55,13 @@ samplers = [
 ]
 # Install with: pip install .[dev]
 dev = [
+    "build>=1.2",
     "pytest>=7.0",
     "pytest-cov",
     "ruff",
     "pre-commit",
-    "tox"
+    "tox",
+    "twine>=5.0"
 ]
 # Install with: pip install .[docs]
 docs = [
