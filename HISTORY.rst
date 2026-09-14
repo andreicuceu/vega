@@ -2,6 +2,30 @@
 History
 =======
 
+1.7.7 (2026-09-14)
+------------------
+* Added support for correlation functions binned in (r, mu) and Legendre multipole
+  compression, including covariance and distortion matrices and metal correlations.
+* Added direct input of QSO auto-correlation multipoles and their covariance for
+  joint Ly-alpha auto, Ly-alpha-QSO cross, and QSO auto analyses, with consistent
+  separation cuts and multipole selection in the global covariance.
+* Added catalog-based redshift weights and bias evolution for QSO multipoles and
+  cross-correlations.
+* Added support for externally computed two-dimensional P(k, mu) models, including
+  metal contributions, with example notebooks for custom models and configurations.
+* Added the aiso/aap Alcock-Paczynski parametrization used in DESI galaxy analyses.
+* Added optional Hartlap corrections for individual and global covariances, with
+  the Percival correction applied to saved parameter errors and covariance for
+  global fits using the Hartlap correction.
+* Extended FITS output and fit postprocessing for multipoles, fit p-values, and
+  covariance corrections; added multipole plotting and improved four-wedge plots.
+* Fixed fiducial-model masking and Monte Carlo mock generation with global
+  covariances, and improved coordinate-binning checks.
+* Added a model-binning option to the configuration builder and updated small-scale
+  marginalization parameter handling.
+* Added tests and example configurations for QSO multipoles and catalog redshift
+  weights, updated the README, and required SciPy >= 1.12.0.
+
 1.7.6 (2026-07-31)
 ------------------
 * Migrated package setup from setup.py to modern pyproject.toml standard.
