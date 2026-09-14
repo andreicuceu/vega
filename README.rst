@@ -29,30 +29,36 @@ We recommend to start by creating a fresh conda environment:
     conda create --name vega python=3.13
     conda activate vega
 
-You can either clone the public repository:
+For a stable release, download the wheel and ``SHA256SUMS`` from the `GitHub
+Releases`_ page. Verify the downloaded file on Linux, then install it with:
+
+.. code-block:: console
+
+    sha256sum --check SHA256SUMS --ignore-missing
+    python -m pip install ./vega-X.Y.Z-py3-none-any.whl
+
+The wheel is the recommended installation artifact. If you need to build Vega
+from source, download the source distribution from the same release and run:
+
+.. code-block:: console
+
+    sha256sum --check SHA256SUMS --ignore-missing
+    python -m pip install ./vega-X.Y.Z.tar.gz
+
+For development, clone the public repository and install it in editable mode
+with the development dependencies:
 
 .. code-block:: console
 
     git clone https://github.com/andreicuceu/vega.git
-
-Or download the `tarball`_:
-
-.. code-block:: console
-
-    curl -OJL https://github.com/andreicuceu/Vega/tarball/master
-
-Once you have a copy of the source, you can install it with:
-
-.. code-block:: console
-
     cd vega
-    pip install -e .
+    python -m pip install -e '.[dev]'
 
-If you want to install the development version with all optional dependencies, you should run:
-
-.. code-block:: console
-
-    pip install -e .[dev]
+GitHub also generates ``Source code`` archives for tags. These are repository
+snapshots rather than the tested Python release artifacts. Archives for tags
+that contain ``.git_archival.txt`` can recover their version without a
+``.git`` directory, but the release wheel and source distribution remain the
+canonical installation inputs.
 
 If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
 
@@ -68,7 +74,7 @@ The sampler and a few other modules in Vega need mpi4py. If you are at NERSC, yo
 
 Vega currently has interfaces for one sampler: `Polychord`_. You do not need to install it to run the iminuit minimizer. You can find the instructions for installing at NERSC Polychord below.
 
-.. _tarball: https://github.com/andreicuceu/Vega/tarball/master
+.. _GitHub Releases: https://github.com/andreicuceu/Vega/releases
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
 Installing Polychord
@@ -103,7 +109,7 @@ After that, you can install PolyChord:
 
     make veryclean
     make COMPILER_TYPE=gnu
-    pip install -e .
+    python -m pip install .
 
 You can test if PolyChord works by running the test script on an interactive node:
 

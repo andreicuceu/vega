@@ -71,3 +71,68 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           verbose: true
+
+  package:
+    name: Validate distributions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the complete repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install packaging tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "build>=1.2" "twine>=5.0" ruff
+
+      - name: Check the distribution validator
+        run: |
+          ruff check .github/scripts/validate_distribution.py
+          ruff format --check .github/scripts/validate_distribution.py
+
+      - name: Validate checkout distributions
+        run: |
+          python .github/scripts/validate_distribution.py \
+            --source . \
+            --dist-dir "$RUNNER_TEMP/checkout-dist" \
+            --work-dir "$RUNNER_TEMP/checkout-validation" \
+            --version-file "$RUNNER_TEMP/checkout-version.txt"
+
+      - name: Create and inspect a Git archive
+        run: |
+          mkdir -p "$RUNNER_TEMP/git-archive"
+          git archive \
+            --format=tar \
+            --prefix=vega-archive/ \
+            --output="$RUNNER_TEMP/vega-git-archive.tar" \
+            HEAD
+          tar --extract \
+            --file="$RUNNER_TEMP/vega-git-archive.tar" \
+            --directory="$RUNNER_TEMP/git-archive"
+          test ! -e "$RUNNER_TEMP/git-archive/vega-archive/.git"
+          grep --fixed-strings --line-regexp \
+            "node: $(git rev-parse HEAD)" \
+            "$RUNNER_TEMP/git-archive/vega-archive/.git_archival.txt"
+          if grep --fixed-strings '$Format' \
+            "$RUNNER_TEMP/git-archive/vega-archive/.git_archival.txt"; then
+            echo "Git archive contains unexpanded version placeholders" >&2
+            exit 1
+          fi
+
+      - name: Validate Git-archive distributions
+        run: |
+          EXPECTED_VERSION=$(tr -d '\n' < "$RUNNER_TEMP/checkout-version.txt")
+          python .github/scripts/validate_distribution.py \
+            --source "$RUNNER_TEMP/git-archive/vega-archive" \
+            --dist-dir "$RUNNER_TEMP/archive-dist" \
+            --work-dir "$RUNNER_TEMP/archive-validation" \
+            --expected-version "$EXPECTED_VERSION" \
+            --skip-install
