@@ -214,9 +214,9 @@ class Analysis:
         self.current_mc_mock = np.concatenate([fiducial_model[name] for name in self._data])
         if not forecast:
             ran_vec = np.random.randn(full_data_mask.sum())
-            assert (
-                ran_vec.size == self.current_mc_mock.size
-            ), "Random vector size does not match Monte Carlo mock size"
+            assert ran_vec.size == self.current_mc_mock.size, (
+                "Random vector size does not match Monte Carlo mock size"
+            )
             self.current_mc_mock += self._cholesky_global_cov.dot(ran_vec)
 
         # Save both the full and concatenated Monte Carlo mocks
@@ -224,9 +224,9 @@ class Analysis:
         idx = 0
         for name in fiducial_model:
             size = fiducial_model[name].size
-            assert (
-                idx + size <= self.current_mc_mock.size
-            ), "Index exceeds the size of the Monte Carlo mock"
+            assert idx + size <= self.current_mc_mock.size, (
+                "Index exceeds the size of the Monte Carlo mock"
+            )
             self.unpacked_mc_mock[name] = self.current_mc_mock[idx : idx + size]
             idx += size
 

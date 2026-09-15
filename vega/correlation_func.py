@@ -67,7 +67,7 @@ class CorrelationFunction:
         self._is_auto = (self._tracer1["type"] == "continuous") and (
             self._tracer2["type"] == "continuous"
         )
-        self._corr_name = f'{tracer1["name"]}x{tracer2["name"]}'
+        self._corr_name = f"{tracer1['name']}x{tracer2['name']}"
         self._z_eff = fiducial["z_eff"]
         self._scale_params = scale_params
         self._metal_corr = metal_corr
@@ -302,7 +302,7 @@ class CorrelationFunction:
             return
 
         if cosmo is None:
-            print("Warning: No cosmology found in xcf files, " "using mean redshift evolution.")
+            print("Warning: No cosmology found in xcf files, using mean redshift evolution.")
             self._use_new_bias_evol = False
             return
 
@@ -684,7 +684,7 @@ class CorrelationFunction:
         """
         if self._tracer1["type"] != self._tracer2["type"]:
             raise ValueError(
-                "DESI instrumental systematics model only applies " "to auto-correlation functions."
+                "DESI instrumental systematics model only applies to auto-correlation functions."
             )
 
         rp = self._r * self._mu

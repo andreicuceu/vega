@@ -86,9 +86,9 @@ class BroadbandPolynomials:
         float or 1D Array
             Total broadband polynomial value(s) for the given position type
         """
-        assert pos_type in list(
-            self.bb_terms.keys()
-        ), f"pos_type must be one of {list(self.bb_terms.keys())}, got '{pos_type}'"
+        assert pos_type in list(self.bb_terms.keys()), (
+            f"pos_type must be one of {list(self.bb_terms.keys())}, got '{pos_type}'"
+        )
 
         if "pre" in pos_type:
             coordinates = self.model_coordinates
@@ -102,7 +102,7 @@ class BroadbandPolynomials:
             elif bb_term["func"] == "broadband_sky":
                 bb_poly = self._compute_broadband_sky(bb_term["name"], params, coordinates)
             else:
-                raise ValueError(f'Broadband function {bb_term["func"]} not supported')
+                raise ValueError(f"Broadband function {bb_term['func']} not supported")
 
             if bb_poly_total is None:
                 bb_poly_total = 1 + bb_poly if "mul" in pos_type else bb_poly
@@ -169,7 +169,7 @@ class BroadbandPolynomials:
             r1 = coordinates.r_grid / 100.0 * coordinates.mu_grid
             r2 = coordinates.r_grid / 100.0 * np.sqrt(1 - coordinates.mu_grid**2)
         else:
-            raise ValueError(f'Coordinates {bb_term["coordinates"]} not supported')
+            raise ValueError(f"Coordinates {bb_term['coordinates']} not supported")
 
         r1_min, r1_max, dr1 = bb_term["r1_config"]
         r2_min, r2_max, dr2 = bb_term["r2_config"]
@@ -179,7 +179,7 @@ class BroadbandPolynomials:
         bb_params = []
         for i in r1_powers:
             for j in r2_powers:
-                bb_params.append(params[f'{bb_term["name"]} ({i},{j})'])
+                bb_params.append(params[f"{bb_term['name']} ({i},{j})"])
 
         # the first dimension of bb_params is that of r1 power indices
         # the second dimension of bb_params is that of r2 power indices

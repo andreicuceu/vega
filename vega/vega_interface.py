@@ -432,9 +432,9 @@ class VegaInterface:
         if params is not None:
             local_params |= params
 
-        assert (
-            self._blind is not None
-        ), "Blinding flag is not set. Call _init_blinding() before computing the model."
+        assert self._blind is not None, (
+            "Blinding flag is not set. Call _init_blinding() before computing the model."
+        )
         if self._rnsps is not None:
             assert self._blind, (
                 "Blinding offsets (_rnsps) are set but blinding flag is False. "
@@ -524,9 +524,9 @@ class VegaInterface:
                 fiducial_path = self.main_config["control"].get(f"mc_fiducial_{name}")
                 with fits.open(utils.find_file(fiducial_path)) as hdul:
                     fiducial_model[name] = hdul[1].data["DA"]
-                assert (
-                    fiducial_model[name].size == self.data[name].full_data_size
-                ), f"Input fiducial model size for {name} does not match data size"
+                assert fiducial_model[name].size == self.data[name].full_data_size, (
+                    f"Input fiducial model size for {name} does not match data size"
+                )
 
                 fiducial_model[name] = fiducial_model[name][self.data[name].data_mask]
         else:
@@ -915,8 +915,7 @@ class VegaInterface:
             prior_list = prior.split()
             if len(prior_list) != 3:
                 raise ValueError(
-                    "Prior configuration must have the format:"
-                    ' "<param> = gaussian <mean> <sigma>"'
+                    'Prior configuration must have the format: "<param> = gaussian <mean> <sigma>"'
                 )
             if prior_list[0] not in ["gaussian", "Gaussian"]:
                 raise ValueError("Only gaussian priors are supported.")
@@ -1167,8 +1166,7 @@ class VegaInterface:
         for pindex, (pname, (pvalue, perror)) in enumerate(nominal.items()):
             if verbose:
                 print(
-                    f"Calculating sensitivity for [{pindex}] {pname} at"
-                    f" {pvalue:.4f} ± {perror:.4f}"
+                    f"Calculating sensitivity for [{pindex}] {pname} at {pvalue:.4f} ± {perror:.4f}"
                 )
 
             # Compute partial derivatives wrt to p for each multipole

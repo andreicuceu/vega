@@ -773,9 +773,9 @@ class Data:
         list or None, list or None, dict
             metals_in_tracer1, metals_in_tracer2, tracer_catalog
         """
-        assert ("in tracer1" in metal_config) or (
-            "in tracer2" in metal_config
-        ), "The metals config must specify 'in tracer1' and/or 'in tracer2'"
+        assert ("in tracer1" in metal_config) or ("in tracer2" in metal_config), (
+            "The metals config must specify 'in tracer1' and/or 'in tracer2'"
+        )
 
         # Read metal tracers
         metals_in_tracer1 = None

@@ -69,7 +69,7 @@ class Output:
         elif self.type == "hdf" or self.type == "h5":
             self.write_results_hdf(minimizer, scan_results)
         else:
-            raise ValueError("Unknown output type. Set type = fits" " or type = hdf")
+            raise ValueError("Unknown output type. Set type = fits or type = hdf")
 
     def write_results_fits(
         self,
@@ -581,9 +581,9 @@ class Output:
             CPU rank used for the output filename when running in parallel, by default None
         """
         assert self.analysis is not None, "Output.write_monte_carlo requires an Analysis object"
-        assert (
-            self.analysis.has_monte_carlo
-        ), "No Monte Carlo results found. Run Analysis.run_monte_carlo() first."
+        assert self.analysis.has_monte_carlo, (
+            "No Monte Carlo results found. Run Analysis.run_monte_carlo() first."
+        )
 
         primary_hdu = fits.PrimaryHDU()
         hdu_list = [primary_hdu]
@@ -663,7 +663,7 @@ class Output:
         """
         if minimizer is None:
             raise ValueError(
-                "The hdf output format is outdated and" " does not work without minimization"
+                "The hdf output format is outdated and does not work without minimization"
             )
         h5_file = h5py.File(Path(self.outfile), "w")
 

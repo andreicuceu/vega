@@ -1067,7 +1067,8 @@ class VegaPlots:
                 ylabel = rf"$\xi_{ell}(s)$"
             else:
                 ylabel = (
-                    rf"$s^{s_power}\,\xi_{ell}(s)$" rf" $[(h^{{-1}}\,\mathrm{{Mpc}})^{s_power-1}]$"
+                    rf"$s^{s_power}\,\xi_{ell}(s)$"
+                    rf" $[(h^{{-1}}\,\mathrm{{Mpc}})^{s_power - 1}]$"
                 )
             ax.set_ylabel(ylabel)
 

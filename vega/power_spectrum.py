@@ -181,7 +181,7 @@ class PowerSpectrum:
             elif "exp" in smoothing_type:
                 pk_full *= self.compute_fullshape_exp_smoothing(params)
             else:
-                raise ValueError('"fullshape smoothing" must be of type' ' "gauss" or "exp".')
+                raise ValueError('"fullshape smoothing" must be of type "gauss" or "exp".')
 
         # add velocity dispersion
         if "velocity dispersion" in self._config:
@@ -194,7 +194,7 @@ class PowerSpectrum:
                 pk_full *= self.compute_velocity_dispersion_lorentz(params)
                 pk_full *= self.compute_velocity_dispersion_gauss(params)
             else:
-                raise ValueError('"velocity dispersion" must be of type' ' "gauss" or "lorentz".')
+                raise ValueError('"velocity dispersion" must be of type "gauss" or "lorentz".')
 
         # P(k) damping at high k
         if self.pk_damping_scale is not None:
@@ -309,7 +309,7 @@ class PowerSpectrum:
             self._compute_hcd_cached(self._hcd_sinc, L0)
         else:
             raise ValueError(
-                f"Unknown hcd model {self.hcd_model}. " "Choose from ['Rogers', 'fvoigt', 'sinc']"
+                f"Unknown hcd model {self.hcd_model}. Choose from ['Rogers', 'fvoigt', 'sinc']"
             )
 
         bias_eff = bias + bias_hcd * self._F_hcd
@@ -411,9 +411,7 @@ class PowerSpectrum:
         elif sigma_trans is None and sigma_par is not None:
             sigma_trans = sigma_par / (1 + growth_rate)
         elif sigma_par is None and sigma_trans is None:
-            raise ValueError(
-                "No parameters for peak NL found." " Add sigmaNL_par and/or sigmaNL_par."
-            )
+            raise ValueError("No parameters for peak NL found. Add sigmaNL_par and/or sigmaNL_par.")
 
         if self._peak_nl_pars is None:
             self._peak_nl_pars = np.array([sigma_par, sigma_trans]) + 1

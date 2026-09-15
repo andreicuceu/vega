@@ -460,9 +460,9 @@ class Metals:
         array, array
             Wavelength array and corresponding weight array
         """
-        assert (
-            main_tracer["type"] == "continuous"
-        ), f"get_forest_weights expects a continuous tracer, got '{main_tracer['type']}'"
+        assert main_tracer["type"] == "continuous", (
+            f"get_forest_weights expects a continuous tracer, got '{main_tracer['type']}'"
+        )
         rebin_factor = self.metal_matrix_config.getint("rebin_factor", fallback=None)
         return redshift_weights.get_forest_weights(
             main_tracer["weights-path"], rebin_factor=rebin_factor
@@ -481,9 +481,9 @@ class Metals:
         array, array
             Weighted mean redshifts per bin and corresponding weight sums
         """
-        assert (
-            tracer["type"] == "discrete"
-        ), f"get_qso_weights expects a discrete tracer, got '{tracer['type']}'"
+        assert tracer["type"] == "discrete", (
+            f"get_qso_weights expects a discrete tracer, got '{tracer['type']}'"
+        )
         return redshift_weights.get_qso_weights(
             tracer["weights-path"],
             z_ref=self.metal_matrix_config.getfloat("z_ref_objects", 2.25),
