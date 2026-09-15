@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "setuptools_scm>=8.0"]
+requires = ["setuptools>=77.0.3", "setuptools_scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "vega"
 dynamic = ["version"]
 description = "A tool for computing 3D correlation function models for tracers used by the Ly-α forest group and for fitting data."
 readme = "README.rst"
-license = {text = "GPL-3.0"}
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [
     {name = "Andrei Cuceu", email = "andreicuceu@gmail.com"}
 ]
@@ -15,7 +16,6 @@ requires-python = ">=3.9"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
