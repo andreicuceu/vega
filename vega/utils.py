@@ -1,26 +1,30 @@
 import os.path
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
+from cachetools import LRUCache, cached
+from cachetools.keys import hashkey
+from numba import float64, njit
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
-from numba import njit, float64
-from cachetools import cached, LRUCache
-from cachetools.keys import hashkey
 
 import vega
 
 CACHE_SMOOTHING = LRUCache(128)
 
 BLIND_FIXED_PARS = [
-    'ap_full', 'at_full', 'aiso_full', 'epsilon_full', 'phi_full',  # 'alpha_full'
+    "ap_full",
+    "at_full",
+    "aiso_full",
+    "epsilon_full",
+    "phi_full",  # 'alpha_full'
 ]
 
 # Dictionary with blinded parameters and the tracers for which they are blinded
 VEGA_BLINDED_PARS = {
-    'phi_smooth': ['all'],
-    'growth_rate': ['all'],
+    "phi_smooth": ["all"],
+    "growth_rate": ["all"],
     # 'alpha_smooth': ['all'],
 }
 
@@ -39,12 +43,12 @@ def sinc(x):
     float or array
         sin(x) / x
     """
-    return np.sin(x)/x
+    return np.sin(x) / x
 
 
 def bin_averaged_legendre(mu, ell, dmu):
-    mu1 = np.clip(mu - dmu / 2., -1., 1.)
-    mu2 = np.clip(mu + dmu / 2., -1., 1.)
+    mu1 = np.clip(mu - dmu / 2.0, -1.0, 1.0)
+    mu2 = np.clip(mu + dmu / 2.0, -1.0, 1.0)
     legint = np.polynomial.legendre.Legendre.basis(ell).integ()
     return (legint(mu2) - legint(mu1)) / (mu2 - mu1)
 
@@ -68,9 +72,8 @@ def get_legendre_bins(ells, nmu, x_correlation):
     f = 0.5 if x_correlation else 1.0
 
     leg_ells = [
-        np.polynomial.legendre.Legendre.basis(ell).integ()(mue)
-        * f * (2 * ell + 1)
-        for ell in ells]
+        np.polynomial.legendre.Legendre.basis(ell).integ()(mue) * f * (2 * ell + 1) for ell in ells
+    ]
     leg_ells = [le[1:] - le[:-1] for le in leg_ells]
 
     return leg_ells
@@ -85,7 +88,8 @@ def percival_correction(nsamples, nbins, nparams):
     A, B = 2.0 / denom, (a - 2.0) / denom
     if a <= 4:
         raise ValueError(
-            "Number of samples must be greater than number of bins + 4 for Percival correction.")
+            "Number of samples must be greater than number of bins + 4 for Percival correction."
+        )
 
     return (1.0 + B * (nbins - nparams)) / (1.0 + A + B * (nparams - 1))
 
@@ -107,14 +111,16 @@ def _tracer_bias_beta(params, name):
     """
     growth_rate = params.get("growth_rate", 0.970386)
 
-    bias = params.get('bias_' + name, None)
-    bias_eta = params.get('bias_eta_' + name, None)
-    beta = params.get('beta_' + name, None)
+    bias = params.get("bias_" + name, None)
+    bias_eta = params.get("bias_eta_" + name, None)
+    beta = params.get("beta_" + name, None)
 
-    err_msg = ("For each tracer, you need to specify two of these three:"
-               " (bias, bias_eta, beta)."
-               " If all three are given, we use bias and beta. "
-               f"Offending tracer: {name}")
+    err_msg = (
+        "For each tracer, you need to specify two of these three:"
+        " (bias, bias_eta, beta)."
+        " If all three are given, we use bias and beta. "
+        f"Offending tracer: {name}"
+    )
 
     if bias is None:
         assert bias_eta is not None and beta is not None, err_msg
@@ -169,7 +175,7 @@ def convert_instance_to_dictionary(inst):
     dict
         Dictionary of non-dunder attribute names to their values
     """
-    dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith('__'))
+    dic = dict((name, getattr(inst, name)) for name in dir(inst) if not name.startswith("__"))
     return dic
 
 
@@ -193,7 +199,7 @@ def hubble(z, Omega_m, Omega_de):
         Hubble parameter
     """
     Omega_k = 1 - Omega_m - Omega_de
-    e_z = np.sqrt(Omega_m * (1 + z)**3 + Omega_de + Omega_k * (1 + z)**2)
+    e_z = np.sqrt(Omega_m * (1 + z) ** 3 + Omega_de + Omega_k * (1 + z) ** 2)
     return e_z
 
 
@@ -216,8 +222,8 @@ def growth_integrand(a, Omega_m, Omega_de):
         Growth integrand
     """
     z = 1 / a - 1
-    inv_int = (a * hubble(z, Omega_m, Omega_de))**3
-    return 1./inv_int
+    inv_int = (a * hubble(z, Omega_m, Omega_de)) ** 3
+    return 1.0 / inv_int
 
 
 @lru_cache(maxsize=32)
@@ -247,10 +253,10 @@ def get_growth_interp(Omega_m, Omega_de):
         args = (Omega_m, Omega_de)
         growth_int = quad(growth_integrand, 0, a, args=args)[0]
         hubble_par = hubble(z, Omega_m, Omega_de)
-        growth[i] = 5./2. * Omega_m * hubble_par * growth_int
+        growth[i] = 5.0 / 2.0 * Omega_m * hubble_par * growth_int
 
     # Return growth interpolation
-    return interp1d(z_grid, growth, kind='cubic')
+    return interp1d(z_grid, growth, kind="cubic")
 
 
 def growth_function(z, Omega_m, Omega_de):
@@ -276,7 +282,7 @@ def growth_function(z, Omega_m, Omega_de):
 
 
 def find_file(path):
-    """ Find files on the system.
+    """Find files on the system.
 
     Checks if it's an absolute path or something inside vega,
     and returns a proper path.
@@ -299,12 +305,12 @@ def find_file(path):
     vega_path = Path(os.path.dirname(vega.__file__))
 
     # Check if it's a model
-    model = vega_path / 'models' / input_path
+    model = vega_path / "models" / input_path
     if model.is_file():
         return model
 
     # Check if it's something used for tests
-    test = vega_path.parents[0] / 'tests' / input_path
+    test = vega_path.parents[0] / "tests" / input_path
     if test.is_file():
         return test
 
@@ -313,7 +319,7 @@ def find_file(path):
     if in_vega.is_file():
         return in_vega
 
-    raise RuntimeError('The path/file does not exists: ', input_path)
+    raise RuntimeError("The path/file does not exists: ", input_path)
 
 
 def compute_masked_invcov(cov_mat, data_mask):
@@ -333,15 +339,15 @@ def compute_masked_invcov(cov_mat, data_mask):
 
     try:
         np.linalg.cholesky(cov_mat)
-        print('LOG: Full matrix is positive definite')
+        print("LOG: Full matrix is positive definite")
     except np.linalg.LinAlgError:
-        print('WARNING: Full matrix is not positive definite')
+        print("WARNING: Full matrix is not positive definite")
 
     try:
         np.linalg.cholesky(masked_cov)
-        print('LOG: Reduced matrix is positive definite')
+        print("LOG: Reduced matrix is positive definite")
     except np.linalg.LinAlgError:
-        print('WARNING: Reduced matrix is not positive definite')
+        print("WARNING: Reduced matrix is not positive definite")
 
     return np.linalg.inv(masked_cov)
 
@@ -367,33 +373,27 @@ def compute_log_cov_det(cov_mat, data_mask):
 
 
 def get_blinding(blind_pars, blinding_strat):
-    assert blinding_strat is not None, 'Blinding failed, do not run!!!'
-    print(f'Blinding parameters: {blind_pars}')
+    assert blinding_strat is not None, "Blinding failed, do not run!!!"
+    print(f"Blinding parameters: {blind_pars}")
 
-    if ('ap' in blind_pars) or ('at' in blind_pars) or ('alpha' in blind_pars):
-        blinding_type = 'bao'
-    elif ('growth_rate' in blind_pars) or ('phi_smooth' in blind_pars):
-        blinding_type = 'full-shape'
+    if ("ap" in blind_pars) or ("at" in blind_pars) or ("alpha" in blind_pars):
+        blinding_type = "bao"
+    elif ("growth_rate" in blind_pars) or ("phi_smooth" in blind_pars):
+        blinding_type = "full-shape"
     else:
-        raise ValueError(f'No blinding implemented for parameters {blind_pars}')
+        raise ValueError(f"No blinding implemented for parameters {blind_pars}")
 
-    blind_dir = '/global/cfs/projectdirs/desicollab/science/lya/vega/'
+    # blind_dir = "/global/cfs/projectdirs/desicollab/science/lya/vega/"
     blinding_choices = {
-        'desi_y1': {
-            'full-shape': None,
-            'bao': None
-        },
-        'desi_y3': {
-            'full-shape': None,
-            'bao': None
-        }
+        "desi_y1": {"full-shape": None, "bao": None},
+        "desi_y3": {"full-shape": None, "bao": None},
     }
 
     if blinding_strat not in blinding_choices:
-        raise ValueError(f'Unknown blinding version: {blinding_strat}.')
+        raise ValueError(f"Unknown blinding version: {blinding_strat}.")
 
-    if blinding_strat == 'desi_y5':
-        raise ValueError('Blinding strategy desi_y5 is not implemented yet.')
+    if blinding_strat == "desi_y5":
+        raise ValueError("Blinding strategy desi_y5 is not implemented yet.")
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
     if blinding_file is None:
@@ -401,19 +401,24 @@ def get_blinding(blind_pars, blinding_strat):
 
     if not blinding_file.exists():
         raise ValueError(
-            f'Blinding file not found: {blinding_file}. Full-shape analyses must be run at NERSC.')
+            f"Blinding file not found: {blinding_file}. Full-shape analyses must be run at NERSC."
+        )
 
     blinding = {}
     with np.load(blinding_file) as file:
         for par in blind_pars:
             if par not in VEGA_BLINDED_PARS:
-                raise ValueError(f'Blinding for parameter {par} not implemented.')
-            if par == 'alpha':
-                dap = float(file['ap'])
-                dat = float(file['at'])
-                blinding[par] = np.sqrt(np.log(
-                    np.pi - np.sqrt((1 + np.pi - np.exp(dap**2)) * (1 + np.pi - np.exp(dat**2))) + 1
-                    ))
+                raise ValueError(f"Blinding for parameter {par} not implemented.")
+            if par == "alpha":
+                dap = float(file["ap"])
+                dat = float(file["at"])
+                blinding[par] = np.sqrt(
+                    np.log(
+                        np.pi
+                        - np.sqrt((1 + np.pi - np.exp(dap**2)) * (1 + np.pi - np.exp(dat**2)))
+                        + 1
+                    )
+                )
             else:
                 blinding[par] = float(file[par])
 
@@ -436,14 +441,14 @@ def apply_blinding(params, blinding):
         The modified params dictionary
     """
     for par, val in blinding.items():
-        params[par] += (np.pi - np.exp(val**2))
+        params[par] += np.pi - np.exp(val**2)
 
     return params
 
 
 @cached(
     cache=CACHE_SMOOTHING,
-    key=lambda sigma_par, sigma_trans, k_par_grid, k_trans_grid: hashkey(sigma_par, sigma_trans)
+    key=lambda sigma_par, sigma_trans, k_par_grid, k_trans_grid: hashkey(sigma_par, sigma_trans),
 )
 @njit
 def compute_gauss_smoothing(sigma_par, sigma_trans, k_par_grid, k_trans_grid):
@@ -486,7 +491,7 @@ def compute_kn_smoothing(scale_par, k_grid, n):
     array
         Smoothing factor
     """
-    return np.exp(-scale_par**2*k_grid**n/2)
+    return np.exp(-(scale_par**2) * k_grid**n / 2)
 
 
 class VegaModelError(Exception):

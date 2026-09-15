@@ -12,7 +12,8 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 .. toctree::
    :maxdepth: 2
 
-   Introduction and Installation <intro>
+   Introduction <intro>
+   Installation <install>
 
 There are several tutorials and examples available to help you get started with Vega:
 

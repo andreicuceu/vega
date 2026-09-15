@@ -1,21 +1,19 @@
 import copy
 
 import numpy as np
-from astropy.io import fits
 from picca import constants as picca_constants
-from scipy.sparse import csr_matrix
 from scipy.interpolate import RegularGridInterpolator
+from scipy.sparse import csr_matrix
 
-from . import coordinates
+from . import coordinates, pktoxi, power_spectrum, redshift_weights, utils
 from . import correlation_func as corr_func
-from . import pktoxi, power_spectrum, utils
-from . import redshift_weights
 
 
 class Metals:
     """
     Class for computing metal correlations
     """
+
     # cache_pk = LRUCache(128)
     # cache_xi = LRUCache(128)
     growth_rate = None
@@ -45,7 +43,7 @@ class Metals:
         # self.PktoXi = PktoXi_obj
         self.size = corr_item.model_coordinates.rp_grid.size
         if self._rmu_binning:
-            ups = corr_item.config['model'].getint('rmu_metal_grid_factor', 1)
+            ups = corr_item.config["model"].getint("rmu_metal_grid_factor", 1)
             self._coordinates = copy.deepcopy(corr_item.model_coordinates)
             self._coordinates.rp_binsize /= ups
             self._coordinates.rt_binsize /= ups
@@ -54,18 +52,19 @@ class Metals:
         else:
             self._coordinates = corr_item.model_coordinates
 
-        self.rp_only_metal_mats = corr_item.config['model'].getboolean('rp_only_metal_mats', False)
+        self.rp_only_metal_mats = corr_item.config["model"].getboolean("rp_only_metal_mats", False)
 
         # Redshift bins
-        self.zmin = corr_item.config['data'].getfloat('zmin', 0.0)
-        self.zmax = corr_item.config['data'].getfloat('zmax', 10.0)
+        self.zmin = corr_item.config["data"].getfloat("zmin", 0.0)
+        self.zmax = corr_item.config["data"].getfloat("zmax", 10.0)
 
-        self.separate_metal_auto_biases = corr_item.config['model'].getboolean(
-            'separate-metal-auto-biases', False)
-        self.single_metal_beta = corr_item.config['model'].getboolean('single-metal-beta', False)
+        self.separate_metal_auto_biases = corr_item.config["model"].getboolean(
+            "separate-metal-auto-biases", False
+        )
+        self.single_metal_beta = corr_item.config["model"].getboolean("single-metal-beta", False)
 
-        self.fast_metals = corr_item.config['model'].getboolean('fast_metals', False)
-        self.fast_metal_bias = corr_item.config['model'].getboolean('fast_metal_bias', True)
+        self.fast_metals = corr_item.config["model"].getboolean("fast_metals", False)
+        self.fast_metal_bias = corr_item.config["model"].getboolean("fast_metal_bias", True)
         if self.fast_metals or self.separate_metal_auto_biases:
             self.fast_metal_bias = True
 
@@ -73,51 +72,60 @@ class Metals:
         self.cache_xi_metal_cross_main = {}
 
         # Read the growth rate and sigma_smooth from the fiducial config
-        if 'growth_rate' in fiducial:
-            self.growth_rate = fiducial['growth_rate']
+        if "growth_rate" in fiducial:
+            self.growth_rate = fiducial["growth_rate"]
 
-        self.save_components = fiducial.get('save-components', False)
+        self.save_components = fiducial.get("save-components", False)
 
         if self.save_components and (self.fast_metals or self.separate_metal_auto_biases):
-            raise ValueError("Cannot save pk/cf components in fast_metals mode."
-                             " Either turn fast_metals off, or turn off write_pk/write_cf.")
+            raise ValueError(
+                "Cannot save pk/cf components in fast_metals mode."
+                " Either turn fast_metals off, or turn off write_pk/write_cf."
+            )
 
-        self.pk = {'peak': {}, 'smooth': {}, 'full': {}}
-        self.xi = {'peak': {}, 'smooth': {}, 'full': {}}
-        self.xi_distorted = {'peak': {}, 'smooth': {}, 'full': {}}
+        self.pk = {"peak": {}, "smooth": {}, "full": {}}
+        self.xi = {"peak": {}, "smooth": {}, "full": {}}
+        self.xi_distorted = {"peak": {}, "smooth": {}, "full": {}}
 
         # Build a mask for the cross-correlations with the main tracers (Lya, QSO)
-        self.main_tracers = [corr_item.tracer1['name'], corr_item.tracer2['name']]
-        self.is_auto_correlation = (self.main_tracers[0] == self.main_tracers[1])
-        self.main_tracer_types = [corr_item.tracer1['type'], corr_item.tracer2['type']]
-        self.main_cross_mask = [tracer1 in self.main_tracers or tracer2 in self.main_tracers
-                                for (tracer1, tracer2) in corr_item.metal_correlations]
+        self.main_tracers = [corr_item.tracer1["name"], corr_item.tracer2["name"]]
+        self.is_auto_correlation = self.main_tracers[0] == self.main_tracers[1]
+        self.main_tracer_types = [corr_item.tracer1["type"], corr_item.tracer2["type"]]
+        self.main_cross_mask = [
+            tracer1 in self.main_tracers or tracer2 in self.main_tracers
+            for (tracer1, tracer2) in corr_item.metal_correlations
+        ]
 
         self._interp_coords = None
         self._interp = None
         # If in new metals mode, read the stacked delta files
         self.new_metals = corr_item.new_metals
         if self.new_metals:
-            self.metal_matrix_config = corr_item.config['metal-matrix']
+            self.metal_matrix_config = corr_item.config["metal-matrix"]
             self.rp_nbins = self._coordinates.rp_nbins
             self.rt_nbins = self._coordinates.rt_nbins
             self.size = self.rp_nbins * self.rt_nbins
 
             if self._rmu_binning:
                 rpg = np.linspace(
-                    self._coordinates.rp_min, self._coordinates.rp_max,
-                    self.rp_nbins + 1)
+                    self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1
+                )
                 rpg = (rpg[1:] + rpg[:-1]) / 2
                 rtg = np.arange(
-                    self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
-                    self._coordinates.rt_binsize
+                    self._coordinates.rt_binsize / 2,
+                    self._coordinates.rt_max,
+                    self._coordinates.rt_binsize,
                 )
-                self._interp_coords = np.vstack([
-                    corr_item.model_coordinates.rp_grid,
-                    corr_item.model_coordinates.rt_grid]).T
+                self._interp_coords = np.vstack(
+                    [corr_item.model_coordinates.rp_grid, corr_item.model_coordinates.rt_grid]
+                ).T
                 self._interp = RegularGridInterpolator(
-                    (rpg, rtg), np.zeros((rpg.size, rtg.size)),
-                    method='linear', bounds_error=False, fill_value=None)
+                    (rpg, rtg),
+                    np.zeros((rpg.size, rtg.size)),
+                    method="linear",
+                    bounds_error=False,
+                    fill_value=None,
+                )
 
         # Initialize metals
         self.Pk_metal = {}
@@ -140,7 +148,8 @@ class Metals:
 
                     self.rp_metal_dmats[corr_hash] = dmat
                     metal_coordinates = coordinates.RtRpCoordinates.init_from_grids(
-                        self._coordinates, rp_grid, rt_grid, z_grid)
+                        self._coordinates, rp_grid, rt_grid, z_grid
+                    )
                 else:
                     # Read rp and rt for the metal correlation
                     if corr_hash in data.metal_coordinates:
@@ -150,19 +159,25 @@ class Metals:
 
                 # Get bin sizes
                 if self._data is not None:
-                    corr_item.config['metals']['bin_size_rp'] = \
-                        str(corr_item.data_coordinates.rp_binsize)
-                    corr_item.config['metals']['bin_size_rt'] = \
-                        str(corr_item.data_coordinates.rt_binsize)
+                    corr_item.config["metals"]["bin_size_rp"] = str(
+                        corr_item.data_coordinates.rp_binsize
+                    )
+                    corr_item.config["metals"]["bin_size_rt"] = str(
+                        corr_item.data_coordinates.rt_binsize
+                    )
 
                 # Initialize the metal correlation P(k)
                 self.Pk_metal[corr_hash] = power_spectrum.PowerSpectrum(
-                        self._corr_item.config['metals'], fiducial,
-                        tracer1, tracer2, self._corr_item.name
-                    )
+                    self._corr_item.config["metals"],
+                    fiducial,
+                    tracer1,
+                    tracer2,
+                    self._corr_item.name,
+                )
 
                 self.PktoXi[corr_hash] = pktoxi.PktoXi.init_from_Pk(
-                    self.Pk_metal[corr_hash], corr_item.config['model'])
+                    self.Pk_metal[corr_hash], corr_item.config["model"]
+                )
 
                 # assert len(self.Pk_metal[(name1, name2)].muk_grid) == len(self.Pk_core.muk_grid)
                 # assert self._corr_item.config['metals'].getint('ell_max', ell_max) == ell_max, \
@@ -170,8 +185,14 @@ class Metals:
 
                 # Initialize the metal correlation Xi
                 self.Xi_metal[corr_hash] = corr_func.CorrelationFunction(
-                    self._corr_item.config['metals'], fiducial, metal_coordinates,
-                    scale_params, tracer1, tracer2, metal_corr=True, cosmo=self.cosmo
+                    self._corr_item.config["metals"],
+                    fiducial,
+                    metal_coordinates,
+                    scale_params,
+                    tracer1,
+                    tracer2,
+                    metal_corr=True,
+                    cosmo=self.cosmo,
                 )
 
     def compute_xi_metal_metal(self, pk_lin, pars, corr_hash):
@@ -197,7 +218,8 @@ class Metals:
             return self.cache_xi_metal_metal[corr_hash]
 
         self.cache_xi_metal_metal[corr_hash] = self.compute_metal_corr_slow(
-            pars, pk_lin, corr_hash, fast_metals=True)
+            pars, pk_lin, corr_hash, fast_metals=True
+        )
 
         return self.cache_xi_metal_metal[corr_hash]
 
@@ -231,7 +253,8 @@ class Metals:
             xi = self.cache_xi_metal_cross_main[xi_hash]
         else:
             xi = self.compute_metal_corr_slow(
-                pars, pk_lin, corr_hash, fast_metals=True, add_metal_dmat=False)
+                pars, pk_lin, corr_hash, fast_metals=True, add_metal_dmat=False
+            )
             self.cache_xi_metal_cross_main[xi_hash] = xi
 
         # Add the correct metal dmats for each correlation
@@ -272,8 +295,8 @@ class Metals:
             xi *= 2
 
         if self.save_components:
-            assert not fast_metals, 'You need to set fast_metal_bias=False.'
-            assert component is not None, 'You need to provide component name.'
+            assert not fast_metals, "You need to set fast_metal_bias=False."
+            assert component is not None, "You need to provide component name."
             self.pk[component][corr_hash] = copy.deepcopy(pk)
             self.xi[component][corr_hash] = copy.deepcopy(xi)
 
@@ -311,8 +334,8 @@ class Metals:
 
         # TODO Check growth rate and sigma_smooth exist. They should be in the fiducial config.
         if self.fast_metals:
-            if 'growth_rate' in local_pars and self.growth_rate is not None:
-                local_pars['growth_rate'] = self.growth_rate
+            if "growth_rate" in local_pars and self.growth_rate is not None:
+                local_pars["growth_rate"] = self.growth_rate
 
         xi_metals = np.zeros(self.size)
         self.cache_xi_metal_cross_main = {}  # clear cache each time compute is called
@@ -321,21 +344,21 @@ class Metals:
 
             if self.single_metal_beta:
                 if name1 not in self.main_tracers:
-                    local_pars[f'beta_{name1}'] = local_pars['beta_metals']
+                    local_pars[f"beta_{name1}"] = local_pars["beta_metals"]
                 if name2 not in self.main_tracers:
-                    local_pars[f'beta_{name2}'] = local_pars['beta_metals']
+                    local_pars[f"beta_{name2}"] = local_pars["beta_metals"]
 
             bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
 
-            is_cross_with_main_tracer = (name1 in self.main_tracers or name2 in self.main_tracers)
+            is_cross_with_main_tracer = name1 in self.main_tracers or name2 in self.main_tracers
 
             if is_cross_with_main_tracer:
                 bias_product = bias1 * bias2
             elif self.separate_metal_auto_biases and name1 != name2:
-                if f'bias_{name1}_{name2}' in local_pars:
-                    bias_auto_factor = local_pars.get(f'bias_{name1}_{name2}', 1.0)
-                elif f'bias_{name2}_{name1}' in local_pars:
-                    bias_auto_factor = local_pars.get(f'bias_{name2}_{name1}', 1.0)
+                if f"bias_{name1}_{name2}" in local_pars:
+                    bias_auto_factor = local_pars.get(f"bias_{name1}_{name2}", 1.0)
+                elif f"bias_{name2}_{name1}" in local_pars:
+                    bias_auto_factor = local_pars.get(f"bias_{name2}_{name1}", 1.0)
                 else:
                     raise ValueError(
                         f"Separate metal auto biases is on, but no bias_{name1}_{name2}"
@@ -347,19 +370,23 @@ class Metals:
 
             if self.fast_metals and is_cross_with_main_tracer:
                 xi_metals += bias_product * self.compute_xi_metal_cross_main(
-                    pk_lin, local_pars, corr_hash, beta1, beta2)
+                    pk_lin, local_pars, corr_hash, beta1, beta2
+                )
 
             elif self.fast_metals:
                 xi_metals += bias_product * self.compute_xi_metal_metal(
-                    pk_lin, local_pars, corr_hash)
+                    pk_lin, local_pars, corr_hash
+                )
 
             else:
                 # If not in fast metals mode, compute the usual way
                 # Slow mode also allows the full save of components
                 xi = self.compute_metal_corr_slow(
-                    local_pars, pk_lin, corr_hash,
+                    local_pars,
+                    pk_lin,
+                    corr_hash,
                     fast_metals=self.fast_metal_bias,
-                    component=component
+                    component=component,
                 )
                 if self.fast_metal_bias:
                     xi_metals += bias_product * xi
@@ -390,8 +417,7 @@ class Metals:
         if self.new_metals:
             if self.rp_only_metal_mats:
                 dmat_xi = (
-                    self.rp_metal_dmats[corr_hash]
-                    @ xi.reshape(self.rp_nbins, self.rt_nbins)
+                    self.rp_metal_dmats[corr_hash] @ xi.reshape(self.rp_nbins, self.rt_nbins)
                 ).flatten()
             else:
                 dmat_xi = self.rp_metal_dmats[corr_hash] @ xi
@@ -434,12 +460,13 @@ class Metals:
         array, array
             Wavelength array and corresponding weight array
         """
-        assert main_tracer['type'] == 'continuous', (
+        assert main_tracer["type"] == "continuous", (
             f"get_forest_weights expects a continuous tracer, got '{main_tracer['type']}'"
         )
-        rebin_factor = self.metal_matrix_config.getint('rebin_factor', fallback=None)
+        rebin_factor = self.metal_matrix_config.getint("rebin_factor", fallback=None)
         return redshift_weights.get_forest_weights(
-            main_tracer['weights-path'], rebin_factor=rebin_factor)
+            main_tracer["weights-path"], rebin_factor=rebin_factor
+        )
 
     def get_qso_weights(self, tracer):
         """Read QSO redshifts and compute weighted redshift bins from the catalog file.
@@ -454,15 +481,16 @@ class Metals:
         array, array
             Weighted mean redshifts per bin and corresponding weight sums
         """
-        assert tracer['type'] == 'discrete', (
+        assert tracer["type"] == "discrete", (
             f"get_qso_weights expects a discrete tracer, got '{tracer['type']}'"
         )
         return redshift_weights.get_qso_weights(
-            tracer['weights-path'],
-            z_ref=self.metal_matrix_config.getfloat('z_ref_objects', 2.25),
-            z_evol=self.metal_matrix_config.getfloat('z_evol_objects', 1.44),
-            z_bins=self.metal_matrix_config.getint('z_bins_objects', 1000),
+            tracer["weights-path"],
+            z_ref=self.metal_matrix_config.getfloat("z_ref_objects", 2.25),
+            z_evol=self.metal_matrix_config.getfloat("z_evol_objects", 1.44),
+            z_bins=self.metal_matrix_config.getint("z_bins_objects", 1000),
         )
+
     def get_rp_pairs(self, z1, z2):
         """Compute line-of-sight separation pairs and mean comoving distances.
 
@@ -479,14 +507,13 @@ class Metals:
             rp_pairs (all z1-z2 pair separations) and mean_distance (mean comoving distances)
         """
         if np.any(z1 < 0) or np.any(z2 < 0):
-            raise ValueError(
-                "Attempting to compute distance to a negative redshift")
+            raise ValueError("Attempting to compute distance to a negative redshift")
         r1 = self.cosmo.get_r_comov(z1)
         r2 = self.cosmo.get_r_comov(z2)
 
         # Get all pairs
         rp_pairs = (r1[:, None] - r2[None, :]).ravel()  # same sign as line 676 of cf.py (1-2)
-        if 'discrete' not in self.main_tracer_types:
+        if "discrete" not in self.main_tracer_types:
             rp_pairs = np.abs(rp_pairs)
 
         mean_distance = ((r1[:, None] + r2[None, :]) / 2).ravel()
@@ -509,9 +536,9 @@ class Metals:
         array
             Weight scaling factor at each redshift
         """
-        true_alpha = self.metal_matrix_config.getfloat(f'alpha_{true_abs}')
-        assumed_alpha = self.metal_matrix_config.getfloat(f'alpha_{assumed_abs}', 2.9)
-        scaling = (1 + z)**(true_alpha + assumed_alpha - 2)
+        true_alpha = self.metal_matrix_config.getfloat(f"alpha_{true_abs}")
+        assumed_alpha = self.metal_matrix_config.getfloat(f"alpha_{assumed_abs}", 2.9)
+        scaling = (1 + z) ** (true_alpha + assumed_alpha - 2)
         return scaling
 
     def compute_metal_dmat(self, true_abs_1, true_abs_2):
@@ -533,26 +560,26 @@ class Metals:
             Distortion matrix and effective rp, rt, z grids
         """
         # Initialize tracer 1 redshift and weights
-        if self.main_tracer_types[0] == 'continuous':
+        if self.main_tracer_types[0] == "continuous":
             wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
-            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
-            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
+            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.0
+            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.0
             scaling_1 = self.get_forest_weight_scaling(true_z1, true_abs_1, self.main_tracers[0])
         else:
             true_z1, weights1 = self.get_qso_weights(self._corr_item.tracer1)
             assumed_z1 = true_z1
-            scaling_1 = 1.
+            scaling_1 = 1.0
 
         # Initialize tracer 2 redshift and weights
-        if self.main_tracer_types[1] == 'continuous':
+        if self.main_tracer_types[1] == "continuous":
             wave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
-            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
-            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
+            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.0
+            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.0
             scaling_2 = self.get_forest_weight_scaling(true_z2, true_abs_2, self.main_tracers[1])
         else:
             true_z2, weights2 = self.get_qso_weights(self._corr_item.tracer2)
             assumed_z2 = true_z2
-            scaling_2 = 1.
+            scaling_2 = 1.0
 
         # Compute rp pairs
         true_rp_pairs, true_mean_distance = self.get_rp_pairs(true_z1, true_z2)
@@ -560,21 +587,23 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
-        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.0
         zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
         weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
-            self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1)
+            self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1
+        )
 
         # Compute the distortion matrix
         rp_1d_dmat, _, __ = np.histogram2d(
-            assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights)
+            assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights
+        )
 
         # Normalize (sum of weights should be one for each input rp,rt)
         sum_rp_1d_dmat = np.sum(rp_1d_dmat, axis=0)
-        rp_1d_dmat /= (sum_rp_1d_dmat + (sum_rp_1d_dmat == 0))
+        rp_1d_dmat /= sum_rp_1d_dmat + (sum_rp_1d_dmat == 0)
 
         # independently, we compute the r_trans distortion matrix
         rt_bin_edges = np.linspace(0, self._coordinates.rt_max, self.rt_nbins + 1)
@@ -598,8 +627,9 @@ class Metals:
         # (that of the true separation of the absorbers) is small, so that this
         # fast matrix calculation is accurate where it matters the most
         distance_ratio_weights, distance_ratio_bins = np.histogram(
-            assumed_mean_distance / true_mean_distance, bins=4*rt_bin_edges.size,
-            weights=weights/true_mean_distance**2*(np.abs(true_rp_pairs) < 20.)
+            assumed_mean_distance / true_mean_distance,
+            bins=4 * rt_bin_edges.size,
+            weights=weights / true_mean_distance**2 * (np.abs(true_rp_pairs) < 20.0),
         )
         distance_ratios = (distance_ratio_bins[1:] + distance_ratio_bins[:-1]) / 2
 
@@ -611,20 +641,22 @@ class Metals:
         oversample = 7
         # the -2/oversample term is needed to get a even-spaced grid
         delta_rt = np.linspace(
-            -rt_bin_half_size, rt_bin_half_size*(1 - 2 / oversample), oversample)[None, :]
+            -rt_bin_half_size, rt_bin_half_size * (1 - 2 / oversample), oversample
+        )[None, :]
         rt_1d_dmat = np.zeros((self.rt_nbins, self.rt_nbins))
 
         for i, rt in enumerate(rt_bin_centers):
             # the weight is proportional to rt+delta_rt to get the correct solid angle effect
             # inside the bin (but it's almost a negligible effect)
             rt_1d_dmat[:, i], _ = np.histogram(
-                (distance_ratios[:, None] * (rt + delta_rt)[None, :]).ravel(), bins=rt_bin_edges,
-                weights=(distance_ratio_weights[:, None] * (rt + delta_rt)[None, :]).ravel()
+                (distance_ratios[:, None] * (rt + delta_rt)[None, :]).ravel(),
+                bins=rt_bin_edges,
+                weights=(distance_ratio_weights[:, None] * (rt + delta_rt)[None, :]).ravel(),
             )
 
         # normalize
         sum_rt_1d_dmat = np.sum(rt_1d_dmat, axis=0)
-        rt_1d_dmat /= (sum_rt_1d_dmat + (sum_rt_1d_dmat == 0))
+        rt_1d_dmat /= sum_rt_1d_dmat + (sum_rt_1d_dmat == 0)
 
         # now that we have both distortion along r_par and r_trans, we have to combine them
         # we just multiply the two matrices, with indices splitted for rt and rp
@@ -633,20 +665,22 @@ class Metals:
         # rp_index  = full_index//cf.num_bins_r_trans
         num_bins_total = self.rp_nbins * self.rt_nbins
         dmat = csr_matrix(
-            np.einsum('ij,kl->ikjl', rp_1d_dmat, rt_1d_dmat).reshape(num_bins_total, num_bins_total)
+            np.einsum("ij,kl->ikjl", rp_1d_dmat, rt_1d_dmat).reshape(num_bins_total, num_bins_total)
         )
 
         # Mean assumed weights
         sum_assumed_weight, _ = np.histogram(assumed_rp_pairs, bins=rp_bin_edges, weights=weights)
         sum_assumed_weight_rp, _ = np.histogram(
-            assumed_rp_pairs, bins=rp_bin_edges,
-            weights=weights * (assumed_rp_pairs[None, :].ravel())
+            assumed_rp_pairs,
+            bins=rp_bin_edges,
+            weights=weights * (assumed_rp_pairs[None, :].ravel()),
         )
 
         # Return the redshift of the actual absorber, which is the average of true_z1 and true_z2
         sum_weight_z, _ = np.histogram(
-            assumed_rp_pairs, bins=rp_bin_edges,
-            weights=weights * ((true_z1[:, None] + true_z2[None, :]) / 2.).ravel()
+            assumed_rp_pairs,
+            bins=rp_bin_edges,
+            weights=weights * ((true_z1[:, None] + true_z2[None, :]) / 2.0).ravel(),
         )
         r_par_eff_1d = sum_assumed_weight_rp / (sum_assumed_weight + (sum_assumed_weight == 0))
         z_eff_1d = sum_weight_z / (sum_assumed_weight + (sum_assumed_weight == 0))
@@ -687,26 +721,26 @@ class Metals:
             rp distortion matrix and effective rp, rt, z grids
         """
         # Initialize tracer 1 redshift and weights
-        if self.main_tracer_types[0] == 'continuous':
+        if self.main_tracer_types[0] == "continuous":
             wave1, weights1 = self.get_forest_weights(self._corr_item.tracer1)
-            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.
-            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.
+            true_z1 = wave1 / picca_constants.ABSORBER_IGM[true_abs_1] - 1.0
+            assumed_z1 = wave1 / picca_constants.ABSORBER_IGM[self.main_tracers[0]] - 1.0
             scaling_1 = self.get_forest_weight_scaling(true_z1, true_abs_1, self.main_tracers[0])
         else:
             true_z1, weights1 = self.get_qso_weights(self._corr_item.tracer1)
             assumed_z1 = true_z1
-            scaling_1 = 1.
+            scaling_1 = 1.0
 
         # Initialize tracer 2 redshift and weights
-        if self.main_tracer_types[1] == 'continuous':
+        if self.main_tracer_types[1] == "continuous":
             wave2, weights2 = self.get_forest_weights(self._corr_item.tracer2)
-            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.
-            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.
+            true_z2 = wave2 / picca_constants.ABSORBER_IGM[true_abs_2] - 1.0
+            assumed_z2 = wave2 / picca_constants.ABSORBER_IGM[self.main_tracers[1]] - 1.0
             scaling_2 = self.get_forest_weight_scaling(true_z2, true_abs_2, self.main_tracers[1])
         else:
             true_z2, weights2 = self.get_qso_weights(self._corr_item.tracer2)
             assumed_z2 = true_z2
-            scaling_2 = 1.
+            scaling_2 = 1.0
 
         # Compute rp pairs
         true_rp_pairs, _ = self.get_rp_pairs(true_z1, true_z2)
@@ -714,17 +748,19 @@ class Metals:
 
         # Compute weights
         weights = ((weights1 * scaling_1)[:, None] * (weights2 * scaling_2)[None, :]).ravel()
-        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.
+        zpair = (assumed_z1[:, None] + assumed_z2[None, :]) / 2.0
         zmask = (zpair >= self.zmin) & (zpair <= self.zmax)
         weights *= zmask.ravel()
 
         # Distortion matrix grid
         rp_bin_edges = np.linspace(
-            self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1)
+            self._coordinates.rp_min, self._coordinates.rp_max, self.rp_nbins + 1
+        )
 
         # Compute the distortion matrix
         dmat, _, __ = np.histogram2d(
-            assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights)
+            assumed_rp_pairs, true_rp_pairs, bins=(rp_bin_edges, rp_bin_edges), weights=weights
+        )
 
         # Normalize (sum of weights should be one for each input rp,rt)
         sum_true_weight, _ = np.histogram(true_rp_pairs, bins=rp_bin_edges, weights=weights)
@@ -733,14 +769,16 @@ class Metals:
         # Mean assumed weights
         sum_assumed_weight, _ = np.histogram(assumed_rp_pairs, bins=rp_bin_edges, weights=weights)
         sum_assumed_weight_rp, _ = np.histogram(
-            assumed_rp_pairs, bins=rp_bin_edges,
-            weights=weights * (assumed_rp_pairs[None, :].ravel())
+            assumed_rp_pairs,
+            bins=rp_bin_edges,
+            weights=weights * (assumed_rp_pairs[None, :].ravel()),
         )
 
         # Return the redshift of the actual absorber, which is the average of true_z1 and true_z2
         sum_weight_z, _ = np.histogram(
-            assumed_rp_pairs, bins=rp_bin_edges,
-            weights=weights * ((true_z1[:, None] + true_z2[None, :]) / 2.).ravel()
+            assumed_rp_pairs,
+            bins=rp_bin_edges,
+            weights=weights * ((true_z1[:, None] + true_z2[None, :]) / 2.0).ravel(),
         )
 
         rp_eff = sum_assumed_weight_rp / (sum_assumed_weight + (sum_assumed_weight == 0))
@@ -753,8 +791,7 @@ class Metals:
 
         rp_indices = np.arange(self.rp_nbins)
         rt_bins = np.arange(
-            self._coordinates.rt_binsize / 2, self._coordinates.rt_max,
-            self._coordinates.rt_binsize
+            self._coordinates.rt_binsize / 2, self._coordinates.rt_max, self._coordinates.rt_binsize
         )
 
         for j in range(self.rt_nbins):

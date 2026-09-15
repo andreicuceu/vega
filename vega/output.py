@@ -1,15 +1,16 @@
 import os.path
 from pathlib import Path
 
-from astropy.io import fits
-import numpy as np
 import h5py
+import numpy as np
+from astropy.io import fits
 
 
 class Output:
     """Class for handling the Vega output,
     and reading/writing output files.
     """
+
     def __init__(self, config, data, corr_items, analysis=None, percival=1):
         """
 
@@ -27,17 +28,22 @@ class Output:
         self.data = data
         self.analysis = analysis
         self.corr_items = corr_items
-        self.type = config.get('type', 'fits')
-        self.overwrite = config.get('overwrite', False)
-        self.outfile = os.path.expandvars(config['filename'])
-        self.output_cf = config.getboolean('write_cf', False)
-        self.output_pk = config.getboolean('write_pk', False)
-        self.mc_output = config.get('mc_output', None)
+        self.type = config.get("type", "fits")
+        self.overwrite = config.get("overwrite", False)
+        self.outfile = os.path.expandvars(config["filename"])
+        self.output_cf = config.getboolean("write_cf", False)
+        self.output_pk = config.getboolean("write_pk", False)
+        self.mc_output = config.get("mc_output", None)
         self.percival = percival
 
     def write_results(
-        self, corr_funcs, params, minimizer=None, bestfit_corr_stats=None,
-        scan_results=None, models=None
+        self,
+        corr_funcs,
+        params,
+        minimizer=None,
+        bestfit_corr_stats=None,
+        scan_results=None,
+        models=None,
     ):
         """Write results in the fits or hdf format
 
@@ -56,18 +62,23 @@ class Output:
         models : dict, optional
             Dictionary with the Vega Model objects, by default None
         """
-        if self.type == 'fits':
+        if self.type == "fits":
             self.write_results_fits(
-                corr_funcs, params, minimizer, bestfit_corr_stats, scan_results, models)
-        elif self.type == 'hdf' or self.type == 'h5':
+                corr_funcs, params, minimizer, bestfit_corr_stats, scan_results, models
+            )
+        elif self.type == "hdf" or self.type == "h5":
             self.write_results_hdf(minimizer, scan_results)
         else:
-            raise ValueError('Unknown output type. Set type = fits'
-                             ' or type = hdf')
+            raise ValueError("Unknown output type. Set type = fits or type = hdf")
 
     def write_results_fits(
-        self, corr_funcs, params, minimizer=None, bestfit_corr_stats=None,
-        scan_results=None, models=None
+        self,
+        corr_funcs,
+        params,
+        minimizer=None,
+        bestfit_corr_stats=None,
+        scan_results=None,
+        models=None,
     ):
         """Write output in the fits format
 
@@ -87,24 +98,26 @@ class Output:
             Dictionary with the Vega Model objects, by default None
         """
         if self.data is None:
-            raise ValueError('Output object was initialized with an invalid data object.'
-                             ' Reinitialize with a valid vega.data object.')
+            raise ValueError(
+                "Output object was initialized with an invalid data object."
+                " Reinitialize with a valid vega.data object."
+            )
 
         primary_hdu = fits.PrimaryHDU()
         # Record catalog-computed effective redshifts when available
         z_eff_lya = None
         z_eff_qso = None
         for item in self.corr_items.values():
-            if getattr(item, 'z_eff_LYA', None) is not None:
+            if getattr(item, "z_eff_LYA", None) is not None:
                 z_eff_lya = item.z_eff_LYA
-            if getattr(item, 'z_eff_QSO', None) is not None:
+            if getattr(item, "z_eff_QSO", None) is not None:
                 z_eff_qso = item.z_eff_QSO
         if z_eff_lya is not None:
-            primary_hdu.header['ZEFFLYA'] = z_eff_lya
-            primary_hdu.header.comments['ZEFFLYA'] = 'Catalog-weighted z_eff_LYA'
+            primary_hdu.header["ZEFFLYA"] = z_eff_lya
+            primary_hdu.header.comments["ZEFFLYA"] = "Catalog-weighted z_eff_LYA"
         if z_eff_qso is not None:
-            primary_hdu.header['ZEFFQSO'] = z_eff_qso
-            primary_hdu.header.comments['ZEFFQSO'] = 'Catalog-weighted z_eff_QSO'
+            primary_hdu.header["ZEFFQSO"] = z_eff_qso
+            primary_hdu.header.comments["ZEFFQSO"] = "Catalog-weighted z_eff_QSO"
 
         model_hdus = self._model_hdus(corr_funcs, params, bestfit_corr_stats)
         hdu_list = [primary_hdu] + model_hdus
@@ -132,8 +145,8 @@ class Output:
 
         hdul = fits.HDUList(hdu_list)
 
-        if self.outfile[-5:] != '.fits':
-            self.outfile += '.fits'
+        if self.outfile[-5:] != ".fits":
+            self.outfile += ".fits"
 
         hdul.writeto(Path(self.outfile), overwrite=self.overwrite)
 
@@ -186,28 +199,30 @@ class Output:
         for name, cf in corr_funcs.items():
             num_rows = len(cf)
             if len(self.data[name].data_vec) > num_rows:
-                raise ValueError('Data coordinate grid is larger than the model grid.')
+                raise ValueError("Data coordinate grid is larger than the model grid.")
 
             columns = [
+                fits.Column(name=name + "_MODEL", format="D", array=self.pad_array(cf, num_rows)),
                 fits.Column(
-                    name=name+'_MODEL', format='D', array=self.pad_array(cf, num_rows)
+                    name=name + "_MODEL_MASK",
+                    format="L",
+                    array=self.pad_array(self.data[name].model_mask, num_rows, False),
                 ),
                 fits.Column(
-                    name=name+'_MODEL_MASK', format='L',
-                    array=self.pad_array(self.data[name].model_mask, num_rows, False)
+                    name=name + "_MASK",
+                    format="L",
+                    array=self.pad_array(self.data[name].data_mask, num_rows, False),
                 ),
                 fits.Column(
-                    name=name+'_MASK', format='L',
-                    array=self.pad_array(self.data[name].data_mask, num_rows, False)
+                    name=name + "_DATA",
+                    format="D",
+                    array=self.pad_array(self.data[name].data_vec, num_rows),
                 ),
                 fits.Column(
-                    name=name+'_DATA', format='D',
-                    array=self.pad_array(self.data[name].data_vec, num_rows)
+                    name=name + "_VAR",
+                    format="D",
+                    array=self.pad_array(self.data[name].variance, num_rows),
                 ),
-                fits.Column(
-                    name=name+'_VAR', format='D',
-                    array=self.pad_array(self.data[name].variance, num_rows)
-                )
             ]
 
             if self.data[name].is_direct_multipoles:
@@ -219,101 +234,132 @@ class Output:
                 s_grid = self.data[name].data_coordinates.s_grid
                 ells_col = np.repeat(ells_to_model, len(s_grid))
                 s_col = np.tile(s_grid, len(ells_to_model))
-                columns.append(fits.Column(
-                    name=name+'_ELL', format='K',
-                    array=self.pad_array(ells_col, num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_R', format='D',
-                    array=self.pad_array(s_col, num_rows)
-                ))
-                z_out = float(getattr(self.corr_items[name], 'z_eff_QSO', None)
-                              or getattr(self.corr_items[name], 'z_eff', 0.)
-                              or 0.)
-                columns.append(fits.Column(
-                    name=name+'_Z', format='D',
-                    array=np.full(num_rows, z_out)
-                ))
+                columns.append(
+                    fits.Column(
+                        name=name + "_ELL", format="K", array=self.pad_array(ells_col, num_rows)
+                    )
+                )
+                columns.append(
+                    fits.Column(name=name + "_R", format="D", array=self.pad_array(s_col, num_rows))
+                )
+                z_out = float(
+                    getattr(self.corr_items[name], "z_eff_QSO", None)
+                    or getattr(self.corr_items[name], "z_eff", 0.0)
+                    or 0.0
+                )
+                columns.append(
+                    fits.Column(name=name + "_Z", format="D", array=np.full(num_rows, z_out))
+                )
             elif not self.corr_items[name].use_multipoles:
-                columns.append(fits.Column(
-                    name=name+'_RP', format='D',
-                    array=self.pad_array(self.corr_items[name].dist_model_coordinates.rp_grid, num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_RT', format='D',
-                    array=self.pad_array(self.corr_items[name].dist_model_coordinates.rt_grid, num_rows)
-                ))
+                columns.append(
+                    fits.Column(
+                        name=name + "_RP",
+                        format="D",
+                        array=self.pad_array(
+                            self.corr_items[name].dist_model_coordinates.rp_grid, num_rows
+                        ),
+                    )
+                )
+                columns.append(
+                    fits.Column(
+                        name=name + "_RT",
+                        format="D",
+                        array=self.pad_array(
+                            self.corr_items[name].dist_model_coordinates.rt_grid, num_rows
+                        ),
+                    )
+                )
                 if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
-                    columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+                    columns.append(
+                        fits.Column(name=name + "_Z", format="D", array=np.zeros(num_rows))
+                    )
                 else:
-                    columns.append(fits.Column(
-                        name=name+'_Z', format='D',
-                        array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
-                    ))
+                    columns.append(
+                        fits.Column(
+                            name=name + "_Z",
+                            format="D",
+                            array=self.pad_array(
+                                self.corr_items[name].model_coordinates.z_grid, num_rows
+                            ),
+                        )
+                    )
             else:
                 nmu = self.corr_items[name].dist_model_coordinates.mu_nbins
                 nr = self.corr_items[name].dist_model_coordinates.r_nbins
                 ells = np.repeat(self.corr_items[name].ells_to_model, nr)
-                rmodel = self.corr_items[name].dist_model_coordinates.r_grid.reshape(
-                    nmu, nr).mean(0)
+                rmodel = (
+                    self.corr_items[name].dist_model_coordinates.r_grid.reshape(nmu, nr).mean(0)
+                )
                 rmodel = np.tile(rmodel, len(self.corr_items[name].ells_to_model))
 
-                columns.append(fits.Column(
-                    name=name+'_ELL', format='K',
-                    array=self.pad_array(ells, num_rows)
-                ))
-                columns.append(fits.Column(
-                    name=name+'_R', format='D',
-                    array=self.pad_array(rmodel, num_rows)
-                ))
+                columns.append(
+                    fits.Column(
+                        name=name + "_ELL", format="K", array=self.pad_array(ells, num_rows)
+                    )
+                )
+                columns.append(
+                    fits.Column(
+                        name=name + "_R", format="D", array=self.pad_array(rmodel, num_rows)
+                    )
+                )
                 if num_rows < self.corr_items[name].model_coordinates.z_grid.size:
-                    columns.append(fits.Column(name=name+'_Z', format='D', array=np.zeros(num_rows)))
+                    columns.append(
+                        fits.Column(name=name + "_Z", format="D", array=np.zeros(num_rows))
+                    )
                 else:
-                    columns.append(fits.Column(
-                        name=name+'_Z', format='D',
-                        array=self.pad_array(self.corr_items[name].model_coordinates.z_grid, num_rows)
-                    ))
+                    columns.append(
+                        fits.Column(
+                            name=name + "_Z",
+                            format="D",
+                            array=self.pad_array(
+                                self.corr_items[name].model_coordinates.z_grid, num_rows
+                            ),
+                        )
+                    )
 
             if self.data[name].nb is not None:
-                columns.append(fits.Column(
-                    name=name+'_NB', format='K',
-                    array=self.pad_array(self.data[name].nb, num_rows, pad_value=0)
-                ))
+                columns.append(
+                    fits.Column(
+                        name=name + "_NB",
+                        format="K",
+                        array=self.pad_array(self.data[name].nb, num_rows, pad_value=0),
+                    )
+                )
 
             model_hdu = fits.BinTableHDU.from_columns(columns)
-            model_hdu.name = 'MODEL_' + name
+            model_hdu.name = "MODEL_" + name
 
-            if getattr(self.corr_items[name], 'z_eff_LYA', None) is not None:
-                model_hdu.header['ZEFFLYA'] = self.corr_items[name].z_eff_LYA
-                model_hdu.header.comments['ZEFFLYA'] = 'Catalog-weighted z_eff_LYA'
-            if getattr(self.corr_items[name], 'z_eff_QSO', None) is not None:
-                model_hdu.header['ZEFFQSO'] = self.corr_items[name].z_eff_QSO
-                model_hdu.header.comments['ZEFFQSO'] = 'Catalog-weighted z_eff_QSO'
+            if getattr(self.corr_items[name], "z_eff_LYA", None) is not None:
+                model_hdu.header["ZEFFLYA"] = self.corr_items[name].z_eff_LYA
+                model_hdu.header.comments["ZEFFLYA"] = "Catalog-weighted z_eff_LYA"
+            if getattr(self.corr_items[name], "z_eff_QSO", None) is not None:
+                model_hdu.header["ZEFFQSO"] = self.corr_items[name].z_eff_QSO
+                model_hdu.header.comments["ZEFFQSO"] = "Catalog-weighted z_eff_QSO"
 
             for par, val in params.items():
-                card_name = 'hierarch ' + par
+                card_name = "hierarch " + par
                 model_hdu.header[card_name] = val
 
             if bestfit_corr_stats is not None:
                 for par, val in bestfit_corr_stats[name].items():
-                    if par == 'bestfit_marg_coeff':
+                    if par == "bestfit_marg_coeff":
                         if val is None:
                             continue
-                        names = [f'marg_coeff_{i}' for i in range(len(val))]
+                        names = [f"marg_coeff_{i}" for i in range(len(val))]
                         for coeff_name, v in zip(names, val):
-                            card_name = 'hierarch ' + coeff_name
+                            card_name = "hierarch " + coeff_name
                             model_hdu.header[card_name] = v
                     else:
-                        card_name = 'hierarch ' + par
+                        card_name = "hierarch " + par
                         model_hdu.header[card_name] = val
 
             for name, size in sizes_data.items():
-                card_name = 'hierarch ' + name + '_datasize'
+                card_name = "hierarch " + name + "_datasize"
                 model_hdu.header[card_name] = size
                 if self.data[name].use_multipoles:
-                    card_name = 'hierarch ' + name + '_multipoles'
+                    card_name = "hierarch " + name + "_multipoles"
                     model_hdu.header[card_name] = True
-                    card_name = 'hierarch ' + name + '_nell'
+                    card_name = "hierarch " + name + "_nell"
                     model_hdu.header[card_name] = self.data[name].nells
 
             model_hdus.append(model_hdu)
@@ -338,7 +384,7 @@ class Output:
 
         # Check if any parameter name is too long
         max_length = np.max([len(name) for name in names])
-        name_format = str(max_length) + 'A'
+        name_format = str(max_length) + "A"
 
         # Get parameter values and errors
         values = np.array([minimizer.values[name] for name in names])
@@ -348,33 +394,33 @@ class Output:
         # Build the covariance matrix
         cov_mat = self.percival * np.array(minimizer.covariance)
 
-        cov_format = str(num_pars) + 'D'
+        cov_format = str(num_pars) + "D"
         # Create the columns with the bestfit data
-        col1 = fits.Column(name='names', format=name_format, array=names)
-        col2 = fits.Column(name='values', format='D', array=values)
-        col3 = fits.Column(name='errors', format='D', array=errors)
-        col4 = fits.Column(name='covariance', format=cov_format, array=cov_mat)
+        col1 = fits.Column(name="names", format=name_format, array=names)
+        col2 = fits.Column(name="values", format="D", array=values)
+        col3 = fits.Column(name="errors", format="D", array=errors)
+        col4 = fits.Column(name="covariance", format=cov_format, array=cov_mat)
 
         # Create the Table HDU from the columns
         bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
-        bestfit_hdu.name = 'BESTFIT'
+        bestfit_hdu.name = "BESTFIT"
 
         # Add all the attributes of the minimum to the header
-        bestfit_hdu.header['FVAL'] = minimizer.fmin.fval
-        bestfit_hdu.header['PVALUE'] = minimizer.p_value
-        bestfit_hdu.header['VALID'] = minimizer.minuit.valid
-        bestfit_hdu.header['ACCURATE'] = minimizer.minuit.accurate
-        bestfit_hdu.header['PERCIVAL'] = self.percival
+        bestfit_hdu.header["FVAL"] = minimizer.fmin.fval
+        bestfit_hdu.header["PVALUE"] = minimizer.p_value
+        bestfit_hdu.header["VALID"] = minimizer.minuit.valid
+        bestfit_hdu.header["ACCURATE"] = minimizer.minuit.accurate
+        bestfit_hdu.header["PERCIVAL"] = self.percival
 
-        bestfit_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
-        bestfit_hdu.header.comments['TTYPE2'] = 'Bestfit values of sampled parameters'
-        bestfit_hdu.header.comments['TTYPE3'] = 'Errors around the bestfit'
-        bestfit_hdu.header.comments['TTYPE4'] = 'Covariance matrix around the bestfit'
-        bestfit_hdu.header.comments['FVAL'] = 'Bestfit chi^2 value'
-        bestfit_hdu.header.comments['VALID'] = 'Flag for valid fit'
-        bestfit_hdu.header.comments['ACCURATE'] = 'Flag for accurate fit'
-        bestfit_hdu.header.comments['PVALUE'] = 'PTE as calculated by vega'
-        bestfit_hdu.header.comments['PERCIVAL'] = 'Applied to errors and covariance'
+        bestfit_hdu.header.comments["TTYPE1"] = "Names of sampled parameters"
+        bestfit_hdu.header.comments["TTYPE2"] = "Bestfit values of sampled parameters"
+        bestfit_hdu.header.comments["TTYPE3"] = "Errors around the bestfit"
+        bestfit_hdu.header.comments["TTYPE4"] = "Covariance matrix around the bestfit"
+        bestfit_hdu.header.comments["FVAL"] = "Bestfit chi^2 value"
+        bestfit_hdu.header.comments["VALID"] = "Flag for valid fit"
+        bestfit_hdu.header.comments["ACCURATE"] = "Flag for accurate fit"
+        bestfit_hdu.header.comments["PVALUE"] = "PTE as calculated by vega"
+        bestfit_hdu.header.comments["PERCIVAL"] = "Applied to errors and covariance"
 
         return bestfit_hdu
 
@@ -400,7 +446,7 @@ class Output:
 
         # Check if any parameter name is too long
         max_length = np.max([len(name) for name in names])
-        name_format = str(max_length) + 'A'
+        name_format = str(max_length) + "A"
 
         # Get list of parameters and results
         results = []
@@ -409,32 +455,32 @@ class Output:
         results = np.array(results)
 
         # Create the columns
-        name_col = fits.Column(name='names', format=name_format, array=names)
+        name_col = fits.Column(name="names", format=name_format, array=names)
         columns = [name_col]
         comms = []
         for col, name in zip(results.T, names):
-            columns.append(fits.Column(name=name, format='D', array=col))
-            comms.append('Bestfit grid values for ' + name)
+            columns.append(fits.Column(name=name, format="D", array=col))
+            comms.append("Bestfit grid values for " + name)
 
         # Create the Table HDU from the columns
         scan_hdu = fits.BinTableHDU.from_columns(columns)
-        scan_hdu.name = 'SCAN'
+        scan_hdu.name = "SCAN"
 
         # Add extra info to the header if we have the analysis object
         if self.analysis is not None:
             params = self.analysis.grids.keys()
             for par in params:
                 grid = self.analysis.grids[par]
-                scan_hdu.header[par + '_min'] = grid[0]
-                scan_hdu.header[par + '_max'] = grid[-1]
-                scan_hdu.header[par + '_num_bins'] = len(grid)
-                scan_hdu.header.comments[par + '_min'] = 'Grid start for ' + par
-                scan_hdu.header.comments[par + '_max'] = 'Grid end for ' + par
-                scan_hdu.header.comments[par + '_num_bins'] = 'Grid size for ' + par
+                scan_hdu.header[par + "_min"] = grid[0]
+                scan_hdu.header[par + "_max"] = grid[-1]
+                scan_hdu.header[par + "_num_bins"] = len(grid)
+                scan_hdu.header.comments[par + "_min"] = "Grid start for " + par
+                scan_hdu.header.comments[par + "_max"] = "Grid end for " + par
+                scan_hdu.header.comments[par + "_num_bins"] = "Grid size for " + par
 
-        scan_hdu.header.comments['TTYPE1'] = 'Names of sampled parameters'
+        scan_hdu.header.comments["TTYPE1"] = "Names of sampled parameters"
         for i, comm in enumerate(comms):
-            scan_hdu.header.comments['TTYPE' + str(i+2)] = comm
+            scan_hdu.header.comments["TTYPE" + str(i + 2)] = comm
 
         return scan_hdu
 
@@ -458,7 +504,7 @@ class Output:
 
         # Create the Table HDU from the columns
         pk_hdu = fits.BinTableHDU.from_columns(columns)
-        pk_hdu.name = 'PK_' + component
+        pk_hdu.name = "PK_" + component
 
         return pk_hdu
 
@@ -478,18 +524,17 @@ class Output:
             HDU with the Xi data for the component
         """
         # Get the Xi components, before and after distortion
-        columns = self._get_components(model.xi, name_prefix='raw_')
-        columns += self._get_components(model.xi_distorted,
-                                        name_prefix='distorted_')
+        columns = self._get_components(model.xi, name_prefix="raw_")
+        columns += self._get_components(model.xi_distorted, name_prefix="distorted_")
 
         # Create the Table HDU from the columns
         cf_hdu = fits.BinTableHDU.from_columns(columns)
-        cf_hdu.name = 'Xi_' + component
+        cf_hdu.name = "Xi_" + component
 
         return cf_hdu
 
     @staticmethod
-    def _get_components(model_components, name_prefix=''):
+    def _get_components(model_components, name_prefix=""):
         """Get the saved model components and create astropy Columns
 
         Parameters
@@ -510,22 +555,20 @@ class Output:
         for part, data in model_components.items():
             if not data:
                 continue
-            shape = np.shape(data['core'])
+            shape = np.shape(data["core"])
             if len(shape) == 1:
-                form = 'D'
+                form = "D"
             else:
                 size = shape[1]
-                form = str(size) + 'D'
+                form = str(size) + "D"
 
             for key, item in data.items():
-                if key == 'core':
-                    name = name_prefix + part + '_core'
-                    columns.append(fits.Column(name=name, format=form,
-                                               array=item))
+                if key == "core":
+                    name = name_prefix + part + "_core"
+                    columns.append(fits.Column(name=name, format=form, array=item))
                 else:
-                    name = name_prefix + part + '_' + key[0] + '_' + key[1]
-                    columns.append(fits.Column(name=name, format=form,
-                                               array=item))
+                    name = name_prefix + part + "_" + key[0] + "_" + key[1]
+                    columns.append(fits.Column(name=name, format=form, array=item))
 
         return columns
 
@@ -537,9 +580,7 @@ class Output:
         cpu_id : int, optional
             CPU rank used for the output filename when running in parallel, by default None
         """
-        assert self.analysis is not None, (
-            "Output.write_monte_carlo requires an Analysis object"
-        )
+        assert self.analysis is not None, "Output.write_monte_carlo requires an Analysis object"
         assert self.analysis.has_monte_carlo, (
             "No Monte Carlo results found. Run Analysis.run_monte_carlo() first."
         )
@@ -551,61 +592,61 @@ class Output:
         covariances = np.array(self.analysis.mc_covariances)
 
         if not bestfits:
-            print('No MC bestfit data to write.')
+            print("No MC bestfit data to write.")
         else:
             names = np.array(list(bestfits.keys()))
             bestfit_table = np.array([bestfits[name][:, 0] for name in names])
             errors_table = np.array([bestfits[name][:, 1] for name in names])
-            covariances = covariances.reshape(bestfit_table.shape[1]*len(names), len(names)).T
+            covariances = covariances.reshape(bestfit_table.shape[1] * len(names), len(names)).T
 
             # Get the data types for the columns
             max_length = np.max([len(name) for name in names])
-            name_format = str(max_length) + 'A'
-            fit_format = f'{bestfit_table.shape[1]}D'
-            cov_format = f'{covariances.shape[1]}D'
+            name_format = str(max_length) + "A"
+            fit_format = f"{bestfit_table.shape[1]}D"
+            cov_format = f"{covariances.shape[1]}D"
 
             # Create the columns with the bestfit data
-            col1 = fits.Column(name='names', format=name_format, array=names)
-            col2 = fits.Column(name='values', format=fit_format, array=bestfit_table)
-            col3 = fits.Column(name='errors', format=fit_format, array=errors_table)
-            col4 = fits.Column(name='covariance', format=cov_format, array=covariances)
+            col1 = fits.Column(name="names", format=name_format, array=names)
+            col2 = fits.Column(name="values", format=fit_format, array=bestfit_table)
+            col3 = fits.Column(name="errors", format=fit_format, array=errors_table)
+            col4 = fits.Column(name="covariance", format=cov_format, array=covariances)
 
             # Create the Table HDU from the columns
             bestfit_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
-            bestfit_hdu.name = 'Bestfit'
+            bestfit_hdu.name = "Bestfit"
             hdu_list += [bestfit_hdu]
 
             # Create the columns with the fit information
-            col1 = fits.Column(name='chisq', format='D', array=self.analysis.mc_chisq)
-            col2 = fits.Column(name='valid_minima', format='L', array=self.analysis.mc_valid_minima)
-            col3 = fits.Column(name='valid_hesse', format='L', array=self.analysis.mc_valid_hesse)
-            col4 = fits.Column(name='failed_mask', format='L', array=self.analysis.mc_failed_mask)
+            col1 = fits.Column(name="chisq", format="D", array=self.analysis.mc_chisq)
+            col2 = fits.Column(name="valid_minima", format="L", array=self.analysis.mc_valid_minima)
+            col3 = fits.Column(name="valid_hesse", format="L", array=self.analysis.mc_valid_hesse)
+            col4 = fits.Column(name="failed_mask", format="L", array=self.analysis.mc_failed_mask)
 
             # Create the Table HDU from the columns
             fitinfo_hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4])
-            fitinfo_hdu.name = 'FitInfo'
+            fitinfo_hdu.name = "FitInfo"
             hdu_list += [fitinfo_hdu]
 
         mocks = self.analysis.mc_mocks
         columns = []
         for name in mocks.keys():
             table = np.array(mocks[name])
-            columns.append(fits.Column(name=name, format=f'{table.shape[1]}D', array=table))
+            columns.append(fits.Column(name=name, format=f"{table.shape[1]}D", array=table))
 
         mocks_hdu = fits.BinTableHDU.from_columns(columns)
-        mocks_hdu.name = 'Mocks'
+        mocks_hdu.name = "Mocks"
         hdu_list += [mocks_hdu]
 
         hdul = fits.HDUList(hdu_list)
         if self.mc_output is None:
-            dir_path = Path(self.outfile).parent / 'monte_carlo'
+            dir_path = Path(self.outfile).parent / "monte_carlo"
         else:
             dir_path = Path(self.mc_output)
         dir_path.mkdir(parents=True, exist_ok=True)
         if cpu_id is None:
-            filepath = dir_path / 'monte_carlo.fits'
+            filepath = dir_path / "monte_carlo.fits"
         else:
-            filepath = dir_path / f'monte_carlo_{cpu_id}.fits'
+            filepath = dir_path / f"monte_carlo_{cpu_id}.fits"
 
         hdul.writeto(filepath, overwrite=self.overwrite)
 
@@ -621,9 +662,10 @@ class Output:
             List of scan results, by default None
         """
         if minimizer is None:
-            raise ValueError("The hdf output format is outdated and"
-                             " does not work without minimization")
-        h5_file = h5py.File(Path(self.outfile), 'w')
+            raise ValueError(
+                "The hdf output format is outdated and does not work without minimization"
+            )
+        h5_file = h5py.File(Path(self.outfile), "w")
 
         # Write bestfit
         bf_group = h5_file.create_group("best fit")
@@ -695,7 +737,6 @@ class Output:
             scan_group.attrs[par] = i
 
         # Write results
-        values = scan_group.create_dataset("values", np.shape(results),
-                                           dtype="f")
+        values = scan_group.create_dataset("values", np.shape(results), dtype="f")
         values[...] = results
         return scan_group

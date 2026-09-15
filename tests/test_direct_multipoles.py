@@ -1,4 +1,5 @@
 """Integration tests for direct QSO multipole data"""
+
 import configparser
 
 import numpy as np
@@ -13,11 +14,11 @@ from vega.utils import find_file
 def _load_qsoxqso():
     config = configparser.ConfigParser()
     config.optionxform = lambda option: option
-    config.read(find_file('configs/qsoxqso.ini'))
+    config.read(find_file("configs/qsoxqso.ini"))
     corr_item = correlation_item.CorrelationItem(config)
     for tracer in (corr_item.tracer1, corr_item.tracer2):
-        if tracer.get('weights-path') is not None:
-            tracer['weights-path'] = str(find_file(tracer['weights-path']))
+        if tracer.get("weights-path") is not None:
+            tracer["weights-path"] = str(find_file(tracer["weights-path"]))
     corr_item.z_eff = 2.304
     data = Data(corr_item)
     return corr_item, data
@@ -30,7 +31,7 @@ def test_read_multipole_data_vector_and_coordinates():
     assert not corr_item.use_multipoles
     assert corr_item.ells_to_model == [0, 2]
 
-    raw = np.loadtxt(find_file('data/qsoauto_xipoles.txt'), comments='#')
+    raw = np.loadtxt(find_file("data/qsoauto_xipoles.txt"), comments="#")
     s_min, s_max = 50.0, 90.0
     mask = (raw[:, 0] >= s_min) & (raw[:, 0] < s_max)
     xi_cut = raw[mask, 2:4]
@@ -69,7 +70,7 @@ def test_multipole_covariance_subset():
     assert data.cov_mat.shape == (20, 20)
     assert np.allclose(data.cov_mat, data.cov_mat.T)
 
-    cov_full = np.loadtxt(find_file('data/qsoauto_cov_20x20.txt'), comments='#')
+    cov_full = np.loadtxt(find_file("data/qsoauto_cov_20x20.txt"), comments="#")
     s_data = data.data_coordinates.s_grid
     s_min, s_max = 50.0, 90.0
     n_s_cov = cov_full.shape[0] // 2

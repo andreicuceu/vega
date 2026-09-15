@@ -1,24 +1,21 @@
 from functools import partial
 
 import numpy as np
-from numpy import fft
-from scipy import special
-from scipy import interpolate
-from mcfit import P2xi
-from cachetools import cached, LRUCache
+from cachetools import LRUCache, cached
 from cachetools.keys import hashkey
+from mcfit import P2xi
+from numpy import fft
+from scipy import interpolate, special
 
 from vega.utils import VegaBoundsError, bin_averaged_legendre
 
 
 class PktoXi:
-    """Transform a 2D power spectrum to a correlation function
-    """
+    """Transform a 2D power spectrum to a correlation function"""
+
     cache = LRUCache(128)
 
-    def __init__(
-            self, k_grid, muk_grid, config, dmu_smooth_xiell=0
-    ):
+    def __init__(self, k_grid, muk_grid, config, dmu_smooth_xiell=0):
         """Initialize the FFTLog and the Legendre polynomials
 
         Parameters
@@ -37,10 +34,10 @@ class PktoXi:
         self.muk_grid = muk_grid
         self.dmuk = 1 / len(muk_grid)
 
-        self.ell_max = config.getint('ell_max', 6)
-        self._old_fftlog = config.getboolean('old_fftlog', False)
-        self._extrap = config.getboolean('fht_extrap', False)
-        fht_lowring = config.getboolean('fht_lowring', True)
+        self.ell_max = config.getint("ell_max", 6)
+        self._old_fftlog = config.getboolean("old_fftlog", False)
+        self._extrap = config.getboolean("fht_extrap", False)
+        fht_lowring = config.getboolean("fht_lowring", True)
 
         # Initialize the multipole values we will need (only even ells)
         self.ell_vals = tuple(np.arange(0, self.ell_max + 1, 2))
@@ -57,7 +54,8 @@ class PktoXi:
             # We don't know the mu grid for Xi in advance, so just initialize
             if dmu_smooth_xiell > 0:
                 self.legendre_xi[ell] = partial(
-                    bin_averaged_legendre, ell=ell, dmu=dmu_smooth_xiell)
+                    bin_averaged_legendre, ell=ell, dmu=dmu_smooth_xiell
+                )
             else:
                 self.legendre_xi[ell] = special.legendre(ell)
 
@@ -146,7 +144,7 @@ class PktoXi:
             r_fft, xi_fft = self.fftlog_objects[ell](pk_ell, extrap=self._extrap)
 
             # Interpolate to r grid
-            xi_interp = interpolate.interp1d(np.log(r_fft), xi_fft, kind='cubic')
+            xi_interp = interpolate.interp1d(np.log(r_fft), xi_fft, kind="cubic")
 
             # Check for nans and get the model correlation
             mask = r_grid != 0
@@ -193,7 +191,7 @@ class PktoXi:
             r_fft, xi_fft = self.fftlog_objects[ell](pk_ell)
 
             # Interpolate to r grid
-            xi_ell_interp[ell] = interpolate.interp1d(np.log(r_fft), xi_fft, kind='cubic')
+            xi_ell_interp[ell] = interpolate.interp1d(np.log(r_fft), xi_fft, kind="cubic")
 
         return xi_ell_interp
 
@@ -222,11 +220,11 @@ class PktoXi:
             xi_ell = np.zeros(len(r_grid))
             try:
                 xi_ell[mask] = xi_ell_interp[ell](np.log(r_grid[mask]))
-            except ValueError:
-                raise VegaBoundsError
+            except ValueError as error:
+                raise VegaBoundsError from error
 
             # Add the Legendre polynomials
-            xi_ell_arr[ell//2, :] = xi_ell * self.legendre_xi[ell](mu_grid)
+            xi_ell_arr[ell // 2, :] = xi_ell * self.legendre_xi[ell](mu_grid)
 
         # Sum over the multipoles
         full_xi = np.sum(xi_ell_arr, axis=0)
@@ -241,13 +239,13 @@ class PktoXi:
         """
 
         k0 = k[0]
-        l = np.log(k.max()/k0)
-        r0 = 1.
+        log_k_range = np.log(k.max() / k0)
+        r0 = 1.0
 
         N = len(k)
         emm = N * fft.fftfreq(N)
-        r = r0*np.exp(-emm*l/N)
-        dr = abs(np.log(r[1]/r[0]))
+        r = r0 * np.exp(-emm * log_k_range / N)
+        dr = abs(np.log(r[1] / r[0]))
         s = np.argsort(r)
         r = r[s]
 
@@ -256,30 +254,30 @@ class PktoXi:
         for ell in ell_vals:
             if tform == "rel":
                 pk_ell = pk
-                n = 1.
+                n = 1.0
             elif tform == "asy":
                 pk_ell = pk
-                n = 2.
+                n = 2.0
             else:
-                pk_ell = np.sum(dmuk*special.legendre(ell)(muk)*pk, axis=0)*(2*ell+1)
-                pk_ell *= (-1)**(ell//2)/2/np.pi**2
-                n = 2.
-            mu = ell+0.5
-            q = 2-n-0.5
-            x = q+2*np.pi*1j*emm/l
-            lg1 = special.loggamma((mu+1+x)/2)
-            lg2 = special.loggamma((mu+1-x)/2)
+                pk_ell = np.sum(dmuk * special.legendre(ell)(muk) * pk, axis=0) * (2 * ell + 1)
+                pk_ell *= (-1) ** (ell // 2) / 2 / np.pi**2
+                n = 2.0
+            mu = ell + 0.5
+            q = 2 - n - 0.5
+            x = q + 2 * np.pi * 1j * emm / log_k_range
+            lg1 = special.loggamma((mu + 1 + x) / 2)
+            lg2 = special.loggamma((mu + 1 - x) / 2)
 
-            um = (k0*r0)**(-2*np.pi*1j*emm/l)*2**x*np.exp(lg1-lg2)
+            um = (k0 * r0) ** (-2 * np.pi * 1j * emm / log_k_range) * 2**x * np.exp(lg1 - lg2)
             um[0] = np.real(um[0])
-            an = fft.fft(pk_ell*k**n*np.sqrt(np.pi/2))
+            an = fft.fft(pk_ell * k**n * np.sqrt(np.pi / 2))
             an *= um
             xi_loc = fft.ifft(an)
             xi_loc = xi_loc[s]
-            xi_loc /= r**(3-n)
+            xi_loc /= r ** (3 - n)
             xi_loc[-1] = 0
-            spline = interpolate.splrep(np.log(r)-dr/2, np.real(xi_loc), k=3, s=0)
-            xi[ell//2, :] = interpolate.splev(np.log(ar), spline)
+            spline = interpolate.splrep(np.log(r) - dr / 2, np.real(xi_loc), k=3, s=0)
+            xi[ell // 2, :] = interpolate.splev(np.log(ar), spline)
 
         return xi
 
@@ -316,10 +314,10 @@ class PktoXi:
         # Add the Legendre polynomials and sum over the multipoles
         if multipole < 0:
             for ell in ell_vals:
-                xi[ell//2, :] *= self.legendre_xi[ell](mu_grid)
+                xi[ell // 2, :] *= self.legendre_xi[ell](mu_grid)
             full_xi = np.sum(xi, axis=0)
         else:
-            full_xi = xi[multipole//2]
+            full_xi = xi[multipole // 2]
 
         return full_xi
 
@@ -345,13 +343,13 @@ class PktoXi:
         """
         # Compute the dipole and octupole terms
         ell_vals = [1, 3]
-        xi = self.Pk2Mp(r_grid, self.k_grid, pk, ell_vals, self.muk_grid, self.dmuk, tform='rel')
+        xi = self.Pk2Mp(r_grid, self.k_grid, pk, ell_vals, self.muk_grid, self.dmuk, tform="rel")
 
         # Get the relativistic parameters and sum over the monopoles
-        A_rel_1 = params['Arel1']
-        A_rel_3 = params['Arel3']
-        xi_rel = A_rel_1 * xi[1//2, :] * special.legendre(1)(mu_grid)
-        xi_rel += A_rel_3 * xi[3//2, :] * special.legendre(3)(mu_grid)
+        A_rel_1 = params["Arel1"]
+        A_rel_3 = params["Arel3"]
+        xi_rel = A_rel_1 * xi[1 // 2, :] * special.legendre(1)(mu_grid)
+        xi_rel += A_rel_3 * xi[3 // 2, :] * special.legendre(3)(mu_grid)
         return xi_rel
 
     def pk_to_xi_asymmetry(self, r_grid, mu_grid, pk, params):
@@ -376,12 +374,12 @@ class PktoXi:
         """
         # Compute the monopole and quadrupole terms
         ell_vals = [0, 2]
-        xi = self.Pk2Mp(r_grid, self.k_grid, pk, ell_vals, self.muk_grid, self.dmuk, tform='asy')
+        xi = self.Pk2Mp(r_grid, self.k_grid, pk, ell_vals, self.muk_grid, self.dmuk, tform="asy")
 
         # Get the asymmetry parameters and sum over the monopoles
-        A_asy_0 = params['Aasy0']
-        A_asy_2 = params['Aasy2']
-        A_asy_3 = params['Aasy3']
+        A_asy_0 = params["Aasy0"]
+        A_asy_2 = params["Aasy2"]
+        A_asy_3 = params["Aasy3"]
         xi_asy = (A_asy_0 * xi[0, :] - A_asy_2 * xi[1, :]) * r_grid * special.legendre(1)(mu_grid)
         xi_asy += A_asy_3 * xi[1, :] * r_grid * special.legendre(3)(mu_grid)
         return xi_asy

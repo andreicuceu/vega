@@ -1,11 +1,10 @@
 import numpy as np
+from astropy.table import Table
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import expn
-from astropy.table import Table
 
-from . import utils
-from . import redshift_weights
+from . import redshift_weights, utils
 
 
 class CorrelationFunction:
@@ -18,10 +17,19 @@ class CorrelationFunction:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
+
     def __init__(
-        self, config, fiducial, coordinates, scale_params,
-        tracer1, tracer2, cosmo=None, metal_corr=False,
-        full_config=None, use_catalog_bias_evolution=False
+        self,
+        config,
+        fiducial,
+        coordinates,
+        scale_params,
+        tracer1,
+        tracer2,
+        cosmo=None,
+        metal_corr=False,
+        full_config=None,
+        use_catalog_bias_evolution=False,
     ):
         """
 
@@ -53,18 +61,19 @@ class CorrelationFunction:
         self._r = coordinates.r_grid
         self._mu = coordinates.mu_grid
         self._z = coordinates.z_grid
-        self._multipole = config.getint('single_multipole', -1)
+        self._multipole = config.getint("single_multipole", -1)
         self._tracer1 = tracer1
         self._tracer2 = tracer2
-        self._is_auto = (
-            (self._tracer1['type'] == 'continuous') and (self._tracer2['type'] == 'continuous'))
-        self._corr_name = f'{tracer1["name"]}x{tracer2["name"]}'
-        self._z_eff = fiducial['z_eff']
+        self._is_auto = (self._tracer1["type"] == "continuous") and (
+            self._tracer2["type"] == "continuous"
+        )
+        self._corr_name = f"{tracer1['name']}x{tracer2['name']}"
+        self._z_eff = fiducial["z_eff"]
         self._scale_params = scale_params
         self._metal_corr = metal_corr
-        self._use_new_bias_evol = config.getboolean('new-bias-evolution', False)
+        self._use_new_bias_evol = config.getboolean("new-bias-evolution", False)
         self._use_catalog_bias_evol = bool(use_catalog_bias_evolution) and not metal_corr
-        self._rescale_coords_systematics = config.getboolean('rescale-coords-systematics', False)
+        self._rescale_coords_systematics = config.getboolean("rescale-coords-systematics", False)
 
         # Catalog bias evolution state (filled in init_bias_evol when enabled)
         self._catalog_weights = None  # {1: (z, w, z_eff), 2: (z, w, z_eff)}
@@ -72,56 +81,62 @@ class CorrelationFunction:
         self.z_eff_QSO = None
 
         # Initialize the bias evolution
-        self.init_bias_evol(tracer1['type'], tracer2['type'], cosmo)
+        self.init_bias_evol(tracer1["type"], tracer2["type"], cosmo)
 
         # Check if we need delta rp (Only for the cross)
         self._delta_rp_name = None
-        if tracer1['type'] == 'discrete' and tracer2['type'] != 'discrete':
-            self._delta_rp_name = 'drp_' + tracer1['name']
-        elif tracer2['type'] == 'discrete' and tracer1['type'] != 'discrete':
-            self._delta_rp_name = 'drp_' + tracer2['name']
+        if tracer1["type"] == "discrete" and tracer2["type"] != "discrete":
+            self._delta_rp_name = "drp_" + tracer1["name"]
+        elif tracer2["type"] == "discrete" and tracer1["type"] != "discrete":
+            self._delta_rp_name = "drp_" + tracer2["name"]
 
         # Precompute growth
-        self._z_fid = fiducial['z_fiducial']
-        self._Omega_m = fiducial.get('Omega_m', None)
-        self._Omega_de = fiducial.get('Omega_de', None)
-        if not config.getboolean('old_growth_func', False):
+        self._z_fid = fiducial["z_fiducial"]
+        self._Omega_m = fiducial.get("Omega_m", None)
+        self._Omega_de = fiducial.get("Omega_de", None)
+        if not config.getboolean("old_growth_func", False):
             self.xi_growth = self.compute_growth(
-                self._z, self._z_fid, self._Omega_m, self._Omega_de)
+                self._z, self._z_fid, self._Omega_m, self._Omega_de
+            )
         else:
             self.xi_growth = self.compute_growth_old(
-                self._z, self._z_fid, self._Omega_m, self._Omega_de)
+                self._z, self._z_fid, self._Omega_m, self._Omega_de
+            )
 
         # Check for QSO radiation modeling and check if it is QSOxLYA
         # Does this work for the QSO auto as well?
         self.radiation_flag = False
-        if 'radiation effects' in self._config:
-            self.radiation_flag = self._config.getboolean('radiation effects')
+        if "radiation effects" in self._config:
+            self.radiation_flag = self._config.getboolean("radiation effects")
             if self.radiation_flag:
-                names = [self._tracer1['name'], self._tracer2['name']]
-                if not ('QSO' in names and 'LYA' in names):
-                    raise ValueError('You asked for QSO radiation effects, but it'
-                                     ' can only be applied to the cross (QSOxLya)')
+                names = [self._tracer1["name"], self._tracer2["name"]]
+                if not ("QSO" in names and "LYA" in names):
+                    raise ValueError(
+                        "You asked for QSO radiation effects, but it"
+                        " can only be applied to the cross (QSOxLya)"
+                    )
 
         # Check for relativistic effects and standard asymmetry
         self.relativistic_flag = False
-        if 'relativistic correction' in self._config:
-            self.relativistic_flag = self._config.getboolean('relativistic correction')
+        if "relativistic correction" in self._config:
+            self.relativistic_flag = self._config.getboolean("relativistic correction")
 
         self.asymmetry_flag = False
-        if 'standard asymmetry' in self._config:
-            self.asymmetry_flag = self._config.getboolean('standard asymmetry')
+        if "standard asymmetry" in self._config:
+            self.asymmetry_flag = self._config.getboolean("standard asymmetry")
         if self.relativistic_flag or self.asymmetry_flag:
-            types = [self._tracer1['type'], self._tracer2['type']]
-            if ('continuous' not in types) or (types[0] == types[1]):
-                raise ValueError('You asked for relativistic effects or standard asymmetry,'
-                                 ' but they only work for the cross')
+            types = [self._tracer1["type"], self._tracer2["type"]]
+            if ("continuous" not in types) or (types[0] == types[1]):
+                raise ValueError(
+                    "You asked for relativistic effects or standard asymmetry,"
+                    " but they only work for the cross"
+                )
 
         self.uv_shotnoise_flag = False
         self._uv_shotnoise_tau = None
         self._uv_shotnoise_A = None
-        if 'UVB-shotnoise' in self._config:
-            self.uv_shotnoise_flag = self._config.getboolean('UVB-shotnoise')
+        if "UVB-shotnoise" in self._config:
+            self.uv_shotnoise_flag = self._config.getboolean("UVB-shotnoise")
             self._uv_shotnoise_tau, self._uv_shotnoise_A = self.compute_shotnoise_A()
 
         # Place holder for interpolation function for DESI intrumental systematics
@@ -156,7 +171,7 @@ class CorrelationFunction:
         xi *= self.xi_growth
 
         # Add QSO radiation modeling for cross
-        if self.radiation_flag and not params['peak']:
+        if self.radiation_flag and not params["peak"]:
             xi += self.compute_qso_radiation(params, rescaled_r, rescaled_mu)
 
         # Add relativistic effects
@@ -195,13 +210,14 @@ class CorrelationFunction:
         """
 
         # Check for delta rp
-        delta_rp = 0.
+        delta_rp = 0.0
         if self._delta_rp_name is not None:
-            delta_rp = params.get(self._delta_rp_name, 0.)
+            delta_rp = params.get(self._delta_rp_name, 0.0)
 
         # Get rescaled Xi coordinates
         ap, at = self._scale_params.get_ap_at(
-            params, corr_name=self._corr_name, metal_corr=self._metal_corr)
+            params, corr_name=self._corr_name, metal_corr=self._metal_corr
+        )
 
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
@@ -211,7 +227,7 @@ class CorrelationFunction:
         return xi, rescaled_r, rescaled_mu
 
     @staticmethod
-    def _rescale_coords(r, mu, ap, at, delta_rp=0.):
+    def _rescale_coords(r, mu, ap, at, delta_rp=0.0):
         """Rescale Xi coordinates using ap/at.
 
         Parameters
@@ -237,7 +253,7 @@ class CorrelationFunction:
         """
         mask = r != 0
         rp = r[mask] * mu[mask] + delta_rp
-        rt = r[mask] * np.sqrt(1 - mu[mask]**2)
+        rt = r[mask] * np.sqrt(1 - mu[mask] ** 2)
         rescaled_rp = ap * rp
         rescaled_rt = at * rt
 
@@ -263,29 +279,30 @@ class CorrelationFunction:
         """
         # Catalog-averaged bias evolution for QSO-involving correlations
         if self._use_catalog_bias_evol:
-            involves_qso = (type1 == 'discrete') or (type2 == 'discrete')
+            involves_qso = (type1 == "discrete") or (type2 == "discrete")
             if not involves_qso:
                 # Forest autos: keep classic pair-mean evolution (backward compatible)
                 self._use_catalog_bias_evol = False
             else:
                 if self._use_new_bias_evol:
-                    print("WARNING: catalog-bias-evolution supersedes new-bias-evolution; "
-                          "disabling geometric z_Q/z_F split.")
+                    print(
+                        "WARNING: catalog-bias-evolution supersedes new-bias-evolution; "
+                        "disabling geometric z_Q/z_F split."
+                    )
                     self._use_new_bias_evol = False
                 self._init_catalog_bias_evol()
                 # Still define classic relative evolution as fallback for growth grids etc.
-                self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+                self._rel_z_evol = (1.0 + self._z) / (1 + self._z_eff)
                 return
 
         # For auto-correlations use mean redshift and return
-        self._rel_z_evol = (1. + self._z) / (1 + self._z_eff)
+        self._rel_z_evol = (1.0 + self._z) / (1 + self._z_eff)
         if type1 == type2:
             self._use_new_bias_evol = False
             return
 
         if cosmo is None:
-            print("Warning: No cosmology found in xcf files, "
-                  "using mean redshift evolution.")
+            print("Warning: No cosmology found in xcf files, using mean redshift evolution.")
             self._use_new_bias_evol = False
             return
 
@@ -295,27 +312,29 @@ class CorrelationFunction:
         z_q = self._z - rp / (2 * cosmo.get_dist_hubble(self._z))
         z_f = self._z + rp / (2 * cosmo.get_dist_hubble(self._z))
 
-        rel_z_evol_q = (1. + z_q) / (1 + self._z_eff)
-        rel_z_evol_f = (1. + z_f) / (1 + self._z_eff)
+        rel_z_evol_q = (1.0 + z_q) / (1 + self._z_eff)
+        rel_z_evol_f = (1.0 + z_f) / (1 + self._z_eff)
 
         assert type1 != type2
-        self._rel_z_evol_1 = rel_z_evol_q if type1 == 'discrete' else rel_z_evol_f
-        self._rel_z_evol_2 = rel_z_evol_q if type2 == 'discrete' else rel_z_evol_f
+        self._rel_z_evol_1 = rel_z_evol_q if type1 == "discrete" else rel_z_evol_f
+        self._rel_z_evol_2 = rel_z_evol_q if type2 == "discrete" else rel_z_evol_f
 
     def _init_catalog_bias_evol(self):
         """Load per-tracer catalog weights and compute z_eff_LYA / z_eff_QSO."""
         self._catalog_weights = {}
         for side, tracer in ((1, self._tracer1), (2, self._tracer2)):
-            absorber = tracer.get('name', 'LYA')
+            absorber = tracer.get("name", "LYA")
             # Metal / region names still map through ABSORBER_IGM for continuous
-            if tracer['type'] == 'continuous' and absorber not in ('LYA', 'LYB'):
-                absorber = 'LYA'
+            if tracer["type"] == "continuous" and absorber not in ("LYA", "LYB"):
+                absorber = "LYA"
             z_arr, w_arr = redshift_weights.load_tracer_redshift_weights(
-                tracer, config=self._full_config, absorber_name=absorber
-                if absorber in ('LYA', 'LYB') else 'LYA')
+                tracer,
+                config=self._full_config,
+                absorber_name=absorber if absorber in ("LYA", "LYB") else "LYA",
+            )
             z_mean = redshift_weights.weighted_mean_z(z_arr, w_arr)
 
-            if tracer['type'] == 'discrete':
+            if tracer["type"] == "discrete":
                 self.z_eff_QSO = z_mean
                 pivot = z_mean
             else:
@@ -324,14 +343,16 @@ class CorrelationFunction:
                 pivot = z_mean
 
             self._catalog_weights[side] = {
-                'tracer': tracer,
-                'z': z_arr,
-                'weights': w_arr,
-                'z_eff': pivot,
+                "tracer": tracer,
+                "z": z_arr,
+                "weights": w_arr,
+                "z_eff": pivot,
             }
 
-        print(f"INFO: catalog-bias-evolution for {self._corr_name}: "
-              f"z_eff_LYA={self.z_eff_LYA}, z_eff_QSO={self.z_eff_QSO}")
+        print(
+            f"INFO: catalog-bias-evolution for {self._corr_name}: "
+            f"z_eff_LYA={self.z_eff_LYA}, z_eff_QSO={self.z_eff_QSO}"
+        )
 
     def compute_bias_evol(self, params):
         """Compute bias evolution for the correlation function.
@@ -356,8 +377,8 @@ class CorrelationFunction:
             rel_z_evol_1, rel_z_evol_2 = self._rel_z_evol, self._rel_z_evol
 
         # Compute the bias evolution
-        bias_evol = self._get_tracer_evol(params, self._tracer1['name'], rel_z_evol_1)
-        bias_evol *= self._get_tracer_evol(params, self._tracer2['name'], rel_z_evol_2)
+        bias_evol = self._get_tracer_evol(params, self._tracer1["name"], rel_z_evol_1)
+        bias_evol *= self._get_tracer_evol(params, self._tracer2["name"], rel_z_evol_2)
 
         return bias_evol
 
@@ -366,28 +387,29 @@ class CorrelationFunction:
         factor = 1.0
         for side in (1, 2):
             info = self._catalog_weights[side]
-            tracer = info['tracer']
-            name = tracer['name']
-            handle_name = f'z evol {name}'
+            tracer = info["tracer"]
+            name = tracer["name"]
+            handle_name = f"z evol {name}"
             if handle_name in self._config:
-                evol_model = self._config.get(handle_name, 'standard')
+                evol_model = self._config.get(handle_name, "standard")
             else:
-                evol_model = self._config.get('z evol', 'standard')
+                evol_model = self._config.get("z evol", "standard")
 
-            if 'croom' in evol_model:
+            if "croom" in evol_model:
                 # Average Croom factor over the catalog redshifts
                 assert name == "QSO"
                 p0 = params["croom_par0"]
                 p1 = params["croom_par1"]
-                z = info['z']
-                w = info['weights']
-                num = p0 + p1 * (1. + z)**2
-                den = p0 + p1 * (1. + info['z_eff'])**2
+                z = info["z"]
+                w = info["weights"]
+                num = p0 + p1 * (1.0 + z) ** 2
+                den = p0 + p1 * (1.0 + info["z_eff"]) ** 2
                 factor *= float(np.sum(w * (num / den)) / np.sum(w))
             else:
-                alpha = params[f'alpha_{name}']
+                alpha = params[f"alpha_{name}"]
                 factor *= redshift_weights.catalog_bias_evolution_factor(
-                    info['z'], info['weights'], alpha, info['z_eff'])
+                    info["z"], info["weights"], alpha, info["z_eff"]
+                )
         return factor
 
     def _get_tracer_evol(self, params, tracer_name, rel_z_evol):
@@ -405,15 +427,15 @@ class CorrelationFunction:
         ND Array
             Bias evolution for tracer
         """
-        handle_name = 'z evol {}'.format(tracer_name)
+        handle_name = "z evol {}".format(tracer_name)
 
         if handle_name in self._config:
-            evol_model = self._config.get(handle_name, 'standard')
+            evol_model = self._config.get(handle_name, "standard")
         else:
-            evol_model = self._config.get('z evol', 'standard')
+            evol_model = self._config.get("z evol", "standard")
 
         # Compute the bias evolution using the right model
-        if 'croom' in evol_model:
+        if "croom" in evol_model:
             assert not self._use_new_bias_evol, "Croom model is not supported with new bias evol"
             bias_evol = self._bias_evol_croom(params, tracer_name)
         else:
@@ -437,7 +459,7 @@ class CorrelationFunction:
         ND Array
             Bias evolution for tracer
         """
-        p0 = params['alpha_{}'.format(tracer_name)]
+        p0 = params["alpha_{}".format(tracer_name)]
         return rel_z_evol**p0
 
     def _bias_evol_croom(self, params, tracer_name):
@@ -458,11 +480,10 @@ class CorrelationFunction:
         assert tracer_name == "QSO"
         p0 = params["croom_par0"]
         p1 = params["croom_par1"]
-        bias_z = (p0 + p1*(1. + self._z)**2) / (p0 + p1 * (1 + self._z_eff)**2)
+        bias_z = (p0 + p1 * (1.0 + self._z) ** 2) / (p0 + p1 * (1 + self._z_eff) ** 2)
         return bias_z
 
-    def compute_growth(self, z_grid=None, z_fid=None,
-                       Omega_m=None, Omega_de=None):
+    def compute_growth(self, z_grid=None, z_fid=None, Omega_m=None, Omega_de=None):
         """Compute growth factor.
 
         Implements eq. 7.77 from S. Dodelson's Modern Cosmology book.
@@ -484,7 +505,7 @@ class CorrelationFunction:
 
         # Check if we have dark energy
         if Omega_de is None:
-            growth = (1 + z_fid) / (1. + z_grid)
+            growth = (1 + z_fid) / (1.0 + z_grid)
             return growth**2
 
         # Compute the growth at each redshift on the grid
@@ -513,22 +534,25 @@ class CorrelationFunction:
         ND Array
             Growth factor squared, normalized to the fiducial redshift
         """
+
         def hubble(z, Omega_m, Omega_de):
-            return np.sqrt(Omega_m*(1+z)**3 + Omega_de + (1-Omega_m-Omega_de)*(1+z)**2)
+            return np.sqrt(
+                Omega_m * (1 + z) ** 3 + Omega_de + (1 - Omega_m - Omega_de) * (1 + z) ** 2
+            )
 
         def dD1(a, Omega_m, Omega_de):
-            z = 1/a-1
-            return 1./(a*hubble(z, Omega_m, Omega_de))**3
+            z = 1 / a - 1
+            return 1.0 / (a * hubble(z, Omega_m, Omega_de)) ** 3
 
         # Calculate D1 in 100 values of z between 0 and zmax, then interpolate
         nbins = 100
-        zmax = 5.
-        z = zmax * np.arange(nbins, dtype=float) / (nbins-1)
+        zmax = 5.0
+        z = zmax * np.arange(nbins, dtype=float) / (nbins - 1)
         D1 = np.zeros(nbins, dtype=float)
         pars = (Omega_m, Omega_de)
         for i in range(nbins):
-            a = 1/(1+z[i])
-            D1[i] = 5/2.*Omega_m*hubble(z[i], *pars)*quad(dD1, 0, a, args=pars)[0]
+            a = 1 / (1 + z[i])
+            D1[i] = 5 / 2.0 * Omega_m * hubble(z[i], *pars) * quad(dD1, 0, a, args=pars)[0]
 
         D1 = interp1d(z, D1)
 
@@ -553,11 +577,11 @@ class CorrelationFunction:
         1D
             Xi QSO radiation model
         """
-        assert 'QSO' in [self._tracer1['name'], self._tracer2['name']]
-        assert self._tracer1['name'] != self._tracer2['name']
+        assert "QSO" in [self._tracer1["name"], self._tracer2["name"]]
+        assert self._tracer1["name"] != self._tracer2["name"]
 
         # Compute the shifted r and mu grids
-        delta_rp = params.get(self._delta_rp_name, 0.)
+        delta_rp = params.get(self._delta_rp_name, 0.0)
 
         if self._rescale_coords_systematics:
             rp = rescaled_r * rescaled_mu + delta_rp
@@ -570,10 +594,10 @@ class CorrelationFunction:
         mu_shift = rp / r_shift
 
         # Get the QSO radiation model parameters
-        strength = params['qso_rad_strength']
-        asymmetry = params['qso_rad_asymmetry']
-        lifetime = params['qso_rad_lifetime']
-        decrease = params['qso_rad_decrease']
+        strength = params["qso_rad_strength"]
+        asymmetry = params["qso_rad_asymmetry"]
+        lifetime = params["qso_rad_lifetime"]
+        decrease = params["qso_rad_decrease"]
 
         # Compute the QSO radiation model
         xi_rad = strength / (r_shift**2) * (1 - asymmetry * (1 - mu_shift**2))
@@ -598,11 +622,11 @@ class CorrelationFunction:
         1D Array
             Output xi relativistic
         """
-        assert 'continuous' in [self._tracer1['type'], self._tracer2['type']]
-        assert self._tracer1['type'] != self._tracer2['type']
+        assert "continuous" in [self._tracer1["type"], self._tracer2["type"]]
+        assert self._tracer1["type"] != self._tracer2["type"]
 
         # Get rescaled Xi coordinates
-        delta_rp = params.get(self._delta_rp_name, 0.)
+        delta_rp = params.get(self._delta_rp_name, 0.0)
         ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
@@ -629,11 +653,11 @@ class CorrelationFunction:
         1D Array
             Output xi asymmetry
         """
-        assert 'continuous' in [self._tracer1['type'], self._tracer2['type']]
-        assert self._tracer1['type'] != self._tracer2['type']
+        assert "continuous" in [self._tracer1["type"], self._tracer2["type"]]
+        assert self._tracer1["type"] != self._tracer2["type"]
 
         # Get rescaled Xi coordinates
-        delta_rp = params.get(self._delta_rp_name, 0.)
+        delta_rp = params.get(self._delta_rp_name, 0.0)
         ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
         rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
 
@@ -658,21 +682,21 @@ class CorrelationFunction:
         1D Array
             Output correction
         """
-        if self._tracer1['type'] != self._tracer2['type']:
-            raise ValueError('DESI instrumental systematics model only applies '
-                             'to auto-correlation functions.')
+        if self._tracer1["type"] != self._tracer2["type"]:
+            raise ValueError(
+                "DESI instrumental systematics model only applies to auto-correlation functions."
+            )
 
         rp = self._r * self._mu
         rt = self._r * np.sqrt(1 - self._mu**2)
 
         # b = 0.0003189935987295203
-        b = params.get('desi_inst_sys_amp', 0.0003189935987295203)
+        b = params.get("desi_inst_sys_amp", 0.0003189935987295203)
 
         w = (rp > 0) & (rp < bin_size_rp)
         correction = np.zeros(rt.shape)
 
         if self.desi_instrumental_systematics_interp is None:
-
             # See in the cvs table directory the code to generate the table.
             # This is the correlation function induced by the sky model white noise.
             path = "instrumental_systematics/desi-instrument-syst-for-forest-auto-correlation.csv"
@@ -680,7 +704,8 @@ class CorrelationFunction:
             print("Reading desi_instrumental_systematics table", table_filename)
             syst_table = Table.read(table_filename)
             self.desi_instrumental_systematics_interp = interp1d(
-                syst_table["RT"], syst_table["XI"], kind='linear')
+                syst_table["RT"], syst_table["XI"], kind="linear"
+            )
 
         correction[w] = b * self.desi_instrumental_systematics_interp(rt[w])
 
@@ -708,12 +733,13 @@ class CorrelationFunction:
         tau = np.linspace(0.01, 5, ntau)
         a = np.zeros(tau.size)
         rho = np.linspace(0.0001, 10, nrho)
-        drho = rho[1]-rho[0]
+        drho = rho[1] - rho[0]
         for i, t in enumerate(tau):
             a[i] = -np.sum(
-                drho * np.exp(-rho) / rho * (
-                    expn(1, rho * np.sqrt(1 + (t/rho)**2)) - expn(1, rho * np.abs(1 - t/rho))
-                )
+                drho
+                * np.exp(-rho)
+                / rho
+                * (expn(1, rho * np.sqrt(1 + (t / rho) ** 2)) - expn(1, rho * np.abs(1 - t / rho)))
             )
         return tau, a
 
@@ -759,9 +785,9 @@ class CorrelationFunction:
         # lambda0 = 1/kappa0 is the mean free path of ionizing photons
         # in Gontcho A Gontcho et al, arxiv:1404.7425
         lambda_uv = params["lambda_uv"]
-        if 'bias_gamma' in params:
+        if "bias_gamma" in params:
             bias_gamma = params["bias_gamma"]
-        elif 'bias_gamma_e' in params:
+        elif "bias_gamma_e" in params:
             bias_gamma = params["bias_gamma_e"]
         else:
             raise ValueError(

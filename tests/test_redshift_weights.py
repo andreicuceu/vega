@@ -1,4 +1,5 @@
 """Tests for catalog redshift weights and bias-evolution factors."""
+
 import importlib.util
 from pathlib import Path
 
@@ -7,8 +8,8 @@ import pytest
 
 from vega.utils import find_file
 
-_RW_PATH = Path(__file__).resolve().parents[1] / 'vega' / 'redshift_weights.py'
-_spec = importlib.util.spec_from_file_location('vega_redshift_weights', _RW_PATH)
+_RW_PATH = Path(__file__).resolve().parents[1] / "vega" / "redshift_weights.py"
+_spec = importlib.util.spec_from_file_location("vega_redshift_weights", _RW_PATH)
 rw = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rw)
 
@@ -31,7 +32,7 @@ def test_catalog_bias_evolution_hand_computation():
     w = np.array([1.0, 2.0, 1.0])
     alpha = 1.5
     z_eff = 2.4
-    expected = np.sum(w * ((1 + z) / (1 + z_eff))**alpha) / np.sum(w)
+    expected = np.sum(w * ((1 + z) / (1 + z_eff)) ** alpha) / np.sum(w)
     assert rw.catalog_bias_evolution_factor(z, w, alpha, z_eff) == pytest.approx(expected)
 
 
@@ -42,7 +43,7 @@ def test_catalog_bias_evolution_differs_from_mean_z_evaluation():
     alpha = 1.44
     z_mean = rw.weighted_mean_z(z, w)
     f_cat = rw.catalog_bias_evolution_factor(z, w, alpha, z_mean)
-    f_mean = ((1 + z_mean) / (1 + z_mean))**alpha
+    f_mean = ((1 + z_mean) / (1 + z_mean)) ** alpha
     assert f_mean == pytest.approx(1.0)
     assert f_cat != pytest.approx(1.0)
 
@@ -57,7 +58,7 @@ def test_rebin():
 
 def test_qso_catalog_weights():
     """QSO catalog fixture yields stable catalog-weighted z_eff."""
-    z, w = rw.get_qso_weights(find_file('data/qsoauto_zcat.fits'))
+    z, w = rw.get_qso_weights(find_file("data/qsoauto_zcat.fits"))
     z_eff = rw.weighted_mean_z(z, w)
     assert z.shape == w.shape
     assert np.all(w > 0)
@@ -67,9 +68,9 @@ def test_qso_catalog_weights():
 
 def test_load_tracer_redshift_weights():
     tracer = {
-        'name': 'QSO',
-        'type': 'discrete',
-        'weights-path': find_file('data/qsoauto_zcat.fits'),
+        "name": "QSO",
+        "type": "discrete",
+        "weights-path": find_file("data/qsoauto_zcat.fits"),
     }
     z, w = rw.load_tracer_redshift_weights(tracer)
     assert rw.weighted_mean_z(z, w) == pytest.approx(2.376196, rel=1e-5)
