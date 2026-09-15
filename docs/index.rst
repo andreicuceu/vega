@@ -5,7 +5,7 @@ Vega is a tool for computing 3D correlation function and power spectrum models p
 
 Vega is currently being used by the Lyα forest working group in DESI to measure Baryon Acoustic Oscillations (BAO) and perform full-shape analyses of Lyα forest auto- and cross-correlations (e.g., `DESI et al. 2025a <https://doi.org/10.1088/1475-7516/2025/01/124>`__, `DESI et al. 2025b <https://doi.org/10.1103/2wwn-xjm5>`__, `Cuceu et al. 2025 <https://doi.org/10.48550/arXiv.2509.15308>`__).
 
-* Free software: GPL-3.0 License
+* Free software: GPL-3.0-or-later License
 * Documentation: https://vega.readthedocs.io.
 * Referencing: If you use Vega in a publication, please give the link to this repository (https://github.com/andreicuceu/vega). The best descriptions of what the code does are found in `Cuceu et al. (2022) <https://doi.org/10.1093/mnras/stad1546>`__ and `Cuceu et al. (2025) <https://doi.org/10.48550/arXiv.2509.15308>`__.
 
