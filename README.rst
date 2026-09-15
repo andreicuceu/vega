@@ -19,6 +19,8 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 * Documentation: https://vega.readthedocs.io.
 * Referencing: If you use Vega in a publication, please give the link to this repository (https://github.com/andreicuceu/vega). The best descriptions of what the code does are found in `Cuceu et al. (2022) <https://doi.org/10.1093/mnras/stad1546>`__ and `Cuceu et al. (2025) <https://doi.org/10.48550/arXiv.2509.15308>`__.
 
+.. docs-install-start
+
 Installation
 ------------
 
@@ -60,6 +62,10 @@ that contain ``.git_archival.txt`` can recover their version without a
 ``.git`` directory, but the release wheel and source distribution remain the
 canonical installation inputs.
 
+.. _GitHub Releases: https://github.com/andreicuceu/Vega/releases
+
+.. docs-install-end
+
 If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
 
 .. code-block:: console
@@ -74,7 +80,6 @@ The sampler and a few other modules in Vega need mpi4py. If you are at NERSC, yo
 
 Vega currently has interfaces for one sampler: `Polychord`_. You do not need to install it to run the iminuit minimizer. You can find the instructions for installing at NERSC Polychord below.
 
-.. _GitHub Releases: https://github.com/andreicuceu/Vega/releases
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
 Installing Polychord
