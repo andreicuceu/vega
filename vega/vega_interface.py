@@ -1,26 +1,25 @@
 """Main module."""
-import os.path
-import numpy as np
-import scipy.stats
-from scipy.sparse import block_array, eye_array
-from astropy.io import fits
+
 import configparser
 import copy
-from importlib.metadata import version, PackageNotFoundError
+import os.path
+from importlib.metadata import PackageNotFoundError, version
 
 import numpy as np
 import scipy.stats
 from astropy.io import fits
+from scipy.sparse import block_array, eye_array
 
-from . import correlation_item, data, utils
-from vega.scale_parameters import ScaleParameters
-from vega.model import Model
-from vega.minimizer import Minimizer
 from vega.analysis import Analysis
+from vega.minimizer import Minimizer
+from vega.model import Model
 from vega.output import Output
 from vega.parameters.param_utils import get_default_values
 from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
+from vega.scale_parameters import ScaleParameters
+
+from . import correlation_item, data, utils
 
 
 class VegaInterface:
@@ -32,6 +31,7 @@ class VegaInterface:
 
     Handle the parameter config and call the analysis class.
     """
+
     _blind = None
     _use_global_cov = False
     global_cov = None
@@ -47,9 +47,9 @@ class VegaInterface:
         """
         try:
             package_version = version("vega")
-            print(f'Initializing Vega version {package_version}')
+            print(f"Initializing Vega version {package_version}")
         except PackageNotFoundError:
-            print('Vega version not found. Continuing initialization.')
+            print("Vega version not found. Continuing initialization.")
 
         # Read the main config file
         self.main_config = configparser.ConfigParser()
@@ -57,25 +57,27 @@ class VegaInterface:
         self.main_config.read(utils.find_file(main_path))
 
         # Read the fiducial pk file
-        self.fiducial = self._read_fiducial(self.main_config['fiducial'])
+        self.fiducial = self._read_fiducial(self.main_config["fiducial"])
 
         # Read the effective redshift and the data config paths
-        self.fiducial['z_eff'] = self.main_config['data sets'].getfloat('zeff')
-        write_cf = self.main_config['output'].getboolean('write_cf', False)
-        write_pk = self.main_config['output'].getboolean('write_pk', False)
-        self.fiducial['save-components'] = write_cf or write_pk
-        ini_files = self.main_config['data sets'].get('ini files').split()
-        global_cov_file = self.main_config['data sets'].get('global-cov-file', None)
-        self.apply_global_hartlap = self.main_config['data sets'].getboolean(
-            'apply-global-hartlap', False)
+        self.fiducial["z_eff"] = self.main_config["data sets"].getfloat("zeff")
+        write_cf = self.main_config["output"].getboolean("write_cf", False)
+        write_pk = self.main_config["output"].getboolean("write_pk", False)
+        self.fiducial["save-components"] = write_cf or write_pk
+        ini_files = self.main_config["data sets"].get("ini files").split()
+        global_cov_file = self.main_config["data sets"].get("global-cov-file", None)
+        self.apply_global_hartlap = self.main_config["data sets"].getboolean(
+            "apply-global-hartlap", False
+        )
         self._percival_corr = 1.0
 
-        self.model_pk = self.main_config['control'].getboolean('model_pk', False)
-        self.low_mem_mode = self.main_config['control'].getboolean('low_mem_mode', False)
+        self.model_pk = self.main_config["control"].getboolean("model_pk", False)
+        self.low_mem_mode = self.main_config["control"].getboolean("low_mem_mode", False)
         self.low_mem_mode &= global_cov_file is not None
 
-        self.marginalize_in_fit = self.main_config['control'].getboolean(
-            'marginalize-in-fit', False)
+        self.marginalize_in_fit = self.main_config["control"].getboolean(
+            "marginalize-in-fit", False
+        )
         if self.marginalize_in_fit:
             print("Marginalizing in fit")
 
@@ -86,42 +88,43 @@ class VegaInterface:
             config.optionxform = lambda option: option
             config.read(utils.find_file(os.path.expandvars(path)))
 
-            name = config['data'].get('name')
+            name = config["data"].get("name")
             self.corr_items[name] = correlation_item.CorrelationItem(config, self.model_pk)
             self.corr_items[name].low_mem_mode = self.low_mem_mode
 
         # Read parameters
-        self.params = self._read_parameters(self.corr_items, self.main_config['parameters'])
-        self.sample_params = self._read_sample(self.main_config['sample'])
+        self.params = self._read_parameters(self.corr_items, self.main_config["parameters"])
+        self.sample_params = self._read_sample(self.main_config["sample"])
 
         # Set growth rate
-        use_template_growth_rate = self.main_config['control'].getboolean(
-            'use_template_growth_rate', True)
-        if use_template_growth_rate and 'growth_rate' in self.fiducial:
-            assert 'growth_rate' not in self.sample_params['limits'], (
+        use_template_growth_rate = self.main_config["control"].getboolean(
+            "use_template_growth_rate", True
+        )
+        if use_template_growth_rate and "growth_rate" in self.fiducial:
+            assert "growth_rate" not in self.sample_params["limits"], (
                 "use_template_growth_rate is True, but growth_rate is in the sample params. "
                 "Remove growth_rate from [sample] or set use_template_growth_rate = False."
             )
-            self.params['growth_rate'] = self.fiducial['growth_rate']
-        elif 'growth_rate' not in self.fiducial:
-            print('WARNING: No growth rate specified in the template file. Using input value.')
-            if 'growth_rate' in self.params:
-                self.fiducial['growth_rate'] = self.params['growth_rate']
+            self.params["growth_rate"] = self.fiducial["growth_rate"]
+        elif "growth_rate" not in self.fiducial:
+            print("WARNING: No growth rate specified in the template file. Using input value.")
+            if "growth_rate" in self.params:
+                self.fiducial["growth_rate"] = self.params["growth_rate"]
 
-        if 'par_sigma_smooth' in self.params:
-            self.fiducial['par_sigma_smooth'] = self.params['par_sigma_smooth']
-        if 'per_sigma_smooth' in self.params:
-            self.fiducial['per_sigma_smooth'] = self.params['per_sigma_smooth']
+        if "par_sigma_smooth" in self.params:
+            self.fiducial["par_sigma_smooth"] = self.params["par_sigma_smooth"]
+        if "per_sigma_smooth" in self.params:
+            self.fiducial["per_sigma_smooth"] = self.params["per_sigma_smooth"]
 
         # Propagate z_eff to each component so that direct-multipoles components
         # can build their model coordinate z_grid.
         for corr_item in self.corr_items.values():
-            corr_item.z_eff = self.fiducial['z_eff']
+            corr_item.z_eff = self.fiducial["z_eff"]
 
         # Check if all correlations have data files
         self.data = {}
         self._has_data = True
-        for name, corr_item in self.corr_items.items():
+        for corr_item in self.corr_items.values():
             if not corr_item.has_data:
                 self._has_data = False
 
@@ -139,54 +142,61 @@ class VegaInterface:
             self._init_blinding()
 
         # Initialize scale parameters
-        self.scale_params = ScaleParameters(self.main_config['cosmo-fit type'])
+        self.scale_params = ScaleParameters(self.main_config["cosmo-fit type"])
 
         # initialize the models
         self.models = {}
         if self._has_data:
             for name, corr_item in self.corr_items.items():
                 self.models[name] = Model(
-                    corr_item, self.fiducial, self.scale_params, self.data[name])
+                    corr_item, self.fiducial, self.scale_params, self.data[name]
+                )
 
         # Read the monte carlo parameters
         self.mc_config = None
-        if 'monte carlo' in self.main_config:
+        if "monte carlo" in self.main_config:
             self.mc_config = {}
-            config = self.main_config['monte carlo']
+            config = self.main_config["monte carlo"]
 
-            self.mc_config['params'] = {}
-            mc_params = self.main_config['mc parameters']
+            self.mc_config["params"] = {}
+            mc_params = self.main_config["mc parameters"]
             for param, value in mc_params.items():
-                self.mc_config['params'][param] = float(value)
+                self.mc_config["params"][param] = float(value)
 
-            self.mc_config['sample'] = self._read_sample(config)
+            self.mc_config["sample"] = self._read_sample(config)
 
         # Get priors
         self.priors = {}
-        if 'priors' in self.main_config:
-            self.priors = self._init_priors(self.main_config['priors'])
+        if "priors" in self.main_config:
+            self.priors = self._init_priors(self.main_config["priors"])
             for param in self.priors.keys():
-                param_is_not_sampled = param not in self.sample_params['limits']
+                param_is_not_sampled = param not in self.sample_params["limits"]
                 if self.mc_config is not None:
-                    param_is_not_sampled &= param not in self.mc_config['sample']['limits']
+                    param_is_not_sampled &= param not in self.mc_config["sample"]["limits"]
                 if param_is_not_sampled:
                     raise ValueError(
-                        f'Prior specified for a parameter that is not sampled: {param}')
+                        f"Prior specified for a parameter that is not sampled: {param}"
+                    )
 
         # Read the global covariance
-        cov_scale = self.main_config['control'].getfloat('cov_scale', None)
+        cov_scale = self.main_config["control"].getfloat("cov_scale", None)
         if global_cov_file is not None and global_cov_file:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
         # Initialize the minimizer and the analysis objects
-        if not self.sample_params['limits']:
+        if not self.sample_params["limits"]:
             self.minimizer = None
         else:
             self.minimizer = Minimizer(self.chi2, self.sample_params)
         self.analysis = Analysis(
-            self.chi2, self.sample_params, self.main_config,
-            self.corr_items, self.data, self.mc_config, self.global_cov
+            self.chi2,
+            self.sample_params,
+            self.main_config,
+            self.corr_items,
+            self.data,
+            self.mc_config,
+            self.global_cov,
         )
 
         # Check for analytic marginalization configuration
@@ -197,19 +207,23 @@ class VegaInterface:
 
         # Check for sampler
         self.run_sampler = False
-        if 'control' in self.main_config:
-            self.run_sampler = self.main_config['control'].getboolean('run_sampler', False)
-            self.sampler = self.main_config['control'].get('sampler', None)
+        if "control" in self.main_config:
+            self.run_sampler = self.main_config["control"].getboolean("run_sampler", False)
+            self.sampler = self.main_config["control"].get("sampler", None)
             if self.run_sampler:
-                if self.sampler not in ['Polychord', 'PocoMC']:
-                    raise ValueError('Sampler not recognized. Please use Polychord or PocoMC.')
+                if self.sampler not in ["Polychord", "PocoMC"]:
+                    raise ValueError("Sampler not recognized. Please use Polychord or PocoMC.")
                 if self.sampler not in self.main_config:
-                    raise RuntimeError('run_sampler called, but no sampler config found')
+                    raise RuntimeError("run_sampler called, but no sampler config found")
 
         # Initialize the output object
         self.output = Output(
-            self.main_config['output'], self.data, self.corr_items, self.analysis,
-            self.percival_correction)
+            self.main_config["output"],
+            self.data,
+            self.corr_items,
+            self.analysis,
+            self.percival_correction,
+        )
 
         # Initialize the monte carlo flag
         self.monte_carlo = False
@@ -246,11 +260,13 @@ class VegaInterface:
         for name, corr_item in self.corr_items.items():
             if run_init:
                 self.models[name] = Model(
-                    corr_item, self.fiducial, self.scale_params, self.data[name])
+                    corr_item, self.fiducial, self.scale_params, self.data[name]
+                )
 
             if direct_pk is None:
                 model_cf[name] = self.models[name].compute(
-                    local_params, self.fiducial['pk_full'], self.fiducial['pk_smooth'])
+                    local_params, self.fiducial["pk_full"], self.fiducial["pk_smooth"]
+                )
             else:
                 model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
 
@@ -311,7 +327,8 @@ class VegaInterface:
                 full_masked_data = self.analysis.current_mc_mock
             else:
                 full_masked_data = np.concatenate(
-                    [self.data[name].masked_data_vec for name in self.corr_items])
+                    [self.data[name].masked_data_vec for name in self.corr_items]
+                )
 
             full_model = np.concatenate([model_cf[name] for name in self.corr_items])
             diff = full_masked_data - full_model[self.full_model_mask]
@@ -386,9 +403,7 @@ class VegaInterface:
             corr_names = sorted(self.corr_items.keys())
             corr_names = [corr for corr in corr_names if corr in marg_coeff]
             if len(corr_names) > 1:
-                marg_coeff_list = np.hstack([
-                    marg_coeff[corr] for corr in corr_names
-                ])
+                marg_coeff_list = np.hstack([marg_coeff[corr] for corr in corr_names])
             elif len(corr_names) == 1:
                 marg_coeff_list = marg_coeff[corr_names[0]]
             else:
@@ -417,9 +432,9 @@ class VegaInterface:
         if params is not None:
             local_params |= params
 
-        assert self._blind is not None, (
-            "Blinding flag is not set. Call _init_blinding() before computing the model."
-        )
+        assert (
+            self._blind is not None
+        ), "Blinding flag is not set. Call _init_blinding() before computing the model."
         if self._rnsps is not None:
             assert self._blind, (
                 "Blinding offsets (_rnsps) are set but blinding flag is False. "
@@ -428,9 +443,9 @@ class VegaInterface:
             local_params = utils.apply_blinding(local_params, self._rnsps)
 
             # Enforce blinding
-            for par, val in local_params.items():
+            for par in local_params:
                 if par in utils.BLIND_FIXED_PARS:
-                    local_params[par] = 1.
+                    local_params[par] = 1.0
 
         return local_params
 
@@ -452,8 +467,10 @@ class VegaInterface:
         chi2 = 0
         for param, prior in self.priors.items():
             if param not in local_params:
-                err_msg = ("You have specified a prior for a parameter not in "
-                           f"the model. Offending parameter: {param}")
+                err_msg = (
+                    "You have specified a prior for a parameter not in "
+                    f"the model. Offending parameter: {param}"
+                )
                 assert param in local_params, err_msg
             chi2 += self._gaussian_chi2_prior(local_params[param], prior[0], prior[1])
 
@@ -475,19 +492,19 @@ class VegaInterface:
         dict
             Fiducial model correlation functions keyed by component name
         """
-        mc_params = self.mc_config['params']
-        mc_start_from_fit = self.main_config['control'].get('mc_start_from_fit', None)
+        mc_params = self.mc_config["params"]
+        mc_start_from_fit = self.main_config["control"].get("mc_start_from_fit", None)
 
         # Read existing fit and use the bestfit values for the MC template
         if mc_start_from_fit is not None:
-            print_func(f'Reading input fit {mc_start_from_fit}')
+            print_func(f"Reading input fit {mc_start_from_fit}")
             existing_fit = FitResults(utils.find_file(mc_start_from_fit))
             mc_params = existing_fit.params | mc_params
-            print_func(f'Set template parameters to {mc_params}.')
+            print_func(f"Set template parameters to {mc_params}.")
 
         # Do fit on input data and use the bestfit values for the MC template
-        elif self.sample_params['limits']:
-            print_func('Running initial fit')
+        elif self.sample_params["limits"]:
+            print_func("Running initial fit")
             # run compute_model once to initialize all the caches
             _ = self.compute_model(run_init=False)
 
@@ -495,26 +512,29 @@ class VegaInterface:
             self.minimize()
 
             mc_params = self.bestfit.values | mc_params
-            print_func(f'Set template parameters to {mc_params}.')
+            print_func(f"Set template parameters to {mc_params}.")
 
         # Get fiducial model
-        use_measured_fiducial = self.main_config['control'].getboolean(
-            'use_measured_fiducial', False)
+        use_measured_fiducial = self.main_config["control"].getboolean(
+            "use_measured_fiducial", False
+        )
         if use_measured_fiducial:
             fiducial_model = {}
             for name in self.corr_items.keys():
-                fiducial_path = self.main_config['control'].get(f'mc_fiducial_{name}')
+                fiducial_path = self.main_config["control"].get(f"mc_fiducial_{name}")
                 with fits.open(utils.find_file(fiducial_path)) as hdul:
-                    fiducial_model[name] = hdul[1].data['DA']
-                assert fiducial_model[name].size == self.data[name].full_data_size, \
-                    f"Input fiducial model size for {name} does not match data size"
+                    fiducial_model[name] = hdul[1].data["DA"]
+                assert (
+                    fiducial_model[name].size == self.data[name].full_data_size
+                ), f"Input fiducial model size for {name} does not match data size"
 
                 fiducial_model[name] = fiducial_model[name][self.data[name].data_mask]
         else:
-            use_full_pk = self.main_config['control'].getboolean('use_full_pk_for_mc', False)
+            use_full_pk = self.main_config["control"].getboolean("use_full_pk_for_mc", False)
             if use_full_pk:
                 fiducial_model = self.compute_model(
-                    mc_params, run_init=False, direct_pk=self.fiducial['pk_full'])
+                    mc_params, run_init=False, direct_pk=self.fiducial["pk_full"]
+                )
             else:
                 fiducial_model = self.compute_model(mc_params, run_init=False)
 
@@ -542,22 +562,24 @@ class VegaInterface:
         fiducial_model = self.get_fiducial_for_monte_carlo(print_func)
 
         # Reset the minimizer
-        sample_params = self.mc_config['sample']
+        sample_params = self.mc_config["sample"]
         self.minimizer = Minimizer(self.chi2, sample_params)
 
         # Check if we need to run a forecast and get the seed
-        forecast = self.main_config['control'].getboolean('forecast', False)
-        seed = self.main_config['control'].getint('mc_seed', 0)
+        forecast = self.main_config["control"].getboolean("forecast", False)
+        seed = self.main_config["control"].getint("mc_seed", 0)
 
         if self._use_global_cov:
-            if scale is None and 'global_cov_rescale' in self.main_config['control']:
-                scale = self.main_config['control'].getfloat('global_cov_rescale')
+            if scale is None and "global_cov_rescale" in self.main_config["control"]:
+                scale = self.main_config["control"].getfloat("global_cov_rescale")
 
             mocks = self.analysis.create_global_monte_carlo(
-                fiducial_model, seed=seed, scale=scale, forecast=forecast)
+                fiducial_model, seed=seed, scale=scale, forecast=forecast
+            )
         else:
             mocks = self.analysis.create_monte_carlo_sim(
-                fiducial_model, seed=seed, scale=scale, forecast=forecast)
+                fiducial_model, seed=seed, scale=scale, forecast=forecast
+            )
 
         # Activate monte carlo mode
         self.monte_carlo = True
@@ -585,11 +607,9 @@ class VegaInterface:
 
             corr_data = self.data[name]
             if self.monte_carlo:
-                diff = corr_data.masked_mc_mock \
-                    - model_cf[name][corr_data.model_mask]
+                diff = corr_data.masked_mc_mock - model_cf[name][corr_data.model_mask]
             else:
-                diff = corr_data.masked_data_vec \
-                    - model_cf[name][corr_data.model_mask]
+                diff = corr_data.masked_data_vec - model_cf[name][corr_data.model_mask]
 
             # Calculate best-fitting values for the marginalized templates.
             # This approximation ignores global_cov, hence correlations between
@@ -600,14 +620,13 @@ class VegaInterface:
         return bestfit_marg_coeff
 
     def minimize(self):
-        """Minimize the chi2 over the sampled parameters.
-        """
+        """Minimize the chi2 over the sampled parameters."""
         if self.minimizer is None:
             print("No sampled parameters. Skipping minimization.")
             return
 
         # if not self.fiducial['save-components']:
-            # self.set_fast_metals()
+        # self.set_fast_metals()
 
         self.minimizer.minimize()
 
@@ -615,28 +634,28 @@ class VegaInterface:
         self.total_data_size = 0
         self.bestfit_corr_stats = {}
 
-        num_pars = len(self.sample_params['limits'])
-        print('\n----------------------------------------------------')
+        num_pars = len(self.sample_params["limits"])
+        print("\n----------------------------------------------------")
         for name in self.corr_items:
             corr_data = self.data[name]
             data_size = corr_data.effective_data_size
             self.total_data_size += data_size
 
             if self.monte_carlo and self._use_global_cov:
-                diff = self.analysis.unpacked_mc_mock[name] \
+                diff = (
+                    self.analysis.unpacked_mc_mock[name]
                     - self.bestfit_model[name][corr_data.model_mask]
+                )
                 print(
-                    'Do not trust individual chi^2 values when using'
-                    ' the global covariance in Monte Carlo mode.'
+                    "Do not trust individual chi^2 values when using"
+                    " the global covariance in Monte Carlo mode."
                 )
                 chisq = diff.T.dot(corr_data.inv_masked_cov.dot(diff))
             elif self.monte_carlo:
-                diff = corr_data.masked_mc_mock \
-                    - self.bestfit_model[name][corr_data.model_mask]
+                diff = corr_data.masked_mc_mock - self.bestfit_model[name][corr_data.model_mask]
                 chisq = diff.T.dot(corr_data.scaled_inv_masked_cov.dot(diff))
             else:
-                diff = corr_data.masked_data_vec \
-                    - self.bestfit_model[name][corr_data.model_mask]
+                diff = corr_data.masked_data_vec - self.bestfit_model[name][corr_data.model_mask]
                 chisq = diff.T.dot(corr_data.inv_masked_cov.dot(diff))
 
             # Calculate best-fitting values for the marginalized templates.
@@ -650,29 +669,36 @@ class VegaInterface:
             reduced_chisq = chisq / (data_size - num_pars)
             p_value = 1 - scipy.stats.chi2.cdf(chisq, data_size - num_pars)
 
-            print(f'{name} chi^2/(ndata-nparam): {chisq:.1f}/({data_size}-{num_pars}) '
-                  f'= {reduced_chisq:.3f}, PTE={p_value:.2f}')
-            print('----------------------------------------------------')
+            print(
+                f"{name} chi^2/(ndata-nparam): {chisq:.1f}/({data_size}-{num_pars}) "
+                f"= {reduced_chisq:.3f}, PTE={p_value:.2f}"
+            )
+            print("----------------------------------------------------")
 
             self.bestfit_corr_stats[name] = {
-                'masked_size': data_size, 'chisq': chisq, 'reduced_chisq': reduced_chisq,
-                'p_value': p_value, 'bestfit_marg_coeff': bestfit_marg_coeff
+                "masked_size": data_size,
+                "chisq": chisq,
+                "reduced_chisq": reduced_chisq,
+                "p_value": p_value,
+                "bestfit_marg_coeff": bestfit_marg_coeff,
             }
 
         self.chisq = self.minimizer.fmin.fval
         self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
         self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
         self.minimizer.p_value = self.p_value
-        print(f'Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) '
-              f'= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}')
-        print('----------------------------------------------------\n')
+        print(
+            f"Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) "
+            f"= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}"
+        )
+        print("----------------------------------------------------\n")
 
         if self.percival_correction != 1.0:
             print(f"Percival correction factor: {self.percival_correction:.3f}")
             print("Note that the Percival correction has to be manually applied.")
 
         if not self.minimizer.fmin.is_valid:
-            print('Invalid fit!!! Check data, covariance, model and priors.')
+            print("Invalid fit!!! Check data, covariance, model and priors.")
 
     @property
     def percival_correction(self):
@@ -701,7 +727,7 @@ class VegaInterface:
         """Activate fast metals. This is automatically called when
         running the minimizer or the sampler.
         """
-        print('Warning! Activating fast metals for minimizing/sampling.')
+        print("Warning! Activating fast metals for minimizing/sampling.")
         for name in self.corr_items:
             if self.models[name].metals is not None:
                 self.models[name].metals.fast_metals = True
@@ -721,25 +747,25 @@ class VegaInterface:
             dictionary with the fiducial data and config
         """
         # First check the path and replace with the right model if necessary
-        path = fiducial_config.get('filename')
+        path = fiducial_config.get("filename")
         path = utils.find_file(os.path.expandvars(path))
         # if not os.path.isfile(path):
         # path = resource_filename('vega', 'models') + '/{}'.format(path)
-        print('INFO: reading input Pk {}'.format(path))
+        print("INFO: reading input Pk {}".format(path))
 
         fiducial = {}
 
         # Open the fits file and get what we need
         hdul = fits.open(path)
-        fiducial['z_fiducial'] = hdul[1].header['ZREF']
-        fiducial['Omega_m'] = hdul[1].header['OM']
-        fiducial['Omega_de'] = hdul[1].header['OL']
-        fiducial['k'] = hdul[1].data['K']
-        fiducial['pk_full'] = hdul[1].data['PK']
-        fiducial['pk_smooth'] = hdul[1].data['PKSB']
+        fiducial["z_fiducial"] = hdul[1].header["ZREF"]
+        fiducial["Omega_m"] = hdul[1].header["OM"]
+        fiducial["Omega_de"] = hdul[1].header["OL"]
+        fiducial["k"] = hdul[1].data["K"]
+        fiducial["pk_full"] = hdul[1].data["PK"]
+        fiducial["pk_smooth"] = hdul[1].data["PKSB"]
 
-        if 'F_ZREF' in hdul[1].header:
-            fiducial['growth_rate'] = hdul[1].header['F_ZREF']
+        if "F_ZREF" in hdul[1].header:
+            fiducial["growth_rate"] = hdul[1].header["F_ZREF"]
 
         hdul.close()
 
@@ -767,9 +793,9 @@ class VegaInterface:
         params = {}
 
         # First get the parameters from each component config
-        for name, corr_item in corr_items.items():
-            if 'parameters' in corr_item.config:
-                for param, value in corr_item.config.items('parameters'):
+        for corr_item in corr_items.values():
+            if "parameters" in corr_item.config:
+                for param, value in corr_item.config.items("parameters"):
                     params[param] = float(value)
 
         # Next get the parameters in the main config
@@ -801,24 +827,28 @@ class VegaInterface:
         """
         # Initialize the dictionaries we need
         sample_params = {}
-        sample_params['limits'] = {}
-        sample_params['values'] = {}
-        sample_params['errors'] = {}
-        sample_params['fix'] = {}
+        sample_params["limits"] = {}
+        sample_params["values"] = {}
+        sample_params["errors"] = {}
+        sample_params["fix"] = {}
 
         default_values = get_default_values()
 
         def check_param(param):
             if param not in default_values:
-                raise ValueError('Default values not found for: %s. Please add'
-                                 ' them to default_values.txt, or provide the'
-                                 ' full sampling specification.' % param)
+                raise ValueError(
+                    "Default values not found for: %s. Please add"
+                    " them to default_values.txt, or provide the"
+                    " full sampling specification." % param
+                )
 
         for param, values in sample_config.items():
             if param not in self.params:
-                print('Warning: You tried sampling the parameter: %s.'
-                      ' As this parameter was not specified under'
-                      ' [parameters], it will be skipped.' % param)
+                print(
+                    "Warning: You tried sampling the parameter: %s."
+                    " As this parameter was not specified under"
+                    " [parameters], it will be skipped." % param
+                )
                 continue
 
             values_list = values.split()
@@ -828,39 +858,39 @@ class VegaInterface:
             if len(values_list) > 1:
                 lower_limit = None
                 upper_limit = None
-                if values_list[0] != 'None':
+                if values_list[0] != "None":
                     lower_limit = float(values_list[0])
-                if values_list[1] != 'None':
+                if values_list[1] != "None":
                     upper_limit = float(values_list[1])
-                sample_params['limits'][param] = (lower_limit, upper_limit)
+                sample_params["limits"][param] = (lower_limit, upper_limit)
             else:
-                if values_list[0] not in ['True', 'true', 't', 'y', 'yes']:
+                if values_list[0] not in ["True", "true", "t", "y", "yes"]:
                     continue
                 check_param(param)
-                sample_params['limits'][param] = default_values[param]['limits']
+                sample_params["limits"][param] = default_values[param]["limits"]
 
             # Get the values and errors for the fitter
             if len(values_list) > 2:
-                sample_params['values'][param] = float(values_list[2])
+                sample_params["values"][param] = float(values_list[2])
             else:
                 check_param(param)
-                sample_params['values'][param] = self.params[param]
+                sample_params["values"][param] = self.params[param]
 
             if len(values_list) > 3:
                 assert len(values_list) == 4
-                sample_params['errors'][param] = float(values_list[3])
+                sample_params["errors"][param] = float(values_list[3])
             else:
                 check_param(param)
-                sample_params['errors'][param] = default_values[param]['error']
+                sample_params["errors"][param] = default_values[param]["error"]
 
             # Populate the fix values
-            sample_params['fix'][param] = False
+            sample_params["fix"][param] = False
 
         return sample_params
 
     @staticmethod
     def _gaussian_chi2_prior(value, mean, sigma):
-        return (value - mean)**2 / sigma**2
+        return (value - mean) ** 2 / sigma**2
 
     @staticmethod
     def _gaussian_lik_prior(sigma):
@@ -884,18 +914,19 @@ class VegaInterface:
         for param, prior in prior_config.items():
             prior_list = prior.split()
             if len(prior_list) != 3:
-                raise ValueError('Prior configuration must have the format:'
-                                 ' "<param> = gaussian <mean> <sigma>"')
-            if prior_list[0] not in ['gaussian', 'Gaussian']:
-                raise ValueError('Only gaussian priors are supported.')
+                raise ValueError(
+                    "Prior configuration must have the format:"
+                    ' "<param> = gaussian <mean> <sigma>"'
+                )
+            if prior_list[0] not in ["gaussian", "Gaussian"]:
+                raise ValueError("Only gaussian priors are supported.")
 
             prior_dict[param] = np.array(prior_list[1:]).astype(float)
 
         return prior_dict
 
     def _init_blinding(self):
-        """Initialize blinding at the parameter level.
-        """
+        """Initialize blinding at the parameter level."""
         blinding_strat = None
         for data_obj in self.data.values():
             if data_obj.blind:
@@ -904,15 +935,15 @@ class VegaInterface:
                 if blinding_strat is None:
                     blinding_strat = data_obj.blinding_strat
                 elif blinding_strat != data_obj.blinding_strat:
-                    raise ValueError('Different blinding strategies found in the data sets.')
+                    raise ValueError("Different blinding strategies found in the data sets.")
 
         if not self._blind:
             return
 
         blind_pars = []
-        for par in self.sample_params['limits'].keys():
+        for par in self.sample_params["limits"].keys():
             if par in utils.BLIND_FIXED_PARS:
-                raise ValueError(f'Running on blind data, parameter {par} must be fixed.')
+                raise ValueError(f"Running on blind data, parameter {par} must be fixed.")
 
             if par not in utils.VEGA_BLINDED_PARS:
                 continue
@@ -924,9 +955,10 @@ class VegaInterface:
         if len(blind_pars) > 0:
             self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
 
-        if ('bias_QSO' in self.sample_params['limits']) and (
-                'beta_QSO' in self.sample_params['limits']):
-            raise ValueError('Running on blind data and sampling bias_QSO and beta_QSO.')
+        if ("bias_QSO" in self.sample_params["limits"]) and (
+            "beta_QSO" in self.sample_params["limits"]
+        ):
+            raise ValueError("Running on blind data and sampling bias_QSO and beta_QSO.")
 
     def read_global_cov(self, global_cov_file, scale=None):
         """Read the joint covariance matrix from file and prepare it for chi2 computation.
@@ -938,11 +970,11 @@ class VegaInterface:
         scale : float, optional
             Rescaling factor applied to the covariance, by default None
         """
-        print(f'INFO: Reading global covariance from {global_cov_file}')
+        print(f"INFO: Reading global covariance from {global_cov_file}")
         with fits.open(utils.find_file(global_cov_file)) as hdul:
             if self.apply_global_hartlap:
-                nsamples = hdul[1].header['NSAMPLES']
-            self.global_cov = hdul[1].data['COV']
+                nsamples = hdul[1].header["NSAMPLES"]
+            self.global_cov = hdul[1].data["COV"]
             hdr = hdul[1].header
 
             # Validate direct-multipole components against provenance stored by
@@ -950,7 +982,7 @@ class VegaInterface:
             # (number of multipoles in the QSO auto block) and SMIN/SMAX
             # (separation cuts), so we can catch mismatches before reaching the
             # chi2 computation.
-            nell_cov = hdr.get('NELL', None)
+            nell_cov = hdr.get("NELL", None)
             if nell_cov is not None:
                 for name, data_obj in self.data.items():
                     if not data_obj.is_direct_multipoles:
@@ -963,10 +995,11 @@ class VegaInterface:
                             f"Re-run lyatools/scripts/build_global_cov3x2.py with "
                             f"--n-multipoles "
                             f"{data_obj.nells} or reduce model_multipoles in the "
-                            f"component config.")
+                            f"component config."
+                        )
 
         if scale is not None:
-            print('Rescaling covariance by a factor of: ', scale)
+            print("Rescaling covariance by a factor of: ", scale)
             self.global_cov *= scale
         self._use_global_cov = True
 
@@ -991,13 +1024,14 @@ class VegaInterface:
                         f"does not match the {data_obj._mp_n_ells_file} multipoles "
                         f"in the data file. Rebuild the global covariance with "
                         f"lyatools/scripts/build_global_cov3x2.py and "
-                        f"--n-multipoles {data_obj._mp_n_ells_file}.")
+                        f"--n-multipoles {data_obj._mp_n_ells_file}."
+                    )
                 n_s_full = data_obj._mp_n_s_full
-                s_cut = data_obj._mp_full_s_mask          # (n_s_full,) bool
+                s_cut = data_obj._mp_full_s_mask  # (n_s_full,) bool
                 n_cov_block = nell_cov * n_s_full
                 cov_block_mask = np.zeros(n_cov_block, dtype=bool)
                 for ell_i in data_obj._mp_ell_file_indices:
-                    cov_block_mask[ell_i * n_s_full:(ell_i + 1) * n_s_full] = s_cut
+                    cov_block_mask[ell_i * n_s_full : (ell_i + 1) * n_s_full] = s_cut
                 self.full_data_mask.append(cov_block_mask)
             else:
                 self.full_data_mask.append(data_obj.data_mask)
@@ -1018,7 +1052,7 @@ class VegaInterface:
                     G[i, i] = data_obj._multipole_matrix
                 else:
                     G[i, i] = eye_array(data_obj.full_data_size)
-            G = block_array(G, format='csr')
+            G = block_array(G, format="csr")
             self.global_cov = G.dot(G.dot(self.global_cov).T).T
 
         self.full_data_mask = np.concatenate(self.full_data_mask)
@@ -1030,16 +1064,20 @@ class VegaInterface:
                 f"not match the total data layout ({self.full_data_mask.size}). "
                 f"Check that the global-cov file was built with the same "
                 f"components, multipoles (NELL), and full (uncut) s-grid as the "
-                f"data files.")
+                f"data files."
+            )
 
         if self.apply_global_hartlap:
             ndata = np.sum(self.full_data_mask)
             hartlap = (nsamples - 1) / (nsamples - ndata - 2)
             self._percival_corr = utils.percival_correction(
-                nsamples, ndata, len(self.sample_params['limits']))
-            print(f"Applying global Hartlap factor: C x {hartlap:.2f}. "
-                  f"Percival correction is {self._percival_corr:.2f}. "
-                  "This needs to be manually applied to the parameter cov.!")
+                nsamples, ndata, len(self.sample_params["limits"])
+            )
+            print(
+                f"Applying global Hartlap factor: C x {hartlap:.2f}. "
+                f"Percival correction is {self._percival_corr:.2f}. "
+                "This needs to be manually applied to the parameter cov.!"
+            )
 
             if hartlap <= 0:
                 raise ValueError("Hartlap factor is non-positive.")
@@ -1052,11 +1090,8 @@ class VegaInterface:
         # Following just updates the covariance matrix
         # More stable inversion can be achieved through Woodbury, but
         # requires handling masked pixels without removing them from cov.
-        if any(
-                corr_item.marginalize_small_scales
-                for corr_item in self.corr_items.values()
-        ):
-            print('Updating global covariance with marginalization templates.')
+        if any(corr_item.marginalize_small_scales for corr_item in self.corr_items.values()):
+            print("Updating global covariance with marginalization templates.")
             j = 0
             for name in self.corr_items:
                 data = self.data[name]
@@ -1064,7 +1099,7 @@ class VegaInterface:
                 wd = data.data_mask
 
                 if self.corr_items[name].marginalize_small_scales:
-                    M1 = self.global_cov[j:j + ndata, j:j + ndata]
+                    M1 = self.global_cov[j : j + ndata, j : j + ndata]
                     if data.cov_marg_update is not None:
                         M1[np.ix_(wd, wd)] += data.cov_marg_update
 
@@ -1084,9 +1119,11 @@ class VegaInterface:
             del masked_cov
         else:
             self.masked_global_invcov = utils.compute_masked_invcov(
-                self.global_cov, self.full_data_mask)
+                self.global_cov, self.full_data_mask
+            )
             self.masked_global_log_cov_det = utils.compute_log_cov_det(
-                self.global_cov, self.full_data_mask)
+                self.global_cov, self.full_data_mask
+            )
 
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.
@@ -1111,27 +1148,27 @@ class VegaInterface:
         # Copy the baseline parameters to use.
         if nominal is None:
             if self.bestfit.params is None:
-                raise RuntimeError('No nominal parameter values provided or saved by minimize()')
+                raise RuntimeError("No nominal parameter values provided or saved by minimize()")
             nominal = {p.name: (p.value, p.error) for p in self.bestfit.params}
 
         params = copy.deepcopy(self.params)
-        for pname, (pvalue, perror) in nominal.items():
+        for pname, (pvalue, _) in nominal.items():
             params[pname] = pvalue
 
         # Initialize the sensitivity results.
         self.sensitivity = dict(nominal=copy.deepcopy(nominal), partials={}, fisher={})
         for name in self.corr_items:
-            self.sensitivity['partials'][name] = {}
-            self.sensitivity['fisher'][name] = {}
+            self.sensitivity["partials"][name] = {}
+            self.sensitivity["fisher"][name] = {}
 
         # Loop over fit parameters
-        self.fiducial['save-components'] = True
-        bao_amp = self.params['bao_amp']
+        self.fiducial["save-components"] = True
+        bao_amp = self.params["bao_amp"]
         for pindex, (pname, (pvalue, perror)) in enumerate(nominal.items()):
             if verbose:
                 print(
-                    f'Calculating sensitivity for [{pindex}] {pname} at'
-                    f' {pvalue:.4f} ± {perror:.4f}'
+                    f"Calculating sensitivity for [{pindex}] {pname} at"
+                    f" {pvalue:.4f} ± {perror:.4f}"
                 )
 
             # Compute partial derivatives wrt to p for each multipole
@@ -1142,38 +1179,42 @@ class VegaInterface:
                 cfs = self.compute_model(params, run_init=True)
 
                 # Loop over datasets to update the partial derivative calculations.
-                for n, cf in cfs.items():
-                    if pname not in self.sensitivity['partials'][n]:
+                for n in cfs:
+                    if pname not in self.sensitivity["partials"][n]:
                         rp = self.corr_items[n].model_coordinates.rp_grid
-                        self.sensitivity['partials'][n][pname] = np.zeros((2, 2, len(rp)))
+                        self.sensitivity["partials"][n][pname] = np.zeros((2, 2, len(rp)))
 
                     model = self.models[n]
                     # Distorted peak
-                    self.sensitivity['partials'][n][pname][0, 0] += (
-                        sign * bao_amp * model.xi_distorted['peak']['core'])
+                    self.sensitivity["partials"][n][pname][0, 0] += (
+                        sign * bao_amp * model.xi_distorted["peak"]["core"]
+                    )
 
                     # Distorted smooth
-                    self.sensitivity['partials'][n][pname][0, 1] += (
-                        sign * model.xi_distorted['smooth']['core'])
+                    self.sensitivity["partials"][n][pname][0, 1] += (
+                        sign * model.xi_distorted["smooth"]["core"]
+                    )
 
                     # Undistorted peak
-                    self.sensitivity['partials'][n][pname][1, 0] += (
-                        sign * bao_amp * model.xi['peak']['core'])
+                    self.sensitivity["partials"][n][pname][1, 0] += (
+                        sign * bao_amp * model.xi["peak"]["core"]
+                    )
 
                     # Distorted smooth
-                    self.sensitivity['partials'][n][pname][1, 1] += (
-                        sign * model.xi['smooth']['core'])
+                    self.sensitivity["partials"][n][pname][1, 1] += (
+                        sign * model.xi["smooth"]["core"]
+                    )
 
             # Normalize the partial derivatives.
             for n in self.corr_items:
-                self.sensitivity['partials'][n][pname] /= 2 * delta
+                self.sensitivity["partials"][n][pname] /= 2 * delta
 
             # Restore the fitted parameter value.
             params[pname] = pvalue
 
         # Loop over pairs of fit parameters.
         if verbose:
-            print('Computing Fisher information for each pair of parameters...')
+            print("Computing Fisher information for each pair of parameters...")
         for pindex1, pname1 in enumerate(nominal):
             for pindex2, pname2 in enumerate(nominal):
                 if pindex1 > pindex2:
@@ -1181,23 +1222,24 @@ class VegaInterface:
 
                 # Loop over datasets.
                 for n in self.corr_items:
-                    if (pname1, pname2) not in self.sensitivity['fisher'][n]:
+                    if (pname1, pname2) not in self.sensitivity["fisher"][n]:
                         rp = self.corr_items[n].model_coordinates.rp_grid
-                        self.sensitivity['fisher'][n][(pname1, pname2)] = np.zeros((2, len(rp)))
+                        self.sensitivity["fisher"][n][(pname1, pname2)] = np.zeros((2, len(rp)))
 
-                    fisher = self.sensitivity['fisher'][n][(pname1, pname2)]
+                    fisher = self.sensitivity["fisher"][n][(pname1, pname2)]
                     # Lookup the data vector mask for this dataset
                     mask = self.data[n].data_mask
 
                     # Loop over distorted / non-distorted.
                     for idistort in range(2):
                         # Combine peak + smooth partials.
-                        partial1 = self.sensitivity['partials'][n][pname1][idistort].sum(axis=0)
-                        partial2 = self.sensitivity['partials'][n][pname2][idistort].sum(axis=0)
+                        partial1 = self.sensitivity["partials"][n][pname1][idistort].sum(axis=0)
+                        partial2 = self.sensitivity["partials"][n][pname2][idistort].sum(axis=0)
 
                         # Calculate the Fisher info for all unmasked correlation bins.
-                        masked_info = (
-                            partial1[mask] * self.data[n].inv_masked_cov.dot(partial2[mask]))
+                        masked_info = partial1[mask] * self.data[n].inv_masked_cov.dot(
+                            partial2[mask]
+                        )
                         fisher[idistort, mask] = masked_info
                         # Calculate the predicted inverse covariance for this parameter pair.
                         # ivar[idistort] = np.sum(fisher[idistort])

@@ -24,14 +24,13 @@ from importlib import metadata
 # -- Path setup --------------------------------------------------------------
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here.
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath(".."))
 
-import vega
 
 # -- Project information -----------------------------------------------------
-project = 'Vega'
-copyright = '2020, Andrei Cuceu' # Update with the correct year if needed
-author = 'Andrei Cuceu'
+project = "Vega"
+copyright = "2020, Andrei Cuceu"  # Update with the correct year if needed
+author = "Andrei Cuceu"
 
 # Modern dynamic versioning (Replaces the old setup.py / __init__.py parsing)
 # This hooks directly into setuptools_scm to get the version from your git tags!
@@ -45,51 +44,51 @@ except metadata.PackageNotFoundError:
 # -- General configuration ---------------------------------------------------
 # Add any Sphinx extension module names here, as strings.
 extensions = [
-    'sphinx.ext.autodoc',      # Core library for html generation from docstrings
-    'sphinx.ext.autosummary',  # Create neat summary tables for API reference
-    'sphinx.ext.napoleon',     # Support for NumPy and Google style docstrings
-    'sphinx.ext.viewcode',     # Add links to highlighted source code
-    'sphinx.ext.mathjax',      # Render math via JavaScript
-    'myst_nb',                 # Parse MyST markdown and render Jupyter Notebooks
+    "sphinx.ext.autodoc",  # Core library for html generation from docstrings
+    "sphinx.ext.autosummary",  # Create neat summary tables for API reference
+    "sphinx.ext.napoleon",  # Support for NumPy and Google style docstrings
+    "sphinx.ext.viewcode",  # Add links to highlighted source code
+    "sphinx.ext.mathjax",  # Render math via JavaScript
+    "myst_nb",  # Parse MyST markdown and render Jupyter Notebooks
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 
 # -- Options for MyST-NB / Markdown ------------------------------------------
 # Allows you to write markdown (.md) and Jupyter Notebooks (.ipynb) alongside .rst
 source_suffix = {
-    '.rst': 'restructuredtext',
-    '.ipynb': 'myst-nb',
-    '.md': 'myst-nb',
+    ".rst": "restructuredtext",
+    ".ipynb": "myst-nb",
+    ".md": "myst-nb",
 }
 
 # 'off' means notebooks are rendered as they currently look in the repository.
 # Change to 'cache' or 'force' if you want Sphinx to execute the notebooks during the build.
-nb_execution_mode = 'off'
+nb_execution_mode = "off"
 
 
 # -- Options for HTML output -------------------------------------------------
 # The theme to use for HTML and HTML Help pages.
-html_theme = 'sphinx_book_theme'
+html_theme = "sphinx_book_theme"
 
 # Custom configuration for the Sphinx Book Theme
 html_theme_options = {
     "repository_url": "https://github.com/andreicuceu/vega",
     "use_repository_button": True,
     "use_issues_button": True,
-    "use_edit_page_button": True,      # Allows users to suggest edits via GitHub PRs
-    "path_to_docs": "docs",            # Tells the edit button where the docs live
-    "show_toc_level": 2,               # Depth of the right-side table of contents
+    "use_edit_page_button": True,  # Allows users to suggest edits via GitHub PRs
+    "path_to_docs": "docs",  # Tells the edit button where the docs live
+    "show_toc_level": 2,  # Depth of the right-side table of contents
 }
 
 # Add any paths that contain custom static files (such as style sheets) here.
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 
 # -- General configuration ---------------------------------------------
@@ -100,7 +99,9 @@ html_static_path = ['_static']
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-# extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx_rtd_theme', 'sphinx.ext.napoleon']
+# extensions = [
+#     'sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx_rtd_theme', 'sphinx.ext.napoleon'
+# ]
 
 # # Add any paths that contain templates here, relative to this directory.
 # templates_path = ['_templates']
@@ -230,6 +231,3 @@ html_static_path = ['_static']
 #      'One line description of project.',
 #      'Miscellaneous'),
 # ]
-
-
-

@@ -14,11 +14,18 @@ class Analysis:
 
     - Run FastMC analysis
     """
+
     current_mc_mock = None
 
     def __init__(
-        self, chi2_func, sampler_params, main_config, corr_items, data,
-        mc_config=None, global_cov=None
+        self,
+        chi2_func,
+        sampler_params,
+        main_config,
+        corr_items,
+        data,
+        mc_config=None,
+        global_cov=None,
     ):
         """
 
@@ -59,13 +66,15 @@ class Analysis:
             Scan results
         """
         # Check if we have the scan section in config
-        if 'chi2 scan' not in self.config:
-            raise ValueError('Called chi2_scan, but no config specified in'
-                             ' main.ini. Add a "[chi2 scan]" section to main.')
+        if "chi2 scan" not in self.config:
+            raise ValueError(
+                "Called chi2_scan, but no config specified in"
+                ' main.ini. Add a "[chi2 scan]" section to main.'
+            )
 
         # Read the config and initialize the grids
         self.grids = {}
-        for param, value in self.config.items('chi2 scan'):
+        for param, value in self.config.items("chi2 scan"):
             par_config = value.split()
             start = float(par_config[0])
             end = float(par_config[1])
@@ -75,16 +84,16 @@ class Analysis:
         # We only support one or two dimensions
         dim = len(self.grids.keys())
         if dim > 2:
-            raise ValueError('chi2_scan only supports one/two parameter scans')
+            raise ValueError("chi2_scan only supports one/two parameter scans")
 
         # Initialize the sample params and fix the right values
         sample_params = {}
-        sample_params['fix'] = {}
-        sample_params['values'] = {}
-        sample_params['errors'] = {}
+        sample_params["fix"] = {}
+        sample_params["values"] = {}
+        sample_params["errors"] = {}
         for param in self.grids.keys():
-            sample_params['fix'][param] = True
-            sample_params['errors'][param] = 0.
+            sample_params["fix"][param] = True
+            sample_params["errors"][param] = 0.0
 
         # Compute the scan
         self.scan_results = []
@@ -93,33 +102,39 @@ class Analysis:
         if dim == 1:
             for i, value in enumerate(self.grids[par1]):
                 # Overwrite params with the grid value
-                sample_params['values'][par1] = value
+                sample_params["values"][par1] = value
 
                 # Minimize and get bestfit values
                 self._scan_minimizer.minimize(sample_params)
                 result = self._scan_minimizer.values
-                result['fval'] = self._scan_minimizer.fmin.fval
+                result["fval"] = self._scan_minimizer.fmin.fval
                 self.scan_results.append(result)
 
-                print('INFO: finished chi2scan iteration {} of {}'.format(
-                    i + 1, len(self.grids[par1])))
+                print(
+                    "INFO: finished chi2scan iteration {} of {}".format(
+                        i + 1, len(self.grids[par1])
+                    )
+                )
         else:
             par2 = list(self.grids.keys())[1]
             for i, value_1 in enumerate(self.grids[par1]):
                 for j, value_2 in enumerate(self.grids[par2]):
                     # Overwrite params with the grid values
-                    sample_params['values'][par1] = value_1
-                    sample_params['values'][par2] = value_2
+                    sample_params["values"][par1] = value_1
+                    sample_params["values"][par2] = value_2
 
                     # Minimize and get bestfit values
                     self._scan_minimizer.minimize(sample_params)
                     result = self._scan_minimizer.values
-                    result['fval'] = self._scan_minimizer.fmin.fval
+                    result["fval"] = self._scan_minimizer.fmin.fval
                     self.scan_results.append(result)
 
-                    print('INFO: finished chi2scan iteration {} of {}'.format(
-                        i * len(self.grids[par2]) + j + 1,
-                        len(self.grids[par1]) * len(self.grids[par2])))
+                    print(
+                        "INFO: finished chi2scan iteration {} of {}".format(
+                            i * len(self.grids[par2]) + j + 1,
+                            len(self.grids[par1]) * len(self.grids[par2]),
+                        )
+                    )
 
         return self.scan_results
 
@@ -153,11 +168,12 @@ class Analysis:
             elif type(scale) is dict and name in scale:
                 item_scale = scale[name]
             else:
-                item_scale = 1.
+                item_scale = 1.0
 
             # Create the mock
             mocks[name] = self._data[name].create_monte_carlo(
-                fiducial_model[name], item_scale, seed, forecast)
+                fiducial_model[name], item_scale, seed, forecast
+            )
 
         return mocks
 
@@ -186,9 +202,7 @@ class Analysis:
         if seed is not None:
             np.random.seed(seed)
 
-        full_data_mask = np.concatenate([
-            self._data[name].data_mask for name in self._corr_items
-        ])
+        full_data_mask = np.concatenate([self._data[name].data_mask for name in self._corr_items])
 
         if self._cholesky_global_cov is None:
             masked_cov = self._global_cov[:, full_data_mask]
@@ -200,8 +214,9 @@ class Analysis:
         self.current_mc_mock = np.concatenate([fiducial_model[name] for name in self._data])
         if not forecast:
             ran_vec = np.random.randn(full_data_mask.sum())
-            assert ran_vec.size == self.current_mc_mock.size, \
-                "Random vector size does not match Monte Carlo mock size"
+            assert (
+                ran_vec.size == self.current_mc_mock.size
+            ), "Random vector size does not match Monte Carlo mock size"
             self.current_mc_mock += self._cholesky_global_cov.dot(ran_vec)
 
         # Save both the full and concatenated Monte Carlo mocks
@@ -209,15 +224,16 @@ class Analysis:
         idx = 0
         for name in fiducial_model:
             size = fiducial_model[name].size
-            assert idx + size <= self.current_mc_mock.size, \
-                "Index exceeds the size of the Monte Carlo mock"
-            self.unpacked_mc_mock[name] = self.current_mc_mock[idx:idx + size]
+            assert (
+                idx + size <= self.current_mc_mock.size
+            ), "Index exceeds the size of the Monte Carlo mock"
+            self.unpacked_mc_mock[name] = self.current_mc_mock[idx : idx + size]
             idx += size
 
         return self.current_mc_mock
 
     def run_monte_carlo(
-            self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False, run_mc_fits=True
+        self, fiducial_model, num_mocks=1, seed=0, scale=None, forecast=False, run_mc_fits=True
     ):
         """Run Monte Carlo simulations
 
@@ -236,10 +252,10 @@ class Analysis:
         run_mc_fits : bool, optional
             If True, minimize on each mock, by default True
         """
-        assert self.mc_config is not None, 'No Monte Carlo config provided'
+        assert self.mc_config is not None, "No Monte Carlo config provided"
 
         np.random.seed(seed)
-        sample_params = self.mc_config['sample']
+        sample_params = self.mc_config["sample"]
         minimizer = Minimizer(self._chi2_func, sample_params)
 
         self.mc_bestfits = {}
@@ -251,13 +267,14 @@ class Analysis:
         self.mc_failed_mask = []
 
         for i in range(num_mocks):
-            print(f'INFO: Running Monte Carlo realization {i}')
+            print(f"INFO: Running Monte Carlo realization {i}")
             sys.stdout.flush()
 
             # Create the mocks
             if self._global_cov is None:
                 mocks = self.create_monte_carlo_sim(
-                    fiducial_model, seed=None, scale=scale, forecast=forecast)
+                    fiducial_model, seed=None, scale=scale, forecast=forecast
+                )
 
                 for name, cf_mock in mocks.items():
                     if name not in self.mc_mocks:
@@ -265,11 +282,12 @@ class Analysis:
                     self.mc_mocks[name].append(cf_mock)
             else:
                 mocks = self.create_global_monte_carlo(
-                    fiducial_model, seed=None, scale=scale, forecast=forecast)
+                    fiducial_model, seed=None, scale=scale, forecast=forecast
+                )
 
-                if 'global' not in self.mc_mocks:
-                    self.mc_mocks['global'] = []
-                self.mc_mocks['global'].append(mocks)
+                if "global" not in self.mc_mocks:
+                    self.mc_mocks["global"] = []
+                self.mc_mocks["global"].append(mocks)
 
             if not run_mc_fits:
                 continue
@@ -279,7 +297,7 @@ class Analysis:
                 minimizer.minimize()
                 self.mc_failed_mask.append(False)
             except ValueError:
-                print('WARNING: Minimizer failed for mock {}'.format(i))
+                print("WARNING: Minimizer failed for mock {}".format(i))
                 self.mc_failed_mask.append(True)
                 self.mc_chisq.append(np.nan)
                 self.mc_valid_minima.append(False)
