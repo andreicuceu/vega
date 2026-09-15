@@ -2,6 +2,17 @@
 History
 =======
 
+1.7.8 (2026-09-14)
+------------------
+* Added tested source distributions, pure-Python wheels, and SHA256 checksums to
+  GitHub Releases.
+* Added Git-archive version metadata for ``setuptools-scm`` so tagged archives can
+  recover their exact version without a ``.git`` directory.
+* Added CI validation of checkout and Git-archive builds, isolated source-distribution
+  rebuilds, clean wheel installations, scripts, and packaged scientific resources.
+* Updated release automation and installation documentation to use the validated
+  GitHub Release artifacts as the canonical distributions.
+
 1.7.7 (2026-09-14)
 ------------------
 * Added support for correlation functions binned in (r, mu) and Legendre multipole
