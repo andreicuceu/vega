@@ -56,6 +56,17 @@ with the development dependencies:
     cd vega
     python -m pip install -e '.[dev]'
 
+Install the Git hooks once in each clone, then check the complete source tree:
+
+.. code-block:: console
+
+    pre-commit install
+    pre-commit run --all-files
+
+The hooks apply Ruff's safe lint fixes and formatting to staged Python files
+before each commit. Run ``pre-commit run --all-files`` and the relevant pytest
+suite before opening a pull request.
+
 GitHub also generates ``Source code`` archives for tags. These are repository
 snapshots rather than the tested Python release artifacts. Archives for tags
 that contain ``.git_archival.txt`` can recover their version without a
