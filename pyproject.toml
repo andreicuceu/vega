@@ -84,6 +84,7 @@ script-files = [
     "bin/run_vega_mc_fits_mpi.py",
     "bin/make_configs.py",
     "bin/make_template.py",
+    "bin/compress_data.py"
 ]
 
 # Automatically infer version from git tags (e.g., v1.2.0)

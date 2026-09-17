@@ -258,6 +258,7 @@ class VegaInterface:
         _parameter_cov_file = config.get('parameter-cov', None)
         if _parameter_cov_file is None:
             _parameter_cov = np.linalg.inv(self.fisher_matrix)
+            print(f'INFO: Using Fisher matrix for CCA compression: {_parameter_cov_file}')
         else:
             _parameter_cov = np.load(_parameter_cov_file)['cov']
             print(f'INFO: Using parameter cov from: {_parameter_cov_file}')
@@ -268,6 +269,9 @@ class VegaInterface:
             _data_param_cov = self._full_jacobian @ _parameter_cov
         else:
             _data_param_cov = np.load(_data_param_cov_file)['cov']
+            #apply mask
+            _data_param_cov = _data_param_cov[self.full_model_mask, :]
+            
             print(f'INFO: Using data-parameter cov from: {_data_param_cov_file}')
 
         ### Masked data covariance ###
