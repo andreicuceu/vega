@@ -6,10 +6,17 @@ class Shell:
     Compress 2D correlation functions defined on an r_parallel/r_transverse grid
     into shells as a function mu
     """
+
     def __init__(
-        self, rp=(0, 200, 50), rt=(0, 200, 50), angle_var='theta',
-        angle_range=(0, np.pi/2), num_bins_fraction=50,
-        r=(30, 45), scaling=10, abs_mu=False
+        self,
+        rp=(0, 200, 50),
+        rt=(0, 200, 50),
+        angle_var="theta",
+        angle_range=(0, np.pi / 2),
+        num_bins_fraction=50,
+        r=(30, 45),
+        scaling=10,
+        abs_mu=False,
     ):
         """Initialize computation of a shell
 
@@ -33,8 +40,8 @@ class Shell:
         abs_mu : bool, optional
             Flag for working with absolute values of mu, by default False
         """
-        assert angle_var in ['theta', 'mu', 'mu2'], "angle_var must be from ['theta', 'mu', 'mu2']"
-        if angle_var != 'theta':
+        assert angle_var in ["theta", "mu", "mu2"], "angle_var must be from ['theta', 'mu', 'mu2']"
+        if angle_var != "theta":
             angle_range = (angle_range[0], min(angle_range[1], 1))
 
         # Init bin limits on the fine scaled grid and get centers
@@ -46,7 +53,7 @@ class Shell:
         # Create meshes on the finer grid for all elements
         rt_mesh, rp_mesh = np.meshgrid(rt_centers, rp_centers)
         r_mesh = np.sqrt(rp_mesh**2 + rt_mesh**2)
-        mu_mesh = (rp_mesh/r_mesh)
+        mu_mesh = rp_mesh / r_mesh
 
         # Check if we need the absolute value of mu
         if abs_mu:
@@ -71,14 +78,16 @@ class Shell:
         rp_centers = rp[0] + (rp_idx + 0.5) * (rp[1] - rp[0]) / rp[2]
         rt_centers = rt[0] + (rt_idx + 0.5) * (rt[1] - rt[0]) / rt[2]
         r_centers = np.sqrt(rp_centers**2 + rt_centers**2)
-        mu_centers = (rp_centers / r_centers)
+        mu_centers = rp_centers / r_centers
         mu2_centers = mu_centers**2
         theta_centers = np.arccos(mu_centers)
 
-        mesh = mu_mesh if angle_var == 'mu' else mu2_mesh if angle_var == 'mu2' else theta_mesh
+        mesh = mu_mesh if angle_var == "mu" else mu2_mesh if angle_var == "mu2" else theta_mesh
         angle_centers = (
-            mu_centers if angle_var == 'mu'
-            else mu2_centers if angle_var == 'mu2'
+            mu_centers
+            if angle_var == "mu"
+            else mu2_centers
+            if angle_var == "mu2"
             else theta_centers
         )
 
@@ -105,8 +114,8 @@ class Shell:
         self.weights[weights_idx] = counts[positive_idx]
 
         angle_bins = np.linspace(angle_range[0], angle_range[1], num_bins_angle + 1)
-        self.angle = self.get_bin_centers(angle_bins) 
-        if angle_var == 'theta':
+        self.angle = self.get_bin_centers(angle_bins)
+        if angle_var == "theta":
             self.angle *= 180 / np.pi  # Convert to degrees
 
     def __call__(self, data, covariance=None):

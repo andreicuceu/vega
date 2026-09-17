@@ -19,19 +19,21 @@ def run_vega(config_path):
     _ = vega.compute_model(run_init=False)
 
     # Check if we need to run over a Monte Carlo mock
-    run_montecarlo = vega.main_config['control'].getboolean('run_montecarlo', False)
+    run_montecarlo = vega.main_config["control"].getboolean("run_montecarlo", False)
     if run_montecarlo and vega.mc_config is not None:
         _ = vega.initialize_monte_carlo()
     elif run_montecarlo:
-        raise ValueError('You asked to run over a Monte Carlo simulation,'
-                         ' but no "[monte carlo]" section provided.')
+        raise ValueError(
+            "You asked to run over a Monte Carlo simulation,"
+            ' but no "[monte carlo]" section provided.'
+        )
 
     # Run minimizer
     vega.minimize()
 
     # Run chi2scan
     scan_results = None
-    if 'chi2 scan' in vega.main_config:
+    if "chi2 scan" in vega.main_config:
         scan_results = vega.analysis.chi2_scan()
 
     # Write output
@@ -40,41 +42,83 @@ def run_vega(config_path):
             vega.params[par] = val
 
     vega.output.write_results(
-        vega.bestfit_model, vega.params, vega.minimizer, vega.bestfit_corr_stats,
-        scan_results, vega.models,
+        vega.bestfit_model,
+        vega.params,
+        vega.minimizer,
+        vega.bestfit_corr_stats,
+        scan_results,
+        vega.models,
     )
 
-    plt.rc('axes', labelsize=16)
-    plt.rc('axes', titlesize=16)
-    plt.rc('legend', fontsize=16)
-    plt.rc('xtick', labelsize=14)
-    plt.rc('ytick', labelsize=14)
+    plt.rc("axes", labelsize=16)
+    plt.rc("axes", titlesize=16)
+    plt.rc("legend", fontsize=16)
+    plt.rc("xtick", labelsize=14)
+    plt.rc("ytick", labelsize=14)
 
-    num_pars = len(vega.sample_params['limits'])
+    num_pars = len(vega.sample_params["limits"])
     for name in vega.plots.data:
+        # Direct-multipole components (e.g. QSO auto measured in xi_ell) get a
+        # dedicated multipole plot instead of wedges/shells.
+        if vega.data[name].is_direct_multipoles:
+            bestfit_legend = f"Correlation: {name}, Total "
+            bestfit_legend += r"$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$"
+            bestfit_legend += f": {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) "
+            bestfit_legend += f"= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}"
+            if not vega.bestfit.fmin.is_valid:
+                bestfit_legend = "Invalid fit! Disregard these results."
+
+            vega.plots.plot_multipoles(
+                corr_name=name,
+                models=[vega.bestfit_model[name]],
+                labels=["Best fit"],
+                model_colors=["r"],
+            )
+            vega.plots.fig.suptitle(bestfit_legend, fontsize=14, y=1.01)
+            vega.plots.fig.savefig(
+                f"{vega.output.outfile[:-5]}_{name}_multipoles.png",
+                dpi="figure",
+                bbox_inches="tight",
+                facecolor="white",
+            )
+            continue
+
+        # Forest components projected from 2D (r, mu) to multipoles: no wedge plot yet.
+        if vega.data[name].use_multipoles:
+            continue
+
         # Get title
-        bestfit_legend = f'Correlation: {name}, Total '
-        bestfit_legend += r'$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$'
-        bestfit_legend += f': {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) '
-        bestfit_legend += f'= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}'
+        bestfit_legend = f"Correlation: {name}, Total "
+        bestfit_legend += r"$\chi^2_\mathrm{best}/(N_\mathrm{data}-N_\mathrm{pars})$"
+        bestfit_legend += f": {vega.chisq:.1f}/({vega.total_data_size}-{num_pars}) "
+        bestfit_legend += f"= {vega.reduced_chisq:.3f}, PTE={vega.p_value:.2f}"
         if not vega.bestfit.fmin.is_valid:
-            bestfit_legend = 'Invalid fit! Disregard these results.'
+            bestfit_legend = "Invalid fit! Disregard these results."
 
         # Plot wedges
         vega.plots.plot_4wedges(
-            models=[vega.bestfit_model[name]], corr_name=name, title=None,
-            mu_bin_labels=True, no_font=True, model_colors=['r'], xlim=None
+            models=[vega.bestfit_model[name]],
+            corr_name=name,
+            title=None,
+            mu_bin_labels=True,
+            no_font=True,
+            model_colors=["r"],
+            xlim=None,
         )
         vega.plots.fig.suptitle(bestfit_legend, fontsize=18, y=1.03)
         vega.plots.fig.savefig(
-            f'{vega.output.outfile[:-5]}_{name}_wedges.png', dpi='figure',
-            bbox_inches='tight', facecolor='white'
+            f"{vega.output.outfile[:-5]}_{name}_wedges.png",
+            dpi="figure",
+            bbox_inches="tight",
+            facecolor="white",
         )
 
         # Plot shells
         vega.plots.plot_4shells(model=vega.bestfit_model[name], corr_name=name)
         vega.plots.fig.suptitle(bestfit_legend, fontsize=22, y=0.95)
         vega.plots.fig.savefig(
-            f'{vega.output.outfile[:-5]}_{name}_shells.png', dpi='figure',
-            bbox_inches='tight', facecolor='white'
+            f"{vega.output.outfile[:-5]}_{name}_shells.png",
+            dpi="figure",
+            bbox_inches="tight",
+            facecolor="white",
         )

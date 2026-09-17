@@ -2,13 +2,170 @@ import numpy as np
 
 
 class Coordinates:
-    """Class to handle Vega coordinate grids
+    def get_mask_to_other(self, other):
+        raise NotImplementedError
+
+    def is_same_binning(self, other):
+        raise NotImplementedError
+
+    def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
+        """Build mask to apply scale cuts
+
+        Parameters
+        ----------
+        cuts_config : ConfigParser
+            Cuts section from config
+
+        Returns
+        -------
+        Array
+            Mask
+        """
+        # Read the cuts
+        rp_min_cut = cuts_config.getfloat("rp-min", 0.0)
+        rp_max_cut = cuts_config.getfloat("rp-max", 300.0)
+
+        rt_min_cut = cuts_config.getfloat("rt-min", 0.0)
+        rt_max_cut = cuts_config.getfloat("rt-max", 300.0)
+
+        r_min_cut = cuts_config.getfloat("r-min", 10.0)
+        r_max_cut = cuts_config.getfloat("r-max", 180.0)
+
+        mu_min_cut = cuts_config.getfloat("mu-min", -1.0)
+        mu_max_cut = cuts_config.getfloat("mu-max", +1.0)
+
+        mask = (self.rp_regular_grid > rp_min_cut) & (self.rt_regular_grid > rt_min_cut)
+        mask &= self.r_regular_grid > r_min_cut
+
+        if small_scale_mask:
+            return mask
+
+        mask &= (self.rp_regular_grid < rp_max_cut) & (self.rt_regular_grid < rt_max_cut)
+        mask &= self.r_regular_grid < r_max_cut
+        mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
+
+        return mask
+
+    def get_mask_marginalization_scales(self, cuts_config, marginalization_cuts):
+        """Build mask to for bins that are marginalized
+
+        Parameters
+        ----------
+        marginalization_cuts : dict
+            Dictionary with the small-scale marginalization cuts
+
+        Returns
+        -------
+        Array
+            Mask
+        """
+        mask = np.ones_like(self.rp_regular_grid, dtype=bool)
+
+        if "rtmax" in marginalization_cuts:
+            rtmax = marginalization_cuts["rtmax"]
+            mask &= self.rt_regular_grid < rtmax
+        if "rtmin" in marginalization_cuts:
+            rtmin = marginalization_cuts["rtmin"]
+            mask &= self.rt_regular_grid > rtmin
+        if "rpmax" in marginalization_cuts:
+            rpmax = marginalization_cuts["rpmax"]
+            mask &= np.abs(self.rp_regular_grid) < rpmax
+        if "rpmin" in marginalization_cuts:
+            rpmin = marginalization_cuts["rpmin"]
+            mask &= np.abs(self.rp_regular_grid) > rpmin
+
+        if "all-rmin" in marginalization_cuts:
+            mask = ~self.get_mask_scale_cuts(cuts_config, small_scale_mask=True)
+
+        return mask
+
+
+class MultipoleCoordinates(Coordinates):
+    """Coordinate class for data already measured in multipoles.
+
+    Used when the input data file provides xi_ell(s) directly (e.g. a QSO
+    auto-correlation measured by pycorr / RascalC) rather than a 2D grid in
+    (rp, rt) or (r, mu) that Vega would project to multipoles internally.
+
+    This object represents only the *data* side.  The model is computed on a
+    separate 2D (r, mu) grid (stored as model_coordinates on the Data object)
+    and projected onto these s-bins via _multipole_matrix.
     """
 
+    def __init__(self, s_grid, ells, z_eff=None):
+        """
+        Parameters
+        ----------
+        s_grid : 1D array
+            Separation bin centres for the data (after applying s cuts).
+        ells : list of int
+            Multipole orders present in the data vector, e.g. [0, 2, 4].
+        z_eff : float, optional
+            Effective redshift used to populate z_grid.
+        """
+        self.s_grid = np.asarray(s_grid, dtype=float)
+        self.ells = list(ells)
+        self.nells = len(ells)
+        ns = len(self.s_grid)
+
+        # Data-vector layout: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
+        r_tiled = np.tile(self.s_grid, self.nells)
+        zeros = np.zeros_like(r_tiled)
+
+        self.r_grid = r_tiled
+        self.mu_grid = zeros
+        self.rp_grid = r_tiled
+        self.rt_grid = zeros
+        self.r_regular_grid = r_tiled
+        self.mu_regular_grid = zeros
+        self.rp_regular_grid = r_tiled
+        self.rt_regular_grid = zeros
+
+        if z_eff is not None:
+            self.z_grid = np.full(len(r_tiled), float(z_eff))
+        else:
+            self.z_grid = None
+
+        ds = float(self.s_grid[1] - self.s_grid[0]) if ns > 1 else 4.0
+        self.rp_min = 0.0
+        self.rp_max = float(self.s_grid.max())
+        self.rt_max = float(self.s_grid.max())
+        self.rp_nbins = ns
+        self.rt_nbins = ns
+        self.rp_binsize = ds
+        self.rt_binsize = ds
+
+    def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
+        """Return a boolean mask based on s-min / s-max cuts.
+
+        The mask is tiled across all multipoles so that it covers the full
+        concatenated data vector [xi_0, xi_2, ..., xi_L].
+        """
+        s_min = cuts_config.getfloat("s-min", 0.0)
+        s_max = cuts_config.getfloat("s-max", 300.0)
+        mask_1d = (self.s_grid >= s_min) & (self.s_grid < s_max)
+        return np.tile(mask_1d, self.nells)
+
+    def get_mask_to_other(self, other):
+        raise NotImplementedError("MultipoleCoordinates does not support get_mask_to_other")
+
+
+class RtRpCoordinates(Coordinates):
+    """Class to handle Vega coordinate grids"""
+
     def __init__(
-        self, rp_min, rp_max, rt_max, rp_nbins, rt_nbins,
-        rp_grid=None, rt_grid=None, z_grid=None, z_eff=None,
-        r_grid=None, mu_grid=None
+        self,
+        rp_min,
+        rp_max,
+        rt_max,
+        rp_nbins,
+        rt_nbins,
+        rp_grid=None,
+        rt_grid=None,
+        z_grid=None,
+        z_eff=None,
+        r_grid=None,
+        mu_grid=None,
     ):
         """Initialize the coordinate grids.
 
@@ -58,13 +215,13 @@ class Coordinates:
 
         if mu_grid is None:
             self.mu_grid = np.zeros_like(self.r_grid)
-            w = self.r_grid > 0.
+            w = self.r_grid > 0.0
             self.mu_grid[w] = self.rp_grid[w] / self.r_grid[w]
         else:
             self.mu_grid = mu_grid
 
         self.mu_regular_grid = np.zeros_like(self.r_regular_grid)
-        w = self.r_regular_grid > 0.
+        w = self.r_regular_grid > 0.0
         self.mu_regular_grid[w] = self.rp_regular_grid[w] / self.r_regular_grid[w]
 
         if z_grid is None and z_eff is None:
@@ -93,8 +250,14 @@ class Coordinates:
             New coordinates
         """
         return cls(
-            other.rp_min, other.rp_max, other.rt_max, other.rp_nbins, other.rt_nbins,
-            rp_grid=rp_grid, rt_grid=rt_grid, z_grid=z_grid
+            other.rp_min,
+            other.rp_max,
+            other.rt_max,
+            other.rp_nbins,
+            other.rt_nbins,
+            rp_grid=rp_grid,
+            rt_grid=rt_grid,
+            z_grid=z_grid,
         )
 
     @classmethod
@@ -115,13 +278,21 @@ class Coordinates:
         """
         if len(r_grid) != len(mu_grid):
             raise ValueError(
-                'r_grid and mu_grid must either be on a meshgrid or have the same size')
+                "r_grid and mu_grid must either be on a meshgrid or have the same size"
+            )
         rp_grid = r_grid * mu_grid
         rt_grid = r_grid * np.sqrt(1 - mu_grid**2)
         return cls(
-            rp_min=rp_grid.min(), rp_max=rp_grid.max(), rt_max=rt_grid.max(),
-            rp_nbins=len(r_grid), rt_nbins=len(r_grid), rp_grid=rp_grid, rt_grid=rt_grid,
-            r_grid=r_grid, mu_grid=mu_grid, z_eff=z_eff,
+            rp_min=rp_grid.min(),
+            rp_max=rp_grid.max(),
+            rt_max=rt_grid.max(),
+            rp_nbins=len(r_grid),
+            rt_nbins=len(r_grid),
+            rp_grid=rp_grid,
+            rt_grid=rt_grid,
+            r_grid=r_grid,
+            mu_grid=mu_grid,
+            z_eff=z_eff,
         )
 
     def get_mask_to_other(self, other):
@@ -140,78 +311,184 @@ class Coordinates:
         assert self.rp_binsize == other.rp_binsize
         assert self.rt_binsize == other.rt_binsize
         mask = (self.rp_grid >= other.rp_min) & (self.rp_grid <= other.rp_max)
-        mask &= (self.rt_grid <= other.rt_max)
+        mask &= self.rt_grid <= other.rt_max
         return mask
 
-    def get_mask_scale_cuts(self, cuts_config, small_scale_mask=False):
-        """Build mask to apply scale cuts
+    def is_same_binning(self, other):
+        """Check if the current coordinates have the same binning as the other coordinates.
 
         Parameters
         ----------
-        cuts_config : ConfigParser
-            Cuts section from config
+        other : Coordinates
+            Other coordinates
+
+        Returns
+        -------
+        bool
+            True if the binning is the same, False otherwise
+        """
+        return np.isclose(self.rp_binsize, other.rp_binsize) and np.isclose(
+            self.rt_binsize, other.rt_binsize
+        )
+
+
+class RMuCoordinates(Coordinates):
+    """Class to handle Vega coordinate grids"""
+
+    def __init__(
+        self,
+        mu_min,
+        mu_max,
+        r_max,
+        mu_nbins,
+        r_nbins,
+        mu_grid=None,
+        r_grid=None,
+        z_grid=None,
+        z_eff=None,
+        rp_grid=None,
+        rt_grid=None,
+    ):
+        """Initialize the coordinate grids.
+
+        Parameters
+        ----------
+        mu_min : float
+            Minimum mu
+        mu_max : float
+            Maximum mu
+        r_max : float
+            Maximum r
+        mu_nbins : int
+            Number of mu bins
+        r_nbins : int
+            Number of r bins
+        rp_grid : Array , optional
+            rp grid, by default None
+        rt_grid : Array, optional
+            rt grid, by default None
+        z_grid : Array, optional
+            z grid, by default None
+        """
+        self.mu_min = mu_min
+        self.mu_max = mu_max
+        self.r_max = r_max
+        self.mu_nbins = mu_nbins
+        self.r_nbins = r_nbins
+
+        self.mu_binsize = (mu_max - mu_min) / mu_nbins
+        self.r_binsize = r_max / r_nbins
+
+        # Keep it for other parts of the code
+        self.rp_min = r_max * mu_min
+        self.rp_max = r_max * mu_max
+        self.rt_max = r_max
+        self.rp_nbins = r_nbins
+        self.rt_nbins = r_nbins
+
+        self.rp_binsize = (self.rp_max - self.rp_min) / self.rp_nbins
+        self.rt_binsize = self.rt_max / self.rt_nbins
+
+        mu_regular_grid = (0.5 + np.arange(mu_nbins)) * self.mu_binsize + self.mu_min
+        r_regular_grid = (0.5 + np.arange(r_nbins)) * self.r_binsize
+
+        r_regular_grid, mu_regular_grid = np.meshgrid(r_regular_grid, mu_regular_grid)
+        self.mu_regular_grid = mu_regular_grid.flatten()
+        self.r_regular_grid = r_regular_grid.flatten()
+
+        self.mu_grid = self.mu_regular_grid if mu_grid is None else mu_grid
+        self.r_grid = self.r_regular_grid if r_grid is None else r_grid
+
+        if rp_grid is None:
+            self.rp_grid = self.r_grid * self.mu_grid
+        else:
+            self.rp_grid = rp_grid
+
+        if rt_grid is None:
+            self.rt_grid = self.r_grid * np.sqrt(1.0 - self.mu_grid**2)
+        else:
+            self.rt_grid = rt_grid
+
+        if z_grid is None and z_eff is None:
+            self.z_grid = None
+        else:
+            self.z_grid = z_eff if z_grid is None else z_grid
+
+        self.rp_regular_grid = self.r_regular_grid * self.mu_regular_grid
+        self.rt_regular_grid = self.r_regular_grid * np.sqrt(1.0 - self.mu_regular_grid**2)
+
+    @classmethod
+    def init_from_grids(cls, other, rp_grid, rt_grid, z_grid):
+        """Initialize from other coordinates and new grids
+
+        Parameters
+        ----------
+        other : Coordinates
+            Other coordinates
+        rp_grid : Array
+            rp grid
+        rt_grid : Array
+            rt grid
+        z_grid : Array
+            z grid
+
+        Returns
+        -------
+        Coordinates
+            New coordinates
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def init_from_r_mu_grids(cls, r_grid, mu_grid, z_eff=None):
+        """Initialize from r and mu grids
+
+        Parameters
+        ----------
+        r_grid : Array
+            r grid
+        mu_grid : Array
+            mu grid
+
+        Returns
+        -------
+        Coordinates
+            New coordinates
+        """
+        raise NotImplementedError
+
+    def get_mask_to_other(self, other):
+        """Build mask from the current coordinates to the other coordinates.
+
+        Parameters
+        ----------
+        other : Coordinates
+            Other coordinates
 
         Returns
         -------
         Array
             Mask
         """
-        # Read the cuts
-        rp_min_cut = cuts_config.getfloat('rp-min', 0.)
-        rp_max_cut = cuts_config.getfloat('rp-max', 300.)
-
-        rt_min_cut = cuts_config.getfloat('rt-min', 0.)
-        rt_max_cut = cuts_config.getfloat('rt-max', 300.)
-
-        r_min_cut = cuts_config.getfloat('r-min', 10.)
-        r_max_cut = cuts_config.getfloat('r-max', 180.)
-
-        mu_min_cut = cuts_config.getfloat('mu-min', -1.)
-        mu_max_cut = cuts_config.getfloat('mu-max', +1.)
-
-        mask = (self.rp_regular_grid > rp_min_cut) & (self.rt_regular_grid > rt_min_cut)
-        mask &= (self.r_regular_grid > r_min_cut)
-
-        if small_scale_mask:
-            return mask
-
-        mask &= (self.rp_regular_grid < rp_max_cut) & (self.rt_regular_grid < rt_max_cut)
-        mask &= (self.r_regular_grid < r_max_cut)
-        mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
-
+        assert self.mu_binsize == other.mu_binsize
+        assert self.r_binsize == other.r_binsize
+        mask = (self.mu_grid >= other.mu_min) & (self.mu_grid <= other.mu_max)
+        mask &= self.r_grid <= other.r_max
         return mask
 
-    def get_mask_marginalization_scales(self, cuts_config, marginalization_cuts):
-        """Build mask to for bins that are marginalized
+    def is_same_binning(self, other):
+        """Check if the current coordinates have the same binning as the other coordinates.
 
         Parameters
         ----------
-        marginalization_cuts : dict
-            Dictionary with the small-scale marginalization cuts
+        other : Coordinates
+            Other coordinates
 
         Returns
         -------
-        Array
-            Mask
+        bool
+            True if the binning is the same, False otherwise
         """
-        mask = np.ones_like(self.rp_regular_grid, dtype=bool)
-
-        if 'rtmax' in marginalization_cuts:
-            rtmax = marginalization_cuts['rtmax']
-            mask &= self.rt_regular_grid < rtmax
-        if 'rtmin' in marginalization_cuts:
-            rtmin = marginalization_cuts['rtmin']
-            mask &= self.rt_regular_grid > rtmin
-        if 'rpmax' in marginalization_cuts:
-            rpmax = marginalization_cuts['rpmax']
-            mask &= np.abs(self.rp_regular_grid) < rpmax
-        if 'rpmin' in marginalization_cuts:
-            rpmin = marginalization_cuts['rpmin']
-            mask &= np.abs(self.rp_regular_grid) > rpmin
-
-        if 'all-rmin' in marginalization_cuts:
-            mask = ~self.get_mask_scale_cuts(
-                cuts_config, small_scale_mask=True
-            )
-
-        return mask
+        return np.isclose(self.r_binsize, other.r_binsize) and np.isclose(
+            self.mu_binsize, other.mu_binsize
+        )

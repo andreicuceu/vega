@@ -6,7 +6,7 @@ from vega.samplers.sampler_interface import Sampler
 
 
 class Polychord(Sampler):
-    ''' Interface between Vega and the nested sampler PolyChord '''
+    """Interface between Vega and the nested sampler PolyChord"""
 
     def __init__(self, sampler_config, limits, log_lik_func, derived_dict=None):
         """Initialize Polychord sampler interface.
@@ -42,26 +42,26 @@ class Polychord(Sampler):
             Settings object for running Polychord
         """
         # Seed and path/name
-        seed = sampler_config.getint('seed', int(0))
+        seed = sampler_config.getint("seed", int(0))
 
         # The key config parameters
-        num_live = sampler_config.getint('num_live', int(25*num_params))
-        num_repeats = sampler_config.getint('num_repeats', int(5*num_params))
-        precision = sampler_config.getfloat('precision', float(0.001))
+        num_live = sampler_config.getint("num_live", int(25 * num_params))
+        num_repeats = sampler_config.getint("num_repeats", int(5 * num_params))
+        precision = sampler_config.getfloat("precision", float(0.001))
 
         # Resume should almost always be true
-        resume = sampler_config.getboolean('resume', True)
-        write_dead = sampler_config.getboolean('write_dead', True)
+        resume = sampler_config.getboolean("resume", True)
+        write_dead = sampler_config.getboolean("write_dead", True)
 
         # Useful for plotting as it gives you more posterior samples
-        boost_posterior = sampler_config.getfloat('boost_posterior', float(0.0))
+        boost_posterior = sampler_config.getfloat("boost_posterior", float(0.0))
 
         # Do we do clustering, useful for multimodal distributions
-        do_clustering = sampler_config.getboolean('do_clustering', False)
-        cluster_posteriors = sampler_config.getboolean('cluster_posteriors', False)
+        do_clustering = sampler_config.getboolean("do_clustering", False)
+        cluster_posteriors = sampler_config.getboolean("cluster_posteriors", False)
 
         # Perform maximisation at the end of the chain
-        maximise = sampler_config.getboolean('maximise', False)
+        maximise = sampler_config.getboolean("maximise", False)
 
         # These control different sampling speeds
         # grade_frac : List[float]
@@ -78,17 +78,24 @@ class Polychord(Sampler):
 
         # Initialize the settings
         self.settings = PolyChordSettings(
-            num_params, num_derived, base_dir=self.path,
-            file_root=self.name, seed=seed, nlive=num_live,
+            num_params,
+            num_derived,
+            base_dir=self.path,
+            file_root=self.name,
+            seed=seed,
+            nlive=num_live,
             num_repeats=num_repeats,
             precision_criterion=precision,
-            write_resume=resume, read_resume=resume,
+            write_resume=resume,
+            read_resume=resume,
             boost_posterior=boost_posterior,
             do_clustering=do_clustering,
             cluster_posteriors=cluster_posteriors,
-            equals=False, write_dead=write_dead,
+            equals=False,
+            write_dead=write_dead,
             maximise=maximise,
-            write_live=False, write_prior=False
+            write_live=False,
+            write_prior=False,
         )
 
     def run(self):
@@ -103,8 +110,9 @@ class Polychord(Sampler):
         dumper: Optional function if we want to get some output while
             the chain is running. For now it's empty
         """
+
         def log_lik(theta):
-            """ Wrapper for likelihood. No derived for now """
+            """Wrapper for likelihood. No derived for now"""
             params = {}
             for i, name in enumerate(self.names):
                 params[name] = theta[i]
@@ -113,15 +121,16 @@ class Polychord(Sampler):
             return log_lik, marg_coeff
 
         def prior(hypercube):
-            """ Uniform prior """
+            """Uniform prior"""
             prior = []
             for i, limits in enumerate(self.limits.values()):
                 prior.append(UniformPrior(limits[0], limits[1])(hypercube[i]))
             return prior
 
         def dumper(live, dead, logweights, logZ, logZ_err):
-            """ Dumper empty for now"""
+            """Dumper empty for now"""
             pass
 
         pypolychord.run_polychord(
-            log_lik, self.num_params, self.num_derived, self.settings, prior, dumper)
+            log_lik, self.num_params, self.num_derived, self.settings, prior, dumper
+        )

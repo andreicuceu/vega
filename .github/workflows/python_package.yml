@@ -9,26 +9,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  # lint:
-  #   name: Code Quality (Ruff)
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
+  lint:
+    name: Code Quality (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.11"
-  #         cache: "pip"
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
           
-  #     - name: Install Ruff
-  #       run: pip install ruff
+      - name: Install Ruff
+        run: pip install "ruff==0.16.7"
         
-  #     - name: Check formatting
-  #       run: ruff format --check .
+      - name: Check formatting
+        run: ruff format --check .
         
-  #     - name: Lint code
-  #       run: ruff check .
+      - name: Lint code
+        run: ruff check .
 
   test:
     name: Test on Python ${{ matrix.python-version }}
@@ -40,10 +40,10 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
@@ -66,8 +66,97 @@ jobs:
           pytest tests/ --cov=vega --cov-report=xml
           
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           verbose: true
+
+  package:
+    name: Validate distributions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the complete repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install packaging tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "build>=1.2" "twine>=5.0" "ruff==0.16.7"
+
+      - name: Check the distribution validator
+        run: |
+          ruff check .github/scripts/validate_distribution.py
+          ruff format --check .github/scripts/validate_distribution.py
+
+      - name: Validate checkout distributions
+        run: |
+          python .github/scripts/validate_distribution.py \
+            --source . \
+            --dist-dir "$RUNNER_TEMP/checkout-dist" \
+            --work-dir "$RUNNER_TEMP/checkout-validation" \
+            --version-file "$RUNNER_TEMP/checkout-version.txt"
+
+      - name: Create and inspect a Git archive
+        run: |
+          mkdir -p "$RUNNER_TEMP/git-archive"
+          git archive \
+            --format=tar \
+            --prefix=vega-archive/ \
+            --output="$RUNNER_TEMP/vega-git-archive.tar" \
+            HEAD
+          tar --extract \
+            --file="$RUNNER_TEMP/vega-git-archive.tar" \
+            --directory="$RUNNER_TEMP/git-archive"
+          test ! -e "$RUNNER_TEMP/git-archive/vega-archive/.git"
+          grep --fixed-strings --line-regexp \
+            "node: $(git rev-parse HEAD)" \
+            "$RUNNER_TEMP/git-archive/vega-archive/.git_archival.txt"
+          if grep --fixed-strings '$Format' \
+            "$RUNNER_TEMP/git-archive/vega-archive/.git_archival.txt"; then
+            echo "Git archive contains unexpanded version placeholders" >&2
+            exit 1
+          fi
+
+      - name: Validate Git-archive distributions
+        run: |
+          EXPECTED_VERSION=$(tr -d '\n' < "$RUNNER_TEMP/checkout-version.txt")
+          python .github/scripts/validate_distribution.py \
+            --source "$RUNNER_TEMP/git-archive/vega-archive" \
+            --dist-dir "$RUNNER_TEMP/archive-dist" \
+            --work-dir "$RUNNER_TEMP/archive-validation" \
+            --expected-version "$EXPECTED_VERSION" \
+            --skip-install
+
+      - name: Upload the packaging validation marker
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packaging-validation-marker
+          path: ${{ runner.temp }}/checkout-version.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  artifact_roundtrip:
+    name: Verify artifact transfer
+    needs: package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download the packaging validation marker
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: packaging-validation-marker
+          path: ${{ runner.temp }}/packaging-validation
+
+      - name: Verify the packaging validation marker
+        run: test -s "$RUNNER_TEMP/packaging-validation/checkout-version.txt"

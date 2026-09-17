@@ -6,9 +6,15 @@ class Wedge:
     Computes a wedge for a 2D function
     """
 
-    def __init__(self, rp=(0., 200., 50),
-                 rt=(0., 200., 50), r=(0., 200., 50),
-                 mu=(0.95, 1.0), scaling=10, abs_mu=False):
+    def __init__(
+        self,
+        rp=(0.0, 200.0, 50),
+        rt=(0.0, 200.0, 50),
+        r=(0.0, 200.0, 50),
+        mu=(0.95, 1.0),
+        scaling=10,
+        abs_mu=False,
+    ):
         """Initialize computation of a wedge
 
         Parameters
@@ -35,7 +41,7 @@ class Wedge:
         # Create meshes on the finer grid for all elements
         rt_mesh, rp_mesh = np.meshgrid(rt_centers, rp_centers)
         r_mesh = np.sqrt(rp_mesh**2 + rt_mesh**2)
-        mu_mesh = (rp_mesh/r_mesh)
+        mu_mesh = rp_mesh / r_mesh
 
         # Check if we need the absolute value of mu
         if abs_mu:

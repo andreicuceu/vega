@@ -1,13 +1,13 @@
-import time
 import copy
+import time
 from sys import stdout
 
 import iminuit
 
 
 class Minimizer:
-    """Class for handling the interface to the minimizer.
-    """
+    """Class for handling the interface to the minimizer."""
+
     def __init__(self, chi2_func, sample_params):
         """
 
@@ -19,11 +19,12 @@ class Minimizer:
             Dictionary with the sample params config
         """
         self.chi2_func = chi2_func
-        self._names = sample_params['limits'].keys()
+        self._names = sample_params["limits"].keys()
         self._sample_params = sample_params
         self._config = {}
 
         self._run_flag = False
+        self.p_value = -1.0
 
     def chi2(self, *pars):
         """Wrapper of chi2 function for iminuit.
@@ -47,10 +48,10 @@ class Minimizer:
         """
         t0 = time.time()
 
-        params_init = copy.deepcopy(self._sample_params['values'])
-        errors = copy.deepcopy(self._sample_params['errors'])
-        limits = copy.deepcopy(self._sample_params['limits'])
-        fixed = copy.deepcopy(self._sample_params['fix'])
+        params_init = copy.deepcopy(self._sample_params["values"])
+        errors = copy.deepcopy(self._sample_params["errors"])
+        limits = copy.deepcopy(self._sample_params["limits"])
+        fixed = copy.deepcopy(self._sample_params["fix"])
 
         def write_settings(params, name, out_container):
             if name in params:
@@ -58,13 +59,13 @@ class Minimizer:
                     out_container[par] = val
 
         if params is not None:
-            write_settings(params, 'values', params_init)
-            write_settings(params, 'errors', errors)
-            write_settings(params, 'limits', limits)
-            write_settings(params, 'fix', fixed)
+            write_settings(params, "values", params_init)
+            write_settings(params, "errors", errors)
+            write_settings(params, "limits", limits)
+            write_settings(params, "fix", fixed)
 
         # Do an initial "fast" minimization over biases
-        bias_flag = bool(len([par for par in self._names if 'bias' in par]))
+        bias_flag = bool(len([par for par in self._names if "bias" in par]))
         if bias_flag:
             mig_init = iminuit.Minuit(self.chi2, name=self._names, **params_init)
             for name in self._names:
@@ -73,7 +74,7 @@ class Minimizer:
                 mig_init.fixed[name] = fixed[name]
 
             for name in self._names:
-                if 'bias' not in name:
+                if "bias" not in name:
                     mig_init.fixed[name] = True
 
             mig_init.errordef = 1
@@ -98,7 +99,7 @@ class Minimizer:
         print(self._minuit.fmin)
         print(self._minuit.params)
 
-        print("INFO: minimized in {}".format(time.time()-t0))
+        print("INFO: minimized in {}".format(time.time() - t0))
         stdout.flush()
         self._run_flag = True
 
@@ -112,8 +113,8 @@ class Minimizer:
             Parameter objects with bestfit values and errors
         """
         if not self._run_flag:
-            print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results before minimization.')
+            print("Run Minimizer.minimize() before asking for results")
+            raise RuntimeError("Tried to access minimization results before minimization.")
         return self._minuit.params
 
     @property
@@ -126,8 +127,8 @@ class Minimizer:
             Parameter name to best-fit value mapping
         """
         if not self._run_flag:
-            print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results before minimization.')
+            print("Run Minimizer.minimize() before asking for results")
+            raise RuntimeError("Tried to access minimization results before minimization.")
         return dict(self._minuit.values.to_dict())
 
     @property
@@ -140,8 +141,8 @@ class Minimizer:
             Parameter name to error mapping
         """
         if not self._run_flag:
-            print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results before minimization.')
+            print("Run Minimizer.minimize() before asking for results")
+            raise RuntimeError("Tried to access minimization results before minimization.")
         return dict(self._minuit.errors.to_dict())
 
     @property
@@ -154,8 +155,8 @@ class Minimizer:
             Covariance matrix
         """
         if not self._run_flag:
-            print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results before minimization.')
+            print("Run Minimizer.minimize() before asking for results")
+            raise RuntimeError("Tried to access minimization results before minimization.")
         return self._minuit.covariance
 
     @property
@@ -168,8 +169,8 @@ class Minimizer:
             Object containing bestfit chi2 and convergence flags
         """
         if not self._run_flag:
-            print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results before minimization.')
+            print("Run Minimizer.minimize() before asking for results")
+            raise RuntimeError("Tried to access minimization results before minimization.")
         return self._minuit.fmin
 
     @property
@@ -182,6 +183,6 @@ class Minimizer:
             The iminuit minimizer object
         """
         if not self._run_flag:
-            print('Run Minimizer.minimize() before asking for results')
-            raise RuntimeError('Tried to access minimization results before minimization.')
+            print("Run Minimizer.minimize() before asking for results")
+            raise RuntimeError("Tried to access minimization results before minimization.")
         return self._minuit

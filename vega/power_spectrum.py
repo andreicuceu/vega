@@ -1,7 +1,8 @@
 import copy
 
 import numpy as np
-from numba import njit, float64
+from numba import float64, njit
+
 from . import utils
 
 
@@ -15,7 +16,8 @@ class PowerSpectrum:
     Extensions should have their separate method of the form
     'compute_extension' that can be called from outside
     """
-    def __init__(self, config, fiducial, tracer1, tracer2, dataset_name=None):
+
+    def __init__(self, config, fiducial, tracer1, tracer2, dataset_name=None, rmu_binning=False):
         """
 
         Parameters
@@ -32,48 +34,56 @@ class PowerSpectrum:
             Name of dataset, by default None
         """
         self._config = config
-        self.tracer1_name = copy.deepcopy(tracer1['name'])
-        self.tracer2_name = copy.deepcopy(tracer2['name'])
-        self._corr_name = f'{self.tracer1_name}x{self.tracer2_name}'
-        self.tracer1_type = copy.deepcopy(tracer1['type'])
-        self.tracer2_type = copy.deepcopy(tracer2['type'])
+        self.tracer1_name = copy.deepcopy(tracer1["name"])
+        self.tracer2_name = copy.deepcopy(tracer2["name"])
+        self._corr_name = f"{self.tracer1_name}x{self.tracer2_name}"
+        self.tracer1_type = copy.deepcopy(tracer1["type"])
+        self.tracer2_type = copy.deepcopy(tracer2["type"])
 
         self._name = dataset_name
-        self.k_grid = fiducial['k']
-        self._bin_size_rp = config.getfloat('bin_size_rp')
-        self._bin_size_rt = config.getfloat('bin_size_rt')
-        self.use_Gk = self._config.getboolean('model binning', True)
+        self.k_grid = fiducial["k"]
+        self.rmu_binning = rmu_binning
+        self.use_Gk = self._config.getboolean("model binning", True)
 
-        self.skip_nl_model_in_peak = config.getboolean('skip-nl-model-in-peak', False)
+        self.skip_nl_model_in_peak = config.getboolean("skip-nl-model-in-peak", False)
+
+        if self.rmu_binning:
+            self._bin_size_r = config.getfloat("bin_size_r")
+            # mu smoothing does not make sense
+            # self._bin_size_mu = config.getfloat('bin_size_mu')
+        else:
+            self._bin_size_rp = config.getfloat("bin_size_rp")
+            self._bin_size_rt = config.getfloat("bin_size_rt")
 
         # Damping scale for P(k) - used to match EFT behavior
-        self.pk_damping_scale = config.getfloat('pk-damping-scale', None)
-        self.pk_damping_power = config.getint('pk-damping-power', 2)
+        self.pk_damping_scale = config.getfloat("pk-damping-scale", None)
+        self.pk_damping_power = config.getint("pk-damping-power", 2)
 
         # Get the HCD model and check for UV
-        self.hcd_model = self._config.get('model-hcd', None)
-        self._add_uvb = self._config.getboolean('UVB-fluctuations', False)
-        self._add_heii = self._config.getboolean('HeII-reionization', False)
+        self.hcd_model = self._config.get("model-hcd", None)
+        self._add_uvb = self._config.getboolean("UVB-fluctuations", False)
+        self._add_heii = self._config.getboolean("HeII-reionization", False)
 
         # Check the HCD model
         self._Fvoigt_data = None
-        if self.hcd_model is not None and 'fvoigt' in self.hcd_model:
-            assert 'fvoigt_model' in self._config.keys(), "No fvoigt_model specified in config"
+        if self.hcd_model is not None and "fvoigt" in self.hcd_model:
+            assert "fvoigt_model" in self._config.keys(), "No fvoigt_model specified in config"
 
-            fvoigt_model = self._config.get('fvoigt_model')
-            if '/' not in fvoigt_model:
-                path = utils.find_file(f'fvoigt_models/Fvoigt_{fvoigt_model}.txt')
+            fvoigt_model = self._config.get("fvoigt_model")
+            if "/" not in fvoigt_model:
+                path = utils.find_file(f"fvoigt_models/Fvoigt_{fvoigt_model}.txt")
             else:
                 path = fvoigt_model
             self._Fvoigt_data = np.loadtxt(path)
 
         # Initialize some stuff we need
         self.pk_Gk = None
-        self._pk_fid = fiducial['pk_full'] * ((1 + fiducial['z_fiducial'])
-                                              / (1. + fiducial['z_eff']))**2
+        self._pk_fid = (
+            fiducial["pk_full"] * ((1 + fiducial["z_fiducial"]) / (1.0 + fiducial["z_eff"])) ** 2
+        )
 
         # Initialize the mu_k grid
-        num_bins_muk = self._config.getint('num_bins_muk', 1000)
+        num_bins_muk = self._config.getint("num_bins_muk", 1000)
         muk_grid = (np.arange(num_bins_muk) + 0.5) / num_bins_muk
         self.muk_grid = muk_grid[:, None]
 
@@ -108,31 +118,31 @@ class PowerSpectrum:
 
         # Add UVB fluctuations and HeII reionization models
         if self._add_uvb or self._add_heii:
-            if self.tracer1_name == 'LYA':
+            if self.tracer1_name == "LYA":
                 bias1, beta1 = self.compute_bias_beta_uv_heii(bias1, beta1, params)
-            if self.tracer2_name == 'LYA':
+            if self.tracer2_name == "LYA":
                 bias2, beta2 = self.compute_bias_beta_uv_heii(bias2, beta2, params)
 
         # Add HCD model
         if self.hcd_model is not None:
-            if self.tracer1_name == 'LYA':
+            if self.tracer1_name == "LYA":
                 bias1, beta1 = self.compute_bias_beta_hcd(bias1, beta1, params)
-            if self.tracer2_name == 'LYA':
+            if self.tracer2_name == "LYA":
                 bias2, beta2 = self.compute_bias_beta_hcd(bias2, beta2, params)
 
         # Compute kaiser model
         pk_full = pk_lin * self.compute_kaiser(bias1, beta1, bias2, beta2, fast_metals)
 
         # add non linear small scales
-        skip_nl = self.skip_nl_model_in_peak and params['peak']
-        if 'small scale nl' in self._config.keys() and not skip_nl:
-            if 'arinyo' in self._config.get('small scale nl'):
+        skip_nl = self.skip_nl_model_in_peak and params["peak"]
+        if "small scale nl" in self._config.keys() and not skip_nl:
+            if "arinyo" in self._config.get("small scale nl"):
                 pk_full *= self.compute_dnl_arinyo(params)
-            elif 'mcdonald' in self._config.get('small scale nl'):
+            elif "mcdonald" in self._config.get("small scale nl"):
                 pk_full *= self.compute_dnl_mcdonald()
             else:
-                print('small scale nl: must be either mcdonald or arinyo')
-                raise ValueError('Incorrect \'small scale nl\' specified')
+                print("small scale nl: must be either mcdonald or arinyo")
+                raise ValueError("Incorrect 'small scale nl' specified")
 
         # model the effect of binning
         if self.use_Gk:
@@ -140,58 +150,57 @@ class PowerSpectrum:
                 self.pk_Gk = self.compute_Gk(params)
             pk_full *= self.pk_Gk
 
-        if 'mock-bin-size' in self._config:
-            bin_size = self._config.getfloat('mock-bin-size')
+        if "mock-bin-size" in self._config:
+            bin_size = self._config.getfloat("mock-bin-size")
             smoothing_parameters = {
-                f'par binsize {self._name}': bin_size,
-                f'per binsize {self._name}': bin_size,
+                f"par binsize {self._name}": bin_size,
+                f"per binsize {self._name}": bin_size,
             }
 
-            los_smoothing = self._config.get('mock-los-smoothing')
-            if los_smoothing == 'growth':
-                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['growth_rate']
-            elif los_smoothing == 'amplitude':
-                smoothing_parameters[f'par binsize {self._name}'] *= 1 + params['los_smooth_amp']
-            elif los_smoothing == 'only-los':
-                smoothing_parameters[f'per binsize {self._name}'] = 0
+            los_smoothing = self._config.get("mock-los-smoothing")
+            if los_smoothing == "growth":
+                smoothing_parameters[f"par binsize {self._name}"] *= 1 + params["growth_rate"]
+            elif los_smoothing == "amplitude":
+                smoothing_parameters[f"par binsize {self._name}"] *= 1 + params["los_smooth_amp"]
+            elif los_smoothing == "only-los":
+                smoothing_parameters[f"per binsize {self._name}"] = 0
             elif los_smoothing is not None:
-                raise ValueError(f'Unknown mock LOS smoothing option {los_smoothing}.')
+                raise ValueError(f"Unknown mock LOS smoothing option {los_smoothing}.")
 
             pk_full *= self.compute_Gk(smoothing_parameters)
 
         # add non linear large scales
-        if params['peak']:
+        if params["peak"]:
             pk_full *= self.compute_peak_nl(params)
 
         # add full shape smoothing
-        if 'fullshape smoothing' in self._config and not skip_nl:
-            smoothing_type = self._config.get('fullshape smoothing')
-            if 'gauss' in smoothing_type:
+        if "fullshape smoothing" in self._config and not skip_nl:
+            smoothing_type = self._config.get("fullshape smoothing")
+            if "gauss" in smoothing_type:
                 pk_full *= self.compute_fullshape_gauss_smoothing(params)
-            elif 'exp' in smoothing_type:
+            elif "exp" in smoothing_type:
                 pk_full *= self.compute_fullshape_exp_smoothing(params)
             else:
-                raise ValueError('"fullshape smoothing" must be of type'
-                                 ' "gauss" or "exp".')
+                raise ValueError('"fullshape smoothing" must be of type "gauss" or "exp".')
 
         # add velocity dispersion
-        if 'velocity dispersion' in self._config:
-            smoothing_type = self._config.get('velocity dispersion')
-            if 'gauss' in smoothing_type:
+        if "velocity dispersion" in self._config:
+            smoothing_type = self._config.get("velocity dispersion")
+            if "gauss" in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_gauss(params)
-            elif 'lorentz' in smoothing_type:
+            elif "lorentz" in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_lorentz(params)
-            elif 'lorentz_gauss' in smoothing_type:
+            elif "lorentz_gauss" in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_lorentz(params)
                 pk_full *= self.compute_velocity_dispersion_gauss(params)
             else:
-                raise ValueError('"velocity dispersion" must be of type'
-                                 ' "gauss" or "lorentz".')
+                raise ValueError('"velocity dispersion" must be of type "gauss" or "lorentz".')
 
         # P(k) damping at high k
         if self.pk_damping_scale is not None:
             pk_full *= utils.compute_kn_smoothing(
-                self.pk_damping_scale, self.k_grid.astype(float), n=self.pk_damping_power)
+                self.pk_damping_scale, self.k_grid.astype(float), n=self.pk_damping_power
+            )
 
         return pk_full
 
@@ -214,7 +223,7 @@ class PowerSpectrum:
         ND Array
             Kaiser term
         """
-        pk = (1 + beta1 * self.muk_grid**2)
+        pk = 1 + beta1 * self.muk_grid**2
         pk = pk * (1 + beta2 * self.muk_grid**2)
 
         if not fast_metals:
@@ -222,7 +231,7 @@ class PowerSpectrum:
         return pk
 
     def compute_bias_beta_uv_heii(self, bias, beta, params):
-        """ Compute effective biases that include UV and helium reionization modeling.
+        """Compute effective biases that include UV and helium reionization modeling.
 
         Parameters
         ----------
@@ -261,7 +270,7 @@ class PowerSpectrum:
         return bias_eff, beta_eff
 
     def compute_bias_beta_hcd(self, bias, beta, params):
-        """ Compute effective biases that include HCD modeling.
+        """Compute effective biases that include HCD modeling.
 
         Parameters
         ----------
@@ -280,7 +289,7 @@ class PowerSpectrum:
         # Check if we have an HCD bias for each component
         bias_hcd = params.get(f"bias_hcd_{self._corr_name}", None)
         if bias_hcd is None:
-            bias_hcd = params['bias_hcd']
+            bias_hcd = params["bias_hcd"]
 
         # Get the other parameters
         beta_hcd = params.get(f"beta_hcd_{self._corr_name}", None)
@@ -288,23 +297,24 @@ class PowerSpectrum:
             beta_hcd = params["beta_hcd"]
 
         # Check which model we need
-        if 'Rogers' in self.hcd_model:
+        if "Rogers" in self.hcd_model:
             L0 = params["L0_hcd"]
             self._compute_hcd_cached(self._hcd_Rogers2018, L0, self.k_par_grid)
-        elif 'fvoigt' in self.hcd_model:
+        elif "fvoigt" in self.hcd_model:
             assert self._Fvoigt_data is not None
             L0 = params.get("L0_fvoigt", 1)
             self._compute_hcd_cached(self._hcd_fvoigt, L0)
-        elif 'sinc' in self.hcd_model:
+        elif "sinc" in self.hcd_model:
             L0 = params.get("L0_sinc", 1)
             self._compute_hcd_cached(self._hcd_sinc, L0)
         else:
-            raise ValueError(f"Unknown hcd model {self.hcd_model}. "
-                             "Choose from ['Rogers', 'fvoigt', 'sinc']")
+            raise ValueError(
+                f"Unknown hcd model {self.hcd_model}. Choose from ['Rogers', 'fvoigt', 'sinc']"
+            )
 
         bias_eff = bias + bias_hcd * self._F_hcd
-        beta_eff = (bias * beta + bias_hcd * beta_hcd * self._F_hcd)
-        beta_eff /= (bias + bias_hcd * self._F_hcd)
+        beta_eff = bias * beta + bias_hcd * beta_hcd * self._F_hcd
+        beta_eff /= bias + bias_hcd * self._F_hcd
 
         return bias_eff, beta_eff
 
@@ -392,23 +402,21 @@ class PowerSpectrum:
         ND Array
             Smoothing factor for the peak
         """
-        sigma_par = params.get('sigmaNL_par', None)
-        sigma_trans = params.get('sigmaNL_per', None)
-        growth_rate = params.get('growth_rate')
+        sigma_par = params.get("sigmaNL_par", None)
+        sigma_trans = params.get("sigmaNL_per", None)
+        growth_rate = params.get("growth_rate")
 
         if sigma_par is None and sigma_trans is not None:
             sigma_par = sigma_trans * (1 + growth_rate)
         elif sigma_trans is None and sigma_par is not None:
             sigma_trans = sigma_par / (1 + growth_rate)
         elif sigma_par is None and sigma_trans is None:
-            raise ValueError('No parameters for peak NL found.'
-                             ' Add sigmaNL_par and/or sigmaNL_par.')
+            raise ValueError("No parameters for peak NL found. Add sigmaNL_par and/or sigmaNL_par.")
 
         if self._peak_nl_pars is None:
             self._peak_nl_pars = np.array([sigma_par, sigma_trans]) + 1
 
-        if not np.allclose(np.array([sigma_par, sigma_trans]),
-                           self._peak_nl_pars):
+        if not np.allclose(np.array([sigma_par, sigma_trans]), self._peak_nl_pars):
             peak_nl = self.k_par_grid**2 * sigma_par**2
             peak_nl += self.k_trans_grid**2 * sigma_trans**2
             self._peak_nl_pars = np.array([sigma_par, sigma_trans])
@@ -427,9 +435,9 @@ class PowerSpectrum:
         assert self.tracer1_name == "LYA"
         assert self.tracer2_name == "LYA"
 
-        kvel = 1.22 * (1 + self.k_grid / 0.923)**0.451
-        dnl = (self.k_grid / 6.4)**0.569 - (self.k_grid / 15.3)**2.01
-        dnl = dnl - (self.k_grid * self.muk_grid / kvel)**1.5
+        kvel = 1.22 * (1 + self.k_grid / 0.923) ** 0.451
+        dnl = (self.k_grid / 6.4) ** 0.569 - (self.k_grid / 15.3) ** 2.01
+        dnl = dnl - (self.k_grid * self.muk_grid / kvel) ** 1.5
         return np.exp(dnl)
 
     def compute_dnl_arinyo(self, params):
@@ -461,7 +469,7 @@ class PowerSpectrum:
         if not np.allclose(np.array([q1, q2, kv, av, bv, kp]), self._arinyo_pars):
             delta_squared = self.k_grid**3 * self._pk_fid / (2 * np.pi**2)
             growth = q1 * delta_squared + q2 * delta_squared**2
-            pec_velocity = (self.k_grid / kv)**av * np.abs(self.muk_grid)**bv
+            pec_velocity = (self.k_grid / kv) ** av * np.abs(self.muk_grid) ** bv
             pressure = (self.k_grid / kp) * (self.k_grid / kp)
             dnl = np.exp(growth * (1 - pec_velocity) - pressure)
 
@@ -491,14 +499,25 @@ class PowerSpectrum:
         ND Array
             G(k)
         """
-        bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
-        bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
+        Gk = 1.0
 
-        Gk = 1.
-        if bin_size_rp != 0:
-            Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
-        if bin_size_rt != 0:
-            Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+        if self.rmu_binning:
+            bin_size_r = params.get(f"r binsize {self._name}", self._bin_size_r)
+            # bin_size_mu = params.get(f"mu binsize {self._name}", self._bin_size_mu)
+
+            if bin_size_r != 0:
+                Gk = Gk * utils.sinc(self.k_grid * bin_size_r / 2)
+            # if bin_size_mu != 0:
+            #     Gk = Gk * utils.sinc(self.muk_grid * bin_size_mu / 2)
+        else:
+            bin_size_rp = params.get("par binsize {}".format(self._name), self._bin_size_rp)
+            bin_size_rt = params.get("per binsize {}".format(self._name), self._bin_size_rt)
+
+            if bin_size_rp != 0:
+                Gk = Gk * utils.sinc(self.k_par_grid * bin_size_rp / 2)
+            if bin_size_rt != 0:
+                Gk = Gk * utils.sinc(self.k_trans_grid * bin_size_rt / 2)
+
         return Gk
 
     def compute_fullshape_gauss_smoothing(self, params):
@@ -514,42 +533,56 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        check_tracer1 = self.tracer1_name in ['LYA', 'QSO']
-        check_tracer2 = self.tracer2_name in ['LYA', 'QSO']
+        check_tracer1 = self.tracer1_name in ["LYA", "QSO"]
+        check_tracer2 = self.tracer2_name in ["LYA", "QSO"]
 
-        if ('par_sigma_smooth' in params) or ('per_sigma_smooth' in params):
-            sigma_par = params.get('par_sigma_smooth', None)
-            sigma_trans = params.get('per_sigma_smooth', None)
+        if ("par_sigma_smooth" in params) or ("per_sigma_smooth" in params):
+            sigma_par = params.get("par_sigma_smooth", None)
+            sigma_trans = params.get("per_sigma_smooth", None)
 
             if sigma_par is None and sigma_trans is None:
                 raise ValueError(
-                    'Asked for fullshape gaussian smoothing without setting the'
-                    ' smoothing parameters (par_sigma_smooth and/or per_sigma_smooth).'
+                    "Asked for fullshape gaussian smoothing without setting the"
+                    " smoothing parameters (par_sigma_smooth and/or per_sigma_smooth)."
                 )
             elif sigma_par is None:
                 sigma_par = sigma_trans
             elif sigma_trans is None:
                 sigma_trans = sigma_par
 
-            return utils.compute_gauss_smoothing(
-                sigma_par, sigma_trans, self.k_par_grid, self.k_trans_grid)**2
-
-        elif (('par_sigma_smooth_metals' in params) and ('per_sigma_smooth_metals' in params)
-              and not (check_tracer1 and check_tracer2)):
-            return utils.compute_gauss_smoothing(
-                params['par_sigma_smooth_metals'], params['per_sigma_smooth_metals'],
-                self.k_par_grid, self.k_trans_grid)**2
-
-        else:
             return (
                 utils.compute_gauss_smoothing(
-                    params[f'par_sigma_smooth_{self.tracer1_name}'],
-                    params[f'per_sigma_smooth_{self.tracer1_name}'],
-                    self.k_par_grid, self.k_trans_grid)
-                * utils.compute_gauss_smoothing(
-                    params[f'par_sigma_smooth_{self.tracer2_name}'],
-                    params[f'per_sigma_smooth_{self.tracer2_name}'],
-                    self.k_par_grid, self.k_trans_grid)
+                    sigma_par, sigma_trans, self.k_par_grid, self.k_trans_grid
+                )
+                ** 2
+            )
+
+        elif (
+            ("par_sigma_smooth_metals" in params)
+            and ("per_sigma_smooth_metals" in params)
+            and not (check_tracer1 and check_tracer2)
+        ):
+            return (
+                utils.compute_gauss_smoothing(
+                    params["par_sigma_smooth_metals"],
+                    params["per_sigma_smooth_metals"],
+                    self.k_par_grid,
+                    self.k_trans_grid,
+                )
+                ** 2
+            )
+
+        else:
+            return utils.compute_gauss_smoothing(
+                params[f"par_sigma_smooth_{self.tracer1_name}"],
+                params[f"per_sigma_smooth_{self.tracer1_name}"],
+                self.k_par_grid,
+                self.k_trans_grid,
+            ) * utils.compute_gauss_smoothing(
+                params[f"par_sigma_smooth_{self.tracer2_name}"],
+                params[f"per_sigma_smooth_{self.tracer2_name}"],
+                self.k_par_grid,
+                self.k_trans_grid,
             )
         # else:
         #     raise ValueError(
@@ -558,7 +591,7 @@ class PowerSpectrum:
         #     )
 
     def compute_fullshape_exp_smoothing(self, params):
-        """ Compute a Gaussian and exp smoothing for the full
+        """Compute a Gaussian and exp smoothing for the full
         correlation function (usefull for london_mocks_v6.0).
 
         Parameters
@@ -572,10 +605,10 @@ class PowerSpectrum:
             Smoothing factor
         """
         # Get the parameters
-        sigma_par_sq = params['par_sigma_smooth']**2
-        sigma_trans_sq = params['per_sigma_smooth']**2
-        exp_par_sq = params['par_exp_smooth']**2
-        exp_trans_sq = params['per_exp_smooth']**2
+        sigma_par_sq = params["par_sigma_smooth"] ** 2
+        sigma_trans_sq = params["per_sigma_smooth"] ** 2
+        exp_par_sq = params["par_exp_smooth"] ** 2
+        exp_trans_sq = params["per_exp_smooth"] ** 2
 
         # Compute the smoothing components
         gauss_smoothing = self.k_par_grid**2 * sigma_par_sq
@@ -598,15 +631,15 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        assert 'discrete' in [self.tracer1_type, self.tracer2_type]
+        assert "discrete" in [self.tracer1_type, self.tracer2_type]
 
         smoothing = np.ones(self.k_par_grid.shape)
-        if self.tracer1_type == 'discrete':
-            sigma = params['sigma_velo_disp_gauss_' + self.tracer1_name]
-            smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
-        if self.tracer2_type == 'discrete':
-            sigma = params['sigma_velo_disp_gauss_' + self.tracer2_name]
-            smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma)**2)
+        if self.tracer1_type == "discrete":
+            sigma = params["sigma_velo_disp_gauss_" + self.tracer1_name]
+            smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma) ** 2)
+        if self.tracer2_type == "discrete":
+            sigma = params["sigma_velo_disp_gauss_" + self.tracer2_name]
+            smoothing *= np.exp(-0.25 * (self.k_par_grid * sigma) ** 2)
 
         return smoothing
 
@@ -623,14 +656,14 @@ class PowerSpectrum:
         ND Array
             Smoothing factor
         """
-        assert 'discrete' in [self.tracer1_type, self.tracer2_type]
+        assert "discrete" in [self.tracer1_type, self.tracer2_type]
 
         smoothing = np.ones(self.k_par_grid.shape)
-        if self.tracer1_type == 'discrete':
-            sigma = params['sigma_velo_disp_lorentz_' + self.tracer1_name]
-            smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
-        if self.tracer2_type == 'discrete':
-            sigma = params['sigma_velo_disp_lorentz_' + self.tracer2_name]
-            smoothing *= 1. / np.sqrt(1 + (self.k_par_grid * sigma)**2)
+        if self.tracer1_type == "discrete":
+            sigma = params["sigma_velo_disp_lorentz_" + self.tracer1_name]
+            smoothing *= 1.0 / np.sqrt(1 + (self.k_par_grid * sigma) ** 2)
+        if self.tracer2_type == "discrete":
+            sigma = params["sigma_velo_disp_lorentz_" + self.tracer2_name]
+            smoothing *= 1.0 / np.sqrt(1 + (self.k_par_grid * sigma) ** 2)
 
         return smoothing

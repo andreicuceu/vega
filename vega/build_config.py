@@ -13,24 +13,33 @@ from vega.utils import find_file
 
 
 class BuildConfig:
-    """Build and manage config files based on available templates
-    """
+    """Build and manage config files based on available templates"""
 
     _params_template = None
     recognised_correlations = [
-        'lyaxlya', 'lyaxlyb', 'lyaxqso', 'lybxqso',
-        'lyaxdla', 'lybxdla', 'lyaxsbla', 'lybxsbla',
-        'qsoxqso', 'qsoxdla', 'dlaxdla',
-        'civxciv', 'civxqso', 'civxlya', 
+        "lyaxlya",
+        "lyaxlyb",
+        "lyaxqso",
+        "lybxqso",
+        "lyaxdla",
+        "lybxdla",
+        "lyaxsbla",
+        "lybxsbla",
+        "qsoxqso",
+        "qsoxdla",
+        "dlaxdla",
+        "civxciv",
+        "civxqso",
+        "civxlya",
     ]
 
-    def __init__(self, options={}, overwrite=False):
+    def __init__(self, options=None, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
 
         Parameters
         ----------
         options : dict, optional
-            Dictionary with model options, by default {}
+            Dictionary with model options, by default None
             Here is a list of options:
                 scale_params: string from ['ap_at', 'phi_alpha', 'aiso_epsilon'], default 'ap_at'
                 template: string with custom_link, default 'PlanckDR16/PlanckDR16.fits'
@@ -51,68 +60,78 @@ class BuildConfig:
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
                     'SiII(1260)', 'CIV(eff)'], default None
         """
+        if options is None:
+            options = {}
+
         self.overwrite = overwrite
         self.options = {}
 
-        self.options['scale_params'] = options.get('scale_params', 'ap_at')
-        self.options['template'] = options.get('template', 'PlanckDR16/PlanckDR16.fits')
-        self.options['full_shape'] = options.get('full_shape', False)
-        self.options['full_shape_alpha'] = options.get('full_shape_alpha', False)
-        self.options['smooth_scaling'] = options.get('smooth_scaling', False)
+        self.options["scale_params"] = options.get("scale_params", "ap_at")
+        self.options["template"] = options.get("template", "PlanckDR16/PlanckDR16.fits")
+        self.options["full_shape"] = options.get("full_shape", False)
+        self.options["full_shape_alpha"] = options.get("full_shape_alpha", False)
+        self.options["smooth_scaling"] = options.get("smooth_scaling", False)
+        self.options["model-binning"] = options.get("model-binning", True)
 
-        self.options['small_scale_nl'] = options.get('small_scale_nl', False)
-        self.options['small_scale_nl_cross'] = options.get('small_scale_nl_cross', False)
-        self.options['bao_broadening'] = options.get('bao_broadening', False)
-        self.options['skip-nl-model-in-peak'] = options.get('skip-nl-model-in-peak', False)
-        self.options['UVB-fluctuations'] = options.get('UVB-fluctuations', False)
-        self.options['UVB-SN-cross'] = options.get('UVB-SN-cross', False)
-        self.options['HeII-reionization'] = options.get('HeII-reionization', False)
-        self.options['mock-bin-size'] = options.get('mock-bin-size', None)
-        self.options['mock-los-smoothing'] = options.get('mock-los-smoothing', None)
+        self.options["small_scale_nl"] = options.get("small_scale_nl", False)
+        self.options["small_scale_nl_cross"] = options.get("small_scale_nl_cross", False)
+        self.options["bao_broadening"] = options.get("bao_broadening", False)
+        self.options["skip-nl-model-in-peak"] = options.get("skip-nl-model-in-peak", False)
+        self.options["UVB-fluctuations"] = options.get("UVB-fluctuations", False)
+        self.options["UVB-SN-cross"] = options.get("UVB-SN-cross", False)
+        self.options["HeII-reionization"] = options.get("HeII-reionization", False)
+        self.options["mock-bin-size"] = options.get("mock-bin-size", None)
+        self.options["mock-los-smoothing"] = options.get("mock-los-smoothing", None)
 
-        self.options['velocity_dispersion'] = options.get('velocity_dispersion', None)
-        self.options['radiation_effects'] = options.get('radiation_effects', False)
-        self.options['pk-damping-scale'] = options.get('pk-damping-scale', None)
-        self.options['pk-damping-power'] = options.get('pk-damping-power', 2)
+        self.options["velocity_dispersion"] = options.get("velocity_dispersion", None)
+        self.options["radiation_effects"] = options.get("radiation_effects", False)
+        self.options["pk-damping-scale"] = options.get("pk-damping-scale", None)
+        self.options["pk-damping-power"] = options.get("pk-damping-power", 2)
 
-        self.options['marginalize-below-rtmax'] = options.get('marginalize-below-rtmax', None)
-        self.options['marginalize-above-rtmin'] = options.get('marginalize-above-rtmin', None)
-        self.options['marginalize-below-rpmax'] = options.get('marginalize-below-rpmax', None)
-        self.options['marginalize-above-rpmin'] = options.get('marginalize-above-rpmin', None)
+        self.options["marginalize-below-rtmax"] = options.get("marginalize-below-rtmax", None)
+        self.options["marginalize-above-rtmin"] = options.get("marginalize-above-rtmin", None)
+        self.options["marginalize-below-rpmax"] = options.get("marginalize-below-rpmax", None)
+        self.options["marginalize-above-rpmin"] = options.get("marginalize-above-rpmin", None)
 
-        self.options['marginalize-all-rmin-cuts'] = options.get('marginalize-all-rmin-cuts', False)
-        self.options['marginalize-prior-sigma'] = options.get('marginalize-prior-sigma', 10.0)
-        self.options['fit-marginalized-scales'] = options.get('fit-marginalized-scales', True)
-        self.options['marginalize-match-data-bins'] = options.get(
-            'marginalize-match-data-bins', True)
+        self.options["marginalize-all-rmin-cuts"] = options.get("marginalize-all-rmin-cuts", False)
+        self.options["marginalize-prior-sigma"] = options.get("marginalize-prior-sigma", 10.0)
+        self.options["fit-marginalized-scales"] = options.get("fit-marginalized-scales", True)
+        self.options["marginalize-match-data-bins"] = options.get(
+            "marginalize-match-data-bins", True
+        )
 
-        self.options['hcd_model'] = options.get('hcd_model', None)
-        self.options['fvoigt_model'] = options.get('fvoigt_model', 'exp')
-        self.options['fullshape_smoothing'] = options.get('fullshape_smoothing', None)
-        self.options['fullshape_smoothing_metals'] = options.get(
-            'fullshape_smoothing_metals', False)
-        self.options['desi-instrumental-systematics'] = options.get(
-            'desi-instrumental-systematics', False)
-        self.options['test'] = options.get('test', False)
-        self.options['use_metal_autos'] = options.get('use_metal_autos', True)
-        self.options['new_metals'] = options.get('new_metals', False)
-        self.options['rp_only_metal_mats'] = options.get('rp_only_metal_mats', False)
-        self.options['metal-matrix'] = options.get('metal-matrix', {})
-        self.options['rebin-metals'] = options.get('rebin-metals', None)
-        self.options['use_metal_bias_eta'] = options.get('use_metal_bias_eta', False)
-        self.options['separate-metal-auto-biases'] = options.get(
-            'separate-metal-auto-biases', False)
-        self.options['single-metal-beta'] = options.get('single-metal-beta', False)
-        self.options['zmin'] = options.get('zmin', 0.0)
-        self.options['zmax'] = options.get('zmax', 10.0)
+        self.options["hcd_model"] = options.get("hcd_model", None)
+        self.options["fvoigt_model"] = options.get("fvoigt_model", "exp")
+        self.options["fullshape_smoothing"] = options.get("fullshape_smoothing", None)
+        self.options["fullshape_smoothing_metals"] = options.get(
+            "fullshape_smoothing_metals", False
+        )
+        self.options["desi-instrumental-systematics"] = options.get(
+            "desi-instrumental-systematics", False
+        )
+        self.options["test"] = options.get("test", False)
+        self.options["use_metal_autos"] = options.get("use_metal_autos", True)
+        self.options["new_metals"] = options.get("new_metals", False)
+        self.options["rp_only_metal_mats"] = options.get("rp_only_metal_mats", False)
+        self.options["metal-matrix"] = options.get("metal-matrix", {})
+        self.options["rebin-metals"] = options.get("rebin-metals", None)
+        self.options["use_metal_bias_eta"] = options.get("use_metal_bias_eta", False)
+        self.options["separate-metal-auto-biases"] = options.get(
+            "separate-metal-auto-biases", False
+        )
+        self.options["single-metal-beta"] = options.get("single-metal-beta", False)
+        self.options["zmin"] = options.get("zmin", 0.0)
+        self.options["zmax"] = options.get("zmax", 10.0)
 
-        metals = options.get('metals', None)
+        metals = options.get("metals", None)
         if metals is not None:
-            if 'all' in metals:
-                metals = ['SiII(1190)', 'SiII(1193)', 'SiIII(1207)', 'SiII(1260)', 'CIV(eff)']
-        self.options['metals'] = metals
+            if "all" in metals:
+                metals = ["SiII(1190)", "SiII(1193)", "SiIII(1207)", "SiII(1260)", "CIV(eff)"]
+        self.options["metals"] = metals
 
-    def build(self, correlations, fit_type, fit_info, out_path, parameters={}, name_extension=None):
+    def build(
+        self, correlations, fit_type, fit_info, out_path, parameters=None, name_extension=None
+    ):
         """Build Vega config files and write them to an output directory
 
         Parameters
@@ -148,7 +167,7 @@ class BuildConfig:
         out_path : string
             Path to directory where to write the config files
         parameters : dict, optional
-            Parameter values to write to the main config, by default {}
+            Parameter values to write to the main config, by default None
         name_extension : string, optional
             Optional string to add to the config file names, by default None
 
@@ -157,35 +176,38 @@ class BuildConfig:
         string
             Path to the main config file
         """
+        if parameters is None:
+            parameters = {}
+
         # Save some of the info
         self.fit_info = fit_info
         self.name_extension = name_extension
 
         # Check if we need sampler or fitter or both
-        self.fitter = fit_info.get('fitter', True)
-        self.run_sampler = fit_info.get('run_sampler', False)
+        self.fitter = fit_info.get("fitter", True)
+        self.run_sampler = fit_info.get("run_sampler", False)
 
         # get the relevant paths
         self.config_path = Path(os.path.expandvars(out_path))
         assert self.config_path.is_dir()
         if self.fitter:
-            self.fitter_out_path = self.config_path / 'output_fitter'
+            self.fitter_out_path = self.config_path / "output_fitter"
             if not self.fitter_out_path.exists():
                 os.mkdir(self.fitter_out_path)
         if self.run_sampler:
-            self.sampler = fit_info.get('sampler', 'Polychord')
-            self.sampler_out_path = self.config_path / 'output_sampler'
+            self.sampler = fit_info.get("sampler", "Polychord")
+            self.sampler_out_path = self.config_path / "output_sampler"
             if not self.sampler_out_path.exists():
                 os.mkdir(self.sampler_out_path)
 
         # Check if we know the correlation types
-        components = fit_type.split('_')
+        components = fit_type.split("_")
         for corr in components:
             if corr not in self.recognised_correlations:
-                raise ValueError(f'Unknown correlation {corr}, part of fit type {fit_type}.')
+                raise ValueError(f"Unknown correlation {corr}, part of fit type {fit_type}.")
 
         if len(components) != len(set(components)):
-            print(f'Warning! fit type {fit_type} has duplicates')
+            print(f"Warning! fit type {fit_type} has duplicates")
 
         # Get git hash
         vega_path = Path(os.path.dirname(vega.__file__))
@@ -201,12 +223,15 @@ class BuildConfig:
         for name in components:
             # Check if we have info on the correlation
             if name not in correlations:
-                raise ValueError(f'You asked for correlation {name} but did not provide'
-                                 ' its configuration in the "correlations" dictionary.')
+                raise ValueError(
+                    f"You asked for correlation {name} but did not provide"
+                    ' its configuration in the "correlations" dictionary.'
+                )
 
             # Build the config file for the correlation and save the path
             corr_path, data_path, tracer1, tracer2 = self._build_corr_config(
-                name, correlations[name], git_hash)
+                name, correlations[name], git_hash
+            )
 
             self.corr_paths.append(corr_path)
             self.data_paths.append(data_path)
@@ -239,222 +264,244 @@ class BuildConfig:
         # Read template
         config = ConfigParser()
         config.optionxform = lambda option: option
-        template_path = find_file(f'vega/templates/{name}.ini')
+        template_path = find_file(f"vega/templates/{name}.ini")
         config.read(template_path)
 
         # get tracer info
-        tracer1 = config['data']['tracer1']
-        tracer2 = config['data']['tracer2']
-        type1 = config['data']['tracer1-type']
-        type2 = config['data']['tracer2-type']
+        tracer1 = config["data"]["tracer1"]
+        tracer2 = config["data"]["tracer2"]
+        type1 = config["data"]["tracer1-type"]
+        type2 = config["data"]["tracer2-type"]
 
         # Write the basic info
-        config['data']['filename'] = corr_info.get('corr_path')
-        if 'distortion-file' in corr_info:
-            config['data']['distortion-file'] = corr_info.get('distortion-file')
-        if 'covariance-file' in corr_info:
-            config['data']['covariance-file'] = corr_info.get('covariance-file')
-        if 'cov_rescale' in corr_info:
-            config['data']['cov_rescale'] = corr_info.get('cov_rescale')
+        config["data"]["filename"] = corr_info.get("corr_path")
+        if "distortion-file" in corr_info:
+            config["data"]["distortion-file"] = corr_info.get("distortion-file")
+        if "covariance-file" in corr_info:
+            config["data"]["covariance-file"] = corr_info.get("covariance-file")
+        if "cov_rescale" in corr_info:
+            config["data"]["cov_rescale"] = corr_info.get("cov_rescale")
 
-        config['cuts']['r-min'] = str(corr_info.get('r-min', 10))
-        config['cuts']['r-max'] = str(corr_info.get('r-max', 180))
-        config['cuts']['rt-min'] = str(corr_info.get('rt-min', 0))
-        config['cuts']['rp-min'] = str(corr_info.get('rp-min', -300))
-        config['cuts']['mu-min'] = str(corr_info.get('mu-min', -1))
-        config['cuts']['mu-max'] = str(corr_info.get('mu-max', 1))
-        if self.options['test']:
-            config['data']['test'] = 'True'
+        config["cuts"]["r-min"] = str(corr_info.get("r-min", 10))
+        config["cuts"]["r-max"] = str(corr_info.get("r-max", 180))
+        config["cuts"]["rt-min"] = str(corr_info.get("rt-min", 0))
+        config["cuts"]["rp-min"] = str(corr_info.get("rp-min", -300))
+        config["cuts"]["mu-min"] = str(corr_info.get("mu-min", -1))
+        config["cuts"]["mu-max"] = str(corr_info.get("mu-max", 1))
+        if self.options["test"]:
+            config["data"]["test"] = "True"
 
-        if 'binsize' in corr_info:
-            config['parameters'] = {}
-            config['parameters']['par binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
-            config['parameters']['per binsize {}'.format(name)] = str(corr_info.get('binsize', 4))
+        if "binsize" in corr_info:
+            config["parameters"] = {}
+            config["parameters"]["par binsize {}".format(name)] = str(corr_info.get("binsize", 4))
+            config["parameters"]["per binsize {}".format(name)] = str(corr_info.get("binsize", 4))
 
         # Write the model options
+        config["model"]["model binning"] = str(self.options["model-binning"])
+
         # Things that require LYA
-        if tracer1 == 'LYA' and tracer2 == 'LYA':
-            if self.options['small_scale_nl']:
-                config['model']['small scale nl'] = 'dnl_arinyo'
-        elif tracer1 == 'LYA' or tracer2 == 'LYA':
-            if self.options['small_scale_nl_cross']:
-                config['model']['small scale nl'] = 'dnl_arinyo'
+        if tracer1 == "LYA" and tracer2 == "LYA":
+            if self.options["small_scale_nl"]:
+                config["model"]["small scale nl"] = "dnl_arinyo"
+        elif tracer1 == "LYA" or tracer2 == "LYA":
+            if self.options["small_scale_nl_cross"]:
+                config["model"]["small scale nl"] = "dnl_arinyo"
 
         # Things that require both tracers to be continuous
-        if type1 == 'continuous' and type2 == 'continuous':
-            config['model']['use_metal_autos'] = str(self.options['use_metal_autos'])
-            if self.options['desi-instrumental-systematics']:
-                config['model']['desi-instrumental-systematics'] = 'True'
+        if type1 == "continuous" and type2 == "continuous":
+            config["model"]["use_metal_autos"] = str(self.options["use_metal_autos"])
+            if self.options["desi-instrumental-systematics"]:
+                config["model"]["desi-instrumental-systematics"] = "True"
 
         # Things that require at least one tracer to be continuous
-        if type1 == 'continuous' or type2 == 'continuous':
-
-            if self.options['UVB-fluctuations']:
-                config['model']['UVB-fluctuations'] = 'True'
+        if type1 == "continuous" or type2 == "continuous":
+            if self.options["UVB-fluctuations"]:
+                config["model"]["UVB-fluctuations"] = "True"
 
                 # UV shotnoise is added to auto by default, and to cross only with extra flag
-                if type1 == type2 or self.options['UVB-SN-cross']:
-                    config['model']['UVB-shotnoise'] = 'True'
+                if type1 == type2 or self.options["UVB-SN-cross"]:
+                    config["model"]["UVB-shotnoise"] = "True"
 
-            if self.options['HeII-reionization']:
-                config['model']['HeII-reionization'] = 'True'
+            if self.options["HeII-reionization"]:
+                config["model"]["HeII-reionization"] = "True"
 
-            if self.options['hcd_model'] is not None:
-                assert self.options['hcd_model'] in ['fvoigt', 'Rogers2018', 'sinc']
-                config['model']['model-hcd'] = self.options['hcd_model']
-                if self.options['hcd_model'] == 'fvoigt':
-                    config['model']['fvoigt_model'] = self.options['fvoigt_model']
+            if self.options["hcd_model"] is not None:
+                assert self.options["hcd_model"] in ["fvoigt", "Rogers2018", "sinc"]
+                config["model"]["model-hcd"] = self.options["hcd_model"]
+                if self.options["hcd_model"] == "fvoigt":
+                    config["model"]["fvoigt_model"] = self.options["fvoigt_model"]
 
-            if self.options['metals'] is not None:
-                config['metals'] = {}
-                config['metals']['filename'] = corr_info.get('metal_path', "None")
-                config['metals']['z evol'] = 'bias_vs_z_std'
-                if type1 == 'continuous':
-                    config['metals']['in tracer1'] = ' '.join(self.options['metals'])
-                if type2 == 'continuous':
-                    config['metals']['in tracer2'] = ' '.join(self.options['metals'])
+            if self.options["metals"] is not None:
+                config["metals"] = {}
+                config["metals"]["filename"] = corr_info.get("metal_path", "None")
+                config["metals"]["z evol"] = "bias_vs_z_std"
+                if type1 == "continuous":
+                    config["metals"]["in tracer1"] = " ".join(self.options["metals"])
+                if type2 == "continuous":
+                    config["metals"]["in tracer2"] = " ".join(self.options["metals"])
 
-                if 'fast_metals' in corr_info:
-                    config['model']['fast_metals'] = corr_info.get('fast_metals', 'False')
+                if "fast_metals" in corr_info:
+                    config["model"]["fast_metals"] = corr_info.get("fast_metals", "False")
 
-                if self.options['separate-metal-auto-biases']:
-                    config['model']['separate-metal-auto-biases'] = 'True'
+                if self.options["separate-metal-auto-biases"]:
+                    config["model"]["separate-metal-auto-biases"] = "True"
 
-                if self.options['single-metal-beta']:
-                    config['model']['single-metal-beta'] = 'True'
+                if self.options["single-metal-beta"]:
+                    config["model"]["single-metal-beta"] = "True"
 
-                new_metals_flag = self.options.get('new_metals', False)
+                new_metals_flag = self.options.get("new_metals", False)
                 if new_metals_flag:
-                    config['model']['new_metals'] = 'True'
-                    config['model']['rp_only_metal_mats'] = str(self.options['rp_only_metal_mats'])
+                    config["model"]["new_metals"] = "True"
+                    config["model"]["rp_only_metal_mats"] = str(self.options["rp_only_metal_mats"])
 
-                    config['data']['weights-tracer1'] = corr_info.get('weights-tracer1')
-                    config['data']['weights-tracer2'] = corr_info.get('weights-tracer2')
-                    config['data']['zmin'] = str(self.options.get('zmin'))
-                    config['data']['zmax'] = str(self.options.get('zmax'))
+                    config["data"]["weights-tracer1"] = corr_info.get("weights-tracer1")
+                    config["data"]["weights-tracer2"] = corr_info.get("weights-tracer2")
+                    config["data"]["zmin"] = str(self.options.get("zmin"))
+                    config["data"]["zmax"] = str(self.options.get("zmax"))
 
-                    config['metal-matrix'] = {}
-                    if self.options['rebin-metals'] is not None:
-                        config['metal-matrix']['rebin_factor'] = str(
-                            int(self.options['rebin-metals']))
+                    config["metal-matrix"] = {}
+                    if self.options["rebin-metals"] is not None:
+                        config["metal-matrix"]["rebin_factor"] = str(
+                            int(self.options["rebin-metals"])
+                        )
                     else:
-                        config['metal-matrix']['rebin_factor'] = self.options['metal-matrix'].get(
-                            'rebin_factor', '3')
+                        config["metal-matrix"]["rebin_factor"] = self.options["metal-matrix"].get(
+                            "rebin_factor", "3"
+                        )
 
-                    config['metal-matrix']['alpha_LYA'] = self.options['metal-matrix'].get(
-                        'alpha_LYA', '2.9')
-                    config['metal-matrix']['alpha_SiII(1260)'] = self.options['metal-matrix'].get(
-                        'alpha_SiII(1260)', '1.')
-                    config['metal-matrix']['alpha_SiIII(1207)'] = self.options['metal-matrix'].get(
-                        'alpha_SiIII(1207)', '1.')
-                    config['metal-matrix']['alpha_SiII(1193)'] = self.options['metal-matrix'].get(
-                        'alpha_SiII(1193)', '1.')
-                    config['metal-matrix']['alpha_SiII(1190)'] = self.options['metal-matrix'].get(
-                        'alpha_SiII(1190)', '1.')
-                    config['metal-matrix']['alpha_CIV(eff)'] = self.options['metal-matrix'].get(
-                        'alpha_CIV(eff)', '0.')
+                    config["metal-matrix"]["alpha_LYA"] = self.options["metal-matrix"].get(
+                        "alpha_LYA", "2.9"
+                    )
+                    config["metal-matrix"]["alpha_SiII(1260)"] = self.options["metal-matrix"].get(
+                        "alpha_SiII(1260)", "1."
+                    )
+                    config["metal-matrix"]["alpha_SiIII(1207)"] = self.options["metal-matrix"].get(
+                        "alpha_SiIII(1207)", "1."
+                    )
+                    config["metal-matrix"]["alpha_SiII(1193)"] = self.options["metal-matrix"].get(
+                        "alpha_SiII(1193)", "1."
+                    )
+                    config["metal-matrix"]["alpha_SiII(1190)"] = self.options["metal-matrix"].get(
+                        "alpha_SiII(1190)", "1."
+                    )
+                    config["metal-matrix"]["alpha_CIV(eff)"] = self.options["metal-matrix"].get(
+                        "alpha_CIV(eff)", "0."
+                    )
 
-                    config['metal-matrix']['z_ref_objects'] = self.options['metal-matrix'].get(
-                        'z_ref_objects', '2.25')
-                    config['metal-matrix']['z_evol_objects'] = self.options['metal-matrix'].get(
-                        'z_evol_objects', '1.44')
-                    config['metal-matrix']['z_bins_objects'] = self.options['metal-matrix'].get(
-                        'z_bins_objects', '1000')
+                    config["metal-matrix"]["z_ref_objects"] = self.options["metal-matrix"].get(
+                        "z_ref_objects", "2.25"
+                    )
+                    config["metal-matrix"]["z_evol_objects"] = self.options["metal-matrix"].get(
+                        "z_evol_objects", "1.44"
+                    )
+                    config["metal-matrix"]["z_bins_objects"] = self.options["metal-matrix"].get(
+                        "z_bins_objects", "1000"
+                    )
 
         # Things that require at least one discrete tracer
-        if type1 == 'discrete' or type2 == 'discrete':
-            if self.options['velocity_dispersion'] is not None:
-                assert self.options['velocity_dispersion'] in ['lorentz', 'gauss']
-                config['model']['velocity dispersion'] = self.options['velocity_dispersion']
+        if type1 == "discrete" or type2 == "discrete":
+            if self.options["velocity_dispersion"] is not None:
+                assert self.options["velocity_dispersion"] in ["lorentz", "gauss"]
+                config["model"]["velocity dispersion"] = self.options["velocity_dispersion"]
 
-                if self.options['metals'] is not None and type1 != type2:
-                    config['metals']['velocity dispersion'] = self.options['velocity_dispersion']
+                if self.options["metals"] is not None and type1 != type2:
+                    config["metals"]["velocity dispersion"] = self.options["velocity_dispersion"]
 
         # Only for the LYA - QSO cross
-        if 'LYA' in [tracer1, tracer2] and 'QSO' in [tracer1, tracer2]:
-            if self.options['radiation_effects']:
-                config['model']['radiation effects'] = 'True'
+        if "LYA" in [tracer1, tracer2] and "QSO" in [tracer1, tracer2]:
+            if self.options["radiation_effects"]:
+                config["model"]["radiation effects"] = "True"
 
         # Marginalize small scales
         has_marg = False
-        if self.options['marginalize-below-rtmax'] is not None:
-            config['model']['marginalize-below-rtmax'] = str(
-                self.options['marginalize-below-rtmax'])
+        if self.options["marginalize-below-rtmax"] is not None:
+            config["model"]["marginalize-below-rtmax"] = str(
+                self.options["marginalize-below-rtmax"]
+            )
             has_marg = True
-        if self.options['marginalize-above-rtmin'] is not None:
-            config['model']['marginalize-above-rtmin'] = str(
-                self.options['marginalize-above-rtmin'])
+        if self.options["marginalize-above-rtmin"] is not None:
+            config["model"]["marginalize-above-rtmin"] = str(
+                self.options["marginalize-above-rtmin"]
+            )
             has_marg = True
-        if self.options['marginalize-below-rpmax'] is not None:
-            config['model']['marginalize-below-rpmax'] = str(
-                self.options['marginalize-below-rpmax'])
+        if self.options["marginalize-below-rpmax"] is not None:
+            config["model"]["marginalize-below-rpmax"] = str(
+                self.options["marginalize-below-rpmax"]
+            )
             has_marg = True
-        if self.options['marginalize-above-rpmin'] is not None:
-            config['model']['marginalize-above-rpmin'] = str(
-                self.options['marginalize-above-rpmin'])
+        if self.options["marginalize-above-rpmin"] is not None:
+            config["model"]["marginalize-above-rpmin"] = str(
+                self.options["marginalize-above-rpmin"]
+            )
             has_marg = True
 
         # This should appear even if turned off to inform user
-        config['model']['marginalize-all-rmin-cuts'] = str(
-            self.options['marginalize-all-rmin-cuts'])
+        config["model"]["marginalize-all-rmin-cuts"] = str(
+            self.options["marginalize-all-rmin-cuts"]
+        )
 
         # These options are only needed if marginalization is turned on
-        if has_marg or self.options['marginalize-all-rmin-cuts']:
-            config['model']['marginalize-prior-sigma'] = str(self.options['marginalize-prior-sigma'])
-            config['model']['fit-marginalized-scales'] = str(self.options['fit-marginalized-scales'])
-            config['model']['marginalize-match-data-bins'] = str(
-                self.options['marginalize-match-data-bins'])
+        if has_marg or self.options["marginalize-all-rmin-cuts"]:
+            config["model"]["marginalize-prior-sigma"] = str(
+                self.options["marginalize-prior-sigma"]
+            )
+            config["model"]["fit-marginalized-scales"] = str(
+                self.options["fit-marginalized-scales"]
+            )
+            config["model"]["marginalize-match-data-bins"] = str(
+                self.options["marginalize-match-data-bins"]
+            )
 
-        if self.options['skip-nl-model-in-peak']:
-            config['model']['skip-nl-model-in-peak'] = str(self.options['skip-nl-model-in-peak'])
+        if self.options["skip-nl-model-in-peak"]:
+            config["model"]["skip-nl-model-in-peak"] = str(self.options["skip-nl-model-in-peak"])
 
         # P(k) damping scale
-        if self.options['pk-damping-scale'] is not None:
-            config['model']['pk-damping-scale'] = str(self.options['pk-damping-scale'])
-            config['model']['pk-damping-power'] = str(self.options['pk-damping-power'])
+        if self.options["pk-damping-scale"] is not None:
+            config["model"]["pk-damping-scale"] = str(self.options["pk-damping-scale"])
+            config["model"]["pk-damping-power"] = str(self.options["pk-damping-power"])
 
         # General things
-        if 'broadband' in corr_info:
-            config['broadband'] = {}
-            for key, item in corr_info['broadband'].items():
-                config['broadband'][key] = item
+        if "broadband" in corr_info:
+            config["broadband"] = {}
+            for key, item in corr_info["broadband"].items():
+                config["broadband"][key] = item
 
-        if self.options['fullshape_smoothing'] is not None:
-            assert self.options['fullshape_smoothing'] in ['gauss', 'gauss_iso', 'exp']
-            config['model']['fullshape smoothing'] = self.options['fullshape_smoothing']
+        if self.options["fullshape_smoothing"] is not None:
+            assert self.options["fullshape_smoothing"] in ["gauss", "gauss_iso", "exp"]
+            config["model"]["fullshape smoothing"] = self.options["fullshape_smoothing"]
 
-            condition = (type1 == 'continuous' or type2 == 'continuous')
-            condition &= self.options['metals'] is not None
-            condition &= self.options['fullshape_smoothing_metals']
+            condition = type1 == "continuous" or type2 == "continuous"
+            condition &= self.options["metals"] is not None
+            condition &= self.options["fullshape_smoothing_metals"]
             if condition:
-                config['metals']['fullshape smoothing'] = self.options['fullshape_smoothing']
+                config["metals"]["fullshape smoothing"] = self.options["fullshape_smoothing"]
 
-        if self.options['mock-bin-size'] is not None:
-            config['model']['mock-bin-size'] = str(self.options['mock-bin-size'])
-            if self.options['metals'] is not None:
-                config['metals']['mock-bin-size'] = str(self.options['mock-bin-size'])
-            if self.options['mock-los-smoothing'] is not None:
-                config['model']['mock-los-smoothing'] = self.options['mock-los-smoothing']
-                if self.options['metals'] is not None:
-                    config['metals']['mock-los-smoothing'] = self.options['mock-los-smoothing']
+        if self.options["mock-bin-size"] is not None:
+            config["model"]["mock-bin-size"] = str(self.options["mock-bin-size"])
+            if self.options["metals"] is not None:
+                config["metals"]["mock-bin-size"] = str(self.options["mock-bin-size"])
+            if self.options["mock-los-smoothing"] is not None:
+                config["model"]["mock-los-smoothing"] = self.options["mock-los-smoothing"]
+                if self.options["metals"] is not None:
+                    config["metals"]["mock-los-smoothing"] = self.options["mock-los-smoothing"]
 
         if self.name_extension is None:
-            corr_path = self.config_path / '{}.ini'.format(name)
+            corr_path = self.config_path / "{}.ini".format(name)
         else:
-            corr_path = self.config_path / '{}-{}.ini'.format(name, self.name_extension)
+            corr_path = self.config_path / "{}-{}.ini".format(name, self.name_extension)
 
         if corr_path.is_file() and not self.overwrite:
-            raise ValueError(f'File {corr_path} already exists. Please change the name extension.')
+            raise ValueError(f"File {corr_path} already exists. Please change the name extension.")
 
-        with open(corr_path, 'w') as configfile:
-            configfile.write(f'# File written on {datetime.now()} \n')
-            configfile.write(f'# Vega git hash: {git_hash} \n\n')
+        with open(corr_path, "w") as configfile:
+            configfile.write(f"# File written on {datetime.now()} \n")
+            configfile.write(f"# Vega git hash: {git_hash} \n\n")
             config.write(configfile)
 
-        return corr_path, config['data']['filename'], tracer1, tracer2
+        return corr_path, config["data"]["filename"], tracer1, tracer2
 
     @staticmethod
-    def get_zeff(data_paths, rmin=0., rmax=300.):
+    def get_zeff(data_paths, rmin=0.0, rmax=300.0):
         """Compute effective redshift of all correlations
 
         Parameters
@@ -476,11 +523,11 @@ class BuildConfig:
         for path in data_paths:
             hdul = fits.open(path)
 
-            r_arr = np.sqrt(hdul[1].data['RP']**2 + hdul[1].data['RT']**2)
+            r_arr = np.sqrt(hdul[1].data["RP"] ** 2 + hdul[1].data["RT"] ** 2)
             cells = (r_arr > rmin) & (r_arr < rmax)
 
-            inverse_variance = 1 / np.diag(hdul[1].data['CO'])
-            zeff = np.average(hdul[1].data['Z'][cells], weights=inverse_variance[cells])
+            inverse_variance = 1 / np.diag(hdul[1].data["CO"])
+            zeff = np.average(hdul[1].data["Z"][cells], weights=inverse_variance[cells])
             weight = np.sum(inverse_variance[cells])
 
             hdul.close()
@@ -517,9 +564,9 @@ class BuildConfig:
         config.optionxform = lambda option: option
 
         # Check the effective redshift
-        self.zeff_in = fit_info.get('zeff', None)
-        zeff_rmin = float(fit_info.get('zeff_rmin', 0.))
-        zeff_rmax = float(fit_info.get('zeff_rmax', 300.))
+        self.zeff_in = fit_info.get("zeff", None)
+        zeff_rmin = float(fit_info.get("zeff_rmin", 0.0))
+        zeff_rmax = float(fit_info.get("zeff_rmax", 300.0))
 
         if self.zeff_in is None:
             zeff_comp = self.get_zeff(self.data_paths, zeff_rmin, zeff_rmax)
@@ -528,146 +575,154 @@ class BuildConfig:
         self.zeff_in = float(self.zeff_in)
 
         # Write the paths to the correlation configs
-        config['data sets'] = {}
-        config['data sets']['zeff'] = str(self.zeff_in)
+        config["data sets"] = {}
+        config["data sets"]["zeff"] = str(self.zeff_in)
         corr_paths = [str(path) for path in self.corr_paths]
-        config['data sets']['ini files'] = ' '.join(corr_paths)
-        if 'global_cov_file' in fit_info:
-            config['data sets']['global-cov-file'] = fit_info.get('global_cov_file')
+        config["data sets"]["ini files"] = " ".join(corr_paths)
+        if "global_cov_file" in fit_info:
+            config["data sets"]["global-cov-file"] = fit_info.get("global_cov_file")
 
         # Write the scale parameters functions
-        config['cosmo-fit type'] = {}
-        config['cosmo-fit type']['cosmo fit func'] = self.options['scale_params']
-        config['cosmo-fit type']['full-shape'] = str(self.options['full_shape'])
-        config['cosmo-fit type']['full-shape-alpha'] = str(self.options['full_shape_alpha'])
-        config['cosmo-fit type']['smooth-scaling'] = str(self.options['smooth_scaling'])
+        config["cosmo-fit type"] = {}
+        config["cosmo-fit type"]["cosmo fit func"] = self.options["scale_params"]
+        config["cosmo-fit type"]["full-shape"] = str(self.options["full_shape"])
+        config["cosmo-fit type"]["full-shape-alpha"] = str(self.options["full_shape_alpha"])
+        config["cosmo-fit type"]["smooth-scaling"] = str(self.options["smooth_scaling"])
 
         # Write the template info
-        config['fiducial'] = {}
-        config['fiducial']['filename'] = self.options['template']
+        config["fiducial"] = {}
+        config["fiducial"]["filename"] = self.options["template"]
 
         # Write the output path
         run_name = fit_type
         if self.name_extension is not None:
-            run_name += '-{}'.format(self.name_extension)
-        config['output'] = {}
-        config['output']['filename'] = str(self.fitter_out_path / run_name)
+            run_name += "-{}".format(self.name_extension)
+        config["output"] = {}
+        config["output"]["filename"] = str(self.fitter_out_path / run_name)
 
         # Write the sampled parameters
-        sample_params = fit_info['sample_params']
-        config['sample'] = {}
+        sample_params = fit_info["sample_params"]
+        config["sample"] = {}
         if type(sample_params) is list:
             for param in sample_params:
-                config['sample'][param] = 'True'
+                config["sample"][param] = "True"
         elif type(sample_params) is dict:
             for param, setup in sample_params.items():
-                config['sample'][param] = setup
+                config["sample"][param] = setup
         else:
-            raise TypeError('The sample_params object has to be either a list or a dict.')
+            raise TypeError("The sample_params object has to be either a list or a dict.")
 
         # Write the priors
-        if 'priors' in fit_info:
-            config['priors'] = {}
-            for par, prior in fit_info['priors'].items():
-                assert par in config['sample'], 'Cannot add prior for parameter that is not sampled'
-                config['priors'][par] = prior
+        if "priors" in fit_info:
+            config["priors"] = {}
+            for par, prior in fit_info["priors"].items():
+                assert par in config["sample"], "Cannot add prior for parameter that is not sampled"
+                config["priors"][par] = prior
 
         # Write the parameters
         self.parameters = parameters
-        
-        config['parameters'] = {}
+
+        config["parameters"] = {}
         for name, value in self.parameters.items():
-            config['parameters'][name] = str(value)
+            config["parameters"][name] = str(value)
 
         # Check all sampled parameters are defined
         for param in sample_params:
-            if param not in config['parameters']:
-                raise ValueError(f'Asked for unknown parameter "{param}". This does not exist in '
-                                 'the current configuration. Please check the vega configuration '
-                                 'you requested is correct. If this is a new parameter that does '
-                                 'not have a default value yet, please add it to the parameters '
-                                 'dictionary when calling BuildConfig.')
+            if param not in config["parameters"]:
+                raise ValueError(
+                    f'Asked for unknown parameter "{param}". This does not exist in '
+                    "the current configuration. Please check the vega configuration "
+                    "you requested is correct. If this is a new parameter that does "
+                    "not have a default value yet, please add it to the parameters "
+                    "dictionary when calling BuildConfig."
+                )
 
         # Check if we need the sampler
-        config['control'] = {'run_sampler': 'False'}
-        if 'use_template_growth_rate' in fit_info:
-            config['control']['use_template_growth_rate'] = fit_info['use_template_growth_rate']
+        config["control"] = {"run_sampler": "False"}
+        if "use_template_growth_rate" in fit_info:
+            config["control"]["use_template_growth_rate"] = fit_info["use_template_growth_rate"]
         if self.run_sampler:
-            config['control']['run_sampler'] = 'True'
-            config['control']['sampler'] = self.sampler
-            config['control']['low_mem_mode'] = fit_info.get('low_mem_mode', 'False')
-            if self.sampler == 'Polychord':
-                config['Polychord'] = {}
-                config['Polychord']['path'] = str(self.sampler_out_path)
-                config['Polychord']['name'] = run_name
+            config["control"]["run_sampler"] = "True"
+            config["control"]["sampler"] = self.sampler
+            config["control"]["low_mem_mode"] = fit_info.get("low_mem_mode", "False")
+            if self.sampler == "Polychord":
+                config["Polychord"] = {}
+                config["Polychord"]["path"] = str(self.sampler_out_path)
+                config["Polychord"]["name"] = run_name
 
-                config['Polychord']['num_live'] = fit_info['Polychord'].get(
-                    'num_live', str(25*len(sample_params)))
-                config['Polychord']['num_repeats'] = fit_info['Polychord'].get(
-                    'num_repeats', str(len(sample_params)))
-                config['Polychord']['do_clustering'] = fit_info['Polychord'].get(
-                    'do_clustering', 'True')
-                config['Polychord']['boost_posterior'] = fit_info['Polychord'].get(
-                    'boost_posterior', str(0))
-            elif self.sampler == 'PocoMC':
-                config['PocoMC'] = {}
-                config['PocoMC']['path'] = str(self.sampler_out_path)
-                config['PocoMC']['name'] = run_name
+                config["Polychord"]["num_live"] = fit_info["Polychord"].get(
+                    "num_live", str(25 * len(sample_params))
+                )
+                config["Polychord"]["num_repeats"] = fit_info["Polychord"].get(
+                    "num_repeats", str(len(sample_params))
+                )
+                config["Polychord"]["do_clustering"] = fit_info["Polychord"].get(
+                    "do_clustering", "True"
+                )
+                config["Polychord"]["boost_posterior"] = fit_info["Polychord"].get(
+                    "boost_posterior", str(0)
+                )
+            elif self.sampler == "PocoMC":
+                config["PocoMC"] = {}
+                config["PocoMC"]["path"] = str(self.sampler_out_path)
+                config["PocoMC"]["name"] = run_name
 
-                config['PocoMC']['precondition'] = fit_info['PocoMC'].get('precondition', 'True')
-                config['PocoMC']['dynamic'] = fit_info['PocoMC'].get('dynamic', 'False')
-                config['PocoMC']['n_effective'] = fit_info['PocoMC'].get('n_effective', '512')
-                config['PocoMC']['n_active'] = fit_info['PocoMC'].get('n_active', '256')
-                config['PocoMC']['n_total'] = fit_info['PocoMC'].get('n_total', '1024')
-                config['PocoMC']['n_evidence'] = fit_info['PocoMC'].get('n_evidence', '0')
-                config['PocoMC']['save_every'] = fit_info['PocoMC'].get('save_every', '3')
-                config['PocoMC']['use_mpi'] = fit_info['PocoMC'].get('use_mpi', 'True')
-                config['PocoMC']['num_cpu'] = fit_info['PocoMC'].get('num_cpu', '64')
+                config["PocoMC"]["precondition"] = fit_info["PocoMC"].get("precondition", "True")
+                config["PocoMC"]["dynamic"] = fit_info["PocoMC"].get("dynamic", "False")
+                config["PocoMC"]["n_effective"] = fit_info["PocoMC"].get("n_effective", "512")
+                config["PocoMC"]["n_active"] = fit_info["PocoMC"].get("n_active", "256")
+                config["PocoMC"]["n_total"] = fit_info["PocoMC"].get("n_total", "1024")
+                config["PocoMC"]["n_evidence"] = fit_info["PocoMC"].get("n_evidence", "0")
+                config["PocoMC"]["save_every"] = fit_info["PocoMC"].get("save_every", "3")
+                config["PocoMC"]["use_mpi"] = fit_info["PocoMC"].get("use_mpi", "True")
+                config["PocoMC"]["num_cpu"] = fit_info["PocoMC"].get("num_cpu", "64")
             else:
                 raise ValueError(
-                    f'Sampler {self.sampler} is not supported. '
-                    'Please choose from ["Polychord", "PocoMC"].')
+                    f"Sampler {self.sampler} is not supported. "
+                    'Please choose from ["Polychord", "PocoMC"].'
+                )
 
-        if 'monte_carlo' in fit_info:
-            config['mc parameters'] = {}
-            for key, value in fit_info['monte_carlo']['parameters'].items():
-                config['mc parameters'][key] = str(value)
+        if "monte_carlo" in fit_info:
+            config["mc parameters"] = {}
+            for key, value in fit_info["monte_carlo"]["parameters"].items():
+                config["mc parameters"][key] = str(value)
 
-            config['control']['run_montecarlo'] = 'True'  
-            if 'forecast' in fit_info['monte_carlo']:
-                config['control']['forecast'] = str(fit_info['monte_carlo']['forecast'])
+            config["control"]["run_montecarlo"] = "True"
+            if "forecast" in fit_info["monte_carlo"]:
+                config["control"]["forecast"] = str(fit_info["monte_carlo"]["forecast"])
 
-            if 'global_cov_rescale' in fit_info['monte_carlo']:
-                config['control']['global_cov_rescale'] = str(
-                    fit_info['monte_carlo']['global_cov_rescale'])
+            if "global_cov_rescale" in fit_info["monte_carlo"]:
+                config["control"]["global_cov_rescale"] = str(
+                    fit_info["monte_carlo"]["global_cov_rescale"]
+                )
 
-            if 'mc_output' in fit_info['monte_carlo']:
-                config['output']['mc_output'] = str(fit_info['monte_carlo']['mc_output'])
+            if "mc_output" in fit_info["monte_carlo"]:
+                config["output"]["mc_output"] = str(fit_info["monte_carlo"]["mc_output"])
 
-            if 'num_mc_mocks' in fit_info['monte_carlo']:
-                config['control']['num_mc_mocks'] = str(fit_info['monte_carlo']['num_mc_mocks'])
+            if "num_mc_mocks" in fit_info["monte_carlo"]:
+                config["control"]["num_mc_mocks"] = str(fit_info["monte_carlo"]["num_mc_mocks"])
 
-            if 'mc_seed' in fit_info['monte_carlo']:
-                config['control']['mc_seed'] = str(fit_info['monte_carlo']['mc_seed'])
+            if "mc_seed" in fit_info["monte_carlo"]:
+                config["control"]["mc_seed"] = str(fit_info["monte_carlo"]["mc_seed"])
 
-            if 'run_mc_fits' in fit_info['monte_carlo']:
-                config['control']['run_mc_fits'] = str(fit_info['monte_carlo']['run_mc_fits'])
+            if "run_mc_fits" in fit_info["monte_carlo"]:
+                config["control"]["run_mc_fits"] = str(fit_info["monte_carlo"]["run_mc_fits"])
 
-            config['monte carlo'] = copy.deepcopy(config['sample'])
-            config['sample'] = {}
+            config["monte carlo"] = copy.deepcopy(config["sample"])
+            config["sample"] = {}
 
         # Write main config
         if self.name_extension is None:
-            main_path = self.config_path / 'main.ini'
+            main_path = self.config_path / "main.ini"
         else:
-            main_path = self.config_path / 'main-{}.ini'.format(self.name_extension)
+            main_path = self.config_path / "main-{}.ini".format(self.name_extension)
 
         if main_path.is_file() and not self.overwrite:
-            raise ValueError(f'File {main_path} already exists. Please change the name extension.')
+            raise ValueError(f"File {main_path} already exists. Please change the name extension.")
 
-        with open(main_path, 'w') as configfile:
-            configfile.write(f'# File written on {datetime.now()} \n')
-            configfile.write(f'# Vega git hash: {git_hash} \n\n')
+        with open(main_path, "w") as configfile:
+            configfile.write(f"# File written on {datetime.now()} \n")
+            configfile.write(f"# Vega git hash: {git_hash} \n\n")
             config.write(configfile)
 
         return main_path
@@ -696,202 +751,198 @@ class BuildConfig:
             # Read template
             config = ConfigParser()
             config.optionxform = lambda option: option
-            template_path = find_file('vega/templates/parameters.ini')
+            template_path = find_file("vega/templates/parameters.ini")
             config.read(template_path)
-            self._params_template = config['parameters']
+            self._params_template = config["parameters"]
 
         def get_par(name):
             if name in parameters:
                 return parameters[name]
             elif name not in self._params_template:
-                raise ValueError('Unknown parameter: {}, please pass a default value.'.format(name))
+                raise ValueError("Unknown parameter: {}, please pass a default value.".format(name))
             else:
                 return self._params_template[name]
 
         new_params = {}
 
         # Scale parameters
-        if self.options['scale_params'] == 'ap_at':
-            new_params['ap'] = get_par('ap')
-            new_params['at'] = get_par('at')
-        elif self.options['scale_params'] == 'phi_alpha':
-            new_params['phi'] = get_par('phi')
-            new_params['alpha'] = get_par('alpha')
-            if self.options['full_shape']:
-                new_params['phi_full'] = get_par('phi_full')
-            if self.options['full_shape_alpha']:
-                new_params['alpha_full'] = get_par('alpha_full')
-            if self.options['smooth_scaling']:
-                new_params['phi_smooth'] = get_par('phi_smooth')
-                new_params['alpha_smooth'] = get_par('alpha_smooth')
-        elif self.options['scale_params'] == 'aiso_epsilon':
-            new_params['aiso'] = get_par('aiso')
-            new_params['epsilon'] = get_par('epsilon')
+        if self.options["scale_params"] == "ap_at":
+            new_params["ap"] = get_par("ap")
+            new_params["at"] = get_par("at")
+        elif self.options["scale_params"] == "phi_alpha":
+            new_params["phi"] = get_par("phi")
+            new_params["alpha"] = get_par("alpha")
+            if self.options["full_shape"]:
+                new_params["phi_full"] = get_par("phi_full")
+            if self.options["full_shape_alpha"]:
+                new_params["alpha_full"] = get_par("alpha_full")
+            if self.options["smooth_scaling"]:
+                new_params["phi_smooth"] = get_par("phi_smooth")
+                new_params["alpha_smooth"] = get_par("alpha_smooth")
+        elif self.options["scale_params"] == "aiso_epsilon":
+            new_params["aiso"] = get_par("aiso")
+            new_params["epsilon"] = get_par("epsilon")
         else:
-            raise ValueError('Unknown scale parameters: {}'.format(self.options['scale_params']))
+            raise ValueError("Unknown scale parameters: {}".format(self.options["scale_params"]))
 
         # Peak parameters
-        if self.options['bao_broadening']:
-            new_params['sigmaNL_per'] = get_par('sigmaNL_per')
-            new_params['sigmaNL_par'] = get_par('sigmaNL_par')
+        if self.options["bao_broadening"]:
+            new_params["sigmaNL_per"] = get_par("sigmaNL_per")
+            new_params["sigmaNL_par"] = get_par("sigmaNL_par")
         else:
-            new_params['sigmaNL_per'] = 0.
-            new_params['sigmaNL_par'] = 0.
-        new_params['bao_amp'] = get_par('bao_amp')
+            new_params["sigmaNL_per"] = 0.0
+            new_params["sigmaNL_par"] = 0.0
+        new_params["bao_amp"] = get_par("bao_amp")
 
         def add_bias_beta(new_params, tracer, bias_beta_config, bias, bias_eta, beta, growth_rate):
-            if bias_beta_config == 'bias_beta':
-                new_params[f'bias_{tracer}'] = bias
-                new_params[f'beta_{tracer}'] = beta
-            elif bias_beta_config == 'bias_bias_eta':
-                new_params[f'bias_{tracer}'] = bias
-                new_params[f'bias_eta_{tracer}'] = bias_eta
-                new_params['growth_rate'] = growth_rate
-            elif bias_beta_config == 'bias_eta_beta':
-                new_params[f'beta_{tracer}'] = beta
-                new_params[f'bias_eta_{tracer}'] = bias_eta
-                new_params['growth_rate'] = growth_rate
+            if bias_beta_config == "bias_beta":
+                new_params[f"bias_{tracer}"] = bias
+                new_params[f"beta_{tracer}"] = beta
+            elif bias_beta_config == "bias_bias_eta":
+                new_params[f"bias_{tracer}"] = bias
+                new_params[f"bias_eta_{tracer}"] = bias_eta
+                new_params["growth_rate"] = growth_rate
+            elif bias_beta_config == "bias_eta_beta":
+                new_params[f"beta_{tracer}"] = beta
+                new_params[f"bias_eta_{tracer}"] = bias_eta
+                new_params["growth_rate"] = growth_rate
             else:
-                raise ValueError(f'Option {bias_beta_config} not a valid bias_beta_config. '
-                                 'Choose from ["bias_beta", "bias_eta_beta", "bias_bias_eta"].')
+                raise ValueError(
+                    f"Option {bias_beta_config} not a valid bias_beta_config. "
+                    'Choose from ["bias_beta", "bias_eta_beta", "bias_bias_eta"].'
+                )
 
         # bias beta model
         for name in self.corr_names:
-            bias_beta_config = self.fit_info['bias_beta_config'].get(name, 'bias_beta')
+            bias_beta_config = self.fit_info["bias_beta_config"].get(name, "bias_beta")
 
-            growth_rate = parameters.get('growth_rate', None)
+            growth_rate = parameters.get("growth_rate", None)
             if growth_rate is None:
                 growth_rate = self.get_growth_rate(self.zeff_in)
 
-            if (name == 'LYA') or (name == 'LYB') or (name == 'CIV'):
-                bias = parameters.get(f'bias_{name}', self.get_lya_bias(self.zeff_in))
-                bias_eta = parameters.get(f'bias_eta_{name}', None)
-                beta = float(get_par(f'beta_{name}'))
+            if (name == "LYA") or (name == "LYB") or (name == "CIV"):
+                bias = parameters.get(f"bias_{name}", self.get_lya_bias(self.zeff_in))
+                bias_eta = parameters.get(f"bias_eta_{name}", None)
+                beta = float(get_par(f"beta_{name}"))
 
                 if bias_eta is None:
                     bias_eta = bias * beta / growth_rate
-            elif (name == 'QSO') or (name == 'DLA') or (name == 'SBLA'):
-                bias = parameters.get(f'bias_{name}', self.get_qso_bias(self.zeff_in))
-                beta = parameters.get(f'beta_{name}', None)
+            elif (name == "QSO") or (name == "DLA") or (name == "SBLA"):
+                bias = parameters.get(f"bias_{name}", self.get_qso_bias(self.zeff_in))
+                beta = parameters.get(f"beta_{name}", None)
                 bias_eta = 1
 
                 if beta is None:
                     beta = growth_rate / bias
             else:
-                raise ValueError(f'Tracer {name} not supported yet. Please open an issue')
+                raise ValueError(f"Tracer {name} not supported yet. Please open an issue")
 
             add_bias_beta(new_params, name, bias_beta_config, bias, bias_eta, beta, growth_rate)
 
-            new_params[f'alpha_{name}'] = get_par(f'alpha_{name}')
+            new_params[f"alpha_{name}"] = get_par(f"alpha_{name}")
 
         # Small scale non-linear model
-        if self.options['small_scale_nl']:
-            new_params['dnl_arinyo_q1'] = get_par('dnl_arinyo_q1')
-            new_params['dnl_arinyo_q2'] = get_par('dnl_arinyo_q2')
-            new_params['dnl_arinyo_kv'] = get_par('dnl_arinyo_kv')
-            new_params['dnl_arinyo_av'] = get_par('dnl_arinyo_av')
-            new_params['dnl_arinyo_bv'] = get_par('dnl_arinyo_bv')
-            new_params['dnl_arinyo_kp'] = get_par('dnl_arinyo_kp')
+        if self.options["small_scale_nl"]:
+            new_params["dnl_arinyo_q1"] = get_par("dnl_arinyo_q1")
+            new_params["dnl_arinyo_q2"] = get_par("dnl_arinyo_q2")
+            new_params["dnl_arinyo_kv"] = get_par("dnl_arinyo_kv")
+            new_params["dnl_arinyo_av"] = get_par("dnl_arinyo_av")
+            new_params["dnl_arinyo_bv"] = get_par("dnl_arinyo_bv")
+            new_params["dnl_arinyo_kp"] = get_par("dnl_arinyo_kp")
 
         # HCDs
-        if self.options['hcd_model'] is not None:
-            new_params['bias_hcd'] = get_par('bias_hcd')
-            new_params['beta_hcd'] = get_par('beta_hcd')
-            new_params['L0_hcd'] = get_par('L0_hcd')
+        if self.options["hcd_model"] is not None:
+            new_params["bias_hcd"] = get_par("bias_hcd")
+            new_params["beta_hcd"] = get_par("beta_hcd")
+            new_params["L0_hcd"] = get_par("L0_hcd")
 
         # Delta_rp
-        if 'QSO' in self.corr_names:
-            new_params['drp_QSO'] = get_par('drp_QSO')
+        if "QSO" in self.corr_names:
+            new_params["drp_QSO"] = get_par("drp_QSO")
 
         # Velocity dispersion parameters
-        if self.options['velocity_dispersion'] is not None:
-            if self.options['velocity_dispersion'] == 'lorentz':
+        if self.options["velocity_dispersion"] is not None:
+            if self.options["velocity_dispersion"] == "lorentz":
                 for name in self.corr_names:
                     if name in ["QSO", "DLA", "SBLA"]:
-                        key = f'sigma_velo_disp_lorentz_{name}'
+                        key = f"sigma_velo_disp_lorentz_{name}"
                         new_params[key] = get_par(key)
             else:
                 for name in self.corr_names:
                     if name in ["QSO", "DLA", "SBLA"]:
-                        key = f'sigma_velo_disp_gauss_{name}'
+                        key = f"sigma_velo_disp_gauss_{name}"
                         new_params[key] = get_par(key)
 
         # QSO radiation effects
-        if self.options['radiation_effects']:
-            new_params['qso_rad_strength'] = get_par('qso_rad_strength')
-            new_params['qso_rad_asymmetry'] = get_par('qso_rad_asymmetry')
-            new_params['qso_rad_lifetime'] = get_par('qso_rad_lifetime')
-            new_params['qso_rad_decrease'] = get_par('qso_rad_decrease')
+        if self.options["radiation_effects"]:
+            new_params["qso_rad_strength"] = get_par("qso_rad_strength")
+            new_params["qso_rad_asymmetry"] = get_par("qso_rad_asymmetry")
+            new_params["qso_rad_lifetime"] = get_par("qso_rad_lifetime")
+            new_params["qso_rad_decrease"] = get_par("qso_rad_decrease")
 
         # UV background parameters
-        if self.options['UVB-fluctuations']:
-            new_params['bias_gamma'] = get_par('bias_gamma')
-            new_params['bias_prim'] = get_par('bias_prim')
-            new_params['lambda_uv'] = get_par('lambda_uv')
-            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
+        if self.options["UVB-fluctuations"]:
+            new_params["bias_gamma"] = get_par("bias_gamma")
+            new_params["bias_prim"] = get_par("bias_prim")
+            new_params["lambda_uv"] = get_par("lambda_uv")
+            new_params["uv_shotnoise_amp"] = get_par("uv_shotnoise_amp")
 
-        if self.options['HeII-reionization']:
-            new_params['bias_gamma_e'] = get_par('bias_gamma_e')
-            new_params['bias_prim'] = get_par('bias_prim')
-            new_params['lambda_HeII'] = get_par('lambda_HeII')
-            new_params['uv_shotnoise_amp'] = get_par('uv_shotnoise_amp')
+        if self.options["HeII-reionization"]:
+            new_params["bias_gamma_e"] = get_par("bias_gamma_e")
+            new_params["bias_prim"] = get_par("bias_prim")
+            new_params["lambda_HeII"] = get_par("lambda_HeII")
+            new_params["uv_shotnoise_amp"] = get_par("uv_shotnoise_amp")
 
         # Metals
-        if self.options['metals'] is not None:
-            for name in self.options['metals']:
-                if self.options['use_metal_bias_eta']:
-                    new_params['bias_eta_{}'.format(name)] = get_par('bias_eta_{}'.format(name))
+        if self.options["metals"] is not None:
+            for name in self.options["metals"]:
+                if self.options["use_metal_bias_eta"]:
+                    new_params["bias_eta_{}".format(name)] = get_par("bias_eta_{}".format(name))
                 else:
-                    new_params['bias_{}'.format(name)] = get_par('bias_{}'.format(name))
+                    new_params["bias_{}".format(name)] = get_par("bias_{}".format(name))
 
-                new_params['beta_{}'.format(name)] = get_par('beta_{}'.format(name))
-                new_params['alpha_{}'.format(name)] = get_par('alpha_{}'.format(name))
+                new_params["beta_{}".format(name)] = get_par("beta_{}".format(name))
+                new_params["alpha_{}".format(name)] = get_par("alpha_{}".format(name))
 
-            if self.options['single-metal-beta']:
-                new_params['beta_metals'] = get_par('beta_metals')
+            if self.options["single-metal-beta"]:
+                new_params["beta_metals"] = get_par("beta_metals")
 
         # Full-shape smoothing
-        if self.options['fullshape_smoothing'] is not None:
-            if self.options['fullshape_smoothing'] == 'exp':
-                new_params['par_exp_smooth'] = get_par('par_exp_smooth')
-                new_params['per_exp_smooth'] = get_par('per_exp_smooth')
-                new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
-                new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
+        if self.options["fullshape_smoothing"] is not None:
+            if self.options["fullshape_smoothing"] == "exp":
+                new_params["par_exp_smooth"] = get_par("par_exp_smooth")
+                new_params["per_exp_smooth"] = get_par("per_exp_smooth")
+                new_params["par_sigma_smooth"] = get_par("par_sigma_smooth")
+                new_params["per_sigma_smooth"] = get_par("per_sigma_smooth")
 
-            if self.options['fullshape_smoothing'] == 'gauss_iso':
-                new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
+            if self.options["fullshape_smoothing"] == "gauss_iso":
+                new_params["par_sigma_smooth"] = get_par("par_sigma_smooth")
 
-            if self.options['fullshape_smoothing'] == 'gauss':
-                if 'par_sigma_smooth' in parameters:
-                    new_params['par_sigma_smooth'] = get_par('par_sigma_smooth')
-                    new_params['per_sigma_smooth'] = get_par('per_sigma_smooth')
-                if 'par_sigma_smooth_QSO' in parameters:
-                    new_params['par_sigma_smooth_QSO'] = get_par('par_sigma_smooth_QSO')
-                    new_params['per_sigma_smooth_QSO'] = get_par('per_sigma_smooth_QSO')
-                if 'par_sigma_smooth_LYA' in parameters:
-                    new_params['par_sigma_smooth_LYA'] = get_par('par_sigma_smooth_LYA')
-                    new_params['per_sigma_smooth_LYA'] = get_par('per_sigma_smooth_LYA')
-                if 'par_sigma_smooth_metals' in parameters:
-                    new_params['par_sigma_smooth_metals'] = get_par('par_sigma_smooth_metals')
-                    new_params['per_sigma_smooth_metals'] = get_par('per_sigma_smooth_metals')
+            if self.options["fullshape_smoothing"] == "gauss":
+                if "par_sigma_smooth" in parameters:
+                    new_params["par_sigma_smooth"] = get_par("par_sigma_smooth")
+                    new_params["per_sigma_smooth"] = get_par("per_sigma_smooth")
+                if "par_sigma_smooth_QSO" in parameters:
+                    new_params["par_sigma_smooth_QSO"] = get_par("par_sigma_smooth_QSO")
+                    new_params["per_sigma_smooth_QSO"] = get_par("per_sigma_smooth_QSO")
+                if "par_sigma_smooth_LYA" in parameters:
+                    new_params["par_sigma_smooth_LYA"] = get_par("par_sigma_smooth_LYA")
+                    new_params["per_sigma_smooth_LYA"] = get_par("per_sigma_smooth_LYA")
+                if "par_sigma_smooth_metals" in parameters:
+                    new_params["par_sigma_smooth_metals"] = get_par("par_sigma_smooth_metals")
+                    new_params["per_sigma_smooth_metals"] = get_par("per_sigma_smooth_metals")
 
-        if self.options['mock-los-smoothing'] == 'amplitude':
-            new_params['los_smooth_amp'] = get_par('los_smooth_amp')
+        if self.options["mock-los-smoothing"] == "amplitude":
+            new_params["los_smooth_amp"] = get_par("los_smooth_amp")
 
         # DESI instrumental systematics amplitude
-        if self.options['desi-instrumental-systematics']:
-            new_params['desi_inst_sys_amp'] = get_par('desi_inst_sys_amp')
+        if self.options["desi-instrumental-systematics"]:
+            new_params["desi_inst_sys_amp"] = get_par("desi_inst_sys_amp")
 
         # Check for broadband parameters
         for name, value in parameters.items():
-            if 'BB' in name and name not in new_params:
+            if "BB" in name and name not in new_params:
                 new_params[name] = value
-
-        # Marginalize small scales
-        if self.options.get('marginalize-small-scales', False):
-            for name, value in parameters.items():
-                if 'bias_xi' in name and name not in new_params:
-                    new_params[name] = value
 
         self._parameters = new_params
 
@@ -909,7 +960,7 @@ class BuildConfig:
         float
             Default Lya bias
         """
-        return -0.1167 * ((1 + z) / (1 + 2.334))**2.9
+        return -0.1167 * ((1 + z) / (1 + 2.334)) ** 2.9
 
     @staticmethod
     def get_qso_bias(z):
@@ -925,7 +976,7 @@ class BuildConfig:
         float
             Default QSO bias
         """
-        return 3.91 * ((1 + z) / (1 + 2.39))**1.7133
+        return 3.91 * ((1 + z) / (1 + 2.39)) ** 1.7133
 
     @staticmethod
     def get_growth_rate(z, Omega_m=0.3153):
@@ -943,7 +994,7 @@ class BuildConfig:
         float
             Default growth rate
         """
-        Omega_m_z = Omega_m * ((1 + z)**3) / (Omega_m * ((1 + z)**3) + 1 - Omega_m)
+        Omega_m_z = Omega_m * ((1 + z) ** 3) / (Omega_m * ((1 + z) ** 3) + 1 - Omega_m)
         Omega_lambda_z = 1 - Omega_m_z
-        growth_rate = (Omega_m_z**0.6) + (Omega_lambda_z / 70.) * (1 + Omega_m_z / 2.)
+        growth_rate = (Omega_m_z**0.6) + (Omega_lambda_z / 70.0) * (1 + Omega_m_z / 2.0)
         return growth_rate

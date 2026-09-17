@@ -5,7 +5,7 @@ Vega
 .. image:: https://github.com/andreicuceu/vega/actions/workflows/python_package.yml/badge.svg?branch=master
     :target: https://github.com/andreicuceu/vega/actions/workflows/python_package.yml
 
-.. image:: https://readthedocs.org/projects/lyafit/badge/?version=latest
+.. image:: https://readthedocs.org/projects/vega/badge/?version=latest
         :target: https://vega.readthedocs.io/en/latest/?badge=latest
 
 .. image:: https://codecov.io/gh/andreicuceu/Vega/branch/master/graph/badge.svg
@@ -15,9 +15,11 @@ Vega is a tool for computing 3D correlation function and power spectrum models p
 
 Vega is currently being used by the Lyα forest working group in DESI to measure Baryon Acoustic Oscillations (BAO) and perform full-shape analyses of Lyα forest auto- and cross-correlations (e.g., `DESI et al. 2025a <https://doi.org/10.1088/1475-7516/2025/01/124>`__, `DESI et al. 2025b <https://doi.org/10.1103/2wwn-xjm5>`__, `Cuceu et al. 2025 <https://doi.org/10.48550/arXiv.2509.15308>`__).
 
-* Free software: GPL-3.0 License
+* Free software: GPL-3.0-or-later License
 * Documentation: https://vega.readthedocs.io.
 * Referencing: If you use Vega in a publication, please give the link to this repository (https://github.com/andreicuceu/vega). The best descriptions of what the code does are found in `Cuceu et al. (2022) <https://doi.org/10.1093/mnras/stad1546>`__ and `Cuceu et al. (2025) <https://doi.org/10.48550/arXiv.2509.15308>`__.
+
+.. docs-install-start
 
 Installation
 ------------
@@ -29,30 +31,51 @@ We recommend to start by creating a fresh conda environment:
     conda create --name vega python=3.13
     conda activate vega
 
-You can either clone the public repository:
+For a stable release, download the wheel and ``SHA256SUMS`` from the `GitHub
+Releases`_ page. Verify the downloaded file on Linux, then install it with:
+
+.. code-block:: console
+
+    sha256sum --check SHA256SUMS --ignore-missing
+    python -m pip install ./vega-X.Y.Z-py3-none-any.whl
+
+The wheel is the recommended installation artifact. If you need to build Vega
+from source, download the source distribution from the same release and run:
+
+.. code-block:: console
+
+    sha256sum --check SHA256SUMS --ignore-missing
+    python -m pip install ./vega-X.Y.Z.tar.gz
+
+For development, clone the public repository and install it in editable mode
+with the development dependencies:
 
 .. code-block:: console
 
     git clone https://github.com/andreicuceu/vega.git
-
-Or download the `tarball`_:
-
-.. code-block:: console
-
-    curl -OJL https://github.com/andreicuceu/Vega/tarball/master
-
-Once you have a copy of the source, you can install it with:
-
-.. code-block:: console
-
     cd vega
-    pip install -e .
+    python -m pip install -e '.[dev]'
 
-If you want to install the development version with all optional dependencies, you should run:
+Install the Git hooks once in each clone, then check the complete source tree:
 
 .. code-block:: console
 
-    pip install -e .[dev]
+    pre-commit install
+    pre-commit run --all-files
+
+The hooks apply Ruff's safe lint fixes and formatting to staged Python files
+before each commit. Run ``pre-commit run --all-files`` and the relevant pytest
+suite before opening a pull request.
+
+GitHub also generates ``Source code`` archives for tags. These are repository
+snapshots rather than the tested Python release artifacts. Archives for tags
+that contain ``.git_archival.txt`` can recover their version without a
+``.git`` directory, but the release wheel and source distribution remain the
+canonical installation inputs.
+
+.. _GitHub Releases: https://github.com/andreicuceu/Vega/releases
+
+.. docs-install-end
 
 If you are at NERSC and want your vega environment to show up as Jupyter kernel, you can run the following command:
 
@@ -68,7 +91,6 @@ The sampler and a few other modules in Vega need mpi4py. If you are at NERSC, yo
 
 Vega currently has interfaces for one sampler: `Polychord`_. You do not need to install it to run the iminuit minimizer. You can find the instructions for installing at NERSC Polychord below.
 
-.. _tarball: https://github.com/andreicuceu/Vega/tarball/master
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
 Installing Polychord
@@ -103,7 +125,7 @@ After that, you can install PolyChord:
 
     make veryclean
     make COMPILER_TYPE=gnu
-    pip install -e .
+    python -m pip install .
 
 You can test if PolyChord works by running the test script on an interactive node:
 

@@ -1,7 +1,7 @@
 """Top-level package for Vega."""
 
 __author__ = """Andrei Cuceu"""
-__email__ = 'andreicuceu@gmail.com'
+__email__ = "andreicuceu@gmail.com"
 
 from importlib.metadata import PackageNotFoundError, version
 
@@ -24,3 +24,15 @@ from vega.vega_interface import VegaInterface
 
 from vega.scripts.run_vega import run_vega
 from vega.scripts.compress_data import compress_data
+
+__all__ = [
+    "BuildConfig",
+    "FitResults",
+    "RtWedge",
+    "Shell",
+    "VegaInterface",
+    "VegaPlots",
+    "Wedge",
+    "run_vega",
+    "compress_data"
+]

@@ -8,9 +8,7 @@ class RtWedge(Wedge):
     Computes a perpendicular distance bin for a 2D function
     """
 
-    def __init__(self, rp=(0., 200., 50),
-                 rt=(0., 200., 50),
-                 rt_cut=(0., 4.0)):
+    def __init__(self, rp=(0.0, 200.0, 50), rt=(0.0, 200.0, 50), rt_cut=(0.0, 4.0)):
         """Initialize computation of a perpendicular distance wedge.
 
         Parameters

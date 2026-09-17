@@ -3,10 +3,11 @@ from astropy.io import fits
 from scipy import sparse
 from scipy.sparse import csr_array
 
-from vega.utils import find_file, compute_masked_invcov, compute_log_cov_det
-from vega.coordinates import Coordinates
+from vega import redshift_weights
+from vega.coordinates import MultipoleCoordinates, RMuCoordinates, RtRpCoordinates
+from vega.utils import compute_log_cov_det, compute_masked_invcov, find_file, get_legendre_bins
 
-BLINDING_STRATEGIES = ['desi_dr3']
+BLINDING_STRATEGIES = ["desi_dr3"]
 
 
 class Data:
@@ -14,6 +15,7 @@ class Data:
 
     An instance of this is required for each cf component
     """
+
     _data_vec = None
     _masked_data_vec = None
     _cov_mat = None
@@ -42,40 +44,69 @@ class Data:
         self.corr_item = corr_item
         self.tracer1 = corr_item.tracer1
         self.tracer2 = corr_item.tracer2
-        self.use_metal_autos = corr_item.config['model'].getboolean('use_metal_autos', True)
-        self.cholesky_masked_cov = corr_item.config['data'].getboolean('cholesky-masked-cov', True)
+        self.use_metal_autos = corr_item.config["model"].getboolean("use_metal_autos", True)
+        self.cholesky_masked_cov = corr_item.config["data"].getboolean("cholesky-masked-cov", True)
+        self._apply_hartlap = corr_item.config["data"].getboolean("apply_hartlap", False)
 
-        # Read the data file and init the corrdinate grids
-        data_path = corr_item.config['data'].get('filename')
-        dmat_path = corr_item.config['data'].get('distortion-file', None)
-        cov_path = corr_item.config['data'].get('covariance-file', None)
-        cov_rescale = corr_item.config['data'].getfloat('cov_rescale', None)
+        self.use_multipoles = corr_item.use_multipoles
+        self.is_direct_multipoles = corr_item.is_direct_multipoles
+        self._rmu_binning = None
+        if self.use_multipoles or self.is_direct_multipoles:
+            self.ells_to_model = corr_item.ells_to_model
+            self.nells = len(self.ells_to_model)
+            if self.use_multipoles:
+                self.weighted_multipoles = corr_item.weighted_multipoles
 
-        self._read_data(data_path, corr_item.config['cuts'], dmat_path, cov_path, cov_rescale)
-        self.corr_item.init_coordinates(
-            self.model_coordinates, self.dist_model_coordinates, self.data_coordinates)
+            # Needed for computation
+            self.averaging_matrix_multipoles = None
+            self._multipole_matrix = None
+        else:
+            self.ells_to_model = None
+            self.nells = 0
 
-        # Read the metal file and init metals in the corr item
-        if 'metals' in corr_item.config:
-            if not corr_item.new_metals:
-                tracer_catalog, metal_correlations = self._init_metals(corr_item.config['metals'])
-            else:
-                metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
-                    corr_item.config['metals'])
-                metal_correlations = self._init_metal_correlations(
-                    corr_item.config['metals'], metals_in_tracer1, metals_in_tracer2)
+        # Read the data file and init the coordinate grids
+        data_path = corr_item.config["data"].get("filename")
+        cov_path = corr_item.config["data"].get("covariance-file", None)
+        cov_rescale = corr_item.config["data"].getfloat("cov_rescale", None)
 
-            self.corr_item.init_metals(tracer_catalog, metal_correlations)
+        if self.is_direct_multipoles:
+            # New path: data already in multipole format (ASCII text)
+            self._read_multipole_data(data_path, corr_item.config["cuts"], cov_path, cov_rescale)
+            self.corr_item.init_coordinates(
+                self.model_coordinates, self.model_coordinates, self.data_coordinates
+            )
+        else:
+            dmat_path = corr_item.config["data"].get("distortion-file", None)
+            self._read_data(data_path, corr_item.config["cuts"], dmat_path, cov_path, cov_rescale)
+            self.corr_item.init_coordinates(
+                self.model_coordinates, self.dist_model_coordinates, self.data_coordinates
+            )
 
-        # Check if we have broadband
-        if 'broadband' in corr_item.config:
-            self.corr_item.init_broadband(self.coeff_binning_model)
+            # Read the metal file and init metals in the corr item
+            if "metals" in corr_item.config:
+                if not corr_item.new_metals:
+                    tracer_catalog, metal_correlations = self._init_metals(
+                        corr_item.config["metals"]
+                    )
+                else:
+                    metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
+                        corr_item.config["metals"]
+                    )
+                    metal_correlations = self._init_metal_correlations(
+                        corr_item.config["metals"], metals_in_tracer1, metals_in_tracer2
+                    )
+
+                self.corr_item.init_metals(tracer_catalog, metal_correlations)
+
+            # Check if we have broadband
+            if "broadband" in corr_item.config:
+                self.corr_item.init_broadband(self.coeff_binning_model)
 
         if self.cosmo_params is not None:
             self.corr_item.init_cosmo(self.cosmo_params)
 
-        if not self.has_distortion:
-            self._distortion_mat = np.eye(self.full_data_size)
+        if not self.has_distortion and not self.is_direct_multipoles:
+            self._distortion_mat = csr_array(np.eye(self.full_data_size))
         if not self.has_cov_mat and not self.corr_item.low_mem_mode:
             self._cov_mat = np.eye(self.full_data_size)
 
@@ -116,9 +147,9 @@ class Data:
             A = templates_masked.T.dot(G.T).T
 
             if not (self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins):
-                S = np.diag(np.full(
-                    ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2
-                ))
+                S = np.diag(
+                    np.full(ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2)
+                )
                 A = A + S  # should be positive definite
 
             Ainv = np.linalg.inv(A)
@@ -128,7 +159,7 @@ class Data:
             self.marg_diff2coeff_matrix = Ainv.dot(G)
 
         self._cholesky = None
-        self._scale = 1.
+        self._scale = 1.0
         self.scaled_inv_masked_cov = None
         self.scaled_log_cov_det = None
         self.effective_data_size = self.data_size - self.num_marg_modes
@@ -201,8 +232,9 @@ class Data:
         """
         if self._cov_mat is None:
             raise AttributeError(
-                'No covariance matrix found. Check for it in the data file: ',
-                self.corr_item.config['data'].get('filename'))
+                "No covariance matrix found. Check for it in the data file: ",
+                self.corr_item.config["data"].get("filename"),
+            )
         return self._cov_mat
 
     @property
@@ -216,8 +248,9 @@ class Data:
         """
         if self._distortion_mat is None:
             raise AttributeError(
-                'No distortion matrix found. Check for it in the data file: ',
-                self.corr_item.config['data'].get('filename'))
+                "No distortion matrix found. Check for it in the data file: ",
+                self.corr_item.config["data"].get("filename"),
+            )
         return self._distortion_mat
 
     @property
@@ -282,6 +315,202 @@ class Data:
         """
         return self._distortion_mat is not None
 
+    def _read_multipole_data(self, data_path, cuts_config, cov_path=None, cov_rescale=None):
+        """Read correlation-function multipoles from an ASCII text file.
+
+        Handles the 'direct multipoles' path where xi_ell(s) values are
+        already measured (e.g. QSO auto-correlation output from pycorr)
+        rather than a 2D (rp, rt) FITS file that Vega converts internally.
+
+        The data vector is concatenated as [xi_0(s), xi_2(s), ..., xi_L(s)].
+        An internal 2D (r, mu) model grid is constructed so that the existing
+        CorrelationFunction / PktoXi machinery can be reused; a multipole
+        projection matrix (_multipole_matrix) then maps model xi(r, mu) onto
+        the data xi_ell(s) values.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to the ASCII file.  Expected column order:
+            s_mid  s_avg  xi_0  xi_2  [xi_4 ...]  std_0  std_2  [std_4 ...]
+        cuts_config : ConfigParser
+            [cuts] section from the component config file.
+        cov_path : str, optional
+            Path to an ASCII multipole covariance file (flat n×n matrix, one row
+            per line, ordered [xi_0 bins, xi_2 bins, ...]).  The same layout is
+            used for data covariances (e.g. RascalC) and mock-stack covariances.
+        cov_rescale : float, optional
+            Multiplicative rescaling applied to the covariance matrix.
+        """
+        from scipy.sparse import csr_array as _csr
+
+        print(f"Reading multipole data file {data_path}\n")
+        raw = np.loadtxt(find_file(data_path), comments="#")
+
+        # Columns: s_mid, s_avg, xi_0, xi_2, [xi_4, ...], std_0, std_2, ...
+        # Infer how many multipoles are present in the file (each ell contributes
+        # one xi column and one std column, so total data columns = 2 * n_ells_file).
+        s_mid_all = raw[:, 0]
+        s_avg_all = raw[:, 1]
+        n_extra = raw.shape[1] - 2
+        if n_extra % 2 != 0:
+            raise ValueError(
+                f"Expected xi/std column pairs after s_mid/s_avg, got {n_extra} extra columns."
+            )
+        n_ells_file = n_extra // 2
+        xi_file = raw[:, 2 : 2 + n_ells_file]
+        ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+        ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+        xi_all = xi_file[:, ell_file_indices]  # shape (n_s_all, nells)
+        # Apply separation cuts
+        s_min = cuts_config.getfloat("s-min", 0.0)
+        s_max = cuts_config.getfloat("s-max", 300.0)
+        mask_1d = (s_mid_all >= s_min) & (s_mid_all < s_max)
+
+        s_data = s_avg_all[mask_1d]  # measured bin centres
+        xi_cut = xi_all[mask_1d, :]
+        n_s = len(s_data)
+
+        # Bookkeeping for the global-covariance path.  The external global
+        # covariance (built by lyatools/scripts/build_global_cov3x2.py) stores
+        # the FULL, uncut QSO auto multipole block: n_ells_file ell-blocks,
+        # each spanning the full set of s-bins.  read_global_cov therefore
+        # needs the full s-grid size, the boolean cut mask over it, and the
+        # file-order indices of the fitted multipoles so it can select exactly
+        # the fitted (ell, s) bins.
+        ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+        self._mp_n_s_full = len(s_mid_all)
+        self._mp_full_s_mask = mask_1d.copy()
+        self._mp_n_ells_file = n_ells_file
+        self._mp_ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+
+        # Data vector: [xi_0(s_1..s_n), xi_2(s_1..s_n), ...]
+        self._data_vec = np.concatenate([xi_cut[:, i] for i in range(self.nells)])
+
+        # Read covariance (ASCII multipole format: flat square matrix, one row/line)
+        if cov_path is not None:
+            print(f"Reading multipole covariance file {cov_path}\n")
+            cov_full = np.loadtxt(find_file(cov_path), comments="#")
+            n_cov = cov_full.shape[0]
+
+            # The covariance file may cover more multipoles than we are fitting
+            # (e.g. the file has ell=0,2,4 but model_multipoles = 0,2).
+            # Use the data-file column count to determine the number of multipoles
+            # in the covariance file, then extract only the fitted subset.
+            n_s_cov = n_cov // n_ells_file
+            if n_s_cov * n_ells_file != n_cov:
+                raise ValueError(
+                    f"Covariance size {n_cov} is not divisible by the number of "
+                    f"multipoles in the data file ({n_ells_file}). "
+                    f"Check the covariance file."
+                )
+
+            # Reconstruct the s-bin centres assumed by the covariance file.
+            # The cov covers the same s range as the cuts; its bins are inferred
+            # from their count and the cut boundaries.
+            ds_cov = (s_max - s_min) / n_s_cov
+            s_cov_centers = s_min + (np.arange(n_s_cov) + 0.5) * ds_cov
+
+            # Match data s_avg values to covariance bins (nearest neighbour)
+            cov_idx = np.array([np.argmin(np.abs(s_cov_centers - sv)) for sv in s_data])
+
+            # The data file multipoles are assumed to be in the standard order
+            # [0, 2, 4, ...]. Find the position of each fitted ell in that sequence.
+            ells_in_file = list(range(0, 2 * n_ells_file, 2))  # [0, 2, 4, ...]
+            ell_file_indices = [ells_in_file.index(ell) for ell in self.ells_to_model]
+
+            # Build full index array selecting only the fitted multipole blocks
+            all_cov_idx = np.concatenate([cov_idx + ell_i * n_s_cov for ell_i in ell_file_indices])
+            self._cov_mat = cov_full[np.ix_(all_cov_idx, all_cov_idx)].copy()
+
+            if cov_rescale is not None:
+                self._cov_mat *= cov_rescale
+
+        # Blinding flags (multipole data are not blinded through Vega)
+        self._blind = False
+        self._blinding_strat = None
+        self.cosmo_params = None
+        self.nb = None
+
+        # Scale-cut bookkeeping (stored for plotting)
+        self.r_min_cut = s_min
+        self.r_max_cut = s_max
+        self.mu_min_cut = 0.0
+        self.mu_max_cut = 1.0
+
+        # Data coordinates: lightweight 1-D s-only object.
+        # For QSO multipoles, prefer catalog-weighted mean redshift from
+        # weights-tracer over the global fit zeff.
+        z_eff = getattr(self.corr_item, "z_eff", None)
+        z_model = z_eff
+        if (
+            self.corr_item.tracer1.get("weights-path") is not None
+            and self.corr_item.tracer1["type"] == "discrete"
+        ):
+            z_arr, w_arr = redshift_weights.load_tracer_redshift_weights(
+                self.corr_item.tracer1, config=self.corr_item.config
+            )
+            z_qso = redshift_weights.weighted_mean_z(z_arr, w_arr)
+            self.corr_item.z_eff_QSO = z_qso
+            z_model = z_qso
+            print(
+                f"INFO: {self.corr_item.name} multipole z_grid from catalog "
+                f"weighted mean z_eff_QSO = {z_qso:.6f} "
+                f"(global zeff = {z_eff})"
+            )
+
+        self.data_coordinates = MultipoleCoordinates(s_data, self.ells_to_model, z_eff=z_model)
+
+        # Data mask is all-True (data vector is already cut to [s_min, s_max))
+        self.data_mask = np.ones(self.nells * n_s, dtype=bool)
+
+        # Model coordinates: 2D (r, mu) grid.
+        # r bins match the data s values so the multipole matrix is block-diagonal.
+        # mu bins run from 0 to 1 (auto-correlation symmetry).
+        n_mu_model = cuts_config.getint("n_mu_model", 100)
+
+        mu_arr = (0.5 + np.arange(n_mu_model)) / n_mu_model  # centres, 0→1
+        r_mesh, mu_mesh = np.meshgrid(s_data, mu_arr)  # (n_mu, n_s)
+        r_flat = r_mesh.flatten()  # mu-major order
+        mu_flat = mu_mesh.flatten()
+
+        z_grid_model = np.full(len(r_flat), float(z_model)) if z_model is not None else None
+        self.model_coordinates = RtRpCoordinates.init_from_r_mu_grids(
+            r_flat, mu_flat, z_eff=z_model
+        )
+        if z_grid_model is not None:
+            self.model_coordinates.z_grid = z_grid_model
+        self.dist_model_coordinates = self.model_coordinates
+
+        # Model mask must match the OUTPUT of Model.compute(), which applies
+        # _multipole_matrix and returns a (n_ells * n_s)-element vector, not
+        # the (n_mu_model * n_s)-element internal grid.
+        self.model_mask = np.ones(self.nells * n_s, dtype=bool)
+
+        # Multipole projection matrix: maps xi(r, mu) on the model grid to
+        # xi_ell(s) on the data grid.
+        #
+        # RtRpCoordinates.init_from_r_mu_grids produces a meshgrid flattened in
+        # mu-major order: flat index k = mu_idx * n_s + r_idx.
+        # For data bin (ell_idx, s_j) the contributing model columns are
+        # k = 0*n_s+j, 1*n_s+j, ..., (n_mu-1)*n_s+j  i.e.  j::n_s.
+        leg_ells = get_legendre_bins(self.ells_to_model, n_mu_model, x_correlation=False)
+
+        n_data_total = self.nells * n_s
+        n_model_total = n_s * n_mu_model
+        mult_matrix = np.zeros((n_data_total, n_model_total))
+        for ell_idx in range(self.nells):
+            for j in range(n_s):
+                mult_matrix[ell_idx * n_s + j, j::n_s] = leg_ells[ell_idx]
+        self._multipole_matrix = _csr(mult_matrix)
+
+        # Signal to Model that it should apply _multipole_matrix
+        self.use_multipoles = True
+        self._rmu_binning = False
+
+        # full_data_size is used for identity-matrix fallbacks
+        self.full_data_size = len(self._data_vec)
+
     def _read_data(self, data_path, cuts_config, dmat_path=None, cov_path=None, cov_rescale=None):
         """Read the data, mask it and prepare the environment.
 
@@ -298,61 +527,65 @@ class Data:
         cov_rescale : float, optional
             Rescaling factor applied to the covariance matrix, by default None
         """
-        print(f'Reading data file {data_path}\n')
+        print(f"Reading data file {data_path}\n")
         hdul = fits.open(find_file(data_path))
         header = hdul[1].header
 
         # Read the data vector
         self._blinding_strat = None
-        if 'BLINDING' in header:
-            self._blinding_strat = header['BLINDING']
+        if "BLINDING" in header:
+            self._blinding_strat = header["BLINDING"]
 
-            if self._blinding_strat == 'none' or self._blinding_strat == 'None':
+            if self._blinding_strat == "none" or self._blinding_strat == "None":
                 self._blinding_strat = None
 
         if self._blinding_strat in BLINDING_STRATEGIES:
-            print(f'Strategy: {self._blinding_strat}')
+            print(f"Strategy: {self._blinding_strat}")
 
             self._blind = True
-            if self._blinding_strat == 'desi_dr3':
-                assert 'DA_BLIND' in hdul[1].columns.names, 'Blinding failed, do not run!!!'
+            if self._blinding_strat == "desi_dr3":
+                assert "DA_BLIND" in hdul[1].columns.names, "Blinding failed, do not run!!!"
 
-            if 'DA_BLIND' in hdul[1].columns.names:
-                print(f'Warning! Running on blinded data {data_path}')
-                print('Using DA_BLIND column')
-                self._data_vec = hdul[1].data['DA_BLIND']
-            elif 'DA' in hdul[1].columns.names:
-                print('Using DA column - No BAO blinding.')
-                self._data_vec = hdul[1].data['DA']
+            if "DA_BLIND" in hdul[1].columns.names:
+                print(f"Warning! Running on blinded data {data_path}")
+                print("Using DA_BLIND column")
+                self._data_vec = hdul[1].data["DA_BLIND"]
+            elif "DA" in hdul[1].columns.names:
+                print("Using DA column - No BAO blinding.")
+                self._data_vec = hdul[1].data["DA"]
             else:
-                raise ValueError('No DA or DA_BLIND column found in data file.')
+                raise ValueError("No DA or DA_BLIND column found in data file.")
 
         elif self._blinding_strat is None:
             self._blind = False
-            self._data_vec = hdul[1].data['DA']
+            self._data_vec = hdul[1].data["DA"]
 
-        elif self._blinding_strat in ['desi_m2', 'desi_y1', 'desi_y3']:
+        elif self._blinding_strat in ["desi_m2", "desi_y1", "desi_y3"]:
             self._blind = False
-            self._data_vec = hdul[1].data['DA']
+            self._data_vec = hdul[1].data["DA"]
 
         else:
             self._blind = True
             raise ValueError(f"Unknown blinding strategy {self._blinding_strat}.")
 
         if dmat_path is None:
-            if 'DM_BLIND' in hdul[1].columns.names:
-                self._distortion_mat = csr_array(hdul[1].data['DM_BLIND'].astype(float))
-            elif 'DM' in hdul[1].columns.names:
-                self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
+            if "DM_BLIND" in hdul[1].columns.names:
+                self._distortion_mat = csr_array(hdul[1].data["DM_BLIND"].astype(float))
+            elif "DM" in hdul[1].columns.names:
+                self._distortion_mat = csr_array(hdul[1].data["DM"].astype(float))
 
+        if self._apply_hartlap:
+            nsamples = header["NSAMPLES"]
         # Read the covariance matrix
         # if not self.corr_item.low_mem_mode:
         if cov_path is not None:
-            print(f'Reading covariance matrix file {cov_path}\n')
+            print(f"Reading covariance matrix file {cov_path}\n")
             with fits.open(find_file(cov_path)) as cov_hdul:
-                self._cov_mat = cov_hdul[1].data['CO']
-        elif 'CO' in hdul[1].columns.names:
-            self._cov_mat = hdul[1].data['CO']
+                if self._apply_hartlap:
+                    nsamples = cov_hdul[1].header["NSAMPLES"]
+                self._cov_mat = cov_hdul[1].data["CO"]
+        elif "CO" in hdul[1].columns.names:
+            self._cov_mat = hdul[1].data["CO"]
 
         if cov_rescale is not None:
             self._cov_mat *= cov_rescale
@@ -360,33 +593,54 @@ class Data:
         # Get the cosmological parameters
         if "OMEGAM" in header:
             self.cosmo_params = {}
-            self.cosmo_params['Omega_m'] = header['OMEGAM']
-            self.cosmo_params['Omega_k'] = header.get('OMEGAK', 0.)
-            self.cosmo_params['Omega_r'] = header.get('OMEGAR', 0.)
-            self.cosmo_params['wl'] = header.get('WL', -1.)
+            self.cosmo_params["Omega_m"] = header["OMEGAM"]
+            self.cosmo_params["Omega_k"] = header.get("OMEGAK", 0.0)
+            self.cosmo_params["Omega_r"] = header.get("OMEGAR", 0.0)
+            self.cosmo_params["wl"] = header.get("WL", -1.0)
 
         # Get the number of pairs
-        if 'NB' in hdul[1].columns.names:
-            self.nb = hdul[1].data['NB']
+        if "NB" in hdul[1].columns.names:
+            self.nb = hdul[1].data["NB"]
         else:
             self.nb = None
 
         # Initialize the data coordinates
-        self.data_coordinates = Coordinates(
-            header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
-            rp_grid=hdul[1].data['RP'], rt_grid=hdul[1].data['RT'], z_grid=hdul[1].data['Z'],
+        if "RMU_BIN" in header and header["RMU_BIN"]:
+            coordinates_cls = RMuCoordinates
+            self._rmu_binning = True
+        elif self.use_multipoles:
+            raise Exception("Data must be in r,mu binning to use multipoles.")
+        else:
+            coordinates_cls = RtRpCoordinates
+            self._rmu_binning = False
+
+        self.data_coordinates = coordinates_cls(
+            header["RPMIN"],
+            header["RPMAX"],
+            header["RTMAX"],
+            header["NP"],
+            header["NT"],
+            hdul[1].data["RP"],
+            hdul[1].data["RT"],
+            hdul[1].data["Z"],
         )
 
         if dmat_path is None:
             if len(hdul) > 2:
-                rp_grid_model = hdul[2].data['DMRP']
-                rt_grid_model = hdul[2].data['DMRT']
-                z_grid_model = hdul[2].data['DMZ']
+                rp_grid_model = hdul[2].data["DMRP"]
+                rt_grid_model = hdul[2].data["DMRT"]
+                z_grid_model = hdul[2].data["DMZ"]
 
                 # Initialize the model coordinates
-                self.model_coordinates = Coordinates(
-                    header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'],
-                    rp_grid=rp_grid_model, rt_grid=rt_grid_model, z_grid=z_grid_model
+                self.model_coordinates = coordinates_cls(
+                    header["RPMIN"],
+                    header["RPMAX"],
+                    header["RTMAX"],
+                    header["NP"],
+                    header["NT"],
+                    rp_grid_model,
+                    rt_grid_model,
+                    z_grid_model,
                 )
 
             self.coeff_binning_model = 1
@@ -409,15 +663,29 @@ class Data:
         # Compute the model mask
         self.model_mask = self.dist_model_coordinates.get_mask_scale_cuts(cuts_config)
 
+        if self.use_multipoles:
+            self._convert_to_multipoles()
+
         # Compute data size
         self.full_data_size = len(self.data_vec)
 
         # Read the cuts we need to save for plotting
-        self.r_min_cut = cuts_config.getfloat('r-min', 10.)
-        self.r_max_cut = cuts_config.getfloat('r-max', 180.)
+        self.r_min_cut = cuts_config.getfloat("r-min", 10.0)
+        self.r_max_cut = cuts_config.getfloat("r-max", 180.0)
 
-        self.mu_min_cut = cuts_config.getfloat('mu-min', -1.)
-        self.mu_max_cut = cuts_config.getfloat('mu-max', +1.)
+        self.mu_min_cut = cuts_config.getfloat("mu-min", -1.0)
+        self.mu_max_cut = cuts_config.getfloat("mu-max", +1.0)
+
+        if self._apply_hartlap:
+            hartlap = (nsamples - 1) / (nsamples - self.data_size - 2)
+            print(f"Applying the Hartlap factor: C x {hartlap:.2f}.")
+
+            if hartlap <= 0:
+                raise ValueError("Hartlap factor is non-positive.")
+            if hartlap > 1.1:
+                print(f"Warning: Large Hartlap correction: {hartlap:.2f}.")
+
+            self._cov_mat *= hartlap
 
     def _check_if_blinding_matches(self, blinding_flag, dmat_path):
         """Warn if the blinding strategy of the distortion matrix does not match the data.
@@ -430,13 +698,17 @@ class Data:
             Path to the distortion matrix file (used in warning messages)
         """
         if self._blinding_strat is None:
-            if not (blinding_flag == 'none' or blinding_flag == 'None'):
-                print(f'Warning: Data has no blinding, but distortion matrix at {dmat_path} '
-                      f'has a blinding flag {blinding_flag}')
+            if not (blinding_flag == "none" or blinding_flag == "None"):
+                print(
+                    f"Warning: Data has no blinding, but distortion matrix at {dmat_path} "
+                    f"has a blinding flag {blinding_flag}"
+                )
         else:
             if self._blinding_strat != blinding_flag:
-                print(f'Warning: Data has a blinding flag {blinding_flag} that does not match '
-                      f'the flag of the distortion matrix at {dmat_path}')
+                print(
+                    f"Warning: Data has a blinding flag {blinding_flag} that does not match "
+                    f"the flag of the distortion matrix at {dmat_path}"
+                )
 
     def _read_dmat(self, dmat_path):
         """Read a separate distortion matrix file and initialize coordinate grids.
@@ -446,29 +718,45 @@ class Data:
         dmat_path : str
             Path to the distortion matrix fits file
         """
-        print(f'Reading distortion matrix file {dmat_path}\n')
+        print(f"Reading distortion matrix file {dmat_path}\n")
         hdul = fits.open(find_file(dmat_path))
         header = hdul[1].header
 
-        if 'BLINDING' in header:
-            self._check_if_blinding_matches(header['BLINDING'], dmat_path)
+        if "BLINDING" in header:
+            self._check_if_blinding_matches(header["BLINDING"], dmat_path)
 
-        if 'DM' in hdul[1].columns.names:
-            self._distortion_mat = csr_array(hdul[1].data['DM'].astype(float))
-        elif 'DM_BLIND' in hdul[1].columns.names:
-            self._distortion_mat = csr_array(hdul[1].data['DM_BLIND'].astype(float))
+        if "DM" in hdul[1].columns.names:
+            self._distortion_mat = csr_array(hdul[1].data["DM"].astype(float))
+        elif "DM_BLIND" in hdul[1].columns.names:
+            self._distortion_mat = csr_array(hdul[1].data["DM_BLIND"].astype(float))
         else:
-            raise ValueError('No DM or DM_BLIND column found in distortion matrix file.')
+            raise ValueError("No DM or DM_BLIND column found in distortion matrix file.")
 
-        self.coeff_binning_model = header['COEFMOD']
-        self.model_coordinates = Coordinates(
-            header['RPMIN'], header['RPMAX'], header['RTMAX'],
-            header['NP']*self.coeff_binning_model, header['NT']*self.coeff_binning_model,
-            rp_grid=hdul[2].data['RP'], rt_grid=hdul[2].data['RT'], z_grid=hdul[2].data['Z']
+        self.coeff_binning_model = header["COEFMOD"]
+        if "RMU_BIN" in header and header["RMU_BIN"]:
+            coordinates_cls = RMuCoordinates
+        elif self.use_multipoles:
+            raise Exception("Data must be in r,mu binning to use multipoles.")
+        else:
+            coordinates_cls = RtRpCoordinates
+
+        self.model_coordinates = coordinates_cls(
+            header["RPMIN"],
+            header["RPMAX"],
+            header["RTMAX"],
+            header["NP"] * self.coeff_binning_model,
+            header["NT"] * self.coeff_binning_model,
+            hdul[2].data["RP"],
+            hdul[2].data["RT"],
+            hdul[2].data["Z"],
         )
 
-        self.dist_model_coordinates = Coordinates(
-            header['RPMIN'], header['RPMAX'], header['RTMAX'], header['NP'], header['NT'])
+        self.dist_model_coordinates = coordinates_cls(
+            header["RPMIN"], header["RPMAX"], header["RTMAX"], header["NP"], header["NT"]
+        )
+
+        if not self.dist_model_coordinates.is_same_binning(self.data_coordinates):
+            raise Exception("Distortion matrix coordinates do not match data coordinates.")
 
         hdul.close()
 
@@ -485,30 +773,30 @@ class Data:
         list or None, list or None, dict
             metals_in_tracer1, metals_in_tracer2, tracer_catalog
         """
-        assert ('in tracer1' in metal_config) or ('in tracer2' in metal_config), (
+        assert ("in tracer1" in metal_config) or ("in tracer2" in metal_config), (
             "The metals config must specify 'in tracer1' and/or 'in tracer2'"
         )
 
         # Read metal tracers
         metals_in_tracer1 = None
         metals_in_tracer2 = None
-        if 'in tracer1' in metal_config:
-            metals_in_tracer1 = metal_config.get('in tracer1').split()
-        if 'in tracer2' in metal_config:
-            metals_in_tracer2 = metal_config.get('in tracer2').split()
+        if "in tracer1" in metal_config:
+            metals_in_tracer1 = metal_config.get("in tracer1").split()
+        if "in tracer2" in metal_config:
+            metals_in_tracer2 = metal_config.get("in tracer2").split()
 
         # Build tracer Catalog
         tracer_catalog = {}
-        tracer_catalog[self.tracer1['name']] = self.tracer1
-        tracer_catalog[self.tracer2['name']] = self.tracer2
+        tracer_catalog[self.tracer1["name"]] = self.tracer1
+        tracer_catalog[self.tracer2["name"]] = self.tracer2
 
         if metals_in_tracer1 is not None:
             for metal in metals_in_tracer1:
-                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+                tracer_catalog[metal] = {"name": metal, "type": "continuous"}
 
         if metals_in_tracer2 is not None:
             for metal in metals_in_tracer2:
-                tracer_catalog[metal] = {'name': metal, 'type': 'continuous'}
+                tracer_catalog[metal] = {"name": metal, "type": "continuous"}
 
         return metals_in_tracer1, metals_in_tracer2, tracer_catalog
 
@@ -530,19 +818,19 @@ class Data:
             List of (name1, name2) tuples for each metal correlation to compute
         """
         metal_correlations = []
-        if 'in tracer2' in metal_config:
+        if "in tracer2" in metal_config:
             for metal in metals_in_tracer2:
-                if not self._use_correlation(self.tracer1['name'], metal):
+                if not self._use_correlation(self.tracer1["name"], metal):
                     continue
-                metal_correlations.append((self.tracer1['name'], metal))
+                metal_correlations.append((self.tracer1["name"], metal))
 
-        if 'in tracer1' in metal_config:
+        if "in tracer1" in metal_config:
             for metal in metals_in_tracer1:
-                if not self._use_correlation(metal, self.tracer2['name']):
+                if not self._use_correlation(metal, self.tracer2["name"]):
                     continue
-                metal_correlations.append((metal, self.tracer2['name']))
+                metal_correlations.append((metal, self.tracer2["name"]))
 
-        if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
+        if ("in tracer1" in metal_config) and ("in tracer2" in metal_config):
             for i, metal1 in enumerate(metals_in_tracer1):
                 j0 = i if self.tracer1 == self.tracer2 else 0
 
@@ -569,48 +857,49 @@ class Data:
             list of all metal correlations we need to compute
         """
         metals_in_tracer1, metals_in_tracer2, tracer_catalog = self._init_metal_tracers(
-            metal_config)
+            metal_config
+        )
 
         self.metal_mats = {}
         self.metal_coordinates = {}
 
         # Read the metal file
-        metal_hdul = fits.open(find_file(metal_config.get('filename')))
+        metal_hdul = fits.open(find_file(metal_config.get("filename")))
 
-        dm_prefix = 'DM_'
-        if 'BLINDING' in metal_hdul[1].header:
-            if metal_hdul[1].header['BLINDING'] != 'none':
-                dm_prefix = 'DM_BLIND_'
+        dm_prefix = "DM_"
+        if "BLINDING" in metal_hdul[1].header:
+            if metal_hdul[1].header["BLINDING"] != "none":
+                dm_prefix = "DM_BLIND_"
 
         metal_correlations = []
         # First look for correlations between tracer1 and metals
-        if 'in tracer2' in metal_config:
+        if "in tracer2" in metal_config:
             for metal in metals_in_tracer2:
-                if not self._use_correlation(self.tracer1['name'], metal):
+                if not self._use_correlation(self.tracer1["name"], metal):
                     continue
-                tracers = (self.tracer1['name'], metal)
-                name = self.tracer1['name'] + '_' + metal
-                if 'RP_' + name not in metal_hdul[2].columns.names:
-                    name = metal + '_' + self.tracer1['name']
+                tracers = (self.tracer1["name"], metal)
+                name = self.tracer1["name"] + "_" + metal
+                if "RP_" + name not in metal_hdul[2].columns.names:
+                    name = metal + "_" + self.tracer1["name"]
                 self._read_metal_correlation(metal_hdul, tracers, name, dm_prefix)
                 metal_correlations.append(tracers)
 
         # Then look for correlations between metals and tracer2
         # If we have an auto-cf the files are saved in the format tracer-metal
-        if 'in tracer1' in metal_config:
+        if "in tracer1" in metal_config:
             for metal in metals_in_tracer1:
-                if not self._use_correlation(metal, self.tracer2['name']):
+                if not self._use_correlation(metal, self.tracer2["name"]):
                     continue
-                tracers = (metal, self.tracer2['name'])
-                name = metal + '_' + self.tracer2['name']
-                if 'RP_' + name not in metal_hdul[2].columns.names:
-                    name = self.tracer2['name'] + '_' + metal
+                tracers = (metal, self.tracer2["name"])
+                name = metal + "_" + self.tracer2["name"]
+                if "RP_" + name not in metal_hdul[2].columns.names:
+                    name = self.tracer2["name"] + "_" + metal
                 self._read_metal_correlation(metal_hdul, tracers, name, dm_prefix)
                 metal_correlations.append(tracers)
 
         # Finally look for metal-metal correlations
         # Some files are reversed order, so reverse order if we don't find it
-        if ('in tracer1' in metal_config) and ('in tracer2' in metal_config):
+        if ("in tracer1" in metal_config) and ("in tracer2" in metal_config):
             for i, metal1 in enumerate(metals_in_tracer1):
                 j0 = i if self.tracer1 == self.tracer2 else 0
 
@@ -618,10 +907,10 @@ class Data:
                     if not self._use_correlation(metal1, metal2):
                         continue
                     tracers = (metal1, metal2)
-                    name = metal1 + '_' + metal2
+                    name = metal1 + "_" + metal2
 
-                    if 'RP_' + name not in metal_hdul[2].columns.names:
-                        name = metal2 + '_' + metal1
+                    if "RP_" + name not in metal_hdul[2].columns.names:
+                        name = metal2 + "_" + metal1
                     self._read_metal_correlation(metal_hdul, tracers, name, dm_prefix)
                     metal_correlations.append(tracers)
 
@@ -645,9 +934,9 @@ class Data:
             Flag for using the correlation between tracer 1 and 2
         """
         # For CIV we only want it's autocorrelation
-        if name1 == 'CIV(eff)' or name2 == 'CIV(eff)':
+        if name1 == "CIV(eff)" or name2 == "CIV(eff)":
             return name1 == name2
-        if 'SiII' in name1 and 'SiII' in name2 and not self.use_metal_autos:
+        if "SiII" in name1 and "SiII" in name2 and not self.use_metal_autos:
             return False
         else:
             return True
@@ -665,12 +954,15 @@ class Data:
         name : string
             The name of the specific correlation to be read from file
         """
-        self.metal_coordinates[tracers] = Coordinates(
-            metal_hdul[1].header['RPMIN'], metal_hdul[1].header['RPMAX'],
-            metal_hdul[1].header['RTMAX'], metal_hdul[1].header['NP'], metal_hdul[1].header['NT'],
-            rp_grid=metal_hdul[2].data['RP_' + name],
-            rt_grid=metal_hdul[2].data['RT_' + name],
-            z_grid=metal_hdul[2].data['Z_' + name]
+        self.metal_coordinates[tracers] = RtRpCoordinates(
+            metal_hdul[1].header["RPMIN"],
+            metal_hdul[1].header["RPMAX"],
+            metal_hdul[1].header["RTMAX"],
+            metal_hdul[1].header["NP"],
+            metal_hdul[1].header["NT"],
+            rp_grid=metal_hdul[2].data["RP_" + name],
+            rt_grid=metal_hdul[2].data["RT_" + name],
+            z_grid=metal_hdul[2].data["Z_" + name],
         )
 
         metal_mat_size = self.metal_coordinates[tracers].rp_grid.size
@@ -683,8 +975,10 @@ class Data:
         elif self.corr_item.test_flag:
             self.metal_mats[tracers] = sparse.eye(metal_mat_size)
         else:
-            raise ValueError("Cannot find correct metal matrices."
-                             " Check that blinding is consistent between cf and metal files.")
+            raise ValueError(
+                "Cannot find correct metal matrices."
+                " Check that blinding is consistent between cf and metal files."
+            )
 
     def create_monte_carlo(self, fiducial_model, scale=None, seed=None, forecast=False):
         """Create monte carlo mock of data using a fiducial model.
@@ -749,8 +1043,9 @@ class Data:
             self.mc_mock = np.full(self.full_data_size, np.nan)
             if self.cholesky_masked_cov:
                 ran_vec = np.random.randn(self.data_mask.sum())
-                self.mc_mock[self.data_mask] = \
-                    masked_fiducial[self.data_mask] + self._cholesky.dot(ran_vec)
+                self.mc_mock[self.data_mask] = masked_fiducial[self.data_mask] + self._cholesky.dot(
+                    ran_vec
+                )
             else:
                 ran_vec = np.random.randn(self.full_data_size)
                 self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
@@ -758,6 +1053,60 @@ class Data:
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 
         return self.mc_mock
+
+    def _convert_to_multipoles(self):
+        is_x_corr = self.data_coordinates.rp_min < 0
+        nmu, nr = self.data_coordinates.mu_nbins, self.data_coordinates.r_nbins
+        n_out = nr * self.nells
+
+        mult_matrix = np.zeros((n_out, self.data_vec.size))
+
+        leg_ells = get_legendre_bins(self.ells_to_model, nmu, is_x_corr)
+
+        if self.weighted_multipoles:
+            weights = self.cov_mat.diagonal().copy()
+            w = weights > 0
+            weights[w] = 1.0 / weights[w]
+            weights[~w] = 0
+        else:
+            weights = np.ones(self.data_vec.size)
+
+        for i in range(n_out):
+            ell, j1 = i // nr, i % nr
+            we = weights[j1::nr]
+            we *= we.size / we.sum()
+            mult_matrix[i, j1::nr] = leg_ells[ell] * self.data_mask[j1::nr] * we
+        mult_matrix = csr_array(mult_matrix)
+        # mult_matrix = mult_matrix.dot(np.diag(self.data_mask))
+
+        self._org_data_mask = self.data_mask.copy()
+        self._data_vec = mult_matrix.dot(self._data_vec)
+        C1 = mult_matrix.dot(self._cov_mat).T
+        self._cov_mat = mult_matrix.dot(C1).T
+        data_mask_ell = np.tile(self.data_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+        self.nb = np.tile(self.nb.reshape(nmu, nr).sum(0), self.nells)
+
+        self._multipole_matrix = mult_matrix
+        self.averaging_matrix_multipoles = np.abs(self._multipole_matrix)
+        norm = self.averaging_matrix_multipoles.sum(axis=1)
+        self.averaging_matrix_multipoles /= norm[:, None]
+
+        if self.has_distortion:
+            # Calculate the multipole matrix for the distortion model coordinates
+            nmu, nr = self.dist_model_coordinates.mu_nbins, self.dist_model_coordinates.r_nbins
+            n_out = nr * self.nells
+            model_mask_ell = np.tile(self.model_mask.reshape(nmu, nr).sum(0) > 0, self.nells)
+            mell = np.nonzero(model_mask_ell)[0]
+            M = self._multipole_matrix.toarray()
+
+            mult_matrix = np.zeros((n_out, nr * nmu))
+            for i, x in enumerate(np.nonzero(data_mask_ell)[0]):
+                mult_matrix[mell[i], self.model_mask] = M[x, self.data_mask]
+            mult_matrix = csr_array(mult_matrix)
+
+        self.data_mask = data_mask_ell
+        self.model_mask = model_mask_ell
+        self._distortion_mat = mult_matrix.dot(self._distortion_mat)
 
     def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
         """Multiply undistorted templates with the distortion matrix and return
@@ -791,10 +1140,12 @@ class Data:
         if self.corr_item.fit_marg_scales:
             # Update masks
             self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
-                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+                self.corr_item.config["cuts"], self.corr_item.marginalize_small_scales
+            )
 
             self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
-                self.corr_item.config['cuts'], self.corr_item.marginalize_small_scales)
+                self.corr_item.config["cuts"], self.corr_item.marginalize_small_scales
+            )
 
             if self.data_mask.sum() != self.model_mask.sum():
                 raise ValueError(
@@ -815,8 +1166,10 @@ class Data:
 
         # Compress using svd to remove degenerate modes
         t = t[self.model_mask, :].toarray()
-        print(f"  There are {templates.shape[1]} templates. "
-              "SVD of template matrix to remove degenerate modes.")
+        print(
+            f"  There are {templates.shape[1]} templates. "
+            "SVD of template matrix to remove degenerate modes."
+        )
         u, s, _ = np.linalg.svd(t, full_matrices=False)
         w = s > factor * s[0]
         u = u[:, w]
