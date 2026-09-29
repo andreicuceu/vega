@@ -3,8 +3,6 @@ from astropy.table import Table
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import expn
-from picca import constants as picca_constants
-
 
 from . import redshift_weights, utils
 
@@ -76,7 +74,6 @@ class CorrelationFunction:
         self._use_new_bias_evol = config.getboolean("new-bias-evolution", False)
         self._use_catalog_bias_evol = bool(use_catalog_bias_evolution) and not metal_corr
         self._rescale_coords_systematics = config.getboolean("rescale-coords-systematics", False)
-        self._cosmo = cosmo
         self._fiducial = fiducial
 
         # Catalog bias evolution state (filled in init_bias_evol when enabled)
@@ -98,7 +95,6 @@ class CorrelationFunction:
         self._z_fid = fiducial["z_fiducial"]
         self._Omega_m = fiducial.get("Omega_m", None)
         self._Omega_de = fiducial.get("Omega_de", None)
-        self._hubble = fiducial.get('h', None)
         if not config.getboolean("old_growth_func", False):
             self.xi_growth = self.compute_growth(
                 self._z, self._z_fid, self._Omega_m, self._Omega_de
@@ -147,8 +143,12 @@ class CorrelationFunction:
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
 
-        # Compute additional scaling for differences between catalogue and template cosmology
-        self._compute_data_template_correction()
+        if cosmo is not None:
+            # Compute additional scaling for differences between catalogue and template cosmology
+            self._compute_data_template_correction(cosmo)
+        else:
+            print("Unable to check consistency of"
+                  " cosmology used to compute data")
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -236,13 +236,13 @@ class CorrelationFunction:
 
         return xi, rescaled_r, rescaled_mu
 
-    def _compute_data_template_correction(self):
+    def _compute_data_template_correction(self, cosmo):
         """Automatically compute a scale factor to correct between any difference 
                 between catalogue cosmology (normally picca) and template cosmology"""
 
         # Calculate shifts given the fiducial and catalogue cosmology
-        self._at_dt = self._fiducial['DM'] / self._cosmo.get_dist_m(self._z_fid)
-        self._ap_dt = self._fiducial['DH'] / self._cosmo.get_dist_hubble(self._z_fid)
+        self._at_dt = self._fiducial['DM'] / cosmo.get_dist_m(self._z_fid)
+        self._ap_dt = self._fiducial['DH'] / cosmo.get_dist_hubble(self._z_fid)
 
         _lim = 0.01
         if abs(1 - self._ap_dt) > _lim or abs(1 - self._at_dt) > _lim:

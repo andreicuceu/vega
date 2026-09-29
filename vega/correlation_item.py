@@ -206,10 +206,6 @@ class CorrelationItem:
             verbose=False,
         )
 
-        # define the parameter attributes (a bit hacky)
-        for key in cosmo_params:
-            setattr(self.cosmo, key, cosmo_params[key])
-
     def check_if_blind_corr(self, blind_tracers):
         """Check whether this correlation should be blinded.
 
