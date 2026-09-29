@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 import numpy as np
 from astropy.table import Table
+
 from vega.utils import find_file
 
-'''
+"""
 # DESI specific code used to generate the table
 # of angular coordinates of the fiber positioners
 #
@@ -35,7 +36,7 @@ t["FOCAL_PLANE_Y_DEG"]=yp
 t["PATROL_RADIUS_DEG"]=rpatrol
 t.write("desi-positioners.csv")
 print("wrote desi-positioners.csv")
-'''
+"""
 
 
 def main():
@@ -48,7 +49,7 @@ def main():
     yp = positioner_table["FOCAL_PLANE_Y_DEG"]
     rpatrol = positioner_table["PATROL_RADIUS_DEG"]
 
-    '''
+    """
     # Commented out picca code to avoid dependencies
     # but  kept for reference
 
@@ -60,7 +61,7 @@ def main():
     comoving_distance=cosmo.get_r_comov(Z)
     print("comoving_distance=",comoving_distance)
     # picca: 3941.861037247279 Mpc/h
-    '''
+    """
 
     comoving_distance = 3941.86  # Mpc/h
     print(f"Use a comoving distance of {comoving_distance} Mpc/h to convert angles to distance")
@@ -70,30 +71,32 @@ def main():
     x = np.random.uniform(size=nr) * (np.max(xp + rpatrol))
     y = np.random.uniform(size=nr) * (np.max(yp + rpatrol))
     ok = np.repeat(False, nr)
-    for xxp, yyp, rrp in zip(xp, yp, rpatrol) :
-        ok |= ((x - xxp)**2 + (y - yyp)**2) < rrp**2
+    for xxp, yyp, rrp in zip(xp, yp, rpatrol):
+        ok |= ((x - xxp) ** 2 + (y - yyp) ** 2) < rrp**2
     x = x[ok]
     y = y[ok]
 
     print("Compute correlation...")
-    deg2mpc = comoving_distance * np.pi / 180.
+    deg2mpc = comoving_distance * np.pi / 180.0
     bins = np.linspace(0, 200, 51)
     nbins = bins.size - 1
     h0 = np.zeros(nbins)
     for xx, yy in zip(x, y):
-        d = np.sqrt((xx - x)**2 + (yy - y)**2) * deg2mpc
+        d = np.sqrt((xx - x) ** 2 + (yy - y) ** 2) * deg2mpc
         t, _ = np.histogram(d, bins=bins)
         h0 += t
-    ok = (h0 > 0)
-    rt = (bins[:-1] + (bins[1] - bins[0]) / 2)
+    ok = h0 > 0
+    rt = bins[:-1] + (bins[1] - bins[0]) / 2
     rt = rt[ok]
     xi = h0[ok] / rt  # number of random pairs scales as rt
 
     # add a value at 0, last measured bin + 1 step, and 1000 Mpc to avoid extrapolations
-    xi_at_0 = (xi[0] - xi[1]) / (rt[0] - rt[1]) * (0 - rt[0]) + xi[0]  # linearly extrapolated to r=0
+    xi_at_0 = (xi[0] - xi[1]) / (rt[0] - rt[1]) * (0 - rt[0]) + xi[
+        0
+    ]  # linearly extrapolated to r=0
     rt = np.append(0, rt)
     xi = np.append(xi_at_0, xi)
-    rt = np.append(rt, [rt[-1] + bins[1] - bins[0], 1000.])
+    rt = np.append(rt, [rt[-1] + bins[1] - bins[0], 1000.0])
     xi = np.append(xi, [0, 0])
     xi /= np.max(xi)  # norm
 
@@ -104,7 +107,7 @@ def main():
     t.write(filename, overwrite=True)
     print("wrote ", filename)
 
-    '''
+    """
     # plotting
     import matplotlib.pyplot as plt
 
@@ -129,8 +132,8 @@ def main():
     plt.grid()
 
     plt.show()
-    '''
+    """
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

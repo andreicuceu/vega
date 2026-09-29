@@ -60,33 +60,57 @@ Get Started!
 Ready to contribute? Here's how to set up `Vega` for local development.
 
 1. Fork the `Vega` repo on GitHub.
-2. Clone your fork locally::
+2. Clone your fork locally:
 
-    $ git clone git@github.com:your_name_here/Vega.git
+   .. code-block:: console
 
-3. Install your local copy into a conda environment following the official installation instructions
+       git clone git@github.com:your_name_here/Vega.git
+       cd Vega
 
-4. Create a branch for local development::
+3. Create and activate a dedicated environment, then install Vega and the
+   development tools in editable mode:
 
-    $ git checkout -b name-of-your-bugfix-or-feature
+   .. code-block:: console
+
+       conda create --name vega-dev python=3.13
+       conda activate vega-dev
+       python -m pip install -e '.[dev]'
+
+4. Install the Git hooks and validate the complete source tree:
+
+   .. code-block:: console
+
+       pre-commit install
+       pre-commit run --all-files
+
+   The hooks apply Ruff lint fixes and formatting. Review any modifications
+   before staging them.
+
+5. Create a branch for local development:
+
+   .. code-block:: console
+
+       git switch -c name-of-your-bugfix-or-feature
 
    Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass flake8 and the
-   tests, including testing other Python versions with tox::
+6. Run focused tests while developing. Before committing, run the full local
+   checks:
 
-    $ flake8 Vega tests
-    $ python setup.py test or pytest
+   .. code-block:: console
 
-   To get flake8, just pip install it into your conda environment.
+       python -m pytest
+       pre-commit run --all-files
 
-6. Commit your changes and push your branch to GitHub::
+7. Commit your changes and push your branch to GitHub:
 
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
+   .. code-block:: console
 
-7. Submit a pull request through the GitHub website.
+       git add path/to/changed/files
+       git commit -m "Describe the change"
+       git push -u origin name-of-your-bugfix-or-feature
+
+8. Submit a pull request through the GitHub website.
 
 Pull Request Guidelines
 -----------------------
@@ -97,27 +121,28 @@ Before you submit a pull request, check that it meets these guidelines:
 2. If the pull request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
-3. The pull request should work for Python 3.9 and 3.10, and for PyPy. Check
-   https://travis-ci.com/andreicuceu/Vega/pull_requests
-   and make sure that the tests pass for all supported Python versions.
+3. Confirm that pre-commit and the relevant local tests pass. GitHub Actions
+   runs the full test matrix on Python 3.9--3.13, Ruff checks, and distribution
+   validation.
 
 Tips
 ----
 
 To run a subset of tests::
 
-$ pytest tests.test_vega
+    $ python -m pytest tests/test_vega.py
 
 
 Deploying
 ---------
 
-A reminder for the maintainers on how to deploy.
-Make sure all your changes are committed (including an entry in HISTORY.rst).
-Then run::
+Maintainers publish releases through the manually dispatched ``Release``
+workflow in GitHub Actions. First merge the release changes, including the
+entry in ``HISTORY.rst``, then create and push a stable ``vX.Y.Z`` tag that is
+reachable from ``master``. Run the workflow with that existing tag as its
+``tag`` input.
 
-$ bump2version patch # possible: major / minor / patch
-$ git push
-$ git push --tags
-
-Travis will then deploy to PyPI if tests pass.
+The workflow builds and validates the wheel and source distribution, checks
+their version against the tag, generates ``SHA256SUMS``, and creates the GitHub
+Release. It will not create or move tags, publish to PyPI, or replace an
+existing GitHub Release.
