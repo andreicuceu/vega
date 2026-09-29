@@ -81,6 +81,10 @@ class CorrelationFunction:
         self.z_eff_LYA = None
         self.z_eff_QSO = None
 
+        # Template-data scalings
+        self._at_dt = 1
+        self._at_dt = 1
+
         # Initialize the bias evolution
         self.init_bias_evol(tracer1["type"], tracer2["type"], cosmo)
 
