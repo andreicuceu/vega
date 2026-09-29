@@ -25,7 +25,9 @@ from importlib import metadata
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here.
 sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, os.path.dirname(__file__))
 
+from notebook_headings import normalize_notebook_headings  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 project = "Vega"
@@ -72,6 +74,9 @@ source_suffix = {
 # Change to 'cache' or 'force' if you want Sphinx to execute the notebooks during the build.
 nb_execution_mode = "off"
 
+# These dependencies are needed only by the optional MPI and PolyChord interfaces.
+autodoc_mock_imports = ["mpi4py", "pypolychord"]
+
 
 # -- Options for HTML output -------------------------------------------------
 # The theme to use for HTML and HTML Help pages.
@@ -88,7 +93,12 @@ html_theme_options = {
 }
 
 # Add any paths that contain custom static files (such as style sheets) here.
-html_static_path = ["_static"]
+html_static_path = []
+
+
+def setup(app):
+    """Render linked example notebooks with a valid Markdown heading hierarchy."""
+    app.connect("source-read", normalize_notebook_headings)
 
 
 # -- General configuration ---------------------------------------------

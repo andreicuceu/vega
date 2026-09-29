@@ -78,9 +78,11 @@ History
 1.6.3 (2026-03-11)
 ------------------
 * Added new options for small-scale marginalization:
-    - Option to fit the marginalized bins
-    - Option to marginalize over data bins instead of model bins
-    - Option to fit marginalized parameters at every step of the likelihood instead of marginalizing in the covariance matrix.
+
+  - Option to fit the marginalized bins.
+  - Option to marginalize over data bins instead of model bins.
+  - Option to fit marginalized parameters at every step of the likelihood
+    instead of marginalizing in the covariance matrix.
 
 1.6.2 (2026-03-04)
 ------------------
@@ -142,6 +144,7 @@ History
 ------------------
 * Some updates to MC mocks. Now it is possible to read a previous fit and use it to generate mocks.
 * Updated metal formatrix computation allowing for rt dependecy.
+
 Previous configuration can still be used, as the new one is quite slow to initialize.
 
 1.2.1 (2024-10-14)
@@ -205,10 +208,11 @@ Previous configuration can still be used, as the new one is quite slow to initia
 ------------------
 
 * New metal modelling:
-    - Metal matrices are now computed on the fly in vega
-    - To compute metal matrices vega now requires weights 
-    (delta-attributes file for forests and catalogs for discrete objects)
-    - Backwards compatibility with old metal matrices is maintained
+
+  - Metal matrices are now computed on the fly in Vega.
+  - To compute metal matrices, Vega now requires weights (delta-attributes
+    files for forests and catalogs for discrete objects).
+  - Backwards compatibility with old metal matrices is maintained.
 
 * New Monte-Carlo mock functionality, including a new MPI parallelized script
 * Overhaul of coordinate handling in vega
