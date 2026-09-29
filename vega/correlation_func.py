@@ -242,7 +242,7 @@ class CorrelationFunction:
 
     def _compute_data_template_correction(self, cosmo):
         """Automatically compute a scale factor to correct between any difference 
-                between catalogue cosmology (normally picca) and template cosmology"""
+        between catalogue cosmology (normally picca) and template cosmology"""
 
         # Calculate shifts given the fiducial and catalogue cosmology
         self._at_dt = self._fiducial["DM"] / cosmo.get_dist_m(self._z_fid)
