@@ -241,7 +241,7 @@ class CorrelationFunction:
         return xi, rescaled_r, rescaled_mu
 
     def _compute_data_template_correction(self, cosmo):
-        """Automatically compute a scale factor to correct between any difference 
+        """Automatically compute a scale factor to correct between any difference
         between catalogue cosmology (normally picca) and template cosmology"""
 
         # Calculate shifts given the fiducial and catalogue cosmology
