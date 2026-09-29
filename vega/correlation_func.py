@@ -151,8 +151,7 @@ class CorrelationFunction:
             # Compute additional scaling for differences between catalogue and template cosmology
             self._compute_data_template_correction(cosmo)
         else:
-            print("Unable to check consistency of"
-                  " cosmology used to compute data")
+            print("Unable to check consistency of cosmology used to compute data")
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -232,8 +231,9 @@ class CorrelationFunction:
         )
 
         # Rescale coordinates
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, 
-        ap * self._ap_dt, at * self._at_dt, delta_rp)
+        rescaled_r, rescaled_mu = self._rescale_coords(
+            self._r, self._mu, ap * self._ap_dt, at * self._at_dt, delta_rp
+        )
 
         # Compute correlation function
         xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)
@@ -245,19 +245,19 @@ class CorrelationFunction:
                 between catalogue cosmology (normally picca) and template cosmology"""
 
         # Calculate shifts given the fiducial and catalogue cosmology
-        self._at_dt = self._fiducial['DM'] / cosmo.get_dist_m(self._z_fid)
-        self._ap_dt = self._fiducial['DH'] / cosmo.get_dist_hubble(self._z_fid)
+        self._at_dt = self._fiducial["DM"] / cosmo.get_dist_m(self._z_fid)
+        self._ap_dt = self._fiducial["DH"] / cosmo.get_dist_hubble(self._z_fid)
 
         _lim = 0.01
         if abs(1 - self._ap_dt) > _lim or abs(1 - self._at_dt) > _lim:
-            print('Warning: Catalogue cosmology differs strongly with template cosmology')
+            print("Warning: Catalogue cosmology differs strongly with template cosmology")
 
-        print(f'Applying data-template correction; ap_dt = {self._ap_dt} and at_dt = {self._at_dt}')
+        print(f"Applying data-template correction; ap_dt = {self._ap_dt} and at_dt = {self._at_dt}")
 
         # Extra check if z_eff and z_fid differ by a lot
         _z_diff = abs(self._z_eff - self._z_fid)
         if _z_diff > 0.025:
-            print('Warning: z_eff and z_fid differ by: ', _z_diff)
+            print("Warning: z_eff and z_fid differ by: ", _z_diff)
 
     @staticmethod
     def _rescale_coords(r, mu, ap, at, delta_rp=0.0):
