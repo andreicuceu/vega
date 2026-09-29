@@ -82,7 +82,7 @@ class CorrelationFunction:
         self.z_eff_QSO = None
 
         # Template-data scalings
-        self._at_dt = 1
+        self._ap_dt = 1
         self._at_dt = 1
 
         # Initialize the bias evolution
