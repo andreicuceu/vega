@@ -62,7 +62,7 @@ Vega Modules
 .. autoclass:: vega.plots.wedges.Wedge
    :members:
 
-.. autoclass:: vega.plots.rt_wedge.RtWedge
+.. autoclass:: vega.plots.rt_wedges.RtWedge
    :members:
 
 .. automodule:: vega.plots.utils
@@ -76,4 +76,3 @@ Vega Modules
 
 .. automodule:: vega.parameters.param_utils
    :members:
-

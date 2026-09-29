@@ -35,7 +35,8 @@ dependencies = [
     "matplotlib",
     "mcfit",
     "getdist",
-    "picca"
+    "picca",
+    "GitPython"
 ]
 
 [project.urls]
@@ -49,9 +50,22 @@ Documentation = "https://vega.readthedocs.io"
 mpi = [
     "mpi4py"
 ]
-# Install with: pip install .[samplers]
+# Install with: pip install .[pocomc]
+pocomc = [
+    "pocomc",
+    "mpi4py",
+    "schwimmbad"
+]
+# Backward-compatible alias for the complete PocoMC feature.
 samplers = [
-    "pocomc"
+    "pocomc",
+    "mpi4py",
+    "schwimmbad"
+]
+# Install with: pip install .[templates]
+templates = [
+    "camb",
+    "fitsio"
 ]
 # Install with: pip install .[dev]
 dev = [

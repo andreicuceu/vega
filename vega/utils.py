@@ -54,18 +54,22 @@ def bin_averaged_legendre(mu, ell, dmu):
 
 
 def get_legendre_bins(ells, nmu, x_correlation):
-    """Return mu-bin averaged Legendre multipoles.
-    Args:
-        ells: list(int)
-            List of multipoles
-        nmu: int
-            Number of mu bins
-        x_correlation: bool
-            True if cross-correlations. mu's start from -1.
+    """Return Legendre multipoles integrated over the mu bins.
 
-    Returns:
-        leg_ells: list(np.ndarray)
-            Bin averaged Legendre multipoles. Array of size nmu.
+    Parameters
+    ----------
+    ells : list of int
+        Multipole orders.
+    nmu : int
+        Number of mu bins.
+    x_correlation : bool
+        For a cross-correlation, integrate from mu = -1 to 1; otherwise,
+        integrate from mu = 0 to 1.
+
+    Returns
+    -------
+    list of numpy.ndarray
+        One array of length ``nmu`` per multipole order.
     """
     mu1 = -1.0 if x_correlation else 0.0
     mue = np.linspace(mu1, 1.0, nmu + 1)

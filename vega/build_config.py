@@ -139,15 +139,11 @@ class BuildConfig:
         correlations : dict
             Information for each correlation. It must contain the path to the measured correlation,
             and the path to metal files if metals were requested. Optionally specify scale cuts.
-            List of options:
-                corr_path: string
-                metal_path: string
-                r-min: float, default 10
-                r-max: float, default 180
-                rt-min: float, default 0
-                fast_metals: bool, default False
-                binsize: int, default 4 (deprecated)
-                broadband: broadband string configuration
+            Options include ``corr_path`` (str), ``metal_path`` (str),
+            ``r-min`` (float, default 10), ``r-max`` (float, default 180),
+            ``rt-min`` (float, default 0), ``fast_metals`` (bool, default False),
+            ``binsize`` (int, default 4; deprecated), and ``broadband``
+            (broadband configuration string).
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
             tracers separated by an "x" (e.g. lyaxqso), and different correlations
@@ -155,15 +151,13 @@ class BuildConfig:
             the templates folder to see all possibilities.
         fit_info : dict
             Fit information. Must contain a list of sampled parameters and the effective redshift.
-            List of options:
-                run_sampler: bool, default False
-                bias_beta_config: dict with 'tracer': 'bias_beta', 'bias_eta_beta', 'bias_bias_eta'
-                zeff: float, default None
-                zeff_rmin: float, default 0
-                zeff_rmax: float, default 300
-                sample_params: list or dict with vega setup (par_name: min max start step)
-                priors: dict with vega setup (par_name: 'gaussian mean sigma')
-                Polychord: dict with Polychord setup
+            Options include ``run_sampler`` (bool, default False),
+            ``bias_beta_config`` (mapping tracers to ``bias_beta``,
+            ``bias_eta_beta``, or ``bias_bias_eta``), ``zeff`` (float, default
+            None), ``zeff_rmin`` (float, default 0), ``zeff_rmax`` (float,
+            default 300), ``sample_params`` (list or parameter configuration
+            dict), ``priors`` (parameter prior dict), and ``Polychord``
+            (PolyChord configuration dict).
         out_path : string
             Path to directory where to write the config files
         parameters : dict, optional

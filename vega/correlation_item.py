@@ -229,9 +229,10 @@ class CorrelationItem:
         return False
 
     def get_undist_xi_marg_templates(self):
-        """Calculate undistorted correlation function marginalization templates.
-        Degenerate modes are removed in the (relevant) distorted space in
-            data.get_dist_xi_marg_templates function.
+        """Calculate undistorted correlation-function marginalization templates.
+
+        Degenerate modes are removed in the relevant distorted space by
+        ``Data.get_dist_xi_marg_templates``.
 
         Returns
         -------
