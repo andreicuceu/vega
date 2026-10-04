@@ -2,6 +2,24 @@
 History
 =======
 
+1.7.9 (2026-10-04)
+------------------
+* Added automatic correction for differences between the cosmology used to compute the
+  correlation function from the data (the ``picca`` cosmology) and the fiducial template
+  cosmology. The ratios of the template and catalogue distances, ``DM/D_M(z_fid)`` and
+  ``DH/D_H(z_fid)``, are applied as additional scalings of the Alcock-Paczynski
+  parameters ``at`` and ``ap`` when rescaling the model coordinates. A warning is printed
+  when the two cosmologies differ by more than 1% or when ``z_eff`` and ``z_fid`` differ
+  by more than 0.025.
+* Enabled Ruff linting and formatting across the package and tests (notebooks excluded),
+  aligned the Ruff version between pre-commit and CI, and documented the pre-commit
+  development workflow.
+* Updated the GitHub Actions workflows for Node.js 24 and bumped the pinned actions
+  (``codecov-action``) via Dependabot.
+* Switched to SPDX license metadata (``GPL-3.0-or-later``, PEP 639), requiring
+  ``setuptools>=77.0.3``, and added canonical installation instructions to the README and
+  documentation.
+
 1.7.8 (2026-09-14)
 ------------------
 * Added tested source distributions, pure-Python wheels, and SHA256 checksums to
