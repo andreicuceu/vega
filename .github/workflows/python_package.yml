@@ -8,6 +8,9 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Code Quality (Ruff)
@@ -18,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.11"
+          python-version: "3.14"
           cache: "pip"
           
       - name: Install Ruff
@@ -37,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false # If one Python version fails, let the others finish
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,29 +51,74 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
           
-      - name: Install system dependencies (MPI)
-        # mpi4py requires system-level MPI headers to compile successfully on Ubuntu
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openmpi-bin libopenmpi-dev
-          
       - name: Install Vega and dependencies
         run: |
           python -m pip install --upgrade pip
-          # Installs the package in editable mode with dev and mpi extras
-          pip install -e .[dev,mpi]
-          
+          # Editable install with the dev extra only: the core suite needs no MPI
+          pip install -e '.[dev]'
+
+      - name: Record the resolved dependency versions
+        run: |
+          python -m pip freeze --exclude-editable | tee freeze.txt
+
+      - name: Upload the resolved dependency versions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: freeze-python-${{ matrix.python-version }}
+          path: freeze.txt
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Run tests with pytest
         run: |
           # Generates an XML report for Codecov
           pytest tests/ --cov=vega --cov-report=xml
           
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           verbose: true
+
+  docs:
+    name: Build documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install Vega and documentation dependencies
+        run: python -m pip install -e '.[docs]'
+
+      - name: Record the resolved dependency versions
+        run: |
+          python -m pip freeze --exclude-editable | tee freeze.txt
+
+      - name: Upload the resolved dependency versions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: freeze-docs
+          path: freeze.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build documentation with strict warnings
+        run: |
+          OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python -m sphinx \
+            -W --keep-going -b html docs docs/_build/html
+
+      - name: Check incremental build and documentation pages
+        run: |
+          OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python -m sphinx \
+            -W --keep-going -b html docs docs/_build/html
+          python .github/scripts/validate_documentation.py docs/_build/html
 
   package:
     name: Validate distributions
@@ -82,10 +130,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install packaging tools
@@ -95,8 +143,8 @@ jobs:
 
       - name: Check the distribution validator
         run: |
-          ruff check .github/scripts/validate_distribution.py
-          ruff format --check .github/scripts/validate_distribution.py
+          ruff check .github/scripts
+          ruff format --check .github/scripts
 
       - name: Validate checkout distributions
         run: |
@@ -137,26 +185,79 @@ jobs:
             --expected-version "$EXPECTED_VERSION" \
             --skip-install
 
-      - name: Upload the packaging validation marker
+      - name: Upload the validated checkout wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: packaging-validation-marker
-          path: ${{ runner.temp }}/checkout-version.txt
+          name: vega-checkout-wheel
+          path: ${{ runner.temp }}/checkout-dist/*.whl
           if-no-files-found: error
-          compression-level: 0
           retention-days: 1
 
-  artifact_roundtrip:
-    name: Verify artifact transfer
+  features:
+    name: Wheel feature (${{ matrix.feature }})
+    needs: package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [core, templates, mpi, pocomc]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install OpenMPI for MPI features
+        if: matrix.feature == 'mpi' || matrix.feature == 'pocomc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openmpi-bin libopenmpi-dev
+
+      - name: Download the validated wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: vega-checkout-wheel
+          path: ${{ runner.temp }}/feature-wheel
+
+      - name: Probe the installed feature
+        run: |
+          set -- "$RUNNER_TEMP/feature-wheel"/*.whl
+          test "$#" -eq 1
+          python .github/scripts/validate_feature_extras.py \
+            --source . \
+            --work-dir "$RUNNER_TEMP/feature-${{ matrix.feature }}" \
+            --wheel "$1" \
+            --feature "${{ matrix.feature }}"
+
+  wheel_tests:
+    name: Test installed wheel (Python 3.14)
     needs: package
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download the packaging validation marker
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Download the validated wheel
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: packaging-validation-marker
-          path: ${{ runner.temp }}/packaging-validation
+          name: vega-checkout-wheel
+          path: ${{ runner.temp }}/test-wheel
 
-      - name: Verify the packaging validation marker
-        run: test -s "$RUNNER_TEMP/packaging-validation/checkout-version.txt"
+      - name: Run the test suite against the installed wheel
+        run: |
+          set -- "$RUNNER_TEMP/test-wheel"/*.whl
+          test "$#" -eq 1
+          python .github/scripts/run_installed_tests.py \
+            --source . \
+            --work-dir "$RUNNER_TEMP/installed-tests" \
+            --wheel "$1"

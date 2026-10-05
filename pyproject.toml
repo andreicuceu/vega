@@ -12,30 +12,36 @@ license-files = ["LICENSE"]
 authors = [
     {name = "Andrei Cuceu", email = "andreicuceu@gmail.com"}
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
+# Lower bounds are listed only where Vega's own code needs them; see "Dependency policy" in
+# CONTRIBUTING.rst. The CI test matrix installs the newest releases of every dependency.
 dependencies = [
     "numpy",
+    # scipy.sparse.block_array and eye_array (vega/vega_interface.py) require scipy 1.12.
     "scipy>=1.12.0",
     "astropy",
     "numba",
     "h5py",
+    # Minuit(..., name=[...]) (vega/minimizer.py) requires the iminuit 2.0 interface.
     "iminuit>=2.0.0",
     "cachetools",
     "matplotlib",
     "mcfit",
     "getdist",
-    "picca"
+    # Only picca.constants is used. picca 9.21.1 is the first release supporting Python 3.14
+    # and requires scipy>=1.16.1 and iminuit>=2.26.0, which exceed the bounds above.
+    "picca",
+    "GitPython"
 ]
 
 [project.urls]
@@ -49,9 +55,22 @@ Documentation = "https://vega.readthedocs.io"
 mpi = [
     "mpi4py"
 ]
-# Install with: pip install .[samplers]
+# Install with: pip install .[pocomc]
+pocomc = [
+    "pocomc",
+    "mpi4py",
+    "schwimmbad"
+]
+# Backward-compatible alias for the complete PocoMC feature.
 samplers = [
-    "pocomc"
+    "pocomc",
+    "mpi4py",
+    "schwimmbad"
+]
+# Install with: pip install .[templates]
+templates = [
+    "camb",
+    "fitsio"
 ]
 # Install with: pip install .[dev]
 dev = [
@@ -60,7 +79,6 @@ dev = [
     "pytest-cov",
     "ruff",
     "pre-commit",
-    "tox",
     "twine>=5.0"
 ]
 # Install with: pip install .[docs]
@@ -94,7 +112,7 @@ script-files = [
 # Modern, blazing fast linter and formatter (Replaces flake8, isort, black)
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py311"
 extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
@@ -105,7 +123,9 @@ select = [
     "I",  # isort
     "B",  # flake8-bugbear
 ]
-ignore = []
+ignore = [
+    "B905",  # zip() strict= (Python >= 3.10): existing calls rely on truncating zip
+]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

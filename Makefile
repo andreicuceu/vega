@@ -42,36 +42,25 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '__pycache__' -exec rm -fr {} +
 
 clean-test: ## remove test and coverage artifacts
-	rm -fr .tox/
 	rm -f .coverage
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
-lint: ## check style with flake8
-	flake8 vega tests
+lint: ## check formatting and style with Ruff, as in CI
+	ruff format --check .
+	ruff check .
 
-test: ## run tests quickly with the default Python
+test: ## run tests with the default Python (coverage options come from pyproject.toml)
 	pytest
 
-test-all: ## run tests on every Python version with tox
-	tox
-
-coverage: ## check code coverage quickly with the default Python
-	coverage run --source vega -m pytest
-	coverage report -m
-	coverage html
+coverage: ## run tests and write an HTML coverage report
+	pytest --cov-report=html
 	$(BROWSER) htmlcov/index.html
 
-docs: ## generate Sphinx HTML documentation, including API docs
-	rm -f docs/vega.rst
-	rm -f docs/modules.rst
-	sphinx-apidoc -o docs/ vega
-	$(MAKE) -C docs clean
-	$(MAKE) -C docs html
+docs: ## build the Sphinx HTML documentation with warnings as errors, as in CI
+	OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python -m sphinx \
+		-W --keep-going -b html docs docs/_build/html
 	$(BROWSER) docs/_build/html/index.html
-
-servedocs: docs ## compile the docs watching for changes
-	watchmedo shell-command -p '*.rst' -c '$(MAKE) -C docs html' -R -D .
 
 dist: clean-build ## build and validate the source and wheel distributions
 	python -m build

@@ -24,11 +24,13 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 Installation
 ------------
 
-We recommend to start by creating a fresh conda environment:
+Vega requires Python 3.11 or newer and is tested on Python 3.11--3.14.
+We recommend to start by creating a fresh conda environment, preferably with the
+latest supported Python version:
 
 .. code-block:: console
 
-    conda create --name vega python=3.13
+    conda create --name vega python=3.14
     conda activate vega
 
 For a stable release, download the wheel and ``SHA256SUMS`` from the `GitHub
@@ -46,6 +48,44 @@ from source, download the source distribution from the same release and run:
 
     sha256sum --check SHA256SUMS --ignore-missing
     python -m pip install ./vega-X.Y.Z.tar.gz
+
+Install optional dependencies for the part of Vega you use. Append the extra
+to the verified wheel path, for example
+``python -m pip install './vega-X.Y.Z-py3-none-any.whl[templates]'``. For an
+editable checkout, use ``python -m pip install -e '.[templates]'``.
+
+.. list-table:: Optional installation features
+   :header-rows: 1
+   :widths: 18 25 57
+
+   * - Extra
+     - Dependencies
+     - Use
+   * - ``[mpi]``
+     - ``mpi4py``
+     - MPI command-line scripts and the PolyChord sampler interface. An MPI
+       implementation must also be installed outside Python.
+   * - ``[pocomc]``
+     - ``pocomc``, ``mpi4py``, ``schwimmbad``
+     - PocoMC sampling, including its MPI pool. The sampler interface imports
+       ``mpi4py`` even when ``use_mpi = False``. ``[samplers]`` is an identical
+       compatibility alias.
+   * - ``[templates]``
+     - ``camb``, ``fitsio``
+     - ``make_template.py`` and its CAMB power-spectrum templates.
+   * - ``[docs]``
+     - Sphinx documentation tools
+     - Build the documentation.
+
+The ``[dev]`` extra supplies tests and development tools; it does not include
+these optional runtime features. PolyChord requires a separate installation
+of PolyChordLite and its ``pypolychord`` bindings; see the `PolyChord installation
+instructions`_.
+
+The DESI instrumental-systematics table generator in
+``vega/models/instrumental_systematics/write_desi_instrumental_syst_table.py``
+is a maintainer utility, not part of the standard installation features. It
+requires ``desimeter``, ``desimodel``, and the corresponding DESI data files.
 
 For development, clone the public repository and install it in editable mode
 with the development dependencies:
@@ -74,6 +114,7 @@ that contain ``.git_archival.txt`` can recover their version without a
 canonical installation inputs.
 
 .. _GitHub Releases: https://github.com/andreicuceu/Vega/releases
+.. _PolyChord installation instructions: https://github.com/andreicuceu/Vega#installing-polychord
 
 .. docs-install-end
 
@@ -83,13 +124,17 @@ If you are at NERSC and want your vega environment to show up as Jupyter kernel,
 
     python -m ipykernel install --user --name vega --display-name Vega
 
-The sampler and a few other modules in Vega need mpi4py. If you are at NERSC, you should install this using the NERSC-specific command:
+.. docs-polychord-start
+
+The MPI and PocoMC features need an MPI implementation as well as ``mpi4py``.
+At NERSC, build ``mpi4py`` against the available MPI wrappers when needed:
 
 .. code-block:: console
 
     MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 
-Vega currently has interfaces for one sampler: `Polychord`_. You do not need to install it to run the iminuit minimizer. You can find the instructions for installing at NERSC Polychord below.
+Vega has interfaces for PolyChord and PocoMC. Neither is needed for the
+``iminuit`` minimizer. The PolyChord installation procedure at NERSC follows.
 
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
@@ -127,11 +172,11 @@ After that, you can install PolyChord:
     make COMPILER_TYPE=gnu
     python -m pip install .
 
-You can test if PolyChord works by running the test script on an interactive node:
+Check the bindings on an interactive compute node after installation:
 
 .. code-block:: console
 
-    srun -n 2 python run_pypolychord.py
+    python -c 'import pypolychord; from pypolychord.settings import PolyChordSettings'
 
 Finally, you should add this line to your :code:`.bashrc` file, or at the beginning of your scripts (make sure to replace it with the correct path to your version of PolyChord):
 
@@ -139,7 +184,7 @@ Finally, you should add this line to your :code:`.bashrc` file, or at the beginn
 
     export LD_LIBRARY_PATH=/path/to/PolyChordLite/lib:${LD_LIBRARY_PATH}
 
-.. _Polychord: https://github.com/PolyChord/PolyChordLite
+.. docs-polychord-end
 
 .. Installing PocoMC
 .. -----------------

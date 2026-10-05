@@ -2,6 +2,33 @@
 History
 =======
 
+1.7.10 (2026-10-04)
+-------------------
+* Raised the minimum supported Python version to 3.11 (3.9 and 3.10 are no longer supported
+  or tested) and added Python 3.14. The CI matrix covers Python 3.11--3.14, and Python 3.14
+  is the default version for linting, documentation, distribution validation, and releases.
+* Declared every directly imported dependency: ``GitPython`` is now a core dependency
+  (required by ``BuildConfig``). Added the ``[pocomc]`` extra (``pocomc``, ``mpi4py``,
+  ``schwimmbad``), with ``[samplers]`` kept as an identical alias, and the ``[templates]``
+  extra (``camb``, ``fitsio``) for ``make_template.py``. The README documents each extra.
+* The Sphinx documentation now builds without warnings: the tutorial notebooks are
+  rendered, broken API references and malformed docstrings were fixed, and optional
+  sampler dependencies are mocked. The PolyChord installation instructions, including
+  the NERSC ``mpi4py`` build, are included in the documentation.
+* Added CI jobs that build the documentation with warnings treated as errors, install the
+  exact validated wheel with each optional extra in a clean environment and probe its
+  imports and scripts, and run the test suite against the installed wheel from outside
+  the source tree.
+* The ordinary CI test matrix no longer installs MPI or the ``mpi`` extra. The CI workflow
+  has an explicit read-only token, every action (including Codecov) is pinned to a commit
+  SHA, and the redundant artifact-transfer job was removed.
+* Aligned the ``Makefile`` targets with CI (Ruff, strict Sphinx build, pytest coverage),
+  removed the unused ``tox`` and ``servedocs`` targets, and stopped ``make docs`` from
+  deleting ``docs/modules.rst``.
+* Documented the reason for each dependency lower bound and added a dependency policy to
+  ``CONTRIBUTING.rst``. Test and documentation CI jobs upload their resolved package
+  versions as ``freeze-*`` artifacts.
+
 1.7.9 (2026-10-04)
 ------------------
 * Added automatic correction for differences between the cosmology used to compute the
@@ -96,9 +123,11 @@ History
 1.6.3 (2026-03-11)
 ------------------
 * Added new options for small-scale marginalization:
-    - Option to fit the marginalized bins
-    - Option to marginalize over data bins instead of model bins
-    - Option to fit marginalized parameters at every step of the likelihood instead of marginalizing in the covariance matrix.
+
+  - Option to fit the marginalized bins.
+  - Option to marginalize over data bins instead of model bins.
+  - Option to fit marginalized parameters at every step of the likelihood
+    instead of marginalizing in the covariance matrix.
 
 1.6.2 (2026-03-04)
 ------------------
@@ -160,6 +189,7 @@ History
 ------------------
 * Some updates to MC mocks. Now it is possible to read a previous fit and use it to generate mocks.
 * Updated metal formatrix computation allowing for rt dependecy.
+
 Previous configuration can still be used, as the new one is quite slow to initialize.
 
 1.2.1 (2024-10-14)
@@ -223,10 +253,11 @@ Previous configuration can still be used, as the new one is quite slow to initia
 ------------------
 
 * New metal modelling:
-    - Metal matrices are now computed on the fly in vega
-    - To compute metal matrices vega now requires weights 
-    (delta-attributes file for forests and catalogs for discrete objects)
-    - Backwards compatibility with old metal matrices is maintained
+
+  - Metal matrices are now computed on the fly in Vega.
+  - To compute metal matrices, Vega now requires weights (delta-attributes
+    files for forests and catalogs for discrete objects).
+  - Backwards compatibility with old metal matrices is maintained.
 
 * New Monte-Carlo mock functionality, including a new MPI parallelized script
 * Overhaul of coordinate handling in vega
