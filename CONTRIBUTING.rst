@@ -133,6 +133,30 @@ To run a subset of tests::
     $ python -m pytest tests/test_vega.py
 
 
+Dependency policy
+-----------------
+
+Vega declares its runtime dependencies without upper bounds. A lower bound appears
+only where Vega's own code needs a newer interface, and ``pyproject.toml`` records
+the reason next to each one (``scipy>=1.12.0`` for ``scipy.sparse.block_array`` and
+``eye_array``; ``iminuit>=2.0.0`` for the ``Minuit(..., name=...)`` interface).
+Because ``picca`` is a core dependency, a normal installation already resolves to
+the higher floors required by ``picca`` itself (currently ``scipy>=1.16.1`` and
+``iminuit>=2.26.0``). Vega does not promise support for older environments.
+
+The CI test matrix installs the newest release of every dependency, so it is the
+latest-dependencies check. Each test and documentation job uploads the exact
+resolved versions as a ``freeze-python-<version>`` or ``freeze-docs`` artifact,
+kept for 30 days. To reconstruct the environment of a CI run while investigating a
+numerical change, download the artifact and install with:
+
+.. code-block:: console
+
+    python -m pip install -c freeze.txt -e '.[dev]'
+
+Changes to a dependency lower bound should be accompanied by a comment in
+``pyproject.toml`` giving the interface that requires it.
+
 Deploying
 ---------
 

@@ -9,6 +9,14 @@ History
   is the default version for linting, documentation, distribution validation, and releases.
 * Added a CI job that installs the exact validated wheel in a clean environment and runs the
   test suite from outside the source tree.
+* The ordinary CI test matrix no longer installs MPI or the ``mpi`` extra. The CI workflow
+  has an explicit read-only token and its Codecov action is pinned to a commit SHA.
+* Aligned the ``Makefile`` targets with CI (Ruff, strict Sphinx build, pytest coverage),
+  removed the unused ``tox`` and ``servedocs`` targets, and stopped ``make docs`` from
+  deleting ``docs/modules.rst``.
+* Documented the reason for each dependency lower bound and added a dependency policy to
+  ``CONTRIBUTING.rst``. Test and documentation CI jobs upload their resolved package
+  versions as ``freeze-*`` artifacts.
 
 1.7.9 (2026-10-04)
 ------------------

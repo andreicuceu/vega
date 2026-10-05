@@ -164,3 +164,34 @@ def test_supported_python_versions_are_consistent():
         text = (SOURCE / path).read_text(encoding="utf-8")
         pinned_versions.update(re.findall(r"python=(3\.\d+)", text))
     assert pinned_versions == {default}
+
+
+def test_makefile_targets_match_documented_tooling():
+    """Keep local developer commands on the tools that CI and the extras declare."""
+    makefile = (SOURCE / "Makefile").read_text(encoding="utf-8")
+    targets = set(re.findall(r"^([a-zA-Z_-]+):", makefile, flags=re.MULTILINE))
+    for obsolete in ("flake8", "tox", "watchmedo", "sphinx-apidoc"):
+        assert obsolete not in makefile, obsolete
+    assert not {"test-all", "servedocs"} & targets
+
+    documentation = "\n".join(
+        (SOURCE / name).read_text(encoding="utf-8")
+        for name in ("README.rst", "CONTRIBUTING.rst", "docs/install.rst")
+    )
+    # Only inline literals such as ``make lint``; PolyChord's own build steps also use make.
+    for target in re.findall(r"``make\s+([a-zA-Z_-]+)``", documentation):
+        assert target in targets, target
+
+
+def test_workflow_actions_are_pinned_and_token_is_read_only():
+    """Require immutable third-party actions and an explicit read-only default token."""
+    workflows = sorted((SOURCE / ".github" / "workflows").glob("*.yml"))
+    assert workflows
+    for workflow in workflows:
+        text = workflow.read_text(encoding="utf-8")
+        for action in re.findall(r"^\s*(?:-\s+)?uses:\s*(\S+)", text, flags=re.MULTILINE):
+            assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action), (workflow.name, action)
+        top_level = re.search(
+            r"^permissions:\s*\n\s+contents:\s*read\s*$", text, flags=re.MULTILINE
+        )
+        assert top_level, workflow.name

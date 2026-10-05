@@ -23,17 +23,23 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
+# Lower bounds are listed only where Vega's own code needs them; see "Dependency policy" in
+# CONTRIBUTING.rst. The CI test matrix installs the newest releases of every dependency.
 dependencies = [
     "numpy",
+    # scipy.sparse.block_array and eye_array (vega/vega_interface.py) require scipy 1.12.
     "scipy>=1.12.0",
     "astropy",
     "numba",
     "h5py",
+    # Minuit(..., name=[...]) (vega/minimizer.py) requires the iminuit 2.0 interface.
     "iminuit>=2.0.0",
     "cachetools",
     "matplotlib",
     "mcfit",
     "getdist",
+    # Only picca.constants is used. picca 9.21.1 is the first release supporting Python 3.14
+    # and requires scipy>=1.16.1 and iminuit>=2.26.0, which exceed the bounds above.
     "picca",
     "GitPython"
 ]
@@ -73,7 +79,6 @@ dev = [
     "pytest-cov",
     "ruff",
     "pre-commit",
-    "tox",
     "twine>=5.0"
 ]
 # Install with: pip install .[docs]

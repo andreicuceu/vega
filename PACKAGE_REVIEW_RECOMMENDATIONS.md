@@ -136,18 +136,9 @@ calls rely on truncation.
 
 ### 6. Separate core tests from MPI tests
 
-**Priority: medium.** Every Python matrix job installs OpenMPI and `mpi4py`, although
-most tests exercise non-MPI numerical code. This increases runtime and can hide an
-accidental core dependency on MPI. On the NERSC login node, the local test run passed
-but emitted repeated MUNGE diagnostics after pytest, illustrating the side effects of
-initializing the MPI stack outside an allocation.
-
-Run the ordinary Python-version matrix without the MPI extra. Add one dedicated MPI
-job that installs OpenMPI plus `.[mpi]` and executes a bounded `mpiexec` smoke or
-integration test for the MPI entry points.
-
-**Completion criterion:** core imports and tests pass without MPI installed, while a
-separate job verifies the intended parallel path.
+**Status: partly done.** The ordinary Python matrix installs `.[dev]` without OpenMPI
+or `mpi4py`; the `features` job still installs OpenMPI for the `mpi` and `pocomc` probes.
+The dedicated bounded `mpiexec` smoke job is still open.
 
 ### 7. Replace legacy script installation with console entry points
 
@@ -170,39 +161,16 @@ a clean wheel environment.
 
 ### 8. Make local developer commands agree with CI
 
-**Priority: medium.** Several `Makefile` targets no longer describe the declared tool
-configuration:
-
-- `make lint` runs undeclared `flake8`, whereas CI uses Ruff;
-- `make test-all` runs `tox`, and the development extra installs it, but there is no
-  `tox.ini` or `tool.tox` configuration;
-- `make servedocs` requires undeclared `watchmedo`;
-- `make docs` regenerates API files before building, unlike the documented
-  `make -C docs html` route.
-
-Update these targets to call the same Ruff, pytest, build, and strict Sphinx commands
-as CI. Either add and maintain a useful tox configuration or remove tox and the
-nonfunctional target. Declare any retained documentation-watcher dependency.
-
-**Completion criterion:** every command advertised by `make help`, `README.rst`,
-`CONTRIBUTING.rst`, and `AGENTS.md` works after its documented installation command and
-matches a CI check.
+**Status: done.** `make lint` runs Ruff format and lint checks, `make docs` runs the
+strict Sphinx build used by CI (and no longer deletes `docs/modules.rst`), `make coverage`
+uses pytest, and `tox` and the `servedocs` target were removed. Tests guard against the
+obsolete tools returning.
 
 ### 9. Finish CI hardening
 
-**Priority: medium.** Most actions are SHA-pinned, but `codecov/codecov-action@v6` is
-still tag-pinned. The main CI workflow also lacks an explicit least-privilege
-`permissions` block.
-
-- Pin Codecov to a reviewed complete commit SHA, retaining the version comment used for
-  the other actions.
-- Add top-level `permissions: contents: read` to the CI workflow and grant narrower job
-  permissions only if a future step needs them.
-- Keep Dependabot enabled for action SHA updates and review the resolved commits before
-  merging.
-
-**Completion criterion:** every third-party action is immutable at workflow execution,
-and the default workflow token has explicit read-only permissions.
+**Status: done.** Codecov is pinned to the `v7.1.1` commit and `python_package.yml`
+declares top-level `permissions: contents: read`. A test requires every workflow action
+to be a full commit SHA.
 
 ### 10. Correct coverage configuration and establish a useful regression floor
 
@@ -225,22 +193,11 @@ fails CI, and new scientific behavior is accompanied by focused regression tests
 
 ### 11. Define and test the dependency-compatibility policy
 
-**Priority: lower.** Most runtime and documentation dependencies have no minimum or
-upper compatibility bounds, while only SciPy and iminuit have explicit floors. Broad
-ranges are reasonable for a library, but the supported range should be empirical.
-
-- Record why each nontrivial lower bound is needed, especially for `scipy`, `iminuit`,
-  and `picca` APIs.
-- Keep a latest-dependencies CI path to detect ecosystem changes, and add a
-  minimum-supported-dependencies check if old environments are part of the support
-  contract.
-- Use a constraints file for reproducible CI or documentation deployments when exact
-  reconstruction matters; do not unnecessarily pin normal runtime requirements.
-- Consider monthly Dependabot monitoring for Python development and documentation
-  dependencies, with numerical changes reviewed rather than auto-merged.
-
-**Completion criterion:** claimed dependency ranges are tested, and a CI or docs
-environment can be reconstructed when investigating a regression.
+**Status: done.** Each lower bound is documented in `pyproject.toml`, and
+`CONTRIBUTING.rst` has a dependency policy: latest-dependencies CI through the unpinned
+matrix, no older-environment support, and `freeze-*` artifacts for reconstructing a CI
+environment with `pip install -c freeze.txt`. No minimum-dependency job or committed
+constraints file was added, so Dependabot has nothing to monitor for Python dependencies.
 
 ### 12. Complete documentation and repository metadata cleanup
 
