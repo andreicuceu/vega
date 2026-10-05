@@ -124,6 +124,8 @@ If you are at NERSC and want your vega environment to show up as Jupyter kernel,
 
     python -m ipykernel install --user --name vega --display-name Vega
 
+.. docs-polychord-start
+
 The MPI and PocoMC features need an MPI implementation as well as ``mpi4py``.
 At NERSC, build ``mpi4py`` against the available MPI wrappers when needed:
 
@@ -133,8 +135,6 @@ At NERSC, build ``mpi4py`` against the available MPI wrappers when needed:
 
 Vega has interfaces for PolyChord and PocoMC. Neither is needed for the
 ``iminuit`` minimizer. The PolyChord installation procedure at NERSC follows.
-
-.. docs-polychord-start
 
 .. _Polychord: https://github.com/PolyChord/PolyChordLite
 
