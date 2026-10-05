@@ -2,6 +2,7 @@
 
 import ast
 import re
+import tomllib
 from importlib.metadata import distribution
 from pathlib import Path
 
@@ -121,3 +122,45 @@ def test_package_and_installed_script_import_inventory():
                     continue
                 assert root in CORE_IMPORTS, (relative, root)
                 assert CORE_IMPORTS[root] in requirements["core"], (relative, root)
+
+
+def test_supported_python_versions_are_consistent():
+    """Require metadata, Ruff, CI, and documentation to name the same Python releases."""
+    pyproject = tomllib.loads((SOURCE / "pyproject.toml").read_text(encoding="utf-8"))
+    floor = re.fullmatch(r">=3\.(\d+)", pyproject["project"]["requires-python"])
+    assert floor, pyproject["project"]["requires-python"]
+    minor_floor = int(floor.group(1))
+
+    classifier_prefix = "Programming Language :: Python :: 3."
+    classifier_minors = sorted(
+        int(name.removeprefix(classifier_prefix))
+        for name in pyproject["project"]["classifiers"]
+        if name.startswith(classifier_prefix)
+    )
+    supported_minors = list(range(minor_floor, classifier_minors[-1] + 1))
+    assert classifier_minors == supported_minors
+
+    # Ruff must not target a release older than the oldest supported one.
+    assert pyproject["tool"]["ruff"]["target-version"] == f"py3{minor_floor}"
+
+    # The editable test matrix covers exactly the supported releases.
+    workflow = (SOURCE / ".github" / "workflows" / "python_package.yml").read_text(encoding="utf-8")
+    matrix = re.search(r"python-version:\s*\[([^\]]*)\]", workflow)
+    assert matrix
+    matrix_minors = [int(item.split(".")[1]) for item in re.findall(r"3\.\d+", matrix.group(1))]
+    assert matrix_minors == supported_minors
+
+    # Every single-version job, the release workflow, the documentation build, and the
+    # installation examples use the newest supported release.
+    default = f"3.{supported_minors[-1]}"
+    pinned_versions = set()
+    for path in (".github/workflows/python_package.yml", ".github/workflows/release.yml"):
+        text = (SOURCE / path).read_text(encoding="utf-8")
+        pinned_versions.update(re.findall(r'python-version:\s*"(3\.\d+)"', text))
+    pinned_versions.update(
+        re.findall(r'python:\s*"(3\.\d+)"', (SOURCE / ".readthedocs.yaml").read_text())
+    )
+    for path in ("README.rst", "CONTRIBUTING.rst"):
+        text = (SOURCE / path).read_text(encoding="utf-8")
+        pinned_versions.update(re.findall(r"python=(3\.\d+)", text))
+    assert pinned_versions == {default}

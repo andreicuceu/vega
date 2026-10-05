@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.11"
+          python-version: "3.14"
           cache: "pip"
           
       - name: Install Ruff
@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false # If one Python version fails, let the others finish
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -79,10 +79,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install Vega and documentation dependencies
@@ -109,10 +109,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install packaging tools
@@ -122,8 +122,8 @@ jobs:
 
       - name: Check the distribution validator
         run: |
-          ruff check .github/scripts/validate_distribution.py
-          ruff format --check .github/scripts/validate_distribution.py
+          ruff check .github/scripts
+          ruff format --check .github/scripts
 
       - name: Validate checkout distributions
         run: |
@@ -193,10 +193,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install OpenMPI for MPI features
@@ -220,6 +220,35 @@ jobs:
             --work-dir "$RUNNER_TEMP/feature-${{ matrix.feature }}" \
             --wheel "$1" \
             --feature "${{ matrix.feature }}"
+
+  wheel_tests:
+    name: Test installed wheel (Python 3.14)
+    needs: package
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Download the validated wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: vega-checkout-wheel
+          path: ${{ runner.temp }}/test-wheel
+
+      - name: Run the test suite against the installed wheel
+        run: |
+          set -- "$RUNNER_TEMP/test-wheel"/*.whl
+          test "$#" -eq 1
+          python .github/scripts/run_installed_tests.py \
+            --source . \
+            --work-dir "$RUNNER_TEMP/installed-tests" \
+            --wheel "$1"
 
   artifact_roundtrip:
     name: Verify artifact transfer

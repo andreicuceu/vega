@@ -2,6 +2,14 @@
 History
 =======
 
+1.7.10 (unreleased)
+-------------------
+* Raised the minimum supported Python version to 3.11 (3.9 and 3.10 are no longer supported
+  or tested) and added Python 3.14. The CI matrix covers Python 3.11--3.14, and Python 3.14
+  is the default version for linting, documentation, distribution validation, and releases.
+* Added a CI job that installs the exact validated wheel in a clean environment and runs the
+  test suite from outside the source tree.
+
 1.7.9 (2026-10-04)
 ------------------
 * Added automatic correction for differences between the cosmology used to compute the

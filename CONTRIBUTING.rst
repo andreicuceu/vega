@@ -72,7 +72,7 @@ Ready to contribute? Here's how to set up `Vega` for local development.
 
    .. code-block:: console
 
-       conda create --name vega-dev python=3.13
+       conda create --name vega-dev python=3.14
        conda activate vega-dev
        python -m pip install -e '.[dev]'
 
@@ -122,7 +122,7 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
 3. Confirm that pre-commit and the relevant local tests pass. GitHub Actions
-   runs the full test matrix on Python 3.9--3.13, Ruff checks, and distribution
+   runs the full test matrix on Python 3.11--3.14, Ruff checks, and distribution
    validation.
 
 Tips

@@ -119,33 +119,20 @@ tutorial entry resolves to a rendered page or an intentional external link.
 
 ### 4. Test an installed wheel with pytest, not only with import probes
 
-**Priority: medium.** The distribution validator provides a strong clean-install
-probe, but the Python matrix still runs the scientific tests against an editable
-checkout. At least one job should install the wheel and run tests from outside the
-source tree. This catches missing modules, resources, or accidental imports from the
-checkout that a symbol probe may not exercise.
-
-Keep the editable matrix for rapid compatibility checks, and add one wheel-test job or
-convert one supported Python version to a wheel-first test. Ensure the working
-directory and `PYTHONPATH` cannot expose the checkout.
-
-**Completion criterion:** the full or a representative scientific test set passes
-against the exact wheel built by CI from an isolated directory.
+**Status: done.** The `wheel_tests` CI job installs the exact wheel built by the `package`
+job into a clean Python 3.14 environment and runs the test suite from a staged copy of
+`tests/` outside the checkout (`.github/scripts/run_installed_tests.py`). It asserts that
+`vega` is imported from site-packages. Tests that inspect the source tree are skipped there
+through `tests/conftest.py`; the editable Python 3.11--3.14 matrix is unchanged.
 
 ### 5. Update the supported Python-version policy
 
-**Priority: medium.** `requires-python`, classifiers, Ruff, CI, and contributor text
-still claim Python 3.9--3.13. Python 3.9 reached end of life on 2025-10-31, while Python
-3.14 is a supported bugfix release.
-
-- Unless an active analysis environment still requires 3.9, raise the floor to at
-  least 3.10 and remove its classifier and CI job.
-- Add Python 3.14 after verifying the scientific dependency stack and tests.
-- Keep `requires-python`, classifiers, Ruff's target, CI, README examples, and
-  contributor guidance synchronized.
-
-**Completion criterion:** metadata and CI describe the same, deliberately selected set
-of supported Python releases.
+**Status: done.** Python 3.11--3.14 is supported: `requires-python = ">=3.11"`, classifiers,
+Ruff's `py311` target, the CI matrix, and the README/CONTRIBUTING examples agree
+(`tests/test_package_metadata.py::test_supported_python_versions_are_consistent` enforces
+this). Python 3.14 is the default for the lint, documentation, packaging, feature and
+release jobs and for Read the Docs. Ruff rule B905 is ignored because the existing `zip()`
+calls rely on truncation.
 
 ### 6. Separate core tests from MPI tests
 

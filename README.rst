@@ -24,11 +24,13 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 Installation
 ------------
 
-We recommend to start by creating a fresh conda environment:
+Vega requires Python 3.11 or newer and is tested on Python 3.11--3.14.
+We recommend to start by creating a fresh conda environment, preferably with the
+latest supported Python version:
 
 .. code-block:: console
 
-    conda create --name vega python=3.13
+    conda create --name vega python=3.14
     conda activate vega
 
 For a stable release, download the wheel and ``SHA256SUMS`` from the `GitHub
