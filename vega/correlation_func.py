@@ -147,7 +147,10 @@ class CorrelationFunction:
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
 
-        if cosmo is not None:
+        apply_data_template_correction = self._config.getboolean(
+            "apply-data-template-correction", False
+        )
+        if cosmo is not None and apply_data_template_correction:
             # Compute additional scaling for differences between catalogue and template cosmology
             self._compute_data_template_correction(cosmo)
         else:
