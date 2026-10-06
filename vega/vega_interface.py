@@ -19,7 +19,7 @@ from vega.plots.plot import VegaPlots
 from vega.postprocess.fit_results import FitResults
 from vega.scale_parameters import ScaleParameters
 
-from . import correlation_item, data, utils
+from . import correlation_item, data, interface_utils, utils
 
 
 class VegaInterface:
@@ -117,9 +117,12 @@ class VegaInterface:
             self.fiducial["per_sigma_smooth"] = self.params["per_sigma_smooth"]
 
         # Propagate z_eff to each component so that direct-multipoles components
-        # can build their model coordinate z_grid.
+        # can build their model coordinate z_grid. The parameter values are also propagated:
+        # the new-metal matrices are built at initialization using the [parameters] values of
+        # the amplitude exponents (alpha_<tracer>, alpha_<metal>).
         for corr_item in self.corr_items.values():
             corr_item.z_eff = self.fiducial["z_eff"]
+            corr_item.parameters = self.params
 
         # Check if all correlations have data files
         self.data = {}
@@ -183,6 +186,10 @@ class VegaInterface:
         if global_cov_file is not None and global_cov_file:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
+
+        # Refuse model options that are inconsistent with the sampled/scanned parameters
+        if self._has_data:
+            interface_utils.check_metal_model_options(self)
 
         # Initialize the minimizer and the analysis objects
         if not self.sample_params["limits"]:
@@ -531,12 +538,29 @@ class VegaInterface:
                 fiducial_model[name] = fiducial_model[name][self.data[name].data_mask]
         else:
             use_full_pk = self.main_config["control"].getboolean("use_full_pk_for_mc", False)
-            if use_full_pk:
-                fiducial_model = self.compute_model(
-                    mc_params, run_init=False, direct_pk=self.fiducial["pk_full"]
+
+            # The metal matrices of the estimator convention are built at initialization from
+            # the [parameters] exponents. If the MC input uses other exponents, the mock input
+            # model needs matrices built with them, while the fits to the mocks keep the
+            # [parameters] matrices. The temporary models exist only for this computation.
+            original_models = self.models
+            try:
+                mc_models = interface_utils.build_models_for_mc_exponents(
+                    self, mc_params, print_func
                 )
-            else:
-                fiducial_model = self.compute_model(mc_params, run_init=False)
+                if mc_models is not None:
+                    self.models = mc_models
+
+                if use_full_pk:
+                    fiducial_model = self.compute_model(
+                        mc_params, run_init=False, direct_pk=self.fiducial["pk_full"]
+                    )
+                else:
+                    fiducial_model = self.compute_model(mc_params, run_init=False)
+            finally:
+                self.models = original_models
+                for corr_item in self.corr_items.values():
+                    corr_item.parameters = self.params
 
             for name in self.corr_items.keys():
                 fiducial_model[name] = fiducial_model[name][self.data[name].model_mask]
@@ -624,9 +648,6 @@ class VegaInterface:
         if self.minimizer is None:
             print("No sampled parameters. Skipping minimization.")
             return
-
-        # if not self.fiducial['save-components']:
-        # self.set_fast_metals()
 
         self.minimizer.minimize()
 
@@ -722,15 +743,6 @@ class VegaInterface:
             Returns the Minimizer class which stores the bestfit values
         """
         return self.minimizer
-
-    def set_fast_metals(self):
-        """Activate fast metals. This is automatically called when
-        running the minimizer or the sampler.
-        """
-        print("Warning! Activating fast metals for minimizing/sampling.")
-        for name in self.corr_items:
-            if self.models[name].metals is not None:
-                self.models[name].metals.fast_metals = True
 
     @staticmethod
     def _read_fiducial(fiducial_config):
@@ -1129,120 +1141,20 @@ class VegaInterface:
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.
 
-        Calculate numerical partial derivatives of the model with respect to each floating
-        pararameter, evaluated at a specified point in parameter space. Calculate Fisher information
-        distributed over bins of (rt,rp).  Results are stored in a dictionary attribute
-        named `sensitivity` with keys `nominal`, `partials`, and `fisher`.
+        Thin wrapper around ``vega.interface_utils.compute_sensitivity``, which describes the
+        method in detail. The results are stored in ``self.sensitivity`` (keys ``nominal``,
+        ``partials`` and ``fisher``).
 
         Parameters
         ----------
         nominal : dict or None
-            Dictionary of (value,error) tuples for each floating parameter. Uses the results
+            Dictionary of (value, error) tuples for each floating parameter. Uses the results
             of the last call to minimize when None, or raises a RuntimeError when minimize
             has not yet been called.
         frac : float
-            Estimate partial derivatives of the likelihood using central finite differences
+            Estimate partial derivatives of the model using central finite differences
             at value +/- frac * error for each floating parameter.
         verbose : bool
             Print progress of the computation when True.
         """
-        # Copy the baseline parameters to use.
-        if nominal is None:
-            if self.bestfit.params is None:
-                raise RuntimeError("No nominal parameter values provided or saved by minimize()")
-            nominal = {p.name: (p.value, p.error) for p in self.bestfit.params}
-
-        params = copy.deepcopy(self.params)
-        for pname, (pvalue, _) in nominal.items():
-            params[pname] = pvalue
-
-        # Initialize the sensitivity results.
-        self.sensitivity = dict(nominal=copy.deepcopy(nominal), partials={}, fisher={})
-        for name in self.corr_items:
-            self.sensitivity["partials"][name] = {}
-            self.sensitivity["fisher"][name] = {}
-
-        # Loop over fit parameters
-        self.fiducial["save-components"] = True
-        bao_amp = self.params["bao_amp"]
-        for pindex, (pname, (pvalue, perror)) in enumerate(nominal.items()):
-            if verbose:
-                print(
-                    f"Calculating sensitivity for [{pindex}] {pname} at {pvalue:.4f} ± {perror:.4f}"
-                )
-
-            # Compute partial derivatives wrt to p for each multipole
-            delta = frac * perror
-            for sign in (+1, -1):
-                params[pname] = pvalue + sign * delta
-                # Compute the model for all datasets.
-                cfs = self.compute_model(params, run_init=True)
-
-                # Loop over datasets to update the partial derivative calculations.
-                for n in cfs:
-                    if pname not in self.sensitivity["partials"][n]:
-                        rp = self.corr_items[n].model_coordinates.rp_grid
-                        self.sensitivity["partials"][n][pname] = np.zeros((2, 2, len(rp)))
-
-                    model = self.models[n]
-                    # Distorted peak
-                    self.sensitivity["partials"][n][pname][0, 0] += (
-                        sign * bao_amp * model.xi_distorted["peak"]["core"]
-                    )
-
-                    # Distorted smooth
-                    self.sensitivity["partials"][n][pname][0, 1] += (
-                        sign * model.xi_distorted["smooth"]["core"]
-                    )
-
-                    # Undistorted peak
-                    self.sensitivity["partials"][n][pname][1, 0] += (
-                        sign * bao_amp * model.xi["peak"]["core"]
-                    )
-
-                    # Distorted smooth
-                    self.sensitivity["partials"][n][pname][1, 1] += (
-                        sign * model.xi["smooth"]["core"]
-                    )
-
-            # Normalize the partial derivatives.
-            for n in self.corr_items:
-                self.sensitivity["partials"][n][pname] /= 2 * delta
-
-            # Restore the fitted parameter value.
-            params[pname] = pvalue
-
-        # Loop over pairs of fit parameters.
-        if verbose:
-            print("Computing Fisher information for each pair of parameters...")
-        for pindex1, pname1 in enumerate(nominal):
-            for pindex2, pname2 in enumerate(nominal):
-                if pindex1 > pindex2:
-                    continue
-
-                # Loop over datasets.
-                for n in self.corr_items:
-                    if (pname1, pname2) not in self.sensitivity["fisher"][n]:
-                        rp = self.corr_items[n].model_coordinates.rp_grid
-                        self.sensitivity["fisher"][n][(pname1, pname2)] = np.zeros((2, len(rp)))
-
-                    fisher = self.sensitivity["fisher"][n][(pname1, pname2)]
-                    # Lookup the data vector mask for this dataset
-                    mask = self.data[n].data_mask
-
-                    # Loop over distorted / non-distorted.
-                    for idistort in range(2):
-                        # Combine peak + smooth partials.
-                        partial1 = self.sensitivity["partials"][n][pname1][idistort].sum(axis=0)
-                        partial2 = self.sensitivity["partials"][n][pname2][idistort].sum(axis=0)
-
-                        # Calculate the Fisher info for all unmasked correlation bins.
-                        masked_info = partial1[mask] * self.data[n].inv_masked_cov.dot(
-                            partial2[mask]
-                        )
-                        fisher[idistort, mask] = masked_info
-                        # Calculate the predicted inverse covariance for this parameter pair.
-                        # ivar[idistort] = np.sum(fisher[idistort])
-                        # ferror = ivar ** -0.5 if ivar > 0 else np.nan
-                        # Set unused bins to NaN for plotting
-                        fisher[idistort, ~mask] = np.nan
+        interface_utils.compute_sensitivity(self, nominal=nominal, frac=frac, verbose=verbose)

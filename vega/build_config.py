@@ -363,30 +363,32 @@ class BuildConfig:
                             "rebin_factor", "3"
                         )
 
-                    config["metal-matrix"]["alpha_LYA"] = self.options["metal-matrix"].get(
-                        "alpha_LYA", "2.9"
+                    # Estimator weighting exponents of the main tracers (how picca weighted the
+                    # data). The deprecated names alpha_LYA and z_evol_objects are still read.
+                    metal_matrix_options = self.options["metal-matrix"]
+                    config["metal-matrix"]["weight_evol_LYA"] = metal_matrix_options.get(
+                        "weight_evol_LYA", metal_matrix_options.get("alpha_LYA", "2.9")
                     )
-                    config["metal-matrix"]["alpha_SiII(1260)"] = self.options["metal-matrix"].get(
-                        "alpha_SiII(1260)", "1."
+                    config["metal-matrix"]["weight_evol_QSO"] = metal_matrix_options.get(
+                        "weight_evol_QSO", metal_matrix_options.get("z_evol_objects", "1.44")
                     )
-                    config["metal-matrix"]["alpha_SiIII(1207)"] = self.options["metal-matrix"].get(
-                        "alpha_SiIII(1207)", "1."
-                    )
-                    config["metal-matrix"]["alpha_SiII(1193)"] = self.options["metal-matrix"].get(
-                        "alpha_SiII(1193)", "1."
-                    )
-                    config["metal-matrix"]["alpha_SiII(1190)"] = self.options["metal-matrix"].get(
-                        "alpha_SiII(1190)", "1."
-                    )
-                    config["metal-matrix"]["alpha_CIV(eff)"] = self.options["metal-matrix"].get(
-                        "alpha_CIV(eff)", "0."
-                    )
+
+                    # The amplitude exponents alpha_<metal> are read from [parameters]
+                    ignored_options = [
+                        option
+                        for option in metal_matrix_options
+                        if option.startswith("alpha_") and option != "alpha_LYA"
+                    ]
+                    if ignored_options:
+                        print(
+                            "WARNING: the [metal-matrix] options "
+                            + ", ".join(ignored_options)
+                            + " are ignored. The amplitude exponents of the metals are taken "
+                            "from [parameters] (alpha_<metal>)."
+                        )
 
                     config["metal-matrix"]["z_ref_objects"] = self.options["metal-matrix"].get(
                         "z_ref_objects", "2.25"
-                    )
-                    config["metal-matrix"]["z_evol_objects"] = self.options["metal-matrix"].get(
-                        "z_evol_objects", "1.44"
                     )
                     config["metal-matrix"]["z_bins_objects"] = self.options["metal-matrix"].get(
                         "z_bins_objects", "1000"
