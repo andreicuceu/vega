@@ -59,6 +59,9 @@ class BuildConfig:
                 fullshape_smoothing: string from [None, 'gauss', 'gauss_iso', 'exp'], default None
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
                     'SiII(1260)', 'CIV(eff)'], default None
+                metal_matrix_convention: string from ['estimator', 'legacy'], default
+                    'estimator'. Convention of the new-metal matrices (only used with
+                    new_metals = True); 'legacy' reproduces the matrices of previous versions.
         """
         if options is None:
             options = {}
@@ -113,6 +116,14 @@ class BuildConfig:
         self.options["use_metal_autos"] = options.get("use_metal_autos", True)
         self.options["new_metals"] = options.get("new_metals", False)
         self.options["rp_only_metal_mats"] = options.get("rp_only_metal_mats", False)
+        self.options["metal_matrix_convention"] = options.get(
+            "metal_matrix_convention", "estimator"
+        )
+        if self.options["metal_matrix_convention"] not in ("estimator", "legacy"):
+            raise ValueError(
+                f"Invalid metal_matrix_convention = '{self.options['metal_matrix_convention']}'. "
+                "Use 'estimator' or 'legacy'."
+            )
         self.options["metal-matrix"] = options.get("metal-matrix", {})
         self.options["rebin-metals"] = options.get("rebin-metals", None)
         self.options["use_metal_bias_eta"] = options.get("use_metal_bias_eta", False)
@@ -347,6 +358,9 @@ class BuildConfig:
                 if new_metals_flag:
                     config["model"]["new_metals"] = "True"
                     config["model"]["rp_only_metal_mats"] = str(self.options["rp_only_metal_mats"])
+                    config["model"]["metal_matrix_convention"] = self.options[
+                        "metal_matrix_convention"
+                    ]
 
                     config["data"]["weights-tracer1"] = corr_info.get("weights-tracer1")
                     config["data"]["weights-tracer2"] = corr_info.get("weights-tracer2")
@@ -373,16 +387,27 @@ class BuildConfig:
                         "weight_evol_QSO", metal_matrix_options.get("z_evol_objects", "1.44")
                     )
 
-                    # The amplitude exponents alpha_<metal> are read from [parameters]
-                    ignored_options = [
+                    # The amplitude exponents alpha_<metal> are read from [parameters]. The legacy
+                    # convention still reads them from [metal-matrix] if present there (alpha_LYA
+                    # also sets the amplitude exponent of the Lya leg), so explicitly given values
+                    # are kept to reproduce previous configurations.
+                    if self.options["metal_matrix_convention"] == "legacy":
+                        for option, value in metal_matrix_options.items():
+                            if option.startswith("alpha_"):
+                                config["metal-matrix"][option] = value
+
+                    metal_alpha_options = [
                         option
                         for option in metal_matrix_options
                         if option.startswith("alpha_") and option != "alpha_LYA"
                     ]
-                    if ignored_options:
+                    if (
+                        self.options["metal_matrix_convention"] == "estimator"
+                        and metal_alpha_options
+                    ):
                         print(
                             "WARNING: the [metal-matrix] options "
-                            + ", ".join(ignored_options)
+                            + ", ".join(metal_alpha_options)
                             + " are ignored. The amplitude exponents of the metals are taken "
                             "from [parameters] (alpha_<metal>)."
                         )
