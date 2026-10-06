@@ -7,7 +7,7 @@ from vega import redshift_weights
 from vega.coordinates import MultipoleCoordinates, RMuCoordinates, RtRpCoordinates
 from vega.utils import compute_log_cov_det, compute_masked_invcov, find_file, get_legendre_bins
 
-BLINDING_STRATEGIES = ["desi_dr3"]
+BLINDING_STRATEGIES = ["desi_dr3", "desi_dr3_civ"]
 
 
 class Data:
@@ -526,6 +526,17 @@ class Data:
             Path to a separate covariance matrix file, by default None
         cov_rescale : float, optional
             Rescaling factor applied to the covariance matrix, by default None
+
+        Returns
+        -------
+        None
+            Initializes the data vector, matrices, coordinates and scale masks.
+
+        Notes
+        -----
+        Active DR3 strategies require ``DA_BLIND``. The ``desi_dr3_civ``
+        strategy marks parameter-level blinding; reading it does not alter the
+        correlation values.
         """
         print(f"Reading data file {data_path}\n")
         hdul = fits.open(find_file(data_path))
@@ -543,7 +554,7 @@ class Data:
             print(f"Strategy: {self._blinding_strat}")
 
             self._blind = True
-            if self._blinding_strat == "desi_dr3":
+            if self._blinding_strat in ["desi_dr3", "desi_dr3_civ"]:
                 assert "DA_BLIND" in hdul[1].columns.names, "Blinding failed, do not run!!!"
 
             if "DA_BLIND" in hdul[1].columns.names:

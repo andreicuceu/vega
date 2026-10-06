@@ -927,7 +927,21 @@ class VegaInterface:
         return prior_dict
 
     def _init_blinding(self):
-        """Initialize blinding at the parameter level."""
+        """Initialize parameter blinding for the active data strategy.
+
+        Returns
+        -------
+        None
+            Sets the blinding flag and requests offsets for protected sampled
+            parameters. CIV BAO parameters are protected only by
+            ``desi_dr3_civ``.
+
+        Raises
+        ------
+        ValueError
+            If active data strategies differ, protected parameters must be
+            fixed, or the required parameter-blinding file is unavailable.
+        """
         blinding_strat = None
         for data_obj in self.data.values():
             if data_obj.blind:
@@ -947,6 +961,9 @@ class VegaInterface:
                 raise ValueError(f"Running on blind data, parameter {par} must be fixed.")
 
             if par not in utils.VEGA_BLINDED_PARS:
+                continue
+
+            if par in ("ap", "at", "alpha") and blinding_strat != "desi_dr3_civ":
                 continue
 
             tracers = utils.VEGA_BLINDED_PARS[par]
