@@ -232,6 +232,10 @@ class Metals:
         self.Xi_metal = {}
         self.rp_metal_dmats = {}
         if corr_item.has_metals:
+            if self.new_metals and self.metal_matrix_convention == "estimator":
+                # The matrices already include the separate evolution of both tracer legs.
+                corr_item.config["metals"]["new-bias-evolution"] = "False"
+
             for corr_hash in corr_item.metal_correlations:
                 name1, name2 = corr_hash
 
