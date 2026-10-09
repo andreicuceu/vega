@@ -150,7 +150,8 @@ class CorrelationFunction:
         )
         if apply_data_template_correction:
             if cosmo is not None:
-                # Compute additional scaling for differences between catalogue and template cosmology
+                # Compute additional scaling for differences
+                # between catalogue and template cosmology
                 self._compute_data_template_correction(cosmo)
             else:
                 print("Unable to check consistency of cosmology used to compute data")
