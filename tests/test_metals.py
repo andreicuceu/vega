@@ -91,9 +91,9 @@ PATH_OPTIONS = {
 }
 
 # Summaries of the metal vector of the legacy convention on the synthetic setups, generated with
-# the unmodified (upstream) code: metals.compute(params, pk_full, "full") with
-# params = vega._get_lcl_prms(None) and params["peak"] = False. ``indices`` are size // 7 * k for
-# k = 1..5.
+# the unmodified (upstream) code at 46aa827, with the data-template AP correction applied:
+# metals.compute(params, pk_full, "full") with params = vega._get_lcl_prms(None) and
+# params["peak"] = False. ``indices`` are size // 7 * k for k = 1..5.
 LEGACY_REFERENCE = {
     "lyaxlya": {
         "size": 2500,
@@ -401,7 +401,9 @@ class SyntheticSetups:
 
         return self._main_inis[(correlation, layout)]
 
-    def interface(self, correlation="lyaxlya", layout="new", model_options=None):
+    def interface(
+        self, correlation="lyaxlya", layout="new", model_options=None, metals_options=None
+    ):
         """Initialized interface of a synthetic setup, memoized (one per distinct call).
 
         Parameters
@@ -413,6 +415,9 @@ class SyntheticSetups:
         model_options : dict, optional
             Extra ``[model]`` options of the correlation INI, e.g.
             ``{"metal_matrix_convention": "legacy"}``.
+        metals_options : dict, optional
+            Extra ``[metals]`` options of the correlation INI, e.g.
+            ``{"apply-data-template-correction": "True"}``.
 
         Returns
         -------
@@ -421,14 +426,26 @@ class SyntheticSetups:
         str
             Text printed during the initialization.
         """
-        key = (correlation, layout, tuple(sorted((model_options or {}).items())))
+        key = (
+            correlation,
+            layout,
+            tuple(sorted((model_options or {}).items())),
+            tuple(sorted((metals_options or {}).items())),
+        )
         if key not in self._interfaces:
             main_ini = self.main_ini(correlation, layout)
+
+            corr_edits = {}
             if model_options:
+                corr_edits["model"] = model_options
+            if metals_options:
+                corr_edits["metals"] = metals_options
+
+            if corr_edits:
                 main_ini = write_config_copy(
                     main_ini,
                     self.root / f"variant_{len(self._interfaces)}",
-                    corr_edits={"model": model_options},
+                    corr_edits=corr_edits,
                 )
             self._interfaces[key] = build_interface(main_ini)
 
@@ -619,8 +636,15 @@ def test_estimator_matrix_identity(setups, correlation):
 @pytest.mark.parametrize("correlation", ["lyaxlya", "lyaxqso"])
 def test_legacy_convention_regression(setups, correlation):
     """The legacy convention reproduces the metal vector of the unmodified code."""
+    # The reference numbers were generated at 46aa827, where the data-template AP correction
+    # (ap_dt, at_dt) was always applied when the data header gives a cosmology. Since b80009d it
+    # is opt-in and read separately from [model] (core) and [metals] (metal correlations).
+    data_template_correction = {"apply-data-template-correction": "True"}
     vega, _ = setups.interface(
-        correlation, layout="deprecated", model_options={"metal_matrix_convention": "legacy"}
+        correlation,
+        layout="deprecated",
+        model_options={"metal_matrix_convention": "legacy", **data_template_correction},
+        metals_options=data_template_correction,
     )
     name = CORRELATION_NAMES[correlation]
 
