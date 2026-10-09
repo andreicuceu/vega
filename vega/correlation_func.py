@@ -148,11 +148,12 @@ class CorrelationFunction:
         apply_data_template_correction = self._config.getboolean(
             "apply-data-template-correction", False
         )
-        if cosmo is not None and apply_data_template_correction:
-            # Compute additional scaling for differences between catalogue and template cosmology
-            self._compute_data_template_correction(cosmo)
-        else:
-            print("Unable to check consistency of cosmology used to compute data")
+        if apply_data_template_correction:
+            if cosmo is not None:
+                # Compute additional scaling for differences between catalogue and template cosmology
+                self._compute_data_template_correction(cosmo)
+            else:
+                print("Unable to check consistency of cosmology used to compute data")
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
