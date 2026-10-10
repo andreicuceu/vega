@@ -285,6 +285,43 @@ def growth_function(z, Omega_m, Omega_de):
     return growth_interp(z)
 
 
+def normalized_growth_factor(z, z_ref, Omega_m, Omega_de):
+    """Compute the linear growth factor normalized at a reference redshift.
+
+    Returns D(z) / D(z_ref), where D is the linear growth factor of matter
+    perturbations. This is the shared helper for the growth rescaling of the
+    correlation function (D^2(z) / D^2(z_fid)) and of the metal matrices
+    (D(z^t) / D(z0) for each metal tracer t).
+
+    Without dark energy (``Omega_de is None``) the Einstein-de Sitter
+    solution D(z) proportional to 1 / (1 + z) is used and ``Omega_m`` is
+    ignored. Otherwise D is computed with :func:`growth_function`.
+
+    Parameters
+    ----------
+    z : float or array_like
+        Redshift(s) at which the growth factor is evaluated (dimensionless).
+    z_ref : float
+        Reference redshift at which the growth factor is normalized to unity.
+    Omega_m : float
+        Matter density parameter at z = 0. Unused if ``Omega_de`` is None.
+    Omega_de : float or None
+        Dark energy density parameter at z = 0. None selects the
+        Einstein-de Sitter growth.
+
+    Returns
+    -------
+    float or ndarray
+        Dimensionless ratio D(z) / D(z_ref), with the shape of ``z``.
+    """
+    # Einstein-de Sitter: D(z) is proportional to the scale factor
+    if Omega_de is None:
+        return (1 + z_ref) / (1.0 + z)
+
+    # LCDM-like background: ratio of the numerically computed growth factors
+    return growth_function(z, Omega_m, Omega_de) / growth_function(z_ref, Omega_m, Omega_de)
+
+
 def find_file(path):
     """Find files on the system.
 

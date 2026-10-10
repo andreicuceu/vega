@@ -1,6 +1,5 @@
 import numpy as np
 from astropy.table import Table
-from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import expn
 
@@ -99,14 +98,13 @@ class CorrelationFunction:
         self._z_fid = fiducial["z_fiducial"]
         self._Omega_m = fiducial.get("Omega_m", None)
         self._Omega_de = fiducial.get("Omega_de", None)
-        if not config.getboolean("old_growth_func", False):
-            self.xi_growth = self.compute_growth(
-                self._z, self._z_fid, self._Omega_m, self._Omega_de
+        if config.getboolean("old_growth_func", False):
+            raise ValueError(
+                "The option 'old_growth_func' has been removed. The growth factor is now always "
+                "computed with utils.growth_function (or the Einstein-de Sitter solution if the "
+                "fiducial has no Omega_de). Remove 'old_growth_func' from the config."
             )
-        else:
-            self.xi_growth = self.compute_growth_old(
-                self._z, self._z_fid, self._Omega_m, self._Omega_de
-            )
+        self.xi_growth = self.compute_growth(self._z, self._z_fid, self._Omega_m, self._Omega_de)
 
         # Check for QSO radiation modeling and check if it is QSOxLYA
         # Does this work for the QSO auto as well?
@@ -150,11 +148,13 @@ class CorrelationFunction:
         apply_data_template_correction = self._config.getboolean(
             "apply-data-template-correction", False
         )
-        if cosmo is not None and apply_data_template_correction:
-            # Compute additional scaling for differences between catalogue and template cosmology
-            self._compute_data_template_correction(cosmo)
-        else:
-            print("Unable to check consistency of cosmology used to compute data")
+        if apply_data_template_correction:
+            if cosmo is not None:
+                # Compute additional scaling for differences
+                # between catalogue and template cosmology
+                self._compute_data_template_correction(cosmo)
+            else:
+                print("Unable to check consistency of cosmology used to compute data")
 
     def compute(self, pk, pk_lin, PktoXi_obj, params):
         """Compute correlation function for input P(k).
@@ -520,14 +520,32 @@ class CorrelationFunction:
         return bias_z
 
     def compute_growth(self, z_grid=None, z_fid=None, Omega_m=None, Omega_de=None):
-        """Compute growth factor.
+        """Compute the squared growth factor applied to the correlation function.
 
-        Implements eq. 7.77 from S. Dodelson's Modern Cosmology book.
+        Returns D^2(z) / D^2(z_fid), the ratio of the squared linear growth factors,
+        which rescales the correlation function from the fiducial redshift to each
+        redshift of the grid. The growth factor D is computed with
+        :func:`vega.utils.growth_function` (eq. 7.77 from S. Dodelson's Modern
+        Cosmology book), or is the Einstein-de Sitter solution D ~ 1 / (1 + z) if
+        there is no dark energy.
+
+        Parameters
+        ----------
+        z_grid : array_like, optional
+            Redshifts at which the growth is evaluated, by default the stored
+            redshift grid.
+        z_fid : float, optional
+            Fiducial redshift of the normalization, by default the stored value.
+        Omega_m : float, optional
+            Matter density parameter at z = 0, by default the stored value.
+        Omega_de : float, optional
+            Dark energy density parameter at z = 0, by default the stored value.
+            If None (and none is stored), Einstein-de Sitter growth is used.
 
         Returns
         -------
         ND Array
-            Growth factor
+            Dimensionless D^2(z) / D^2(z_fid), with the shape of ``z_grid``.
         """
         # Check the defaults
         if z_grid is None:
@@ -539,61 +557,8 @@ class CorrelationFunction:
         if Omega_de is None:
             Omega_de = self._Omega_de
 
-        # Check if we have dark energy
-        if Omega_de is None:
-            growth = (1 + z_fid) / (1.0 + z_grid)
-            return growth**2
-
-        # Compute the growth at each redshift on the grid
-        growth = utils.growth_function(z_grid, Omega_m, Omega_de)
-        # Scale to the fiducial redshift
-        growth /= utils.growth_function(z_fid, Omega_m, Omega_de)
-
-        return growth**2
-
-    def compute_growth_old(self, z_grid=None, z_fid=None, Omega_m=None, Omega_de=None):
-        """Compute growth factor using the old integration approach (deprecated).
-
-        Parameters
-        ----------
-        z_grid : array, optional
-            Redshift grid, by default uses stored grid
-        z_fid : float, optional
-            Fiducial redshift for normalization, by default uses stored value
-        Omega_m : float, optional
-            Matter density, by default uses stored value
-        Omega_de : float, optional
-            Dark energy density, by default uses stored value
-
-        Returns
-        -------
-        ND Array
-            Growth factor squared, normalized to the fiducial redshift
-        """
-
-        def hubble(z, Omega_m, Omega_de):
-            return np.sqrt(
-                Omega_m * (1 + z) ** 3 + Omega_de + (1 - Omega_m - Omega_de) * (1 + z) ** 2
-            )
-
-        def dD1(a, Omega_m, Omega_de):
-            z = 1 / a - 1
-            return 1.0 / (a * hubble(z, Omega_m, Omega_de)) ** 3
-
-        # Calculate D1 in 100 values of z between 0 and zmax, then interpolate
-        nbins = 100
-        zmax = 5.0
-        z = zmax * np.arange(nbins, dtype=float) / (nbins - 1)
-        D1 = np.zeros(nbins, dtype=float)
-        pars = (Omega_m, Omega_de)
-        for i in range(nbins):
-            a = 1 / (1 + z[i])
-            D1[i] = 5 / 2.0 * Omega_m * hubble(z[i], *pars) * quad(dD1, 0, a, args=pars)[0]
-
-        D1 = interp1d(z, D1)
-
-        growth = D1(z_grid) / D1(z_fid)
-        return growth**2
+        # Growth normalized at the fiducial redshift, squared for the correlation function
+        return utils.normalized_growth_factor(z_grid, z_fid, Omega_m, Omega_de) ** 2
 
     def compute_qso_radiation(self, params, rescaled_r, rescaled_mu):
         """Model the contribution of QSO radiation to the cross
