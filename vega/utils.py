@@ -25,6 +25,9 @@ BLIND_FIXED_PARS = [
 VEGA_BLINDED_PARS = {
     "phi_smooth": ["all"],
     "growth_rate": ["all"],
+    "ap": ["CIV", "civ"],
+    "at": ["CIV", "civ"],
+    "alpha": ["CIV", "civ"],
     # 'alpha_smooth': ['all'],
 }
 
@@ -414,6 +417,30 @@ def compute_log_cov_det(cov_mat, data_mask):
 
 
 def get_blinding(blind_pars, blinding_strat):
+    """Read the parameter offsets for the requested blinding strategy.
+
+    Parameters
+    ----------
+    blind_pars : list of str
+        Sampled parameter names requiring blinding. BAO parameters select the
+        BAO file; otherwise full-shape parameters select the full-shape file.
+    blinding_strat : str
+        Blinding strategy inherited from the correlation data.
+
+    Returns
+    -------
+    dict of str to float or None
+        Dimensionless offsets keyed by parameter name, or ``None`` for an
+        unblinded legacy strategy.
+
+    Raises
+    ------
+    AssertionError
+        If no blinding strategy is supplied.
+    ValueError
+        If the parameters or strategy are unsupported, or a required file is
+        unavailable. ``desi_dr3_civ`` raises until a file is configured.
+    """
     assert blinding_strat is not None, "Blinding failed, do not run!!!"
     print(f"Blinding parameters: {blind_pars}")
 
@@ -428,6 +455,7 @@ def get_blinding(blind_pars, blinding_strat):
     blinding_choices = {
         "desi_y1": {"full-shape": None, "bao": None},
         "desi_y3": {"full-shape": None, "bao": None},
+        "desi_dr3_civ": {"full-shape": None, "bao": None},
     }
 
     if blinding_strat not in blinding_choices:
@@ -438,6 +466,8 @@ def get_blinding(blind_pars, blinding_strat):
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
     if blinding_file is None:
+        if blinding_strat == "desi_dr3_civ":
+            raise ValueError("No parameter-blinding file is configured for desi_dr3_civ.")
         return None
 
     if not blinding_file.exists():
