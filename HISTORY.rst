@@ -2,6 +2,58 @@
 History
 =======
 
+1.8.0 (2026-10-09)
+------------------
+* Changed the new-metal distortion matrices (``new_metals = True``) to the expectation of
+  the pair estimator, selected with the new ``metal_matrix_convention`` option in
+  ``[model]`` (``estimator`` by default, or ``legacy``). Each observed bin is normalized by
+  the estimator weight of all its pairs, the amplitude evolution of each absorber is
+  applied once, pair by pair at the true redshift, and the undistorted metal correlation
+  is evaluated at ``zeff`` with the effective coordinates of the true bin. The previous
+  matrices normalized each true bin to unit sum, counted the redshift evolution twice,
+  and used the effective coordinates of the observed bin, biasing e.g. the CIV(eff)xCIV(eff)
+  amplitude low by about 11%.
+* The new default changes the model of every existing ``new_metals`` configuration. Set
+  ``metal_matrix_convention = legacy`` to reproduce previous results bit for bit. In
+  DESI-like Ly-alpha auto and Ly-alpha-QSO cross fits the change is 0.2--0.5 in chi2 at
+  fixed parameters, absorbed by 2--6% shifts in the metal biases, with BAO shifts of at
+  most 0.08 sigma.
+* Moved the amplitude evolution exponents of the metal matrices to ``alpha_<X>`` in
+  ``[parameters]``, now required for every absorber of the metal correlations (including
+  ``alpha_LYA`` and ``alpha_QSO``). The estimator weighting exponents in ``[metal-matrix]``
+  are renamed ``weight_evol_LYA`` (previously ``alpha_LYA``) and ``weight_evol_QSO``
+  (previously ``z_evol_objects``, also used by catalogue bias evolution and direct
+  multipoles). The old keys are accepted with a deprecation warning, and conflicting old
+  and new weighting keys raise an error.
+* Under the estimator convention, sampling or scanning an exponent built into the
+  matrices raises an error, and Monte Carlo input models with different exponents are
+  computed with matrices built from those exponents. ``new-bias-evolution`` is disabled
+  for these metal correlations, since the matrices already include the evolution of both
+  legs.
+* ``fast_metals = True`` now raises an error for configurations that would reuse a stale
+  cached metal x metal correlation: a varied metal beta, a varied metal ``alpha`` under
+  ``legacy`` or with ``new_metals = False``, ``no-metal-decomp = False``, or
+  ``metal-scaling = True``. The picca metal-matrix path (``new_metals = False``) is
+  unchanged but now warns that it double counts the redshift evolution.
+* The data-template cosmology correction introduced in 1.7.9 is no longer applied
+  automatically; enable it with ``apply-data-template-correction = True`` in ``[model]``.
+* ``BuildConfig`` accepts ``metal_matrix_convention`` and writes the new
+  ``[metal-matrix]`` layout, as do the example configurations. The examples now use
+  ``alpha_CIV(eff) = 0`` from ``[parameters]`` instead of the inconsistent value of 1
+  previously set in ``[metal-matrix]``.
+* The 2D metal matrices are assembled as a sparse Kronecker product, yielding identical
+  matrices without the dense temporary (about 7 GB per species for Ly-alpha-QSO) and a
+  5--10 times faster initialization.
+* Added ``utils.normalized_growth_factor``, shared by ``CorrelationFunction`` and the metal
+  matrices, and removed ``compute_growth_old`` and the ``old_growth_func`` option (setting
+  it now raises an error).
+* Removed the unused ``VegaInterface.set_fast_metals``; set ``fast_metals`` in ``[model]``
+  instead. The interface checks and ``compute_sensitivity`` moved to
+  ``vega/interface_utils.py``, with ``VegaInterface.compute_sensitivity`` kept as a wrapper.
+* Added ``tests/test_metals.py``, covering the matrix normalization against an independent
+  stacked-pair expectation, a ``legacy`` regression, equivalence of the old and new key
+  layouts, the exponent and fast-metals errors, and the Monte Carlo input models.
+
 1.7.10 (2026-10-04)
 -------------------
 * Raised the minimum supported Python version to 3.11 (3.9 and 3.10 are no longer supported
