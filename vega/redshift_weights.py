@@ -135,7 +135,8 @@ def load_tracer_redshift_weights(tracer, config=None, absorber_name="LYA"):
     tracer : dict
         Tracer config with 'type' and 'weights-path'.
     config : ConfigParser section or dict-like, optional
-        Source for z_ref_objects / z_evol_objects / z_bins_objects / rebin_factor.
+        Source for z_ref_objects / weight_evol_<tracer name> / z_bins_objects / rebin_factor.
+        The deprecated key z_evol_objects is used if weight_evol_<tracer name> is absent.
         May be a full ConfigParser (uses [metal-matrix] if present) or a section.
     absorber_name : str
         Absorber used to convert forest wavelengths to redshift.
@@ -152,7 +153,9 @@ def load_tracer_redshift_weights(tracer, config=None, absorber_name="LYA"):
             "set weights-tracer1/2 in [data]."
         )
 
-    z_ref, z_evol, z_bins, rebin_factor = _parse_weight_config(config)
+    z_ref, z_evol, z_bins, rebin_factor = _parse_weight_config(
+        config, tracer_name=tracer.get("name", "QSO")
+    )
 
     if tracer["type"] == "discrete":
         return get_qso_weights(path, z_ref=z_ref, z_evol=z_evol, z_bins=z_bins)
@@ -165,8 +168,24 @@ def load_tracer_redshift_weights(tracer, config=None, absorber_name="LYA"):
     raise ValueError(f"Unknown tracer type for redshift weights: {tracer['type']}")
 
 
-def _parse_weight_config(config):
-    """Extract weight-histogram options with the same defaults as metals."""
+def _parse_weight_config(config, tracer_name="QSO"):
+    """Extract weight-histogram options with the same defaults as metals.
+
+    Parameters
+    ----------
+    config : ConfigParser, ConfigParser section, dict or None
+        Source of the options (see ``load_tracer_redshift_weights``).
+    tracer_name : str, optional
+        Name of the tracer. Its estimator weighting exponent is read from
+        ``weight_evol_<tracer_name>``, falling back to the deprecated ``z_evol_objects`` and
+        then to 1.44. By default "QSO".
+
+    Returns
+    -------
+    tuple
+        ``(z_ref, z_evol, z_bins, rebin_factor)``; ``rebin_factor`` is None if not set.
+    """
+    weight_evol_key = f"weight_evol_{tracer_name}"
     z_ref = 2.25
     z_evol = 1.44
     z_bins = 1000
@@ -187,13 +206,13 @@ def _parse_weight_config(config):
 
     if hasattr(section, "getfloat"):
         z_ref = section.getfloat("z_ref_objects", z_ref)
-        z_evol = section.getfloat("z_evol_objects", z_evol)
+        z_evol = section.getfloat(weight_evol_key, section.getfloat("z_evol_objects", z_evol))
         z_bins = section.getint("z_bins_objects", z_bins)
         if section.get("rebin_factor", None) is not None:
             rebin_factor = section.getint("rebin_factor")
     elif isinstance(section, dict):
         z_ref = float(section.get("z_ref_objects", z_ref))
-        z_evol = float(section.get("z_evol_objects", z_evol))
+        z_evol = float(section.get(weight_evol_key, section.get("z_evol_objects", z_evol)))
         z_bins = int(section.get("z_bins_objects", z_bins))
         rb = section.get("rebin_factor", None)
         rebin_factor = int(rb) if rb is not None else None
