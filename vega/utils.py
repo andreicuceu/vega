@@ -414,23 +414,29 @@ def get_blinding(blind_pars, blinding_strat):
     else:
         raise ValueError(f"No blinding implemented for parameters {blind_pars}")
 
-    # blind_dir = "/global/cfs/projectdirs/desicollab/science/lya/vega/"
+    blind_dir = "/global/cfs/projectdirs/desicollab/science/lya/vega/"
     blinding_choices = {
         "desi_y1": {"full-shape": None, "bao": None},
         "desi_y3": {"full-shape": None, "bao": None},
-        "desi_dr3_civ": {"full-shape": None, "bao": None},
+        "desi_dr3": {"full-shape": None, "bao": None},
+        "desi_dr3_civ": {
+            "full-shape": None,
+            "bao": Path(blind_dir)
+            / "bao-parameter-blinding"
+            / "dr3_bao_CIV_blinding_12_10_2026.npz",
+        },
     }
 
     if blinding_strat not in blinding_choices:
         raise ValueError(f"Unknown blinding version: {blinding_strat}.")
 
-    if blinding_strat == "desi_y5":
-        raise ValueError("Blinding strategy desi_y5 is not implemented yet.")
+    if blinding_strat == "desi_dr4":
+        raise ValueError("Blinding strategy desi_dr4 is not implemented yet.")
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
     if blinding_file is None:
-        if blinding_strat == "desi_dr3_civ":
-            raise ValueError("No parameter-blinding file is configured for desi_dr3_civ.")
+        if blinding_strat == "desi_dr3" and blinding_type == "full-shape":
+            raise ValueError("No parameter-blinding file is configured for desi_dr3 full-shape.")
         return None
 
     if not blinding_file.exists():
