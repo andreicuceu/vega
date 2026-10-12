@@ -14,6 +14,20 @@ from vega.data import Data
 from vega.vega_interface import VegaInterface
 
 
+@pytest.fixture(autouse=True)
+def _redirect_blinding_dir(monkeypatch, tmp_path):
+    """Point parameter-blinding file selection to an empty temporary directory.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing the module-level blinding directory.
+    tmp_path : pathlib.Path
+        Empty temporary directory supplied by pytest.
+    """
+    monkeypatch.setattr(utils, "PARAMETER_BLINDING_DIR", tmp_path / "blinding")
+
+
 def _write_correlation(data_path, strategy, data_column="DA_BLIND"):
     """Write a four-bin synthetic correlation with identity matrices.
 
@@ -184,26 +198,108 @@ def test_civ_bao_parameter_selection(monkeypatch, parameters, tracer_names):
     get_blinding.assert_called_once_with(list(parameters), "desi_dr3_civ")
 
 
-@pytest.mark.parametrize("parameters", [("ap", "at"), ("alpha",), ("phi_smooth", "growth_rate")])
-def test_civ_missing_file_error_precedes_file_access(monkeypatch, parameters):
-    """Raise the explicit unset-file error before opening parameter resources.
+@pytest.mark.parametrize("parameters", [("ap", "at"), ("alpha",)])
+def test_civ_bao_missing_file_error_precedes_file_access(monkeypatch, parameters):
+    """Raise the file-not-found error for CIV BAO offsets before opening any file.
 
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
         Fixture replacing NumPy file loading with a forbidden operation.
     parameters : tuple of str
-        Sampled BAO or full-shape parameters.
+        Sampled anisotropic or isotropic BAO parameters.
     """
     load_parameters = Mock(side_effect=AssertionError("Parameter resources must not be opened."))
     monkeypatch.setattr(utils.np, "load", load_parameters)
     interface = _blinding_interface(parameters)
 
     with pytest.raises(
-        ValueError, match=r"^No parameter-blinding file is configured for desi_dr3_civ\.$"
+        ValueError, match=r"^Blinding file not found: .*dr3_bao_CIV_blinding_12_10_2026\.npz\."
     ):
         interface._init_blinding()
     load_parameters.assert_not_called()
+
+
+@pytest.mark.parametrize("strategy", ["desi_dr3", "desi_dr3_civ"])
+def test_dr3_full_shape_requires_configured_file(monkeypatch, strategy):
+    """Reject DR3 full-shape fits while no full-shape offsets are configured.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing NumPy file loading with a forbidden operation.
+    strategy : str
+        Active DR3 blinding strategy.
+    """
+    load_parameters = Mock(side_effect=AssertionError("Parameter resources must not be opened."))
+    monkeypatch.setattr(utils.np, "load", load_parameters)
+    interface = _blinding_interface(("phi_smooth", "growth_rate"), strategy=strategy)
+
+    with pytest.raises(
+        ValueError, match=rf"^No parameter-blinding file is configured for {strategy} full-shape\.$"
+    ):
+        interface._init_blinding()
+    load_parameters.assert_not_called()
+
+
+@pytest.mark.parametrize("parameters", [("ap", "at", "growth_rate"), ("alpha", "phi_smooth")])
+def test_mixed_bao_and_full_shape_parameters_are_rejected(monkeypatch, parameters):
+    """Reject requests that would read full-shape offsets from the BAO file.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing NumPy file loading with a forbidden operation.
+    parameters : tuple of str
+        Sampled CIV BAO and full-shape parameters.
+    """
+    load_parameters = Mock(side_effect=AssertionError("Parameter resources must not be opened."))
+    monkeypatch.setattr(utils.np, "load", load_parameters)
+    interface = _blinding_interface(parameters)
+
+    with pytest.raises(ValueError, match=r"^Cannot blind BAO and full-shape parameters together"):
+        interface._init_blinding()
+    load_parameters.assert_not_called()
+
+
+@pytest.mark.parametrize("parameter", ["phi", "aiso", "epsilon", "aap"])
+def test_civ_rejects_unblinded_bao_parametrisations(monkeypatch, parameter):
+    """Require BAO parameters without CIV offsets to be fixed.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    parameter : str
+        Sampled BAO parameter of the phi_alpha, aiso_epsilon or aiso_aap
+        parametrisations.
+    """
+    get_blinding = Mock()
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface((parameter, "alpha"))
+
+    with pytest.raises(ValueError, match=rf"desi_dr3_civ blind data, parameter {parameter} must"):
+        interface._init_blinding()
+    get_blinding.assert_not_called()
+
+
+@pytest.mark.parametrize("strategy", ["desi_dr3", "desi_y1", "desi_y3"])
+def test_other_strategies_allow_alternative_bao_parametrisations(monkeypatch, strategy):
+    """Leave phi, aiso, epsilon and aap unrestricted outside desi_dr3_civ.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    strategy : str
+        Strategy other than ``desi_dr3_civ``.
+    """
+    get_blinding = Mock()
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface(("phi", "aiso", "epsilon", "aap"), strategy=strategy)
+    interface._init_blinding()
+    get_blinding.assert_not_called()
+    assert interface._rnsps is None
 
 
 @pytest.mark.parametrize("strategy", ["desi_dr3", "desi_y1", "desi_y3"])
@@ -298,10 +394,18 @@ def test_legacy_unset_files_remain_unblinded(monkeypatch, parameters, strategy):
     load_parameters.assert_not_called()
 
 
-def test_standard_dr3_file_selection_is_unchanged():
-    """Preserve the existing error for the unconfigured standard DR3 strategy."""
-    with pytest.raises(ValueError, match=r"^Unknown blinding version: desi_dr3\.$"):
-        utils.get_blinding(["phi_smooth"], "desi_dr3")
+def test_standard_dr3_bao_file_selection_returns_none(monkeypatch):
+    """Return no offsets for BAO parameters under the standard DR3 strategy.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording NumPy file-loading calls.
+    """
+    load_parameters = Mock()
+    monkeypatch.setattr(utils.np, "load", load_parameters)
+    assert utils.get_blinding(["ap", "at"], "desi_dr3") is None
+    load_parameters.assert_not_called()
 
 
 @pytest.mark.parametrize("parameters", [("ap_full",), ("bias_QSO", "beta_QSO")])

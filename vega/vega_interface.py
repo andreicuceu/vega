@@ -952,7 +952,9 @@ class VegaInterface:
         ------
         ValueError
             If active data strategies differ, protected parameters must be
-            fixed, or the required parameter-blinding file is unavailable.
+            fixed (including ``phi``, ``aiso``, ``epsilon`` and ``aap`` under
+            ``desi_dr3_civ``), BAO and full-shape parameters are blinded
+            together, or the required parameter-blinding file is unavailable.
         """
         blinding_strat = None
         for data_obj in self.data.values():
@@ -972,10 +974,18 @@ class VegaInterface:
             if par in utils.BLIND_FIXED_PARS:
                 raise ValueError(f"Running on blind data, parameter {par} must be fixed.")
 
+            # The CIV correlation is not blinded, so BAO parametrisations other
+            # than ap/at/alpha would expose the BAO measurement
+            if blinding_strat == "desi_dr3_civ" and par in utils.CIV_BLIND_FIXED_PARS:
+                raise ValueError(
+                    f"Running on desi_dr3_civ blind data, parameter {par} must be fixed. "
+                    "Use the ap_at parametrisation."
+                )
+
             if par not in utils.VEGA_BLINDED_PARS:
                 continue
 
-            if par in ("ap", "at", "alpha") and blinding_strat != "desi_dr3_civ":
+            if par in utils.BAO_BLINDED_PARS and blinding_strat != "desi_dr3_civ":
                 continue
 
             tracers = utils.VEGA_BLINDED_PARS[par]
