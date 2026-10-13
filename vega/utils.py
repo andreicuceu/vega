@@ -25,8 +25,20 @@ BLIND_FIXED_PARS = [
 VEGA_BLINDED_PARS = {
     "phi_smooth": ["all"],
     "growth_rate": ["all"],
+    "ap": ["CIV", "civ"],
+    "at": ["CIV", "civ"],
+    "alpha": ["CIV", "civ"],
     # 'alpha_smooth': ['all'],
 }
+
+# BAO parameters without offsets under desi_dr3_civ; they must be fixed because the
+# CIV correlation itself is not blinded
+CIV_BLIND_FIXED_PARS = ["phi", "aiso", "epsilon", "aap"]
+
+BAO_BLINDED_PARS = ["ap", "at", "alpha"]
+FULL_SHAPE_BLINDED_PARS = ["growth_rate", "phi_smooth"]
+
+PARAMETER_BLINDING_DIR = Path("/global/cfs/projectdirs/desicollab/science/lya/vega/")
 
 
 @njit
@@ -414,30 +426,80 @@ def compute_log_cov_det(cov_mat, data_mask):
 
 
 def get_blinding(blind_pars, blinding_strat):
+    """Read the parameter offsets for the requested blinding strategy.
+
+    Parameters
+    ----------
+    blind_pars : list of str
+        Sampled parameter names requiring blinding. BAO parameters (``ap``,
+        ``at``, ``alpha``) select the BAO file and full-shape parameters
+        (``growth_rate``, ``phi_smooth``) the full-shape file; the two sets
+        cannot be combined.
+    blinding_strat : str
+        Blinding strategy inherited from the correlation data.
+
+    Returns
+    -------
+    dict of str to float or None
+        Dimensionless offsets keyed by parameter name, or ``None`` for an
+        unblinded legacy strategy.
+
+    Raises
+    ------
+    AssertionError
+        If no blinding strategy is supplied.
+    ValueError
+        If the parameters or strategy are unsupported, if BAO and full-shape
+        parameters are requested together, or if a required file is not
+        configured or not found. Both DR3 strategies raise for full-shape
+        parameters until a full-shape file is configured.
+    """
     assert blinding_strat is not None, "Blinding failed, do not run!!!"
     print(f"Blinding parameters: {blind_pars}")
 
-    if ("ap" in blind_pars) or ("at" in blind_pars) or ("alpha" in blind_pars):
+    has_bao_pars = any(par in BAO_BLINDED_PARS for par in blind_pars)
+    has_full_shape_pars = any(par in FULL_SHAPE_BLINDED_PARS for par in blind_pars)
+
+    # Each file holds the offsets of a single parameter set, so a mixed request
+    # would read full-shape offsets from the BAO file
+    if has_bao_pars and has_full_shape_pars:
+        raise ValueError(
+            f"Cannot blind BAO and full-shape parameters together: {blind_pars}. "
+            "Sample either ap/at/alpha or growth_rate/phi_smooth."
+        )
+
+    if has_bao_pars:
         blinding_type = "bao"
-    elif ("growth_rate" in blind_pars) or ("phi_smooth" in blind_pars):
+    elif has_full_shape_pars:
         blinding_type = "full-shape"
     else:
         raise ValueError(f"No blinding implemented for parameters {blind_pars}")
 
-    # blind_dir = "/global/cfs/projectdirs/desicollab/science/lya/vega/"
     blinding_choices = {
         "desi_y1": {"full-shape": None, "bao": None},
         "desi_y3": {"full-shape": None, "bao": None},
+        "desi_dr3": {"full-shape": None, "bao": None},
+        "desi_dr3_civ": {
+            "full-shape": None,
+            "bao": PARAMETER_BLINDING_DIR
+            / "bao-parameter-blinding"
+            / "dr3_bao_CIV_blinding_12_10_2026.npz",
+        },
     }
 
     if blinding_strat not in blinding_choices:
         raise ValueError(f"Unknown blinding version: {blinding_strat}.")
 
-    if blinding_strat == "desi_y5":
-        raise ValueError("Blinding strategy desi_y5 is not implemented yet.")
+    if blinding_strat == "desi_dr4":
+        raise ValueError("Blinding strategy desi_dr4 is not implemented yet.")
 
     blinding_file = blinding_choices[blinding_strat][blinding_type]
     if blinding_file is None:
+        # DR3 full-shape parameters must not run without offsets
+        if blinding_strat in ["desi_dr3", "desi_dr3_civ"] and blinding_type == "full-shape":
+            raise ValueError(
+                f"No parameter-blinding file is configured for {blinding_strat} full-shape."
+            )
         return None
 
     if not blinding_file.exists():
