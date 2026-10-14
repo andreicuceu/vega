@@ -35,7 +35,7 @@ def get_forest_weights(weights_path, rebin_factor=None):
         Forest weights.
     """
     with fits.open(weights_path) as hdul:
-        stack_table = hdul[1].data
+        stack_table = hdul['STACK_DELTAS'].data
 
     wave = 10 ** stack_table["LOGLAM"]
     weights = stack_table["WEIGHT"]
