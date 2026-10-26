@@ -35,8 +35,8 @@ def get_forest_weights(weights_path, rebin_factor=None):
         Forest weights.
     """
     with fits.open(weights_path) as hdul:
-        if 'STACK_DELTAS' in hdul:
-            stack_table = hdul['STACK_DELTAS'].data
+        if "STACK_DELTAS" in hdul:
+            stack_table = hdul["STACK_DELTAS"].data
         else:
             stack_table = hdul[1].data
 
