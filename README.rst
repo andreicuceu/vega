@@ -19,6 +19,10 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 * Documentation: https://vega.readthedocs.io.
 * Referencing: If you use Vega in a publication, please give the link to this repository (https://github.com/andreicuceu/vega). The best descriptions of what the code does are found in `Cuceu et al. (2022) <https://doi.org/10.1093/mnras/stad1546>`__ and `Cuceu et al. (2025) <https://doi.org/10.48550/arXiv.2509.15308>`__.
 
+Fixed-covariance Fisher forecasts are available through ``vega.fisher.compute_fisher``
+and ``run_vega_fisher.py`` using ordinary Vega INIs plus a small ``[fisher]`` section.
+See ``docs/fisher.rst`` for the notebook API, covariance conventions, and diagnostics.
+
 .. docs-install-start
 
 Installation

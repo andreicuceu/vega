@@ -98,6 +98,7 @@ exclude = ["tests*", "docs*", "examples*"]
 
 [tool.setuptools]
 script-files = [
+    "bin/run_vega_fisher.py",
     "bin/run_vega.py",
     "bin/run_vega_mpi.py",
     "bin/run_vega_mc_mpi.py",

@@ -14,6 +14,7 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 
    Introduction <intro>
    Installation <install>
+   Fisher forecasts <fisher>
 
 There are several tutorials and examples available to help you get started with Vega:
 
