@@ -17,6 +17,8 @@ Vega is currently being used by the Lyα forest working group in DESI to measure
 
 * Free software: GPL-3.0-or-later License
 * Documentation: https://vega.readthedocs.io.
+* Opt-in joint analytic profiling/integration of small-scale bin modes and additive
+  polynomial broadbands: see ``docs/linear_nuisance.rst`` for phase 1 configuration.
 * Referencing: If you use Vega in a publication, please give the link to this repository (https://github.com/andreicuceu/vega). The best descriptions of what the code does are found in `Cuceu et al. (2022) <https://doi.org/10.1093/mnras/stad1546>`__ and `Cuceu et al. (2025) <https://doi.org/10.48550/arXiv.2509.15308>`__.
 
 .. docs-install-start

@@ -11,6 +11,7 @@ from astropy.io import fits
 from scipy.sparse import block_array, eye_array
 
 from vega.analysis import Analysis
+from vega.linear_nuisance import LinearNuisance
 from vega.minimizer import Minimizer
 from vega.model import Model
 from vega.output import Output
@@ -78,6 +79,10 @@ class VegaInterface:
         self.marginalize_in_fit = self.main_config["control"].getboolean(
             "marginalize-in-fit", False
         )
+        self.linear_nuisance = None
+        self._linear_nuisance_enabled = "linear nuisance" in self.main_config
+        if self._linear_nuisance_enabled and self.marginalize_in_fit:
+            raise ValueError("[linear nuisance] cannot be combined with marginalize-in-fit")
         if self.marginalize_in_fit:
             print("Marginalizing in fit")
 
@@ -134,7 +139,11 @@ class VegaInterface:
         # Initialize the data
         for name, corr_item in self.corr_items.items():
             if self._has_data:
-                self.data[name] = data.Data(corr_item, marginalize_in_fit=self.marginalize_in_fit)
+                self.data[name] = data.Data(
+                    corr_item,
+                    marginalize_in_fit=self.marginalize_in_fit,
+                    linear_nuisance=self._linear_nuisance_enabled,
+                )
             else:
                 self.data[name] = None
 
@@ -187,6 +196,9 @@ class VegaInterface:
             self.read_global_cov(global_cov_file, cov_scale)
             self._use_global_cov = True
 
+        if self._linear_nuisance_enabled:
+            self.linear_nuisance = LinearNuisance(self)
+
         # Refuse model options that are inconsistent with the sampled/scanned parameters
         if self._has_data:
             interface_utils.check_metal_model_options(self)
@@ -211,6 +223,8 @@ class VegaInterface:
         if self._has_data:
             for name in self.corr_items:
                 self.corr_num_marg_modes[name] = self.data[name].num_marg_modes
+        if self.linear_nuisance is not None:
+            self.corr_num_marg_modes = {"linear_nuisance": len(self.linear_nuisance.ids)}
 
         # Check for sampler
         self.run_sampler = False
@@ -260,6 +274,9 @@ class VegaInterface:
         # Get computation parameters
         local_params = self._get_lcl_prms(params)
 
+        if self.linear_nuisance is not None:
+            local_params = self.linear_nuisance.base_params(local_params)
+
         # Go through each component and compute the model cf
         model_cf = {}
         if run_init:
@@ -277,7 +294,13 @@ class VegaInterface:
             else:
                 model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
 
-        if marg_coeff is not None:
+        if marg_coeff is not None and self.linear_nuisance is not None:
+            # Coefficients follow linear_nuisance.ids, shared across all components.
+            coefficients = np.array([marg_coeff[key] for key in self.linear_nuisance.ids])
+            templates = self.linear_nuisance.templates(local_params, direct_pk is not None)
+            for name in model_cf:
+                model_cf[name] += templates[name] @ coefficients
+        elif marg_coeff is not None:
             for name in self.data:
                 if self.data[name].marg_templates is not None:
                     model_cf[name] += self.data[name].marg_templates.dot(marg_coeff[name])
@@ -314,6 +337,16 @@ class VegaInterface:
                 return 1e100, None
             else:
                 return 1e100
+
+        if self.linear_nuisance is not None:
+            local_params = self._get_lcl_prms(params)
+            result = self.linear_nuisance.evaluate(model_cf, local_params, direct_pk is not None)
+            objective = result.objective + self.compute_prior_chi2(params)
+            if return_marg_coeff:
+                # Keep the legacy dict-of-arrays shape for sampler blob consumers.
+                self._random_marg_coeff = {"linear_nuisance": result.coefficients.copy()}
+                return objective, self._random_marg_coeff
+            return objective
 
         # Get marginalization coefficients
         if return_marg_coeff or self.marginalize_in_fit:
@@ -407,7 +440,11 @@ class VegaInterface:
             log_lik += self._gaussian_lik_prior(prior[1])
 
         if return_marg_coeff and marg_coeff is not None:
-            corr_names = sorted(self.corr_items.keys())
+            corr_names = (
+                ["linear_nuisance"]
+                if self.linear_nuisance is not None
+                else sorted(self.corr_items.keys())
+            )
             corr_names = [corr for corr in corr_names if corr in marg_coeff]
             if len(corr_names) > 1:
                 marg_coeff_list = np.hstack([marg_coeff[corr] for corr in corr_names])
@@ -624,6 +661,8 @@ class VegaInterface:
             Best-fit template coefficients keyed by component name (only for components
             that have marginalization configured)
         """
+        if self.linear_nuisance is not None:
+            raise ValueError("Use compute_linear_nuisance(params) for the joint coefficient solve")
         bestfit_marg_coeff = {}
         for name in self.corr_items:
             if not self.corr_items[name].marginalize_small_scales:
@@ -643,6 +682,21 @@ class VegaInterface:
 
         return bestfit_marg_coeff
 
+    def compute_linear_nuisance(self, params=None, direct_pk=None):
+        """Return the joint conditional linear posterior in stable ID order.
+
+        Requires an opt-in [linear nuisance] section. The returned LinearResult
+        includes coefficients, conditional covariance and both objectives.
+        In integrate mode chi2() returns an effective -2 log likelihood,
+        including parameter-dependent volume terms, rather than a chi-square.
+        """
+        if self.linear_nuisance is None:
+            raise ValueError("Enable [linear nuisance] before requesting the joint solve")
+        value = self.chi2(params, direct_pk)
+        if value == 1e100:
+            raise utils.VegaModelError("Model evaluation failed during linear nuisance solve")
+        return self.linear_nuisance.last_result
+
     def minimize(self):
         """Minimize the chi2 over the sampled parameters."""
         if self.minimizer is None:
@@ -652,6 +706,15 @@ class VegaInterface:
         self.minimizer.minimize()
 
         self.bestfit_model = self.compute_model(self.minimizer.values, run_init=False)
+        if self.linear_nuisance is not None:
+            # Re-evaluate jointly at the final nonlinear point, including global covariance.
+            self.chi2(self.minimizer.values)
+            result = self.linear_nuisance.last_result
+            self.bestfit_linear_nuisance = result
+            for name in self.bestfit_model:
+                self.bestfit_model[name] += (
+                    self.linear_nuisance.last_templates[name] @ result.coefficients
+                )
         self.total_data_size = 0
         self.bestfit_corr_stats = {}
 
@@ -687,13 +750,17 @@ class VegaInterface:
                 bestfit_marg_coeff = corr_data.marg_diff2coeff_matrix.dot(diff)
                 self.bestfit_model[name] += corr_data.marg_templates.dot(bestfit_marg_coeff)
 
-            reduced_chisq = chisq / (data_size - num_pars)
-            p_value = 1 - scipy.stats.chi2.cdf(chisq, data_size - num_pars)
-
-            print(
-                f"{name} chi^2/(ndata-nparam): {chisq:.1f}/({data_size}-{num_pars}) "
-                f"= {reduced_chisq:.3f}, PTE={p_value:.2f}"
-            )
+            if self.linear_nuisance is not None:
+                # Priors and shared coefficients do not define per-component degrees of freedom.
+                reduced_chisq = p_value = -1.0
+                print(f"{name} conditional residual quadratic: {chisq:.3f}; PTE unavailable")
+            else:
+                reduced_chisq = chisq / (data_size - num_pars)
+                p_value = 1 - scipy.stats.chi2.cdf(chisq, data_size - num_pars)
+                print(
+                    f"{name} chi^2/(ndata-nparam): {chisq:.1f}/({data_size}-{num_pars}) "
+                    f"= {reduced_chisq:.3f}, PTE={p_value:.2f}"
+                )
             print("----------------------------------------------------")
 
             self.bestfit_corr_stats[name] = {
@@ -703,15 +770,28 @@ class VegaInterface:
                 "p_value": p_value,
                 "bestfit_marg_coeff": bestfit_marg_coeff,
             }
+            if self.linear_nuisance is not None:
+                self.bestfit_corr_stats[name]["linear_nuisance_mode"] = self.linear_nuisance.mode
+                for key, value in zip(result.ids, result.coefficients):
+                    self.bestfit_corr_stats[name][f"linear coefficient {key}"] = float(value)
 
         self.chisq = self.minimizer.fmin.fval
-        self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
-        self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
+        if self.linear_nuisance is not None:
+            self.reduced_chisq = self.p_value = -1.0
+        else:
+            self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
+            self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
         self.minimizer.p_value = self.p_value
-        print(
-            f"Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) "
-            f"= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}"
-        )
+        if self.linear_nuisance is not None:
+            print(
+                f"Linear nuisance {self.linear_nuisance.mode} objective: {self.chisq:.3f}; "
+                "PTE unavailable"
+            )
+        else:
+            print(
+                f"Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) "
+                f"= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}"
+            )
         print("----------------------------------------------------\n")
 
         if self.percival_correction != 1.0:
@@ -1130,7 +1210,9 @@ class VegaInterface:
         # Following just updates the covariance matrix
         # More stable inversion can be achieved through Woodbury, but
         # requires handling masked pixels without removing them from cov.
-        if any(corr_item.marginalize_small_scales for corr_item in self.corr_items.values()):
+        if not self._linear_nuisance_enabled and any(
+            corr_item.marginalize_small_scales for corr_item in self.corr_items.values()
+        ):
             print("Updating global covariance with marginalization templates.")
             j = 0
             for name in self.corr_items:

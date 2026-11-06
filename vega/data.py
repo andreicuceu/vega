@@ -29,7 +29,7 @@ class Data:
     model_coordinates = None
     data_coordinates = None
 
-    def __init__(self, corr_item, marginalize_in_fit=False):
+    def __init__(self, corr_item, marginalize_in_fit=False, linear_nuisance=False):
         """Read the data and initialize the coordinate grids.
 
         Parameters
@@ -39,6 +39,9 @@ class Data:
         marginalize_in_fit : bool, optional
             If True, the marginalization covariance update is deferred to the fit
             instead of being added to the covariance matrix, by default False
+        linear_nuisance : bool, optional
+            Prepare small-scale masks/templates without the legacy covariance
+            update or coefficient solve, by default False.
         """
         # First save the tracer info
         self.corr_item = corr_item
@@ -124,7 +127,9 @@ class Data:
         if not self.corr_item.low_mem_mode:
             self.cov_mat_org = self.cov_mat.copy()
 
-        if corr_item.marginalize_small_scales:
+        if corr_item.marginalize_small_scales and linear_nuisance:
+            self.marg_templates = self.get_dist_xi_marg_templates(return_AAT=False)
+        elif corr_item.marginalize_small_scales:
             self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
 
             # if not self.corr_item.low_mem_mode:
