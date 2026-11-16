@@ -303,6 +303,11 @@ def project_flat_templates(precision, flat_templates):
     ValueError
         If the templates are linearly dependent within the fitted bins.
     """
+    # A precision obtained by numerical inversion is symmetric only to round-off, and
+    # for an ill-conditioned covariance the asymmetry is not negligible. The projection
+    # removes the templates from both sides of the quadratic form only if it is symmetric.
+    precision = 0.5 * (precision + precision.T)
+
     # Scale each template to unit norm: the projection is unchanged, and the
     # conditioning of the normal matrix no longer depends on the template units.
     weighted_templates = precision.dot(flat_templates)

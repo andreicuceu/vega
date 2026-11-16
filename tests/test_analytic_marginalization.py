@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
+from vega.analytic_marginalization import project_flat_templates
 from vega.utils import find_file
 from vega.vega_interface import VegaInterface
 
@@ -483,3 +484,28 @@ def test_linearly_dependent_flat_templates_are_rejected(tmp_path):
     interface = VegaInterface(str(main_path))
     with pytest.raises(ValueError, match="linearly dependent"):
         interface.chi2()
+
+
+def test_flat_projection_removes_templates_from_both_sides_of_an_asymmetric_precision():
+    rng = np.random.default_rng(3)
+    num_bins, num_templates = 30, 4
+    factor = rng.normal(size=(num_bins, num_bins))
+    precision = np.linalg.inv(factor @ factor.T + np.eye(num_bins))
+    flat_templates = rng.normal(size=(num_bins, num_templates))
+
+    # Numerical inverses of ill-conditioned covariances are not exactly symmetric
+    antisymmetric_part = rng.normal(size=(num_bins, num_bins))
+    antisymmetric_part = 1e-6 * (antisymmetric_part - antisymmetric_part.T)
+    projected_precision, coefficient_matrix, _, _ = project_flat_templates(
+        precision + antisymmetric_part, flat_templates
+    )
+
+    scale = np.abs(precision @ flat_templates).max()
+    np.testing.assert_allclose(
+        projected_precision, projected_precision.T, atol=1e-13 * np.abs(precision).max()
+    )
+    np.testing.assert_allclose(projected_precision @ flat_templates, 0, atol=1e-11 * scale)
+    np.testing.assert_allclose(flat_templates.T @ projected_precision, 0, atol=1e-11 * scale)
+    np.testing.assert_allclose(
+        coefficient_matrix @ flat_templates, np.eye(num_templates), atol=1e-10
+    )
