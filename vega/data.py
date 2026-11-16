@@ -3,7 +3,7 @@ from astropy.io import fits
 from scipy import sparse
 from scipy.sparse import csr_array
 
-from vega import redshift_weights
+from vega import analytic_marginalization, redshift_weights
 from vega.coordinates import MultipoleCoordinates, RMuCoordinates, RtRpCoordinates
 from vega.utils import compute_log_cov_det, compute_masked_invcov, find_file, get_legendre_bins
 
@@ -29,19 +29,13 @@ class Data:
     model_coordinates = None
     data_coordinates = None
 
-    def __init__(self, corr_item, marginalize_in_fit=False, linear_nuisance=False):
+    def __init__(self, corr_item):
         """Read the data and initialize the coordinate grids.
 
         Parameters
         ----------
         corr_item : CorrelationItem
             Item object with the component config
-        marginalize_in_fit : bool, optional
-            If True, the marginalization covariance update is deferred to the fit
-            instead of being added to the covariance matrix, by default False
-        linear_nuisance : bool, optional
-            Prepare small-scale masks/templates without the legacy covariance
-            update or coefficient solve, by default False.
         """
         # First save the tracer info
         self.corr_item = corr_item
@@ -120,48 +114,12 @@ class Data:
 
         # self.cov_mat_org = self.cov_mat
         self.cov_mat_org = None
-        self.marg_templates = None
-        self.cov_marg_update = None
-        self.marg_diff2coeff_matrix = None
-        self.num_marg_modes = 0
         if not self.corr_item.low_mem_mode:
             self.cov_mat_org = self.cov_mat.copy()
 
-        if corr_item.marginalize_small_scales and linear_nuisance:
-            self.marg_templates = self.get_dist_xi_marg_templates(return_AAT=False)
-        elif corr_item.marginalize_small_scales:
-            self.marg_templates, self.cov_marg_update = self.get_dist_xi_marg_templates()
-
-            # if not self.corr_item.low_mem_mode:
-            # print('Updating covariance with marginalization templates.')
-            ntemps = self.marg_templates.shape[1]
-
-            # Invert the matrix but do not save it
-            self._inv_masked_cov = None
-            _inv_masked_cov = self.inv_masked_cov
-            self._inv_masked_cov = None
-
-            if not marginalize_in_fit:
-                self._cov_mat[np.ix_(self.data_mask, self.data_mask)] += self.cov_marg_update
-            else:
-                self.cov_marg_update = None
-
-            # Construct solution matrix, G becomes an ndarray
-            templates_masked = self.marg_templates[self.model_mask, :]
-            G = templates_masked.T.dot(_inv_masked_cov)
-            A = templates_masked.T.dot(G.T).T
-
-            if not (self.corr_item.fit_marg_scales and self.corr_item.marginalize_match_data_bins):
-                S = np.diag(
-                    np.full(ntemps, self.corr_item.marginalize_small_scales_prior_sigma**-2)
-                )
-                A = A + S  # should be positive definite
-
-            Ainv = np.linalg.inv(A)
-            # When multiplied by data - bestfit model, the below matrix will
-            # give the coefficients for each template. Total marginalized model
-            # is given by marg_templates.dot(marg_diff2coeff_matrix.dot(diff))
-            self.marg_diff2coeff_matrix = Ainv.dot(G)
+        # Build the linear templates and marginalize them into the covariance matrix
+        self.marginalization = analytic_marginalization.ComponentMarginalization(self)
+        self.num_marg_modes = self.marginalization.num_small_scale_modes
 
         self._cholesky = None
         self._scale = 1.0
@@ -1123,75 +1081,3 @@ class Data:
         self.data_mask = data_mask_ell
         self.model_mask = model_mask_ell
         self._distortion_mat = mult_matrix.dot(self._distortion_mat)
-
-    def get_dist_xi_marg_templates(self, factor=1e-8, return_AAT=True):
-        """Multiply undistorted templates with the distortion matrix and return
-        either the distorted template matrix alone or, additionally, the
-        compressed covariance-update matrix A @ A^T, depending on ``return_AAT``.
-
-        Parameters
-        ----------
-        factor: float, default: 1e-8
-            Compression cut-off ratio with respect to the highest singular value.
-        return_AAT : bool, optional
-            If True (default), also returns the covariance update matrix (A @ A^T)
-            and the function returns a tuple ``(templates, cov_update)``.
-            If False, returns only the template matrix.
-
-        Returns
-        -------
-        templates: csr_array
-            Template matrix.
-        cov_update (optional): 2D np.array
-            Covariance update matrix, returned only when ``return_AAT`` is True.
-        """
-        if not self.corr_item.marginalize_small_scales:
-            raise ValueError("Marginalization not configured")
-        if not self.has_distortion:
-            raise ValueError("Distortion matrix required for marginalization")
-
-        templates = self.corr_item.get_undist_xi_marg_templates()
-        templates = self.distortion_mat.dot(templates)
-
-        if self.corr_item.fit_marg_scales:
-            # Update masks
-            self.data_mask |= self.data_coordinates.get_mask_marginalization_scales(
-                self.corr_item.config["cuts"], self.corr_item.marginalize_small_scales
-            )
-
-            self.model_mask |= self.dist_model_coordinates.get_mask_marginalization_scales(
-                self.corr_item.config["cuts"], self.corr_item.marginalize_small_scales
-            )
-
-            if self.data_mask.sum() != self.model_mask.sum():
-                raise ValueError(
-                    "Data and model masks should be the same after marginalization scale cuts."
-                    " The most likely reason is a mismatch in rp-min between the data and"
-                    " the model coordinates. Check that 'rp-min = -300' for cross-correlations, "
-                    " or set it to the smallest rp in your distortion matrix."
-                )
-
-            # Recompute masked data vector and size
-            self._masked_data_vec = None
-            _ = self.masked_data_vec
-
-        if not return_AAT:
-            return templates
-
-        t = templates * self.corr_item.marginalize_small_scales_prior_sigma
-
-        # Compress using svd to remove degenerate modes
-        t = t[self.model_mask, :].toarray()
-        print(
-            f"  There are {templates.shape[1]} templates. "
-            "SVD of template matrix to remove degenerate modes."
-        )
-        u, s, _ = np.linalg.svd(t, full_matrices=False)
-        w = s > factor * s[0]
-        u = u[:, w]
-        s = s[w]
-        print(f"  There are {w.sum()} remaining modes for marginalization.")
-        self.num_marg_modes = w.sum()
-        cov_update = np.dot(u * s**2, u.T)
-
-        return templates, cov_update

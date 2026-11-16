@@ -117,6 +117,10 @@ class Polychord(Sampler):
             for i, name in enumerate(self.names):
                 params[name] = theta[i]
 
+            # Marginalized coefficients are derived parameters only when requested
+            if self.num_derived == 0:
+                return self.log_lik(params), []
+
             log_lik, marg_coeff = self.log_lik(params, return_marg_coeff=True)
             return log_lik, marg_coeff
 
