@@ -148,6 +148,11 @@ class VegaInterface:
         # Initialize scale parameters
         self.scale_params = ScaleParameters(self.main_config["cosmo-fit type"])
 
+        # Collect the analytically marginalized linear templates of all components
+        self.marginalization = None
+        if self._has_data:
+            self.marginalization = AnalyticMarginalization(self)
+
         # initialize the models
         self.models = {}
         if self._has_data:
@@ -210,10 +215,9 @@ class VegaInterface:
         # Check for analytic marginalization configuration
         # Marginalized coefficients are saved as derived parameters of a chain only
         # when they are computed at every likelihood evaluation.
-        self.marginalization = None
         self.corr_num_marg_modes = {}
         if self._has_data:
-            self.marginalization = AnalyticMarginalization(self)
+            self.marginalization.validate_configuration()
             if self.marginalize_in_fit:
                 self.corr_num_marg_modes = self.marginalization.num_coefficients
 
@@ -283,7 +287,7 @@ class VegaInterface:
                 model_cf[name] = self.models[name].compute_direct(local_params, direct_pk)
 
         if marg_coeff is not None:
-            self.marginalization.add_templates(model_cf, marg_coeff)
+            self.marginalization.add_templates(model_cf, marg_coeff, direct_pk is not None)
 
         return model_cf
 
@@ -321,7 +325,7 @@ class VegaInterface:
         # Get the best-fit marginalized coefficients. The chi2 itself does not need
         # them: the covariance already contains the marginalization.
         if return_marg_coeff:
-            marg_coeff = self.compute_marg_coeff(model_cf)
+            marg_coeff = self.compute_marg_coeff(model_cf, direct_pk is not None)
 
             if self._random_marg_coeff is None:
                 self._random_marg_coeff = marg_coeff
@@ -608,13 +612,16 @@ class VegaInterface:
 
         return mocks
 
-    def compute_marg_coeff(self, model_cf):
+    def compute_marg_coeff(self, model_cf, direct=False):
         """Compute the best-fit coefficients for the marginalization templates.
 
         Parameters
         ----------
         model_cf : dict
             Model correlation functions keyed by component name
+        direct : bool, optional
+            True if the model was computed directly from the full power spectrum,
+            by default False
 
         Returns
         -------
@@ -622,7 +629,7 @@ class VegaInterface:
             Best-fit template coefficients keyed by component name (only for components
             that have marginalization configured)
         """
-        return self.marginalization.compute_coefficients(model_cf)
+        return self.marginalization.compute_coefficients(model_cf, direct)
 
     def minimize(self):
         """Minimize the chi2 over the sampled parameters."""
@@ -636,16 +643,34 @@ class VegaInterface:
 
         # Best-fit marginalized coefficients, solved jointly for all components
         all_bestfit_marg_coeff = self.compute_marg_coeff(self.bestfit_model)
+        all_marg_coeff_errors = self.marginalization.get_coefficient_errors()
+        bestfit_params = self.params | self.minimizer.values
 
         self.total_data_size = 0
         self.bestfit_corr_stats = {}
 
-        num_pars = len(self.sample_params["limits"])
+        # Degrees of freedom. Each small-scale mode removes the information of one
+        # fitted bin, so these modes are subtracted from the number of data points.
+        # Other analytically marginalized coefficients count as model parameters.
+        num_fitted_params = len(self.sample_params["limits"])
+        num_other_marginalized = self.marginalization.num_other_coefficients
+        num_small_scale_modes = sum(self.data[name].num_marg_modes for name in self.corr_items)
+        self.dof_counts = {
+            "num_data_points": sum(self.data[name].data_size for name in self.corr_items),
+            "num_fitted_params": num_fitted_params,
+            "num_small_scale_modes": num_small_scale_modes,
+            "num_other_marginalized": sum(num_other_marginalized.values()),
+            "num_marginalized": num_small_scale_modes + sum(num_other_marginalized.values()),
+        }
+        self.num_model_params = num_fitted_params + self.dof_counts["num_other_marginalized"]
+        self.minimizer.dof_counts = self.dof_counts
+
         print("\n----------------------------------------------------")
         for name in self.corr_items:
             corr_data = self.data[name]
             data_size = corr_data.effective_data_size
             self.total_data_size += data_size
+            num_pars = num_fitted_params + num_other_marginalized[name]
 
             if self.monte_carlo and self._use_global_cov:
                 diff = (
@@ -681,12 +706,23 @@ class VegaInterface:
                 "reduced_chisq": reduced_chisq,
                 "p_value": p_value,
                 "bestfit_marg_coeff": bestfit_marg_coeff,
+                "num_small_scale_modes": corr_data.num_marg_modes,
+                "num_other_marginalized": num_other_marginalized[name],
             }
+            if bestfit_marg_coeff is not None:
+                # Full coefficient values: model value plus the fitted deviation
+                component = self.marginalization.components[name]
+                self.bestfit_corr_stats[name]["marg_coeff_table"] = {
+                    "names": component.coefficient_ids,
+                    "values": component.get_base_values(bestfit_params) + bestfit_marg_coeff,
+                    "errors": all_marg_coeff_errors[name],
+                }
 
         # The individual chi2 values above use the model without the template
         # contribution, as the covariance already accounts for it.
         self.marginalization.add_templates(self.bestfit_model, all_bestfit_marg_coeff)
 
+        num_pars = self.num_model_params
         self.chisq = self.minimizer.fmin.fval
         self.reduced_chisq = self.chisq / (self.total_data_size - num_pars)
         self.p_value = 1 - scipy.stats.chi2.cdf(self.chisq, self.total_data_size - num_pars)
@@ -694,6 +730,12 @@ class VegaInterface:
         print(
             f"Total chi^2/(ndata-nparam): {self.chisq:.1f}/({self.total_data_size}-{num_pars}) "
             f"= {self.reduced_chisq:.3f}, PTE={self.p_value:.2f}"
+        )
+        print(
+            f"Data points: {self.dof_counts['num_data_points']}, "
+            f"small-scale modes: {self.dof_counts['num_small_scale_modes']}, "
+            f"fitted parameters: {num_fitted_params}, "
+            f"other marginalized parameters: {self.dof_counts['num_other_marginalized']}"
         )
         print("----------------------------------------------------\n")
 
@@ -1146,6 +1188,10 @@ class VegaInterface:
             self.masked_global_log_cov_det = utils.compute_log_cov_det(
                 self.global_cov, self.full_data_mask
             )
+
+        # Marginalize the linear templates that have a flat prior
+        if self.marginalization is not None:
+            self.marginalization.project_global_precision()
 
     def compute_sensitivity(self, nominal=None, frac=0.1, verbose=True):
         """Compute the model sensitivity to each floating parameter.

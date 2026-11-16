@@ -22,6 +22,7 @@ class Data:
     _distortion_mat = None
     _inv_masked_cov = None
     _log_cov_det = None
+    marginalization = None
     _blind = None
     _blinding_strat = None
     cosmo_params = None
@@ -229,6 +230,10 @@ class Data:
             # Compute inverse of the covariance matrix
             self._inv_masked_cov = compute_masked_invcov(self.cov_mat, self.data_mask)
 
+            # Marginalize the linear templates that have a flat prior
+            if self.marginalization is not None:
+                self._inv_masked_cov = self.marginalization.project_precision(self._inv_masked_cov)
+
         return self._inv_masked_cov
 
     @property
@@ -242,6 +247,12 @@ class Data:
         """
         if self._log_cov_det is None:
             self._log_cov_det = compute_log_cov_det(self.cov_mat, self.data_mask)
+
+            # Normalization from the linear templates that have a flat prior,
+            # which is set when the precision matrix is projected
+            if self.marginalization is not None and self.marginalization.has_flat_templates:
+                _ = self.inv_masked_cov
+                self._log_cov_det += self.marginalization.flat_log_normalization
 
         return self._log_cov_det
 

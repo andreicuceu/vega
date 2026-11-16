@@ -10,9 +10,18 @@ from vega.utils import find_file
 from vega.vega_interface import VegaInterface
 
 PRIOR_SIGMA = 0.3
+BROADBAND_IDS = ("BB-{name}-0 add pre r,mu (0,0)", "BB-{name}-1 add post r,mu (1,0)")
 
 
-def write_configs(tmp_path, global_cov=False, marginalize_in_fit=False, marginalize=True):
+def write_configs(
+    tmp_path,
+    global_cov=False,
+    marginalize_in_fit=False,
+    marginalize=True,
+    broadbands=False,
+    broadband_prior_sigma=None,
+    extra_sample=None,
+):
     """Write a 12-bin correlation, its component configs and a main config.
 
     Parameters
@@ -25,6 +34,13 @@ def write_configs(tmp_path, global_cov=False, marginalize_in_fit=False, marginal
         Value of the ``marginalize-in-fit`` control option, by default False.
     marginalize : bool, optional
         If True, marginalize the bins below ``rt = 40``, by default True.
+    broadbands : bool, optional
+        If True, add one additive polynomial before and one after distortion and
+        marginalize their coefficients analytically, by default False.
+    broadband_prior_sigma : float, optional
+        Width of the Gaussian prior on the broadband coefficients; flat if None.
+    extra_sample : dict, optional
+        Additional entries for the ``[sample]`` section of the main config.
 
     Returns
     -------
@@ -66,8 +82,18 @@ def write_configs(tmp_path, global_cov=False, marginalize_in_fit=False, marginal
                 "marginalize-prior-sigma": str(PRIOR_SIGMA),
                 "fit-marginalized-scales": "True",
             }
+        sections = {}
+        if broadbands:
+            model_options["marginalize-broadbands"] = "True"
+            if broadband_prior_sigma is not None:
+                model_options["broadband-prior-sigma"] = str(broadband_prior_sigma)
+            sections["broadband"] = {
+                "1": "add pre r,mu 0:0:1 0:0:1",
+                "2": "add post r,mu 1:1:1 0:0:1",
+            }
         component.read_dict(
-            {
+            sections
+            | {
                 "data": {
                     "name": name,
                     "filename": str(data_path),
@@ -96,6 +122,13 @@ def write_configs(tmp_path, global_cov=False, marginalize_in_fit=False, marginal
     main["data sets"]["ini files"] = " ".join(component_paths)
     main["output"]["filename"] = str(tmp_path / "result.fits")
     main["control"]["marginalize-in-fit"] = str(marginalize_in_fit)
+    if broadbands:
+        for name in ("first", "second") if global_cov else ("first",):
+            for broadband_id in BROADBAND_IDS:
+                main["parameters"][broadband_id.format(name=name)] = "0.0"
+    if extra_sample is not None:
+        for key, value in extra_sample.items():
+            main["sample"][key] = value
 
     if global_cov:
         joint_covariance = np.block(
@@ -133,12 +166,15 @@ def joint_problem(interface, model_cf):
         ``(total_data_size, total_num_coefficients)``.
     original_covariance : 2D array
         Masked covariance before the marginalization update.
+    prior_variances : 1D array
+        Prior variance of each coefficient, infinite for flat priors.
     """
-    residuals, template_blocks, covariance_blocks = [], [], []
+    residuals, template_blocks, covariance_blocks, prior_variances = [], [], [], []
     for name in interface.corr_items:
         data = interface.data[name]
         residuals.append(data.masked_data_vec - model_cf[name][data.model_mask])
         template_blocks.append(data.marginalization.templates[data.model_mask, :].toarray())
+        prior_variances.append(data.marginalization.prior_variances)
         covariance_blocks.append(data.cov_mat_org[np.ix_(data.data_mask, data.data_mask)])
 
     num_coefficients = sum(block.shape[1] for block in template_blocks)
@@ -159,14 +195,19 @@ def joint_problem(interface, model_cf):
         original_covariance[:size, size:] = 0.1 * covariance_blocks[0]
         original_covariance[size:, :size] = 0.1 * covariance_blocks[0]
 
-    return np.concatenate(residuals), templates, original_covariance
+    return (
+        np.concatenate(residuals),
+        templates,
+        original_covariance,
+        np.concatenate(prior_variances),
+    )
 
 
 @pytest.mark.parametrize("global_cov", [False, True])
 def test_chi2_and_coefficients_match_explicit_solution(tmp_path, global_cov):
     interface = VegaInterface(str(write_configs(tmp_path, global_cov=global_cov)))
     model_cf = interface.compute_model(run_init=False)
-    residual, templates, original_covariance = joint_problem(interface, model_cf)
+    residual, templates, original_covariance, _ = joint_problem(interface, model_cf)
     num_coefficients = templates.shape[1]
     assert num_coefficients > 0
 
@@ -261,3 +302,184 @@ def test_no_marginalization_is_a_no_op(tmp_path):
     chi2, coefficients = interface.chi2(return_marg_coeff=True)
     assert coefficients == {}
     assert chi2 == interface.chi2()
+
+
+@pytest.mark.parametrize("global_cov", [False, True])
+@pytest.mark.parametrize("broadband_prior_sigma", [None, 0.05])
+def test_broadband_marginalization_matches_explicit_solution(
+    tmp_path, global_cov, broadband_prior_sigma
+):
+    main_path = write_configs(
+        tmp_path,
+        global_cov=global_cov,
+        broadbands=True,
+        broadband_prior_sigma=broadband_prior_sigma,
+    )
+    interface = VegaInterface(str(main_path))
+    model_cf = interface.compute_model(run_init=False)
+    residual, templates, original_covariance, prior_variances = joint_problem(interface, model_cf)
+
+    flat_mask = np.isinf(prior_variances)
+    num_flat = flat_mask.sum()
+    num_components = len(interface.corr_items)
+    assert num_flat == (2 * num_components if broadband_prior_sigma is None else 0)
+
+    # Explicit joint solution: flat priors have zero prior precision
+    original_precision = np.linalg.inv(original_covariance)
+    prior_precision = np.diag(1 / prior_variances)
+    normal_matrix = templates.T @ original_precision @ templates + prior_precision
+    expected_coefficients = np.linalg.solve(
+        normal_matrix, templates.T @ original_precision @ residual
+    )
+    corrected_residual = residual - templates @ expected_coefficients
+    expected_chi2 = (
+        corrected_residual @ original_precision @ corrected_residual
+        + expected_coefficients @ prior_precision @ expected_coefficients
+    )
+
+    prior_chi2 = interface.compute_prior_chi2()
+    assert interface.chi2() - prior_chi2 == pytest.approx(expected_chi2, rel=1e-9)
+
+    _, coefficients = interface.chi2(return_marg_coeff=True)
+    joint_coefficients = np.concatenate([coefficients[name] for name in interface.corr_items])
+    np.testing.assert_allclose(joint_coefficients, expected_coefficients, rtol=1e-6, atol=1e-12)
+
+    # Uncertainties at fixed sampled parameters from the inverse of the joint normal matrix
+    coefficient_errors = interface.marginalization.get_coefficient_errors()
+    joint_errors = np.concatenate([coefficient_errors[name] for name in interface.corr_items])
+    expected_errors = np.sqrt(np.diag(np.linalg.inv(normal_matrix)))
+    np.testing.assert_allclose(joint_errors, expected_errors, rtol=1e-6)
+
+    # Marginal likelihood: Gaussian-prior coefficients update the covariance, and the
+    # integral over the flat-prior ones adds log det(F^T P F) - num_flat log(2 pi)
+    gaussian_templates = templates[:, ~flat_mask]
+    updated_covariance = (
+        original_covariance
+        + (gaussian_templates * prior_variances[~flat_mask]) @ gaussian_templates.T
+    )
+    minus_two_log_lik = (
+        expected_chi2
+        + np.linalg.slogdet(updated_covariance)[1]
+        + residual.size * np.log(2 * np.pi)
+        + prior_chi2
+    )
+    if num_flat > 0:
+        flat_templates = templates[:, flat_mask]
+        flat_normal_matrix = flat_templates.T @ np.linalg.solve(updated_covariance, flat_templates)
+        minus_two_log_lik += np.linalg.slogdet(flat_normal_matrix)[1] - num_flat * np.log(2 * np.pi)
+    expected_log_lik = -0.5 * minus_two_log_lik
+    for prior in interface.priors.values():
+        expected_log_lik += interface._gaussian_lik_prior(prior[1])
+    assert interface.log_lik() == pytest.approx(expected_log_lik, rel=1e-9)
+
+
+def test_broadband_templates_are_the_model_response(tmp_path):
+    interface = VegaInterface(str(write_configs(tmp_path, broadbands=True)))
+    data = interface.data["first"]
+    component = data.marginalization
+    base_model = interface.compute_model(run_init=False)["first"]
+
+    for broadband_id in BROADBAND_IDS:
+        broadband_id = broadband_id.format(name="first")
+        column = component.coefficient_ids.index(broadband_id)
+        shifted_model = interface.compute_model({broadband_id: 0.7}, run_init=False)["first"]
+        np.testing.assert_allclose(
+            shifted_model - base_model,
+            0.7 * component.templates[:, [column]].toarray()[:, 0],
+            rtol=1e-10,
+            atol=1e-14,
+        )
+
+
+def test_flat_broadband_chi2_is_independent_of_base_coefficients(tmp_path):
+    interface = VegaInterface(str(write_configs(tmp_path, broadbands=True)))
+    shifted_params = {
+        BROADBAND_IDS[0].format(name="first"): 0.02,
+        BROADBAND_IDS[1].format(name="first"): -0.01,
+    }
+
+    assert interface.chi2(shifted_params) == pytest.approx(interface.chi2(), rel=1e-9)
+
+    # The fitted deviation absorbs the shift of the base coefficients
+    _, coefficients = interface.chi2(return_marg_coeff=True)
+    _, shifted_coefficients = interface.chi2(shifted_params, return_marg_coeff=True)
+    component = interface.data["first"].marginalization
+    for broadband_id, shift in shifted_params.items():
+        column = component.coefficient_ids.index(broadband_id)
+        difference = coefficients["first"][column] - shifted_coefficients["first"][column]
+        assert difference == pytest.approx(shift, rel=1e-6)
+
+
+def test_degrees_of_freedom_counts(tmp_path):
+    interface = VegaInterface(str(write_configs(tmp_path, broadbands=True)))
+    interface.minimize()
+    data = interface.data["first"]
+
+    assert interface.dof_counts == {
+        "num_data_points": data.data_size,
+        "num_fitted_params": 2,
+        "num_small_scale_modes": data.num_marg_modes,
+        "num_other_marginalized": 2,
+        "num_marginalized": data.num_marg_modes + 2,
+    }
+    assert interface.total_data_size == data.data_size - data.num_marg_modes
+    assert interface.num_model_params == 4
+    expected_reduced_chisq = interface.chisq / (interface.total_data_size - 4)
+    assert interface.reduced_chisq == pytest.approx(expected_reduced_chisq)
+
+    interface.output.write_results(
+        interface.bestfit_model, interface.params, interface.minimizer, interface.bestfit_corr_stats
+    )
+    with fits.open(interface.output.outfile) as hdul:
+        header = hdul["BESTFIT"].header
+        assert header["NDATA"] == data.data_size
+        assert header["NFITPAR"] == 2
+        assert header["NSMALL"] == data.num_marg_modes
+        assert header["NMARGOTH"] == 2
+        assert header["NMARG"] == data.num_marg_modes + 2
+
+        # One row per marginalized coefficient, with names that survive the round trip
+        table = hdul["MARGCOEFF"].data
+        component = data.marginalization
+        assert tuple(table["names"]) == component.coefficient_ids
+        assert set(table["correlation"]) == {"first"}
+        np.testing.assert_allclose(
+            table["values"], interface.bestfit_corr_stats["first"]["bestfit_marg_coeff"]
+        )
+        assert np.all(table["errors"] > 0)
+
+
+def test_marginalized_broadband_cannot_be_sampled(tmp_path):
+    sampled_broadband = {BROADBAND_IDS[0].format(name="first"): "-1 1 0 0.1"}
+    main_path = write_configs(tmp_path, broadbands=True, extra_sample=sampled_broadband)
+    with pytest.raises(ValueError, match="cannot appear in"):
+        VegaInterface(str(main_path))
+
+
+def test_bao_amp_cannot_be_sampled_with_marginalized_broadbands(tmp_path):
+    main_path = write_configs(tmp_path, broadbands=True, extra_sample={"bao_amp": "0 2 1 0.1"})
+    with pytest.raises(ValueError, match="bao_amp cannot be sampled"):
+        VegaInterface(str(main_path))
+
+
+def test_linearly_dependent_flat_templates_are_rejected(tmp_path):
+    main_path = write_configs(tmp_path, broadbands=True)
+    component_path = tmp_path / "first.ini"
+    component = configparser.ConfigParser()
+    component.optionxform = str
+    component.read(component_path)
+    # A second copy of the same polynomial term is degenerate with the first
+    component["broadband"]["3"] = "add pre r,mu 0:0:1 0:0:1"
+    with component_path.open("w") as stream:
+        component.write(stream)
+
+    main = configparser.ConfigParser()
+    main.optionxform = str
+    main.read(main_path)
+    main["parameters"]["BB-first-2 add pre r,mu (0,0)"] = "0.0"
+    with main_path.open("w") as stream:
+        main.write(stream)
+
+    interface = VegaInterface(str(main_path))
+    with pytest.raises(ValueError, match="linearly dependent"):
+        interface.chi2()

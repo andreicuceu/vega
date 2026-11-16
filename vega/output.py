@@ -126,6 +126,10 @@ class Output:
             bestfit_hdu = self._bestfit_hdu(minimizer)
             hdu_list.append(bestfit_hdu)
 
+        marg_coeff_hdu = self._marg_coeff_hdu(bestfit_corr_stats)
+        if marg_coeff_hdu is not None:
+            hdu_list.append(marg_coeff_hdu)
+
         if self.output_pk:
             assert models is not None
             for key, model in models.items():
@@ -342,6 +346,9 @@ class Output:
 
             if bestfit_corr_stats is not None:
                 for par, val in bestfit_corr_stats[name].items():
+                    if par == "marg_coeff_table":
+                        # Written to its own table extension
+                        continue
                     if par == "bestfit_marg_coeff":
                         if val is None:
                             continue
@@ -365,6 +372,55 @@ class Output:
             model_hdus.append(model_hdu)
 
         return model_hdus
+
+    @staticmethod
+    def _marg_coeff_hdu(bestfit_corr_stats):
+        """Create HDU with the best-fit analytically marginalized coefficients.
+
+        Parameters
+        ----------
+        bestfit_corr_stats : dict or None
+            Best-fit statistics keyed by correlation name. Correlations with
+            marginalized coefficients have a ``marg_coeff_table`` entry.
+
+        Returns
+        -------
+        astropy.io.fits.hdu.table.BinTableHDU or None
+            HDU with one row per coefficient, or None if nothing was marginalized.
+        """
+        if bestfit_corr_stats is None:
+            return None
+
+        correlations, names, values, errors = [], [], [], []
+        for corr_name, stats in bestfit_corr_stats.items():
+            table = stats.get("marg_coeff_table")
+            if table is None:
+                continue
+            correlations += [corr_name] * len(table["names"])
+            names += list(table["names"])
+            values.append(table["values"])
+            errors.append(table["errors"])
+
+        if not names:
+            return None
+
+        correlation_format = f"{max(len(name) for name in correlations)}A"
+        name_format = f"{max(len(name) for name in names)}A"
+        columns = [
+            fits.Column(name="correlation", format=correlation_format, array=correlations),
+            fits.Column(name="names", format=name_format, array=names),
+            fits.Column(name="values", format="D", array=np.concatenate(values)),
+            fits.Column(name="errors", format="D", array=np.concatenate(errors)),
+        ]
+        marg_coeff_hdu = fits.BinTableHDU.from_columns(columns)
+        marg_coeff_hdu.name = "MARGCOEFF"
+
+        marg_coeff_hdu.header.comments["TTYPE1"] = "Correlation of the coefficient"
+        marg_coeff_hdu.header.comments["TTYPE2"] = "Names of marginalized coefficients"
+        marg_coeff_hdu.header.comments["TTYPE3"] = "Bestfit values of the coefficients"
+        marg_coeff_hdu.header.comments["TTYPE4"] = "Errors at fixed sampled parameters"
+
+        return marg_coeff_hdu
 
     def _bestfit_hdu(self, minimizer):
         """Create HDU with the bestfit info
@@ -411,6 +467,20 @@ class Output:
         bestfit_hdu.header["VALID"] = minimizer.minuit.valid
         bestfit_hdu.header["ACCURATE"] = minimizer.minuit.accurate
         bestfit_hdu.header["PERCIVAL"] = self.percival
+
+        # Counts entering the degrees of freedom
+        dof_cards = {
+            "NDATA": ("num_data_points", "Fitted data points"),
+            "NFITPAR": ("num_fitted_params", "Directly fitted parameters"),
+            "NSMALL": ("num_small_scale_modes", "Small-scale marginalization modes"),
+            "NMARGOTH": ("num_other_marginalized", "Other marginalized parameters"),
+            "NMARG": ("num_marginalized", "All analytically marginalized parameters"),
+        }
+        dof_counts = getattr(minimizer, "dof_counts", None)
+        if dof_counts is not None:
+            for card, (key, comment) in dof_cards.items():
+                bestfit_hdu.header[card] = int(dof_counts[key])
+                bestfit_hdu.header.comments[card] = comment
 
         bestfit_hdu.header.comments["TTYPE1"] = "Names of sampled parameters"
         bestfit_hdu.header.comments["TTYPE2"] = "Bestfit values of sampled parameters"

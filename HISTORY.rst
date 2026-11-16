@@ -2,6 +2,27 @@
 History
 =======
 
+Unreleased
+----------
+* Added ``vega/analytic_marginalization.py``, which holds the analytic marginalization
+  of linear model parameters. The small-scale template marginalization moved there from
+  ``Data`` and ``VegaInterface``; the chi2, likelihood and fit results of existing
+  configurations are bit-identical.
+* Additive broadband polynomials can be marginalized analytically with
+  ``marginalize-broadbands = True`` in the ``[model]`` section of a correlation config,
+  with a flat prior or a Gaussian prior of width ``broadband-prior-sigma``.
+* The best-fit small-scale coefficients, and the best-fit model in the output file, now
+  come from the joint solution with the Gaussian prior and, when a global covariance is
+  used, the covariance between correlations. Previously each correlation was solved
+  separately, with a flat prior when ``fit-marginalized-scales`` and
+  ``marginalize-match-data-bins`` were both set.
+* ``marginalize-in-fit = True`` no longer changes the likelihood: it only makes the
+  marginalized coefficients available at every evaluation, e.g. as derived parameters of
+  a chain. Chains run without it no longer contain these derived parameters.
+* The counts entering the degrees of freedom are stored in ``VegaInterface.dof_counts``
+  and written to the ``BESTFIT`` header (``NDATA``, ``NFITPAR``, ``NSMALL``, ``NMARGOTH``,
+  ``NMARG``).
+
 1.8.0 (2026-10-09)
 ------------------
 * Changed the new-metal distortion matrices (``new_metals = True``) to the expectation of
