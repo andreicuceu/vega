@@ -22,6 +22,11 @@ Unreleased
 * The counts entering the degrees of freedom are stored in ``VegaInterface.dof_counts``
   and written to the ``BESTFIT`` header (``NDATA``, ``NFITPAR``, ``NSMALL``, ``NMARGOTH``,
   ``NMARG``).
+* ``FitResults`` reads ``NSMALL`` and ``NMARGOTH`` and computes the degrees of freedom,
+  reduced chi2 and PTE as ``VegaInterface.minimize`` does. For output files written from
+  now on, the small-scale modes are therefore subtracted from the number of data points.
+* The Percival correction counts analytically marginalized broadband coefficients as
+  fitted parameters.
 * Fixed Monte Carlo mock creation without a global covariance when scale cuts are applied:
   ``Data.create_monte_carlo`` now accepts the fiducial model restricted to the fitted bins
   that ``VegaInterface.initialize_monte_carlo`` passes to it, instead of raising

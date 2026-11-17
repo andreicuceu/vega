@@ -215,11 +215,15 @@ class VegaInterface:
         # Check for analytic marginalization configuration
         # Marginalized coefficients are saved as derived parameters of a chain only
         # when they are computed at every likelihood evaluation.
-        self.corr_num_marg_modes = {}
+        self.corr_num_marg_modes = dict.fromkeys(self.corr_items, 0)
+        self.num_model_params = len(self.sample_params["limits"])
         if self._has_data:
             self.marginalization.validate_configuration()
             if self.marginalize_in_fit:
                 self.corr_num_marg_modes = self.marginalization.num_coefficients
+
+            # Marginalized coefficients other than small-scale modes count as model parameters
+            self.num_model_params += sum(self.marginalization.num_other_coefficients.values())
 
         # Check for sampler
         self.run_sampler = False
@@ -307,6 +311,9 @@ class VegaInterface:
             chi^2
         """
         assert self._has_data
+
+        if direct_pk is not None:
+            self.marginalization.check_direct_model()
 
         # Compute model
         try:
@@ -1135,9 +1142,12 @@ class VegaInterface:
         if self.apply_global_hartlap:
             ndata = np.sum(self.full_data_mask)
             hartlap = (nsamples - 1) / (nsamples - ndata - 2)
-            self._percival_corr = utils.percival_correction(
-                nsamples, ndata, len(self.sample_params["limits"])
-            )
+            # Analytically marginalized coefficients other than the small-scale
+            # modes are fitted parameters of the model as well
+            num_model_params = len(self.sample_params["limits"])
+            if self.marginalization is not None:
+                num_model_params += sum(self.marginalization.num_other_coefficients.values())
+            self._percival_corr = utils.percival_correction(nsamples, ndata, num_model_params)
             print(
                 f"Applying global Hartlap factor: C x {hartlap:.2f}. "
                 f"Percival correction is {self._percival_corr:.2f}. "
@@ -1151,27 +1161,12 @@ class VegaInterface:
 
             self.global_cov *= hartlap
 
-        # Construct combined templates for the mode marginalization
-        # Following just updates the covariance matrix
-        # More stable inversion can be achieved through Woodbury, but
-        # requires handling masked pixels without removing them from cov.
-        if any(corr_item.marginalize_small_scales for corr_item in self.corr_items.values()):
-            print("Updating global covariance with marginalization templates.")
-            j = 0
-            for name in self.corr_items:
-                data = self.data[name]
-                ndata = data.full_data_size
-                wd = data.data_mask
-
-                if self.corr_items[name].marginalize_small_scales:
-                    M1 = self.global_cov[j : j + ndata, j : j + ndata]
-                    M1[np.ix_(wd, wd)] += data.marginalization.cov_update
-
-                    if self.low_mem_mode:
-                        data.marginalization.cov_update = None
-
-                j += ndata
-            del j
+        # Marginalize the linear templates that have a Gaussian prior. This only
+        # updates the covariance matrix; a more stable inversion can be achieved
+        # through Woodbury, but requires handling masked pixels without removing
+        # them from cov.
+        if self.marginalization is not None:
+            self.marginalization.update_global_covariance()
 
         if self.low_mem_mode:
             masked_cov = self.global_cov[:, self.full_data_mask]

@@ -2,7 +2,6 @@ import os.path
 import sys
 from pathlib import Path
 
-import numpy as np
 from mpi4py import MPI
 
 from vega.parameters.param_utils import build_names
@@ -31,7 +30,7 @@ class Sampler:
         self.derived_dict = None
         if derived_dict is not None:
             self.derived_dict = derived_dict
-            self.num_derived = np.sum([num_marg for num_marg in derived_dict.values()])
+            self.num_derived = int(sum(derived_dict.values()))
         else:
             self.num_derived = 0
 

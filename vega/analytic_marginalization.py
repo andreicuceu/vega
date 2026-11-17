@@ -35,7 +35,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.linalg import block_diag as dense_block_diag
 from scipy.linalg import cho_factor, cho_solve
-from scipy.sparse import block_diag, csr_array, hstack
+from scipy.sparse import csr_array, hstack
 
 from vega.broadband_poly import BroadbandPolynomials
 
@@ -230,13 +230,7 @@ def build_broadband_family(data):
             if term["func"] != "broadband":
                 continue
 
-            r1_min, r1_max, r1_step = term["r1_config"]
-            r2_min, r2_max, r2_step = term["r2_config"]
-            term_ids = [
-                f"{term['name']} ({i},{j})"
-                for i in np.arange(r1_min, r1_max + 1, r1_step)
-                for j in np.arange(r2_min, r2_max + 1, r2_step)
-            ]
+            term_ids = broadband.get_coefficient_names(term)
 
             for coefficient_id in term_ids:
                 # Response of the model evaluator itself to a unit coefficient
@@ -288,15 +282,9 @@ def project_flat_templates(precision, flat_templates):
     -------
     projected_precision : 2D array
         ``P - P F inv(F.T P F) F.T P``, with shape ``(data_size, data_size)``.
-    coefficient_matrix : 2D array
-        Matrix ``inv(F.T P F) F.T P`` giving the best-fit flat-prior coefficients
-        from a residual, with shape ``(num_flat, data_size)``.
     log_normalization : float
         ``log det(F.T P F) - num_flat * log(2 pi)``, the term that integrating
         over the coefficients adds to minus twice the log-likelihood.
-    coefficient_variances : 1D array
-        Diagonal of ``inv(F.T P F)``, the variance of each flat-prior coefficient
-        at fixed sampled parameters, with shape ``(num_flat,)``.
 
     Raises
     ------
@@ -329,17 +317,80 @@ def project_flat_templates(precision, flat_templates):
 
     cholesky_factor = cho_factor(normal_matrix)
     scaled_coefficient_matrix = cho_solve(cholesky_factor, scaled_weighted_templates.T)
-
     projected_precision = precision - scaled_weighted_templates.dot(scaled_coefficient_matrix)
-    coefficient_matrix = scaled_coefficient_matrix / template_norms[:, None]
 
     log_det_normal_matrix = np.sum(np.log(eigenvalues)) + 2 * np.sum(np.log(template_norms))
     log_normalization = log_det_normal_matrix - flat_templates.shape[1] * np.log(2 * np.pi)
 
-    inverse_normal_matrix = cho_solve(cholesky_factor, np.eye(flat_templates.shape[1]))
-    coefficient_variances = np.diag(inverse_normal_matrix) / template_norms**2
+    return projected_precision, log_normalization
 
-    return projected_precision, coefficient_matrix, log_normalization, coefficient_variances
+
+def solve_with_covariance(covariance, right_hand_side):
+    """Solve ``covariance @ solution = right_hand_side`` for a symmetric covariance.
+
+    Parameters
+    ----------
+    covariance : 2D array
+        Covariance matrix, shape ``(data_size, data_size)``. It may be overwritten.
+    right_hand_side : 2D array
+        Right-hand sides, shape ``(data_size, num_columns)``.
+
+    Returns
+    -------
+    2D array
+        Solution with shape ``(data_size, num_columns)``.
+    """
+    try:
+        cholesky_factor = cho_factor(covariance, overwrite_a=True)
+    except np.linalg.LinAlgError:
+        # Covariances that are not positive definite are accepted elsewhere in Vega
+        return np.linalg.solve(covariance, right_hand_side)
+
+    return cho_solve(cholesky_factor, right_hand_side)
+
+
+def solve_coefficients(masked_templates, weighted_templates, prior_variances):
+    """Build the solution for the best-fit coefficients of linear templates.
+
+    With ``C`` the covariance before any marginalization, ``T`` the templates and
+    ``Lambda`` the diagonal prior precision (zero for flat priors), the best-fit
+    coefficients for a residual ``r`` are
+
+        inv(T.T inv(C) T + Lambda) @ T.T @ inv(C) @ r,
+
+    and the inverse of the normal matrix is their covariance at fixed sampled
+    parameters. The original covariance is used on purpose: the precision after
+    the Gaussian update is ill-conditioned along the marginalized directions and
+    is not accurate enough to recover the coefficients from it.
+
+    Parameters
+    ----------
+    masked_templates : 2D array
+        Templates within the fitted bins, shape ``(data_size, num_coefficients)``.
+    weighted_templates : 2D array
+        ``inv(C) @ T``, with shape ``(data_size, num_coefficients)``.
+    prior_variances : 1D array
+        Prior variance of each coefficient; infinite for flat priors.
+
+    Returns
+    -------
+    coefficient_matrix : 2D array
+        Matrix giving the coefficients from a residual, shape
+        ``(num_coefficients, data_size)``.
+    coefficient_errors : 1D array
+        Standard deviation of each coefficient at fixed sampled parameters.
+    """
+    normal_matrix = masked_templates.T.dot(weighted_templates)
+    normal_matrix = 0.5 * (normal_matrix + normal_matrix.T)
+    normal_matrix[np.diag_indices_from(normal_matrix)] += 1 / prior_variances
+
+    inverse_normal_matrix = np.linalg.inv(normal_matrix)
+    coefficient_matrix = inverse_normal_matrix.dot(weighted_templates.T)
+
+    # Round-off can leave tiny negative variances for unconstrained coefficients
+    coefficient_errors = np.sqrt(np.clip(np.diag(inverse_normal_matrix), 0.0, None))
+
+    return coefficient_matrix, coefficient_errors
 
 
 class ComponentMarginalization:
@@ -355,16 +406,10 @@ class ComponentMarginalization:
     num_small_scale_modes : int
         Number of non-degenerate small-scale modes, subtracted from the number
         of data points when counting degrees of freedom.
-    flat_coefficient_matrix : 2D array or None
-        Matrix giving the best-fit flat-prior coefficients of this correlation from
-        its residual, shape ``(num_flat, data_size)``. Set when the precision of
-        the correlation is first computed.
     flat_log_normalization : float
         Term added to the log-determinant of the covariance by the flat-prior
-        coefficients; zero without them.
-    flat_coefficient_variances : 1D array or None
-        Variance of each flat-prior coefficient at fixed sampled parameters,
-        ignoring the covariance between correlations.
+        coefficients; zero without them. Set when the precision of the
+        correlation is first computed.
     """
 
     def __init__(self, data):
@@ -383,9 +428,7 @@ class ComponentMarginalization:
         self.families = []
         self.cov_update = None
         self.num_small_scale_modes = 0
-        self.flat_coefficient_matrix = None
         self.flat_log_normalization = 0.0
-        self.flat_coefficient_variances = None
 
         if corr_item.marginalize_small_scales:
             self.families.append(build_small_scale_family(data))
@@ -396,6 +439,22 @@ class ComponentMarginalization:
 
         if corr_item.config["model"].getboolean("marginalize-broadbands", False):
             self.families.append(build_broadband_family(data))
+
+        # The families are fixed from here on: stack their templates and priors once
+        self._templates = None
+        self._prior_variances = np.empty(0)
+        self._amplitude_factors = np.empty(0)
+        if len(self.families) == 1:
+            self._templates = self.families[0].templates
+        elif self.families:
+            self._templates = hstack([family.templates for family in self.families], format="csr")
+        if self.families:
+            self._prior_variances = np.concatenate(
+                [np.full(len(family.ids), family.prior_sigma**2) for family in self.families]
+            )
+            self._amplitude_factors = np.concatenate(
+                [np.full(len(family.ids), family.amplitude_factor) for family in self.families]
+            )
 
         for family in self.families:
             # Flat priors are handled by a projection of the precision matrix
@@ -448,10 +507,7 @@ class ComponentMarginalization:
         scipy.sparse.csr_array
             Template matrix with shape ``(model_size, num_coefficients)``.
         """
-        if len(self.families) == 1:
-            return self.families[0].templates
-
-        return hstack([family.templates for family in self.families], format="csr")
+        return self._templates
 
     @property
     def prior_variances(self):
@@ -462,9 +518,7 @@ class ComponentMarginalization:
         1D array
             Prior variances with shape ``(num_coefficients,)``; infinite for flat priors.
         """
-        return np.concatenate(
-            [np.full(len(family.ids), family.prior_sigma**2) for family in self.families]
-        )
+        return self._prior_variances
 
     @property
     def amplitude_factors(self):
@@ -475,9 +529,7 @@ class ComponentMarginalization:
         1D array
             Amplitude factors with shape ``(num_coefficients,)``.
         """
-        return np.concatenate(
-            [np.full(len(family.ids), family.amplitude_factor) for family in self.families]
-        )
+        return self._amplitude_factors
 
     @property
     def num_other_coefficients(self):
@@ -530,12 +582,9 @@ class ComponentMarginalization:
         if not self.has_flat_templates:
             return precision
 
-        (
-            precision,
-            self.flat_coefficient_matrix,
-            self.flat_log_normalization,
-            self.flat_coefficient_variances,
-        ) = project_flat_templates(precision, self.get_masked_flat_templates())
+        precision, self.flat_log_normalization = project_flat_templates(
+            precision, self.get_masked_flat_templates()
+        )
 
         return precision
 
@@ -603,11 +652,9 @@ class AnalyticMarginalization:
     covariance updates. This class recovers the best-fit coefficients from a
     residual, either once after a fit or at every likelihood evaluation.
 
-    For Gaussian priors the best-fit coefficients are the conditional mean
-
-        coefficients = Sigma @ templates.T @ updated_precision @ (data - model),
-
-    so one matrix, built on first use, maps a residual to all coefficients.
+    The coefficients are the solution of the joint normal equations of all
+    templates with their priors (see ``solve_coefficients``), so one matrix, built
+    on first use, maps a residual to all coefficients.
     """
 
     def __init__(self, interface):
@@ -627,9 +674,8 @@ class AnalyticMarginalization:
 
         self._coefficient_matrices = None
         self._global_coefficient_matrix = None
-        self._global_flat_coefficient_matrix = None
-        self._global_flat_coefficient_variances = None
         self._coefficient_errors = None
+        self._global_weighted_templates = None
 
     def validate_configuration(self):
         """Check the marginalized coefficients against the sampled and scanned parameters.
@@ -682,6 +728,77 @@ class AnalyticMarginalization:
                 "analytically marginalized: their templates are built with a fixed bao_amp."
             )
 
+    def update_global_covariance(self):
+        """Add the covariance updates of all correlations to the global covariance.
+
+        Marginalizes the Gaussian-prior coefficients of every template family in
+        the block of each correlation of ``interface.global_cov``, in place. The
+        action of the original inverse covariance on the templates is stored
+        first, for the solution of the best-fit coefficients.
+        """
+        interface = self._interface
+        if not self.components:
+            return
+
+        # The best-fit coefficients are solved with the covariance before the
+        # update, which is overwritten below: keep its action on the templates.
+        original_masked_covariance = interface.global_cov[
+            np.ix_(interface.full_data_mask, interface.full_data_mask)
+        ]
+        self._global_weighted_templates = solve_with_covariance(
+            original_masked_covariance, self._get_joint_masked_templates()
+        )
+        del original_masked_covariance
+
+        if all(component.cov_update is None for component in self.components.values()):
+            return
+
+        print("Updating global covariance with marginalization templates.")
+        block_start = 0
+        for name in interface.corr_items:
+            data = interface.data[name]
+            block_stop = block_start + data.full_data_size
+
+            if name in self.components and self.components[name].cov_update is not None:
+                component = self.components[name]
+                covariance_block = interface.global_cov[
+                    block_start:block_stop, block_start:block_stop
+                ]
+                covariance_block[np.ix_(data.data_mask, data.data_mask)] += component.cov_update
+
+                if interface.low_mem_mode:
+                    component.cov_update = None
+
+            block_start = block_stop
+
+    def check_direct_model(self):
+        """Refuse a direct power spectrum model with Gaussian broadband priors.
+
+        The broadband templates and their covariance update include the
+        ``(1 + bao_amp)`` factor of the peak/smooth decomposition. A model computed
+        directly from the full power spectrum does not have this factor, so the
+        prior would act with a width ``(1 + bao_amp)`` times the configured one.
+        Flat priors are not affected.
+
+        Raises
+        ------
+        ValueError
+            If any correlation has marginalized broadbands with a Gaussian prior
+            and an amplitude factor different from one.
+        """
+        for name, component in self.components.items():
+            for family in component.families:
+                if (
+                    family.name == "broadband"
+                    and not family.has_flat_prior
+                    and family.amplitude_factor != 1.0
+                ):
+                    raise ValueError(
+                        f"{name}: analytically marginalized broadbands with a Gaussian prior "
+                        "(broadband-prior-sigma) cannot be used with a model computed "
+                        "directly from the full power spectrum. Use a flat prior."
+                    )
+
     def project_global_precision(self):
         """Marginalize the flat-prior coefficients of all correlations in the global precision.
 
@@ -701,14 +818,12 @@ class AnalyticMarginalization:
                 flat_template_blocks.append(np.zeros((data.data_size, 0)))
 
         joint_flat_templates = dense_block_diag(*flat_template_blocks)
-        projected_precision, coefficient_matrix, log_normalization, coefficient_variances = (
-            project_flat_templates(interface.masked_global_invcov, joint_flat_templates)
+        projected_precision, log_normalization = project_flat_templates(
+            interface.masked_global_invcov, joint_flat_templates
         )
 
         interface.masked_global_invcov = projected_precision
         interface.masked_global_log_cov_det += log_normalization
-        self._global_flat_coefficient_matrix = coefficient_matrix
-        self._global_flat_coefficient_variances = coefficient_variances
 
     @property
     def num_other_coefficients(self):
@@ -738,6 +853,29 @@ class AnalyticMarginalization:
             for name in self._interface.corr_items
         }
 
+    def _get_joint_masked_templates(self):
+        """Templates of all correlations within the fitted bins, as one matrix.
+
+        Returns
+        -------
+        2D array
+            Dense block-diagonal template matrix with shape
+            ``(total_data_size, total_num_coefficients)``. Correlations without
+            marginalized templates contribute rows and no columns.
+        """
+        interface = self._interface
+
+        template_blocks = []
+        for name in interface.corr_items:
+            data = interface.data[name]
+            if name in self.components:
+                masked_templates = self.components[name].templates[data.model_mask, :]
+                template_blocks.append(masked_templates.toarray())
+            else:
+                template_blocks.append(np.zeros((data.data_size, 0)))
+
+        return dense_block_diag(*template_blocks)
+
     def _build_coefficient_matrices(self):
         """Build the matrices mapping a masked residual to best-fit coefficients.
 
@@ -749,31 +887,13 @@ class AnalyticMarginalization:
         interface = self._interface
 
         if interface._use_global_cov:
-            # Templates of correlations without marginalization have zero columns
-            masked_templates = []
-            prior_variances = []
-            for name in interface.corr_items:
-                data = interface.data[name]
-                if name in self.components:
-                    component = self.components[name]
-                    masked_templates.append(component.templates[data.model_mask, :])
-                    prior_variances.append(component.prior_variances)
-                else:
-                    masked_templates.append(csr_array((data.data_size, 0)))
-
-            joint_templates = block_diag(masked_templates, format="csr")
-            prior_variances = np.concatenate(prior_variances)
-            self._global_coefficient_matrix = self._conditional_mean_matrix(
-                joint_templates,
-                prior_variances,
-                interface.masked_global_invcov,
-                self._global_flat_coefficient_matrix,
+            prior_variances = np.concatenate(
+                [component.prior_variances for component in self.components.values()]
             )
-            joint_errors = self._conditional_errors(
-                joint_templates,
+            self._global_coefficient_matrix, joint_errors = solve_coefficients(
+                self._get_joint_masked_templates(),
+                self._global_weighted_templates,
                 prior_variances,
-                self._global_coefficient_matrix,
-                self._global_flat_coefficient_variances,
             )
 
             self._coefficient_errors = {}
@@ -788,60 +908,19 @@ class AnalyticMarginalization:
         self._coefficient_errors = {}
         for name, component in self.components.items():
             data = interface.data[name]
-            # Computing the precision also sets the flat-prior coefficient matrix
-            precision = data.inv_masked_cov
-            masked_templates = component.templates[data.model_mask, :]
-            self._coefficient_matrices[name] = self._conditional_mean_matrix(
-                masked_templates,
-                component.prior_variances,
-                precision,
-                component.flat_coefficient_matrix,
+            if data.cov_mat_org is None:
+                raise ValueError(
+                    "The marginalized coefficients need the original covariance, "
+                    "which is not kept in low-memory mode without a global covariance."
+                )
+
+            masked_templates = component.templates[data.model_mask, :].toarray()
+            original_masked_covariance = data.cov_mat_org[np.ix_(data.data_mask, data.data_mask)]
+            weighted_templates = solve_with_covariance(original_masked_covariance, masked_templates)
+
+            self._coefficient_matrices[name], self._coefficient_errors[name] = solve_coefficients(
+                masked_templates, weighted_templates, component.prior_variances
             )
-            self._coefficient_errors[name] = self._conditional_errors(
-                masked_templates,
-                component.prior_variances,
-                self._coefficient_matrices[name],
-                component.flat_coefficient_variances,
-            )
-
-    @staticmethod
-    def _conditional_errors(
-        masked_templates, prior_variances, coefficient_matrix, flat_coefficient_variances
-    ):
-        """Compute the uncertainty of each coefficient at fixed sampled parameters.
-
-        For a Gaussian prior the posterior variance of coefficient ``i`` is
-        ``sigma_i**2 * (1 - (coefficient_matrix @ templates)[i, i])``. For a flat
-        prior it is the diagonal of ``inv(F.T P F)``.
-
-        Parameters
-        ----------
-        masked_templates : scipy.sparse.csr_array
-            Templates within the fitted bins, shape ``(data_size, num_coefficients)``.
-        prior_variances : 1D array
-            Prior variance of each coefficient; infinite for flat priors.
-        coefficient_matrix : 2D array
-            Matrix from ``_conditional_mean_matrix``, shape ``(num_coefficients, data_size)``.
-        flat_coefficient_variances : 1D array or None
-            Variances of the flat-prior coefficients, shape ``(num_flat,)``.
-
-        Returns
-        -------
-        1D array
-            Standard deviation of each coefficient, shape ``(num_coefficients,)``.
-        """
-        flat_mask = np.isinf(prior_variances)
-
-        # Fraction of the prior variance removed by the data, per coefficient
-        data_fraction = np.asarray(
-            masked_templates.multiply(coefficient_matrix.T).sum(axis=0)
-        ).ravel()
-        variances = np.where(flat_mask, 0.0, prior_variances) * (1 - data_fraction)
-        if flat_mask.any():
-            variances[flat_mask] = flat_coefficient_variances
-
-        # Round-off can leave tiny negative variances for unconstrained coefficients
-        return np.sqrt(np.clip(variances, 0.0, None))
 
     def get_coefficient_errors(self):
         """Uncertainties of the marginalized coefficients at fixed sampled parameters.
@@ -860,42 +939,6 @@ class AnalyticMarginalization:
             self._build_coefficient_matrices()
 
         return self._coefficient_errors
-
-    @staticmethod
-    def _conditional_mean_matrix(
-        masked_templates, prior_variances, precision, flat_coefficient_matrix
-    ):
-        """Build the matrix mapping a residual to the best-fit coefficients.
-
-        Gaussian-prior coefficients are the conditional mean
-        ``Sigma @ templates.T @ precision @ residual``, where the precision already
-        has the flat-prior templates projected out. Flat-prior coefficients are the
-        generalized least-squares solution stored when the projection was done.
-
-        Parameters
-        ----------
-        masked_templates : scipy.sparse.csr_array
-            Templates within the fitted bins, shape ``(data_size, num_coefficients)``.
-        prior_variances : 1D array
-            Prior variance of each coefficient; infinite for flat priors.
-        precision : 2D array
-            Marginalized precision matrix, shape ``(data_size, data_size)``.
-        flat_coefficient_matrix : 2D array or None
-            Rows for the flat-prior coefficients, shape ``(num_flat, data_size)``.
-
-        Returns
-        -------
-        2D array
-            Coefficient matrix with shape ``(num_coefficients, data_size)``.
-        """
-        flat_mask = np.isinf(prior_variances)
-        gaussian_variances = np.where(flat_mask, 0.0, prior_variances)
-
-        coefficient_matrix = gaussian_variances[:, None] * masked_templates.T.dot(precision)
-        if flat_mask.any():
-            coefficient_matrix[flat_mask, :] = flat_coefficient_matrix
-
-        return coefficient_matrix
 
     def compute_coefficients(self, model_cf, direct=False):
         """Compute the best-fit marginalized coefficients for a given model.

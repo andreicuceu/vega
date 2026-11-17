@@ -232,14 +232,14 @@ class CorrelationItem:
         """Calculate undistorted correlation-function marginalization templates.
 
         Degenerate modes are removed in the relevant distorted space by
-        ``Data.get_dist_xi_marg_templates``.
+        ``vega.analytic_marginalization.ComponentMarginalization``.
 
         Returns
         -------
         sparse array, likely csc_array
             Sparse matrix of undistorted marginalization templates. Prior sigma
-            is applied in the calling function (e.g. in
-            ``data.get_dist_xi_marg_templates``), not here.
+            is applied when the covariance update is built in
+            ``vega.analytic_marginalization``, not here.
         """
         if "all-rmin" not in self.marginalize_small_scales:
             indices = []

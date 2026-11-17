@@ -155,6 +155,13 @@ class FitResults:
         }
         self.num_pars = len(self.names)
 
+        # Analytically marginalized parameters. Small-scale modes are subtracted from
+        # the number of data points; the others count as model parameters. Files
+        # written before these counts existed have none of the latter recorded.
+        bestfit_header = hdul["BESTFIT"].header
+        self.num_small_scale_modes = bestfit_header.get("NSMALL", 0)
+        self.num_other_marginalized = bestfit_header.get("NMARGOTH", 0)
+
         self.marg_coeff = {}
         if not results_only:
             self.read_correlations(hdul)
@@ -218,8 +225,14 @@ class FitResults:
             self.marg_coeff[lowercase_name] = this_corr.bestfit_marg_coeff
             self.correlations[lowercase_name] = this_corr
 
-        self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_data_points - self.num_pars)
-        self.reduced_chisq = self.chisq / (self.num_data_points - self.num_pars)
+        self.num_dof = (
+            self.num_data_points
+            - self.num_small_scale_modes
+            - self.num_pars
+            - self.num_other_marginalized
+        )
+        self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_dof)
+        self.reduced_chisq = self.chisq / self.num_dof
 
     def old_read_correlations(self, hdu):
         """Read correlations from the legacy single-HDU 'MODEL' format.
@@ -256,5 +269,11 @@ class FitResults:
                 model, model_mask, data, data_mask, variance, rp, rt, z
             )
 
-        self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_data_points - self.num_pars)
-        self.reduced_chisq = self.chisq / (self.num_data_points - self.num_pars)
+        self.num_dof = (
+            self.num_data_points
+            - self.num_small_scale_modes
+            - self.num_pars
+            - self.num_other_marginalized
+        )
+        self.p_value = 1 - stats.chi2.cdf(self.chisq, self.num_dof)
+        self.reduced_chisq = self.chisq / self.num_dof

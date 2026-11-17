@@ -7,6 +7,7 @@ import pytest
 from astropy.io import fits
 
 from vega.analytic_marginalization import project_flat_templates
+from vega.postprocess.fit_results import FitResults
 from vega.utils import find_file
 from vega.vega_interface import VegaInterface
 
@@ -269,7 +270,8 @@ def test_coefficients_at_every_evaluation_leave_likelihood_unchanged(tmp_path):
     assert once.log_lik() == every_call.log_lik()
 
     # Coefficients are derived chain parameters only when computed at every evaluation
-    assert sum(once.corr_num_marg_modes.values()) == 0
+    assert once.corr_num_marg_modes == {"first": 0}
+    assert all(isinstance(count, int) for count in once.corr_num_marg_modes.values())
     num_coefficients = every_call.data["first"].marginalization.num_coefficients
     assert every_call.corr_num_marg_modes == {"first": num_coefficients}
 
@@ -310,12 +312,14 @@ def test_no_marginalization_is_a_no_op(tmp_path):
 
 @pytest.mark.parametrize("global_cov", [False, True])
 @pytest.mark.parametrize("broadband_prior_sigma", [None, 0.05])
+@pytest.mark.parametrize("marginalize_small_scales", [True, False])
 def test_broadband_marginalization_matches_explicit_solution(
-    tmp_path, global_cov, broadband_prior_sigma
+    tmp_path, global_cov, broadband_prior_sigma, marginalize_small_scales
 ):
     main_path = write_configs(
         tmp_path,
         global_cov=global_cov,
+        marginalize=marginalize_small_scales,
         broadbands=True,
         broadband_prior_sigma=broadband_prior_sigma,
     )
@@ -416,6 +420,7 @@ def test_flat_broadband_chi2_is_independent_of_base_coefficients(tmp_path):
 
 def test_degrees_of_freedom_counts(tmp_path):
     interface = VegaInterface(str(write_configs(tmp_path, broadbands=True)))
+    assert interface.num_model_params == 4
     interface.minimize()
     data = interface.data["first"]
 
@@ -451,6 +456,14 @@ def test_degrees_of_freedom_counts(tmp_path):
             table["values"], interface.bestfit_corr_stats["first"]["bestfit_marg_coeff"]
         )
         assert np.all(table["errors"] > 0)
+
+    # The postprocessing reader counts the degrees of freedom in the same way
+    fit_results = FitResults(interface.output.outfile, no_chain=True)
+    assert fit_results.num_small_scale_modes == data.num_marg_modes
+    assert fit_results.num_other_marginalized == 2
+    assert fit_results.num_dof == data.data_size - data.num_marg_modes - 4
+    assert fit_results.reduced_chisq == pytest.approx(interface.reduced_chisq)
+    assert fit_results.p_value == pytest.approx(interface.p_value)
 
 
 def test_marginalized_broadband_cannot_be_sampled(tmp_path):
@@ -499,9 +512,7 @@ def test_flat_projection_removes_templates_from_both_sides_of_an_asymmetric_prec
     # Numerical inverses of ill-conditioned covariances are not exactly symmetric
     antisymmetric_part = rng.normal(size=(num_bins, num_bins))
     antisymmetric_part = 1e-6 * (antisymmetric_part - antisymmetric_part.T)
-    projected_precision, coefficient_matrix, _, _ = project_flat_templates(
-        precision + antisymmetric_part, flat_templates
-    )
+    projected_precision, _ = project_flat_templates(precision + antisymmetric_part, flat_templates)
 
     scale = np.abs(precision @ flat_templates).max()
     np.testing.assert_allclose(
@@ -509,9 +520,6 @@ def test_flat_projection_removes_templates_from_both_sides_of_an_asymmetric_prec
     )
     np.testing.assert_allclose(projected_precision @ flat_templates, 0, atol=1e-11 * scale)
     np.testing.assert_allclose(flat_templates.T @ projected_precision, 0, atol=1e-11 * scale)
-    np.testing.assert_allclose(
-        coefficient_matrix @ flat_templates, np.eye(num_templates), atol=1e-10
-    )
 
 
 @pytest.mark.parametrize("forecast", [True, False])
@@ -547,3 +555,30 @@ def test_monte_carlo_with_block_covariance_and_cuts(tmp_path, forecast):
         input_model = interface.compute_model(run_init=False)["first"]
         np.testing.assert_allclose(data.masked_mc_mock, input_model[data.model_mask])
         assert chi2 == pytest.approx(interface.compute_prior_chi2(), abs=1e-8)
+
+
+def test_direct_power_spectrum_model_refuses_gaussian_broadband_prior(tmp_path):
+    gaussian = VegaInterface(
+        str(write_configs(tmp_path / "gaussian", broadbands=True, broadband_prior_sigma=0.05))
+    )
+    with pytest.raises(ValueError, match="directly from the full power spectrum"):
+        gaussian.chi2(direct_pk=gaussian.fiducial["pk_full"])
+
+    # A flat prior does not depend on the normalization of the templates
+    flat = VegaInterface(str(write_configs(tmp_path / "flat", broadbands=True)))
+    assert np.isfinite(flat.chi2(direct_pk=flat.fiducial["pk_full"]))
+
+
+def test_broadband_coefficient_names_match_the_model_parameters(tmp_path):
+    interface = VegaInterface(str(write_configs(tmp_path, broadbands=True)))
+    broadband = interface.models["first"].broadband
+    model_names = [
+        name
+        for position in ("pre-add", "post-add")
+        for term in broadband.bb_terms[position]
+        for name in broadband.get_coefficient_names(term)
+    ]
+
+    broadband_family = interface.data["first"].marginalization.families[-1]
+    assert list(broadband_family.ids) == model_names
+    assert all(name in interface.params for name in model_names)

@@ -41,6 +41,15 @@ templates :math:`F` out of the resulting precision matrix :math:`P`,
 
     P \rightarrow P - P F (F^T P F)^{-1} F^T P .
 
+The best-fit coefficients for a residual :math:`r` are the solution of the joint
+normal equations with the original covariance,
+
+.. math::
+
+    \hat a = (T^T C^{-1} T + \Lambda)^{-1} T^T C^{-1} r ,
+
+where :math:`\Lambda` is the diagonal prior precision, zero for flat priors.
+
 ``chi2()`` computed with the marginalized precision equals the chi2 at the
 best-fit coefficients, including the penalty of their Gaussian priors.
 ``log_lik()`` is the likelihood integrated over the coefficients. With a global
@@ -89,6 +98,9 @@ The following rules apply:
   :math:`(1 + \mathrm{bao\_amp})\, a` times its polynomial, as it does when it is
   sampled. The templates are built with the ``bao_amp`` of ``[parameters]``, so
   ``bao_amp`` cannot be sampled or scanned while broadbands are marginalized.
+* For the same reason, a Gaussian broadband prior cannot be used when the model is
+  computed directly from the full power spectrum (``direct_pk``), which does not
+  have this factor; Vega raises an error. Flat priors are not affected.
 * Multiplicative broadbands are not applied to the marginalized templates. Vega
   prints a warning when a correlation has both.
 * Only polynomial terms are marginalized; sky broadbands keep their usual
