@@ -22,6 +22,10 @@ Unreleased
 * The counts entering the degrees of freedom are stored in ``VegaInterface.dof_counts``
   and written to the ``BESTFIT`` header (``NDATA``, ``NFITPAR``, ``NSMALL``, ``NMARGOTH``,
   ``NMARG``).
+* Fixed Monte Carlo mock creation without a global covariance when scale cuts are applied:
+  ``Data.create_monte_carlo`` now accepts the fiducial model restricted to the fitted bins
+  that ``VegaInterface.initialize_monte_carlo`` passes to it, instead of raising
+  "Could not match fiducial model to data or model size".
 
 1.8.0 (2026-10-09)
 ------------------

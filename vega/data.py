@@ -1015,12 +1015,19 @@ class Data:
         if seed is not None:
             np.random.seed(seed)
 
+        # The fiducial model can be given on the full data grid, on the distorted
+        # model grid, or restricted to the fitted bins (as VegaInterface provides it)
         masked_fiducial = fiducial_model
-        if fiducial_model.size != self.full_data_size:
-            if fiducial_model.size != self.dist_model_coordinates.rp_grid.size:
-                raise ValueError("Could not match fiducial model to data or model size.")
+        if fiducial_model.size == self.full_data_size:
+            pass
+        elif fiducial_model.size == self.dist_model_coordinates.rp_grid.size:
             mask = self.dist_model_coordinates.get_mask_to_other(self.data_coordinates)
             masked_fiducial = fiducial_model[mask]
+        elif fiducial_model.size == self.data_mask.sum():
+            masked_fiducial = np.full(self.full_data_size, np.nan)
+            masked_fiducial[self.data_mask] = fiducial_model
+        else:
+            raise ValueError("Could not match fiducial model to data or model size.")
 
         if forecast:
             self.mc_mock = masked_fiducial

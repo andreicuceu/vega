@@ -22,6 +22,7 @@ def write_configs(
     broadbands=False,
     broadband_prior_sigma=None,
     extra_sample=None,
+    r_max=220.0,
 ):
     """Write a 12-bin correlation, its component configs and a main config.
 
@@ -42,6 +43,8 @@ def write_configs(
         Width of the Gaussian prior on the broadband coefficients; flat if None.
     extra_sample : dict, optional
         Additional entries for the ``[sample]`` section of the main config.
+    r_max : float, optional
+        Maximum fitted separation; the default of 220 keeps all bins.
 
     Returns
     -------
@@ -103,7 +106,7 @@ def write_configs(
                 },
                 "cuts": {
                     "r-min": "40",
-                    "r-max": "220",
+                    "r-max": str(r_max),
                     "rp-min": "0",
                     "rt-min": "0",
                     "rp-max": "200",
@@ -509,3 +512,38 @@ def test_flat_projection_removes_templates_from_both_sides_of_an_asymmetric_prec
     np.testing.assert_allclose(
         coefficient_matrix @ flat_templates, np.eye(num_templates), atol=1e-10
     )
+
+
+@pytest.mark.parametrize("forecast", [True, False])
+def test_monte_carlo_with_block_covariance_and_cuts(tmp_path, forecast):
+    main_path = write_configs(tmp_path, broadbands=True, r_max=150.0)
+    main = configparser.ConfigParser()
+    main.optionxform = str
+    main.read(main_path)
+    # Without sampled parameters no initial fit is run, and the mock input is the
+    # model at the [parameters] values
+    main["monte carlo"] = dict(main["sample"])
+    main["mc parameters"] = {}
+    main["sample"] = {}
+    main["control"]["forecast"] = str(forecast)
+    with main_path.open("w") as stream:
+        main.write(stream)
+
+    interface = VegaInterface(str(main_path))
+    data = interface.data["first"]
+    assert data.data_size < data.full_data_size
+
+    # The fiducial model passed to the mock creation is restricted to the fitted bins
+    mocks = interface.initialize_monte_carlo()
+    assert interface.monte_carlo
+    assert mocks["first"].size == data.full_data_size
+    assert data.masked_mc_mock.shape == (data.data_size,)
+    assert np.all(np.isfinite(data.masked_mc_mock))
+
+    chi2 = interface.chi2()
+    assert np.isfinite(chi2)
+    if forecast:
+        # A noiseless mock is reproduced exactly by the model it was generated from
+        input_model = interface.compute_model(run_init=False)["first"]
+        np.testing.assert_allclose(data.masked_mc_mock, input_model[data.model_mask])
+        assert chi2 == pytest.approx(interface.compute_prior_chi2(), abs=1e-8)
