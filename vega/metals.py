@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import numpy as np
 from picca import constants as picca_constants
@@ -7,6 +8,11 @@ from scipy.sparse import csr_matrix, kron
 
 from . import coordinates, pktoxi, power_spectrum, redshift_weights, utils
 from . import correlation_func as corr_func
+
+Z_OPTIONS_DEPRECATION = (
+    "The zmin/zmax options are deprecated and will be removed in a future version of vega. "
+    "The redshift range of the pairs is now read from the ZMIN/ZMAX header of the data file."
+)
 
 
 class Metals:
@@ -63,6 +69,9 @@ class Metals:
     # cache_xi = LRUCache(128)
     growth_rate = None
     fast_metals = False
+    # Report the redshift range of the pairs only once per process
+    _warned_z_options = False
+    _reported_z = set()
 
     def __init__(self, corr_item, fiducial, scale_params, data=None):
         """Initialize metals
@@ -99,9 +108,18 @@ class Metals:
 
         self.rp_only_metal_mats = corr_item.config["model"].getboolean("rp_only_metal_mats", False)
 
-        # Redshift bins
-        self.zmin = corr_item.config["data"].getfloat("zmin", 0.0)
-        self.zmax = corr_item.config["data"].getfloat("zmax", 10.0)
+        # Redshift range of the pairs: data header (picca ZMIN/ZMAX), else config, else no cut
+        data_config = corr_item.config["data"]
+        zmin_hdr = getattr(self._data, "z_min_pairs", None)
+        zmax_hdr = getattr(self._data, "z_max_pairs", None)
+        self.zmin = data_config.getfloat("zmin", 0.0) if zmin_hdr is None else float(zmin_hdr)
+        self.zmax = data_config.getfloat("zmax", 10.0) if zmax_hdr is None else float(zmax_hdr)
+        if (self.zmin, self.zmax) != (0.0, 10.0) and corr_item.name not in Metals._reported_z:
+            Metals._reported_z.add(corr_item.name)
+            print(f"{corr_item.name}: metal matrices for pairs at {self.zmin} <= z <= {self.zmax}")
+        if ("zmin" in data_config or "zmax" in data_config) and not Metals._warned_z_options:
+            Metals._warned_z_options = True
+            warnings.warn(Z_OPTIONS_DEPRECATION, FutureWarning, stacklevel=2)
 
         self.separate_metal_auto_biases = corr_item.config["model"].getboolean(
             "separate-metal-auto-biases", False

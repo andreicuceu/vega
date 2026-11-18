@@ -28,6 +28,8 @@ class Data:
     dist_model_coordinates = None
     model_coordinates = None
     data_coordinates = None
+    z_min_pairs = None
+    z_max_pairs = None
 
     def __init__(self, corr_item, marginalize_in_fit=False):
         """Read the data and initialize the coordinate grids.
@@ -608,6 +610,10 @@ class Data:
             self.cosmo_params["Omega_k"] = header.get("OMEGAK", 0.0)
             self.cosmo_params["Omega_r"] = header.get("OMEGAR", 0.0)
             self.cosmo_params["wl"] = header.get("WL", -1.0)
+
+        # Redshift range of the pairs (picca --z-min-pairs/--z-max-pairs), None if not cut
+        self.z_min_pairs = header.get("ZMIN")
+        self.z_max_pairs = header.get("ZMAX")
 
         # Get the number of pairs
         if "NB" in hdul[1].columns.names:
