@@ -1,5 +1,4 @@
 import copy
-import warnings
 
 import numpy as np
 from picca import constants as picca_constants
@@ -9,9 +8,10 @@ from scipy.sparse import csr_matrix, kron
 from . import coordinates, pktoxi, power_spectrum, redshift_weights, utils
 from . import correlation_func as corr_func
 
-Z_OPTIONS_DEPRECATION = (
-    "The zmin/zmax options are deprecated and will be removed in a future version of vega. "
-    "The redshift range of the pairs is now read from the ZMIN/ZMAX header of the data file."
+Z_OPTIONS_REMOVED = (
+    "The zmin/zmax options were removed: the redshift range of the pairs is now read from the "
+    "ZMIN/ZMAX header of the correlation file. Remove zmin/zmax from your config and make sure "
+    "the header has them, or recompute the correlations with picca --z-min-pairs/--z-max-pairs."
 )
 
 
@@ -69,9 +69,6 @@ class Metals:
     # cache_xi = LRUCache(128)
     growth_rate = None
     fast_metals = False
-    # Report the redshift range of the pairs only once per process
-    _warned_z_options = False
-    _reported_z = set()
 
     def __init__(self, corr_item, fiducial, scale_params, data=None):
         """Initialize metals
@@ -108,27 +105,13 @@ class Metals:
 
         self.rp_only_metal_mats = corr_item.config["model"].getboolean("rp_only_metal_mats", False)
 
-        # Redshift range of the pairs: data header (picca ZMIN/ZMAX), else config, else no cut
-        data_config = corr_item.config["data"]
-        zmin_hdr = getattr(self._data, "z_min_pairs", None)
-        zmax_hdr = getattr(self._data, "z_max_pairs", None)
-        for key, hdr in (("zmin", zmin_hdr), ("zmax", zmax_hdr)):
-            cfg = data_config.getfloat(key, None)
-            if hdr is not None and cfg is not None and not np.isclose(float(hdr), cfg):
-                warnings.warn(
-                    f"{corr_item.name}: {key} = {cfg} in the config does not match the data "
-                    f"header ({hdr}). Using the header value.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-        self.zmin = data_config.getfloat("zmin", 0.0) if zmin_hdr is None else float(zmin_hdr)
-        self.zmax = data_config.getfloat("zmax", 10.0) if zmax_hdr is None else float(zmax_hdr)
-        if (self.zmin, self.zmax) != (0.0, 10.0) and corr_item.name not in Metals._reported_z:
-            Metals._reported_z.add(corr_item.name)
-            print(f"{corr_item.name}: metal matrices for pairs at {self.zmin} <= z <= {self.zmax}")
-        if ("zmin" in data_config or "zmax" in data_config) and not Metals._warned_z_options:
-            Metals._warned_z_options = True
-            warnings.warn(Z_OPTIONS_DEPRECATION, FutureWarning, stacklevel=2)
+        # Redshift range of the pairs from the data header (picca ZMIN/ZMAX), no cut if absent
+        if "zmin" in corr_item.config["data"] or "zmax" in corr_item.config["data"]:
+            raise ValueError(f"{corr_item.name}: {Z_OPTIONS_REMOVED}")
+        zmin = getattr(self._data, "z_min_pairs", None)
+        zmax = getattr(self._data, "z_max_pairs", None)
+        self.zmin = 0.0 if zmin is None else float(zmin)
+        self.zmax = 10.0 if zmax is None else float(zmax)
 
         self.separate_metal_auto_biases = corr_item.config["model"].getboolean(
             "separate-metal-auto-biases", False
@@ -866,7 +849,8 @@ class Metals:
         denominator weights ``w_1 w_2``. ``e_k`` is applied per leg, before the pair product.
 
         In both conventions pairs whose assumed mean redshift lies outside
-        ``[zmin, zmax]`` get zero weight.
+        ``[zmin, zmax]`` (the ``ZMIN``/``ZMAX`` header of the data, by default no cut) get zero
+        weight.
 
         Parameters
         ----------

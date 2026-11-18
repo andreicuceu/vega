@@ -28,8 +28,6 @@ class Data:
     dist_model_coordinates = None
     model_coordinates = None
     data_coordinates = None
-    z_min_pairs = None
-    z_max_pairs = None
 
     def __init__(self, corr_item, marginalize_in_fit=False):
         """Read the data and initialize the coordinate grids.

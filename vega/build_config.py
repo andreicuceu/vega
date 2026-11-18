@@ -1,6 +1,5 @@
 import copy
 import os
-import warnings
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +9,7 @@ import numpy as np
 from astropy.io import fits
 
 import vega
-from vega.metals import Z_OPTIONS_DEPRECATION
+from vega.metals import Z_OPTIONS_REMOVED
 from vega.utils import find_file
 
 
@@ -18,7 +17,6 @@ class BuildConfig:
     """Build and manage config files based on available templates"""
 
     _params_template = None
-    _warned_z_options = False
     recognised_correlations = [
         "lyaxlya",
         "lyaxlyb",
@@ -68,6 +66,8 @@ class BuildConfig:
         """
         if options is None:
             options = {}
+        if "zmin" in options or "zmax" in options:
+            raise ValueError(Z_OPTIONS_REMOVED)
 
         self.overwrite = overwrite
         self.options = {}
@@ -134,12 +134,6 @@ class BuildConfig:
             "separate-metal-auto-biases", False
         )
         self.options["single-metal-beta"] = options.get("single-metal-beta", False)
-        self.options["zmin"] = options.get("zmin", None)
-        self.options["zmax"] = options.get("zmax", None)
-        z_given = self.options["zmin"] is not None or self.options["zmax"] is not None
-        if z_given and not BuildConfig._warned_z_options:
-            BuildConfig._warned_z_options = True
-            warnings.warn(Z_OPTIONS_DEPRECATION, FutureWarning, stacklevel=2)
 
         metals = options.get("metals", None)
         if metals is not None:
@@ -371,9 +365,6 @@ class BuildConfig:
 
                     config["data"]["weights-tracer1"] = corr_info.get("weights-tracer1")
                     config["data"]["weights-tracer2"] = corr_info.get("weights-tracer2")
-                    for key in ("zmin", "zmax"):
-                        if self.options[key] is not None:
-                            config["data"][key] = str(self.options[key])
 
                     config["metal-matrix"] = {}
                     if self.options["rebin-metals"] is not None:
