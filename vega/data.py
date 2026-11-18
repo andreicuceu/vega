@@ -968,10 +968,14 @@ class Data:
     def create_monte_carlo(self, fiducial_model, scale=None, seed=None, forecast=False):
         """Create monte carlo mock of data using a fiducial model.
 
+        The mock is drawn in the fitted bins only, which is all the likelihood uses.
+
         Parameters
         ----------
         fiducial_model : 1D Array
-            Fiducial model of the data
+            Fiducial model in the fitted bins, with shape ``(data_size,)``, as returned by
+            ``VegaInterface.get_fiducial_for_monte_carlo`` (the model restricted with
+            ``model_mask``, or a measured fiducial restricted with ``data_mask``).
         scale : float, optional
             Scaling for the covariance, by default None.
         seed : int, optional
@@ -983,8 +987,20 @@ class Data:
         Returns
         -------
         1D Array
-            Monte Carlo mock of the data
+            Monte Carlo mock on the full data grid, with shape ``(full_data_size,)``;
+            bins outside the fit are NaN.
+
+        Raises
+        ------
+        ValueError
+            If the fiducial model does not have one value per fitted bin.
         """
+        if fiducial_model.size != self.data_size:
+            raise ValueError(
+                f"The fiducial model has {fiducial_model.size} values, but the correlation has "
+                f"{self.data_size} fitted bins. Pass the model restricted to the fitted bins."
+            )
+
         if scale is None:
             scale = 1
 
@@ -1015,32 +1031,17 @@ class Data:
         if seed is not None:
             np.random.seed(seed)
 
-        # The fiducial model can be given on the full data grid, on the distorted
-        # model grid, or restricted to the fitted bins (as VegaInterface provides it)
-        masked_fiducial = fiducial_model
-        if fiducial_model.size == self.full_data_size:
-            pass
-        elif fiducial_model.size == self.dist_model_coordinates.rp_grid.size:
-            mask = self.dist_model_coordinates.get_mask_to_other(self.data_coordinates)
-            masked_fiducial = fiducial_model[mask]
-        elif fiducial_model.size == self.data_mask.sum():
-            masked_fiducial = np.full(self.full_data_size, np.nan)
-            masked_fiducial[self.data_mask] = fiducial_model
-        else:
-            raise ValueError("Could not match fiducial model to data or model size.")
-
+        self.mc_mock = np.full(self.full_data_size, np.nan)
         if forecast:
-            self.mc_mock = masked_fiducial
+            self.mc_mock[self.data_mask] = fiducial_model
+        elif self.cholesky_masked_cov:
+            ran_vec = np.random.randn(self.data_size)
+            self.mc_mock[self.data_mask] = fiducial_model + self._cholesky.dot(ran_vec)
         else:
-            self.mc_mock = np.full(self.full_data_size, np.nan)
-            if self.cholesky_masked_cov:
-                ran_vec = np.random.randn(self.data_mask.sum())
-                self.mc_mock[self.data_mask] = masked_fiducial[self.data_mask] + self._cholesky.dot(
-                    ran_vec
-                )
-            else:
-                ran_vec = np.random.randn(self.full_data_size)
-                self.mc_mock = masked_fiducial + self._cholesky.dot(ran_vec)
+            # Noise drawn from the full covariance and restricted to the fitted bins
+            ran_vec = np.random.randn(self.full_data_size)
+            noise = self._cholesky.dot(ran_vec)
+            self.mc_mock[self.data_mask] = fiducial_model + noise[self.data_mask]
 
         self.masked_mc_mock = self.mc_mock[self.data_mask]
 

@@ -119,13 +119,13 @@ class Metals:
 
         self.fast_metals = corr_item.config["model"].getboolean("fast_metals", False)
         self.fast_metal_bias = corr_item.config["model"].getboolean("fast_metal_bias", True)
+        if self.fast_metals:
+            self.fast_metal_bias = True
         if self.metal_auto_amplitudes and not self.fast_metal_bias:
             raise ValueError(
                 f"metal-auto-amplitudes = True in '{corr_item.name}' needs fast_metal_bias = True:"
                 " the amplitudes multiply metal correlations computed with unit biases."
             )
-        if self.fast_metals:
-            self.fast_metal_bias = True
 
         self.cache_xi_metal_metal = {}
         self.cache_xi_metal_cross_main = {}
@@ -154,6 +154,24 @@ class Metals:
             tracer1 in self.main_tracers or tracer2 in self.main_tracers
             for (tracer1, tracer2) in corr_item.metal_correlations
         ]
+
+        # Every metal x metal correlation needs its amplitude. Analytically marginalized
+        # amplitudes are added to the parameters (as zero) before the models are built.
+        parameters = getattr(corr_item, "parameters", None)
+        if self.metal_auto_amplitudes and parameters is not None:
+            missing_amplitudes = [
+                self.amplitude_name(name1, name2)
+                for (name1, name2), is_cross in zip(
+                    corr_item.metal_correlations, self.main_cross_mask
+                )
+                if not is_cross and self.amplitude_name(name1, name2) not in parameters
+            ]
+            if missing_amplitudes:
+                raise ValueError(
+                    f"metal-auto-amplitudes = True in '{corr_item.name}', but the amplitudes "
+                    f"{missing_amplitudes} are not set. Give them in [parameters] or list them "
+                    "in [analytic marginalization]."
+                )
 
         self._interp_coords = None
         self._interp = None

@@ -342,10 +342,14 @@ class Model:
         1D Array
             Metal correlation functions on the model grid
         """
-        if not self.linear_parameters:
+        # Only metal biases and metal x metal amplitudes have templates in the metals
+        metal_parameters = [
+            name for name in self.linear_parameters if name.startswith(("amp_", "bias_"))
+        ]
+        if not metal_parameters:
             return self.metals.compute(pars, pk_full, "full")
 
-        metal_templates = dict.fromkeys(self.linear_parameters)
+        metal_templates = dict.fromkeys(metal_parameters)
         xi_metals = self.metals.compute(pars, pk_full, "full", linear_templates=metal_templates)
         for name, template in metal_templates.items():
             self.linear_templates[name] += template

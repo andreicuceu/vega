@@ -119,6 +119,45 @@ class TemplateFamily:
         return np.isinf(self.prior_sigma)
 
 
+def is_rp_rt_data(data):
+    """Whether a correlation is fitted on its rp/rt grid.
+
+    Marginalized broadbands and ``[analytic marginalization]`` parameters support only
+    this format; multipole and r/mu data are refused.
+
+    Parameters
+    ----------
+    data : vega.data.Data
+        Data of one correlation.
+
+    Returns
+    -------
+    bool
+        False for multipole, direct-multipole and r/mu data.
+    """
+    return not (data.use_multipoles or data.is_direct_multipoles or data._rmu_binning)
+
+
+def has_multiplicative_broadbands(model):
+    """Whether a model applies multiplicative broadbands (before or after distortion).
+
+    Multiplicative broadbands are not applied to analytically marginalized templates.
+
+    Parameters
+    ----------
+    model : vega.model.Model
+        Model of one correlation.
+
+    Returns
+    -------
+    bool
+        True if the model has ``pre-mul`` or ``post-mul`` broadband terms.
+    """
+    return model.broadband is not None and bool(
+        model.broadband.bb_terms["pre-mul"] or model.broadband.bb_terms["post-mul"]
+    )
+
+
 def include_marginalized_scales_in_fit(data):
     """Extend the data and model masks to the marginalized small-scale bins.
 
@@ -233,7 +272,7 @@ def build_broadband_family(data):
         polynomial broadband, or if the prior width is not positive.
     """
     corr_item = data.corr_item
-    if data.use_multipoles or data.is_direct_multipoles or data._rmu_binning:
+    if not is_rp_rt_data(data):
         raise ValueError(
             f"marginalize-broadbands is only supported for rp/rt data ({corr_item.name})."
         )
@@ -800,23 +839,27 @@ class AnalyticMarginalization:
             varied_parameters |= set(interface.main_config["chi2 scan"])
 
         broadband_ids = set()
+        correlations_with_templates = set()
         for name, component in self.components.items():
             for family in component.families:
                 if family.name == "broadband":
                     broadband_ids |= set(family.ids)
-
-                    model = interface.models[name]
-                    has_multiplicative = model.broadband is not None and (
-                        model.broadband.bb_terms["pre-mul"] or model.broadband.bb_terms["post-mul"]
-                    )
-                    if has_multiplicative:
-                        print(
-                            f"WARNING: {name} has multiplicative broadbands. They are not "
-                            "applied to the analytically marginalized additive broadbands."
-                        )
+                    correlations_with_templates.add(name)
 
         if self.linear is not None:
             self.linear.initialize(varied_parameters)
+            for name, parameters in self.linear.component_parameters.items():
+                if parameters:
+                    correlations_with_templates.add(name)
+
+        for name in interface.corr_items:
+            if name in correlations_with_templates and has_multiplicative_broadbands(
+                interface.models[name]
+            ):
+                print(
+                    f"WARNING: {name} has multiplicative broadbands. They are not applied to "
+                    "the analytically marginalized templates."
+                )
 
         if not broadband_ids:
             return
@@ -949,6 +992,22 @@ class AnalyticMarginalization:
             name: self.components[name].num_other_coefficients if name in self.components else 0
             for name in self._interface.corr_items
         }
+
+    @property
+    def num_marginalized_model_parameters(self):
+        """Number of marginalized coefficients that count as model parameters.
+
+        All coefficients except the small-scale modes, which are subtracted from the
+        number of data points instead. Used for the degrees of freedom and the
+        Percival correction.
+
+        Returns
+        -------
+        int
+            Per-correlation coefficients other than small-scale modes plus the
+            ``[analytic marginalization]`` parameters.
+        """
+        return sum(self.num_other_coefficients.values()) + self.num_linear_parameters
 
     @property
     def num_linear_parameters(self):
@@ -1372,6 +1431,8 @@ class LinearParameters:
 
         if not model.no_metal_decomp:
             problems.append(f"{name}: no-metal-decomp = False in '{corr_name}'.")
+        if not metals.fast_metal_bias:
+            problems.append(f"{name}: fast_metal_bias = False in '{corr_name}'.")
         if not metals.metal_auto_amplitudes and any(metal in pair for pair in metal_pairs):
             problems.append(
                 f"{name}: '{corr_name}' has metal x metal correlations with {metal}, which are "
@@ -1428,8 +1489,7 @@ class LinearParameters:
                 components[name].append(corr_name)
                 fixed_flags[name].append(is_fixed)
 
-            data = interface.data[corr_name]
-            if sources and (data.use_multipoles or data.is_direct_multipoles or data._rmu_binning):
+            if sources and not is_rp_rt_data(interface.data[corr_name]):
                 problems.append(
                     f"'{corr_name}': [analytic marginalization] supports rp/rt data only."
                 )
@@ -1438,13 +1498,6 @@ class LinearParameters:
                 for name in self.names:
                     if name.startswith(("amp_", "bias_")):
                         problems += self._check_metal_parameters(name, model)
-
-            if sources and model.broadband is not None:
-                if model.broadband.bb_terms["pre-mul"] or model.broadband.bb_terms["post-mul"]:
-                    print(
-                        f"WARNING: {corr_name} has multiplicative broadbands. They are not "
-                        "applied to the templates of the [analytic marginalization] parameters."
-                    )
 
         for name in self.names:
             if not components[name]:
@@ -1468,10 +1521,13 @@ class LinearParameters:
         base_params = interface.marginalization.get_base_model_params()
         model_cf = interface.compute_model(base_params, run_init=False)
 
-        fixed_columns = np.flatnonzero(self.is_fixed)
         for corr_name, model in interface.models.items():
-            fixed_names = [self.names[j] for j in fixed_columns]
-            if any(name in self.component_parameters[corr_name] for name in fixed_names):
+            fixed_names = [
+                name
+                for name in self.component_parameters[corr_name]
+                if self.is_fixed[self._index(name)]
+            ]
+            if fixed_names:
                 self._fixed_full_templates[corr_name] = self._distort(
                     corr_name, {name: model.linear_templates[name] for name in fixed_names}
                 )

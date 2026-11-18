@@ -226,8 +226,7 @@ class VegaInterface:
                 self.corr_num_marg_modes = self.marginalization.num_coefficients
 
             # Marginalized coefficients other than small-scale modes count as model parameters
-            self.num_model_params += sum(self.marginalization.num_other_coefficients.values())
-            self.num_model_params += self.marginalization.num_linear_parameters
+            self.num_model_params += self.marginalization.num_marginalized_model_parameters
 
         # Check for sampler
         self.run_sampler = False
@@ -548,7 +547,7 @@ class VegaInterface:
         if mc_start_from_fit is not None:
             print_func(f"Reading input fit {mc_start_from_fit}")
             existing_fit = FitResults(utils.find_file(mc_start_from_fit))
-            mc_params = existing_fit.params | mc_params
+            mc_params = existing_fit.params | existing_fit.marginalized_params | mc_params
             print_func(f"Set template parameters to {mc_params}.")
 
         # Do fit on input data and use the bestfit values for the MC template
@@ -560,7 +559,8 @@ class VegaInterface:
             # Run minimizer
             self.minimize()
 
-            mc_params = self.bestfit.values | mc_params
+            # The fiducial includes the best-fit analytically marginalized coefficients
+            mc_params = self.bestfit.values | self.bestfit_marginalized_values | mc_params
             print_func(f"Set template parameters to {mc_params}.")
 
         # Get fiducial model
@@ -725,10 +725,7 @@ class VegaInterface:
         if linear is not None:
             for name, parameters in linear.component_parameters.items():
                 num_other_marginalized[name] += len(parameters)
-        total_other_marginalized = (
-            sum(self.marginalization.num_other_coefficients.values())
-            + self.marginalization.num_linear_parameters
-        )
+        total_other_marginalized = self.marginalization.num_marginalized_model_parameters
         num_small_scale_modes = sum(self.data[name].num_marg_modes for name in self.corr_items)
         self.dof_counts = {
             "num_data_points": sum(self.data[name].data_size for name in self.corr_items),
@@ -1222,8 +1219,7 @@ class VegaInterface:
             # modes are fitted parameters of the model as well
             num_model_params = len(self.sample_params["limits"])
             if self.marginalization is not None:
-                num_model_params += sum(self.marginalization.num_other_coefficients.values())
-                num_model_params += self.marginalization.num_linear_parameters
+                num_model_params += self.marginalization.num_marginalized_model_parameters
             self._percival_corr = utils.percival_correction(nsamples, ndata, num_model_params)
             print(
                 f"Applying global Hartlap factor: C x {hartlap:.2f}. "

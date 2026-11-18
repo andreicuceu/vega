@@ -20,6 +20,7 @@ from astropy.io import fits
 
 from vega.metals import Metals
 from vega.output import Output
+from vega.postprocess.fit_results import FitResults
 from vega.utils import bias_beta
 
 from .test_metals import TESTS_DIR, apply_edits, build_interface, read_config, write_config_copy
@@ -564,3 +565,135 @@ def test_coefficients_at_every_evaluation(tmp_path):
     log_lik, coefficients = vega.log_lik(return_marg_coeff=True)
     assert log_lik == vega.log_lik()
     assert coefficients.shape == (len(linear_names),)
+
+
+# ----------------------------------------------------------------------------------------------
+# Regression tests of the review of PR #181
+# ----------------------------------------------------------------------------------------------
+
+
+def test_fixed_parameter_absent_from_one_correlation(tmp_path):
+    """Fixed templates of parameters that enter only some correlations (KeyError before)."""
+    linear_names = ["desi_inst_sys_amp", AMPLITUDES[0]]
+    main_ini = write_linear_configs(tmp_path, linear_names=linear_names, ini_files=INI_FILES[:2])
+    lyb_path = main_ini.parent / "lyalya_lyalyb.ini"
+    config = read_config(lyb_path)
+    config["model"]["desi-instrumental-systematics"] = "False"
+    with open(lyb_path, "w") as file:
+        config.write(file)
+
+    vega, _ = build_interface(main_ini)
+    linear = vega.marginalization.linear
+    assert linear.component_parameters["lyalya_lyalyb"] == [AMPLITUDES[0]]
+    assert np.all(linear.is_fixed)
+
+    # The templates still reproduce the model
+    values = {"desi_inst_sys_amp": 3e-4, AMPLITUDES[0]: 2e-5}
+    full_model = vega.compute_model(values, run_init=False)
+    model = vega.compute_model(vega.marginalization.get_base_model_params(values), run_init=False)
+    linear.add_templates(model, np.array([values[name] for name in linear.names]))
+    for name in full_model:
+        scale = np.max(np.abs(full_model[name]))
+        np.testing.assert_allclose(model[name], full_model[name], rtol=0, atol=1e-12 * scale)
+
+
+def test_radiation_marginalized_with_slow_metal_bias(tmp_path):
+    """Non-metal parameters do not request metal templates (assertion before)."""
+    main_ini = write_linear_configs(
+        tmp_path,
+        fast_metals=False,
+        linear_names=["qso_rad_strength"],
+        ini_files=["lyalya_qso.ini"],
+    )
+    config = read_config(main_ini.parent / "lyalya_qso.ini")
+    config["model"]["fast_metal_bias"] = "False"
+    with open(main_ini.parent / "lyalya_qso.ini", "w") as file:
+        config.write(file)
+
+    vega, _ = build_interface(main_ini)
+    assert not vega.models["lyalya_qso"].metals.fast_metal_bias
+    assert np.isfinite(vega.chi2())
+
+
+def test_metal_bias_refused_with_slow_metal_bias(tmp_path):
+    main_ini = write_linear_configs(
+        tmp_path,
+        fast_metals=False,
+        linear_names=METAL_BIASES[:1],
+        ini_files=["lyalya_qso.ini"],
+    )
+    config = read_config(main_ini.parent / "lyalya_qso.ini")
+    config["model"]["fast_metal_bias"] = "False"
+    with open(main_ini.parent / "lyalya_qso.ini", "w") as file:
+        config.write(file)
+
+    with pytest.raises(ValueError, match="fast_metal_bias = False"):
+        build_interface(main_ini)
+
+
+def test_amplitudes_with_fast_metals_and_slow_metal_bias_option(tmp_path):
+    """fast_metals sets fast_metal_bias before the amplitudes need it (refused before)."""
+    main_ini = write_linear_configs(
+        tmp_path, linear_names=[], auto_edits={"model": {"fast_metal_bias": "False"}}
+    )
+    vega, _ = build_interface(main_ini)
+    assert vega.models["lyalya_lyalya"].metals.fast_metal_bias
+
+
+def test_missing_amplitude_is_reported_at_initialization(tmp_path):
+    main_ini = write_linear_configs(tmp_path, linear_names=[])
+    config = read_config(main_ini)
+    config.remove_option("parameters", AMPLITUDES[0])
+    with open(main_ini, "w") as file:
+        config.write(file)
+
+    with pytest.raises(ValueError, match="are not set"):
+        build_interface(main_ini)
+
+
+def test_monte_carlo_fiducial_includes_bestfit_coefficients(tmp_path):
+    """The mock input contains the best-fit marginalized terms, also read from the output."""
+    linear_names = ["qso_rad_strength", METAL_BIASES[0]]
+    main_ini = write_linear_configs(
+        tmp_path,
+        linear_names=linear_names,
+        priors={},
+        ini_files=["lyalya_qso.ini"],
+        main_edits={"output": {"filename": str(tmp_path / "fit")}},
+    )
+    config = read_config(main_ini)
+    config["monte carlo"] = dict(config["sample"])
+    config["mc parameters"] = {}
+    config["control"]["forecast"] = "True"
+    with open(main_ini, "w") as file:
+        config.write(file)
+
+    # The initial fit to the data sets the mock input
+    vega, _ = build_interface(main_ini)
+    fiducial_model = vega.get_fiducial_for_monte_carlo()
+    fit_values = dict(vega.bestfit.values)
+    bestfit_values = np.array([vega.bestfit_marginalized_values[name] for name in linear_names])
+
+    # The noiseless mock is the full model at the best fit: the coefficients are recovered
+    vega.analysis.create_monte_carlo_sim(fiducial_model, forecast=True)
+    vega.monte_carlo = True
+    chi2, marg_coeff = vega.chi2(fit_values, return_marg_coeff=True)
+    assert chi2 == pytest.approx(0, abs=1e-6)
+    np.testing.assert_allclose(marg_coeff["linear"], bestfit_values, rtol=1e-6)
+    vega.monte_carlo = False
+
+    # The best-fit coefficients are written and read back (mc_start_from_fit)
+    vega.output.write_results(
+        vega.bestfit_model, vega.params, vega.minimizer, vega.bestfit_corr_stats
+    )
+    fit_results = FitResults(tmp_path / "fit.fits")
+    assert set(fit_results.marginalized_params) == set(linear_names)
+    np.testing.assert_allclose(
+        [fit_results.marginalized_params[name] for name in linear_names], bestfit_values
+    )
+
+
+def test_monte_carlo_needs_the_fiducial_in_the_fitted_bins(linear_interface):
+    data = linear_interface.data["lyalya_qso"]
+    with pytest.raises(ValueError, match="fitted bins"):
+        data.create_monte_carlo(np.zeros(data.full_data_size), forecast=True)
