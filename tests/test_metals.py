@@ -512,8 +512,14 @@ def explicit_stacked_pair_expectation(vega, correlation_name, corr_hash):
     omega_m = vega.fiducial["Omega_m"]
     omega_de = vega.fiducial["Omega_de"]
 
-    zmin = corr_item.config["data"].getfloat("zmin", 0.0)
-    zmax = corr_item.config["data"].getfloat("zmax", 10.0)
+    # Redshift range of the pairs: data header first, then config, then no cut
+    data_config = corr_item.config["data"]
+    zmin = vega.data[correlation_name].z_min_pairs
+    zmax = vega.data[correlation_name].z_max_pairs
+    if zmin is None:
+        zmin = data_config.getfloat("zmin", 0.0)
+    if zmax is None:
+        zmax = data_config.getfloat("zmax", 10.0)
 
     true_redshifts = []
     assumed_redshifts = []
