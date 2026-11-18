@@ -112,6 +112,15 @@ class Metals:
         data_config = corr_item.config["data"]
         zmin_hdr = getattr(self._data, "z_min_pairs", None)
         zmax_hdr = getattr(self._data, "z_max_pairs", None)
+        for key, hdr in (("zmin", zmin_hdr), ("zmax", zmax_hdr)):
+            cfg = data_config.getfloat(key, None)
+            if hdr is not None and cfg is not None and not np.isclose(float(hdr), cfg):
+                warnings.warn(
+                    f"{corr_item.name}: {key} = {cfg} in the config does not match the data "
+                    f"header ({hdr}). Using the header value.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         self.zmin = data_config.getfloat("zmin", 0.0) if zmin_hdr is None else float(zmin_hdr)
         self.zmax = data_config.getfloat("zmax", 10.0) if zmax_hdr is None else float(zmax_hdr)
         if (self.zmin, self.zmax) != (0.0, 10.0) and corr_item.name not in Metals._reported_z:

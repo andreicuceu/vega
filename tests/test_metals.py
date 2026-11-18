@@ -844,15 +844,29 @@ def test_pair_z_range_read_from_data_header(setups, tmp_path, reset_z_notices):
 
 
 def test_data_header_pair_z_range_overrides_config(setups, tmp_path, reset_z_notices):
-    """The header wins over the deprecated config zmin/zmax, which only warn."""
+    """The header wins over a mismatched config zmin/zmax, with a mismatch warning."""
     name = CORRELATION_NAMES["lyaxlya"]
     with pytest.warns(FutureWarning, match="zmin/zmax"):
-        vega = build_z_range_interface(
-            setups, tmp_path, header_z=HEADER_Z_RANGE, config_z=CONFIG_Z_RANGE, rp_only=False
-        )
+        with pytest.warns(UserWarning, match="does not match the data header") as record:
+            vega = build_z_range_interface(
+                setups, tmp_path, header_z=HEADER_Z_RANGE, config_z=CONFIG_Z_RANGE, rp_only=False
+            )
 
+    mismatches = [str(w.message) for w in record if "does not match" in str(w.message)]
+    assert len(mismatches) == 2  # one per key
     metals = vega.models[name].metals
     assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE
+
+
+def test_matching_config_pair_z_range_gives_no_mismatch_warning(setups, tmp_path, reset_z_notices):
+    """A config zmin/zmax equal to the header raises no mismatch warning."""
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        build_z_range_interface(
+            setups, tmp_path, header_z=HEADER_Z_RANGE, config_z=HEADER_Z_RANGE, rp_only=False
+        )
+
+    assert not any("does not match" in str(w.message) for w in record)
 
 
 def test_config_pair_z_range_used_without_header(setups, tmp_path, reset_z_notices):
