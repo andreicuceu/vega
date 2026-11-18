@@ -867,12 +867,13 @@ def test_config_pair_z_range_used_without_header(setups, tmp_path, reset_z_notic
     assert (metals.zmin, metals.zmax) == CONFIG_Z_RANGE
 
 
-def test_no_pair_z_range_means_no_cut(setups, reset_z_notices):
+def test_no_pair_z_range_means_no_cut(setups, tmp_path, reset_z_notices):
     """Neither header nor config: the full 0-10 range, and no deprecation warning."""
     name = CORRELATION_NAMES["lyaxlya"]
+    # Fresh setup (not the memoized interface), so Metals is initialized inside the check
     with warnings.catch_warnings():
         warnings.simplefilter("error", FutureWarning)
-        vega, _ = setups.interface()
+        vega = build_z_range_interface(setups, tmp_path, rp_only=False)
 
     metals = vega.models[name].metals
     assert (metals.zmin, metals.zmax) == (0.0, 10.0)
