@@ -27,6 +27,26 @@ Unreleased
   now on, the small-scale modes are therefore subtracted from the number of data points.
 * The Percival correction counts analytically marginalized broadband coefficients as
   fitted parameters.
+* Linear parameters listed in the new ``[analytic marginalization]`` section of the main
+  config are marginalized analytically: ``desi_inst_sys_amp``, ``qso_rad_strength``, the
+  metal biases and the metal x metal amplitudes. One parameter is one coefficient whose
+  template may enter several correlations; templates that depend on the sampled parameters
+  are rebuilt at every evaluation. Their priors are read from ``[priors]`` (flat otherwise).
+* New ``metal-auto-amplitudes`` option in ``[model]``: every metal x metal correlation is
+  scaled by its own amplitude ``amp_<m1>_<m2>`` instead of the product of the metal biases,
+  which makes the metal biases linear parameters. With amplitudes equal to the bias
+  products the model is unchanged.
+* Removed the ``separate-metal-auto-biases`` option (``bias_<m1>_<m2>`` factors on the
+  metal x metal bias products); configurations that set it are refused with a pointer to
+  ``metal-auto-amplitudes``.
+* Changed convention for analytically marginalized broadband coefficients: the model is
+  evaluated with them set to zero, and they are marginalized with a zero-mean prior, as
+  all marginalized coefficients now are. Their ``[parameters]`` values no longer enter the
+  likelihood and may be omitted. Results are unchanged for flat priors and for zero
+  ``[parameters]`` values; with ``broadband-prior-sigma`` and non-zero values, the prior
+  is now centred on zero instead of on those values; the previous results correspond to a
+  Gaussian prior centred on the ``[parameters]`` values. The reported coefficients are the
+  values themselves, not deviations from ``[parameters]``.
 * Fixed Monte Carlo mock creation without a global covariance when scale cuts are applied:
   ``Data.create_monte_carlo`` now accepts the fiducial model restricted to the fitted bins
   that ``VegaInterface.initialize_monte_carlo`` passes to it, instead of raising
