@@ -127,9 +127,13 @@ class BuildConfig:
         self.options["metal-matrix"] = options.get("metal-matrix", {})
         self.options["rebin-metals"] = options.get("rebin-metals", None)
         self.options["use_metal_bias_eta"] = options.get("use_metal_bias_eta", False)
-        self.options["separate-metal-auto-biases"] = options.get(
-            "separate-metal-auto-biases", False
-        )
+        if "separate-metal-auto-biases" in options:
+            raise ValueError(
+                "The option 'separate-metal-auto-biases' was removed. Use "
+                "'metal-auto-amplitudes', which gives every metal x metal correlation its own "
+                "amplitude amp_<metal1>_<metal2>."
+            )
+        self.options["metal-auto-amplitudes"] = options.get("metal-auto-amplitudes", False)
         self.options["single-metal-beta"] = options.get("single-metal-beta", False)
         self.options["zmin"] = options.get("zmin", 0.0)
         self.options["zmax"] = options.get("zmax", 10.0)
@@ -348,8 +352,8 @@ class BuildConfig:
                 if "fast_metals" in corr_info:
                     config["model"]["fast_metals"] = corr_info.get("fast_metals", "False")
 
-                if self.options["separate-metal-auto-biases"]:
-                    config["model"]["separate-metal-auto-biases"] = "True"
+                if self.options["metal-auto-amplitudes"]:
+                    config["model"]["metal-auto-amplitudes"] = "True"
 
                 if self.options["single-metal-beta"]:
                     config["model"]["single-metal-beta"] = "True"

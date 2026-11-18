@@ -103,14 +103,28 @@ class Metals:
         self.zmin = corr_item.config["data"].getfloat("zmin", 0.0)
         self.zmax = corr_item.config["data"].getfloat("zmax", 10.0)
 
-        self.separate_metal_auto_biases = corr_item.config["model"].getboolean(
-            "separate-metal-auto-biases", False
+        if "separate-metal-auto-biases" in corr_item.config["model"]:
+            raise ValueError(
+                f"'separate-metal-auto-biases' in [model] of '{corr_item.name}' was removed. "
+                "Use 'metal-auto-amplitudes = True', which gives every metal x metal "
+                "correlation its own amplitude amp_<metal1>_<metal2>."
+            )
+
+        # Each metal x metal correlation scaled by its own amplitude amp_<m1>_<m2> instead of
+        # the product of the metal biases. The main x metal terms keep the bias products.
+        self.metal_auto_amplitudes = corr_item.config["model"].getboolean(
+            "metal-auto-amplitudes", False
         )
         self.single_metal_beta = corr_item.config["model"].getboolean("single-metal-beta", False)
 
         self.fast_metals = corr_item.config["model"].getboolean("fast_metals", False)
         self.fast_metal_bias = corr_item.config["model"].getboolean("fast_metal_bias", True)
-        if self.fast_metals or self.separate_metal_auto_biases:
+        if self.metal_auto_amplitudes and not self.fast_metal_bias:
+            raise ValueError(
+                f"metal-auto-amplitudes = True in '{corr_item.name}' needs fast_metal_bias = True:"
+                " the amplitudes multiply metal correlations computed with unit biases."
+            )
+        if self.fast_metals:
             self.fast_metal_bias = True
 
         self.cache_xi_metal_metal = {}
@@ -122,10 +136,10 @@ class Metals:
 
         self.save_components = fiducial.get("save-components", False)
 
-        if self.save_components and (self.fast_metals or self.separate_metal_auto_biases):
+        if self.save_components and (self.fast_metals or self.metal_auto_amplitudes):
             raise ValueError(
-                "Cannot save pk/cf components in fast_metals mode."
-                " Either turn fast_metals off, or turn off write_pk/write_cf."
+                "Cannot save pk/cf components in fast_metals or metal-auto-amplitudes mode."
+                " Either turn these options off, or turn off write_pk/write_cf."
             )
 
         self.pk = {"peak": {}, "smooth": {}, "full": {}}
@@ -430,7 +444,77 @@ class Metals:
 
         return dmat_xi
 
-    def compute(self, pars, pk_lin, component):
+    @staticmethod
+    def amplitude_name(name1, name2):
+        """Name of the amplitude parameter of a metal x metal correlation.
+
+        Parameters
+        ----------
+        name1, name2 : str
+            Names of the two metals, in any order.
+
+        Returns
+        -------
+        str
+            ``amp_<m1>_<m2>`` with the metal names sorted, e.g. ``amp_SiII(1190)_SiII(1193)``.
+        """
+        sorted_names = sorted([name1, name2])
+        return f"amp_{sorted_names[0]}_{sorted_names[1]}"
+
+    def _amplitude(self, pars, corr_hash):
+        """Amplitude multiplying a metal correlation computed with unit biases.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters, with the metal betas already resolved.
+        corr_hash : tuple of str
+            Names of the two tracers of the metal correlation.
+
+        Returns
+        -------
+        float
+            The bias product for main x metal correlations, and for metal x metal
+            correlations without ``metal-auto-amplitudes``; ``amp_<m1>_<m2>`` otherwise.
+        """
+        name1, name2 = corr_hash
+        is_cross_with_main_tracer = name1 in self.main_tracers or name2 in self.main_tracers
+        if self.metal_auto_amplitudes and not is_cross_with_main_tracer:
+            return pars[self.amplitude_name(name1, name2)]
+
+        bias1, _, bias2, _ = utils.bias_beta(pars, name1, name2)
+        return bias1 * bias2
+
+    def _linear_parameters_of_pair(self, corr_hash, linear_parameters):
+        """Requested linear parameters that scale one metal correlation.
+
+        Parameters
+        ----------
+        corr_hash : tuple of str
+            Names of the two tracers of the metal correlation.
+        linear_parameters : set of str
+            Parameters whose unit-amplitude templates are requested.
+
+        Returns
+        -------
+        list of str
+            The amplitude of a metal x metal correlation with ``metal-auto-amplitudes``,
+            or the bias parameters (``bias_<m>`` or ``bias_eta_<m>``) of the metal in a
+            main x metal correlation, restricted to ``linear_parameters``.
+        """
+        name1, name2 = corr_hash
+        if name1 in self.main_tracers or name2 in self.main_tracers:
+            metal = name2 if name1 in self.main_tracers else name1
+            candidates = [f"bias_{metal}", f"bias_eta_{metal}"]
+        elif self.metal_auto_amplitudes:
+            candidates = [self.amplitude_name(name1, name2)]
+        else:
+            # Bias products of two metals are not linear in either bias
+            candidates = []
+
+        return [name for name in candidates if name in linear_parameters]
+
+    def compute(self, pars, pk_lin, component, linear_templates=None):
         """Compute metal correlations for input isotropic P(k).
 
         Parameters
@@ -442,6 +526,13 @@ class Metals:
         component : str
             Name of pk component, used as key for dictionary of saved
             components ('peak' or 'smooth' or 'full')
+        linear_templates : dict, optional
+            If given, the keys are the linear parameters whose templates are requested
+            (metal biases ``bias_<m>`` or ``bias_eta_<m>``, and amplitudes
+            ``amp_<m1>_<m2>``). Each value is replaced by the metal correlation for a
+            unit value of that parameter, all other parameters fixed, on the model grid
+            before the distortion matrix. Requires ``fast_metal_bias``, so that the
+            correlations are computed with unit biases. By default None.
 
         Returns
         -------
@@ -450,6 +541,11 @@ class Metals:
         """
         assert self._corr_item.has_metals
         local_pars = copy.deepcopy(pars)
+
+        if linear_templates is not None:
+            assert self.fast_metal_bias, "Metal templates need fast_metal_bias = True."
+            for name in linear_templates:
+                linear_templates[name] = np.zeros(self.size)
 
         # TODO Check growth rate and sigma_smooth exist. They should be in the fiducial config.
         if self.fast_metals:
@@ -467,35 +563,16 @@ class Metals:
                 if name2 not in self.main_tracers:
                     local_pars[f"beta_{name2}"] = local_pars["beta_metals"]
 
-            bias1, beta1, bias2, beta2 = utils.bias_beta(local_pars, name1, name2)
+            _, beta1, _, beta2 = utils.bias_beta(local_pars, name1, name2)
+            amplitude = self._amplitude(local_pars, corr_hash)
 
             is_cross_with_main_tracer = name1 in self.main_tracers or name2 in self.main_tracers
 
-            if is_cross_with_main_tracer:
-                bias_product = bias1 * bias2
-            elif self.separate_metal_auto_biases and name1 != name2:
-                if f"bias_{name1}_{name2}" in local_pars:
-                    bias_auto_factor = local_pars.get(f"bias_{name1}_{name2}", 1.0)
-                elif f"bias_{name2}_{name1}" in local_pars:
-                    bias_auto_factor = local_pars.get(f"bias_{name2}_{name1}", 1.0)
-                else:
-                    raise ValueError(
-                        f"Separate metal auto biases is on, but no bias_{name1}_{name2}"
-                        f" or bias_{name2}_{name1} parameter found for {corr_hash}."
-                    )
-                bias_product = bias1 * bias2 * bias_auto_factor
-            else:
-                bias_product = bias1 * bias2
-
             if self.fast_metals and is_cross_with_main_tracer:
-                xi_metals += bias_product * self.compute_xi_metal_cross_main(
-                    pk_lin, local_pars, corr_hash, beta1, beta2
-                )
+                xi = self.compute_xi_metal_cross_main(pk_lin, local_pars, corr_hash, beta1, beta2)
 
             elif self.fast_metals:
-                xi_metals += bias_product * self.compute_xi_metal_metal(
-                    pk_lin, local_pars, corr_hash
-                )
+                xi = self.compute_xi_metal_metal(pk_lin, local_pars, corr_hash)
 
             else:
                 # If not in fast metals mode, compute the usual way
@@ -507,10 +584,18 @@ class Metals:
                     fast_metals=self.fast_metal_bias,
                     component=component,
                 )
-                if self.fast_metal_bias:
-                    xi_metals += bias_product * xi
-                else:
-                    xi_metals += xi
+
+            if self.fast_metal_bias:
+                xi_metals += amplitude * xi
+            else:
+                xi_metals += xi
+
+            # The amplitude is linear in each of these parameters, so its value for a unit
+            # parameter (all other parameters fixed) gives the template of the parameter.
+            if linear_templates is not None:
+                for name in self._linear_parameters_of_pair(corr_hash, linear_templates):
+                    unit_pars = local_pars | {name: 1.0}
+                    linear_templates[name] += self._amplitude(unit_pars, corr_hash) * xi
 
         if self._rmu_binning:
             self._interp.values = xi_metals.reshape(self.rp_nbins, self.rt_nbins)
