@@ -28,6 +28,28 @@ up to a constant that depends on the units of the coefficients.
 This module keeps track of the templates of each correlation, propagates them
 through the distortion matrix and the data masks, builds the covariance update,
 and recovers the best-fit coefficients from a residual when they are requested.
+
+Linear parameters listed in the ``[analytic marginalization]`` section of the main
+config (``LinearParameters``) are handled differently: one parameter is one
+coefficient, and its template may span several correlations. Their templates are
+fixed (built once at initialization) or rebuilt at every evaluation when they depend
+on the sampled parameters. With ``P`` the precision after the marginalizations above,
+``r`` the residual of the model without these terms, ``T`` their templates and a
+Gaussian prior of mean ``mu`` and diagonal precision ``Lambda`` (zero for flat
+priors), each evaluation computes
+
+    F = T.T P T + Lambda,    b = T.T P r + Lambda mu,
+    chi2 = r.T P r + mu.T Lambda mu - b.T inv(F) b,
+
+which is the chi2 at the best-fit coefficients ``inv(F) b`` including the prior
+penalty, and adds ``log det F + sum(log sigma^2) - num_flat * log(2 pi)`` (Gaussian
+coefficients in the sum, flat ones in ``num_flat``) to minus twice the
+log-likelihood. The covariance is not modified.
+
+All marginalized coefficients use the same convention: the model itself is
+evaluated with the coefficients set to zero, and the coefficients are marginalized
+with their prior. Values given for them in ``[parameters]`` enter only the model at
+fixed parameters (e.g. the fiducial model of Monte Carlo mocks).
 """
 
 from dataclasses import dataclass
@@ -38,6 +60,11 @@ from scipy.linalg import cho_factor, cho_solve
 from scipy.sparse import csr_array, hstack
 
 from vega.broadband_poly import BroadbandPolynomials
+from vega.utils import VegaModelError
+
+# Key of the coefficients of the [analytic marginalization] parameters in the dictionaries
+# of coefficients, which are otherwise keyed by correlation name
+LINEAR_PARAMETERS_KEY = "linear"
 
 # Singular values below this fraction of the largest one are treated as
 # degenerate template combinations and dropped from the covariance update.
@@ -184,6 +211,9 @@ def build_broadband_family(data):
     to the model. The templates include this factor, evaluated at the ``bao_amp``
     value of ``[parameters]``, so that marginalized coefficients have the same
     meaning as sampled ones.
+
+    The model is evaluated with the marginalized coefficients set to zero, and the
+    coefficients themselves are marginalized with a zero-mean prior.
 
     Parameters
     ----------
@@ -588,27 +618,6 @@ class ComponentMarginalization:
 
         return precision
 
-    def get_base_values(self, params):
-        """Values of the marginalized coefficients used in the model itself.
-
-        Additive broadband coefficients keep their parameter values in the model,
-        and the marginalization is over deviations from them. Small-scale
-        templates are not part of the model, so their base values are zero.
-
-        Parameters
-        ----------
-        params : dict
-            Model parameters.
-
-        Returns
-        -------
-        1D array
-            Base values with shape ``(num_coefficients,)``.
-        """
-        return np.array(
-            [params.get(coefficient_id, 0.0) for coefficient_id in self.coefficient_ids]
-        )
-
     def _compute_cov_update(self, family):
         """Compute ``templates @ Sigma @ templates.T`` within the fitted bins.
 
@@ -647,23 +656,39 @@ class ComponentMarginalization:
 class AnalyticMarginalization:
     """Joint handling of the marginalized linear coefficients of all correlations.
 
-    The likelihood needs nothing from this class: the covariance of each
-    correlation, and the global covariance if present, already contain the
-    covariance updates. This class recovers the best-fit coefficients from a
-    residual, either once after a fit or at every likelihood evaluation.
+    For the per-correlation families (small-scale modes, additive broadbands) the
+    likelihood needs nothing from this class: the covariance of each correlation,
+    and the global covariance if present, already contain the covariance updates.
+    This class recovers their best-fit coefficients from a residual, either once
+    after a fit or at every likelihood evaluation. These coefficients are the
+    solution of the joint normal equations of all templates with their priors (see
+    ``solve_coefficients``), so one matrix, built on first use, maps a residual to
+    all coefficients.
 
-    The coefficients are the solution of the joint normal equations of all
-    templates with their priors (see ``solve_coefficients``), so one matrix, built
-    on first use, maps a residual to all coefficients.
+    The parameters of the ``[analytic marginalization]`` section are handled by
+    ``linear`` (a ``LinearParameters`` object, or None without such parameters),
+    which also computes the chi2 when present.
+
+    Attributes
+    ----------
+    components : dict
+        ``ComponentMarginalization`` of each correlation with per-correlation families.
+    linear : LinearParameters or None
+        Parameters of the ``[analytic marginalization]`` section.
     """
 
     def __init__(self, interface):
         """Collect the correlations that have marginalized templates.
 
+        Also reads the ``[analytic marginalization]`` section, and sets every
+        marginalized coefficient missing from ``[parameters]`` to zero in the
+        parameters of the interface, so that the model can be evaluated.
+
         Parameters
         ----------
         interface : vega.vega_interface.VegaInterface
-            Initialized interface, with data and (optionally) the global covariance read.
+            Interface with the data read; models, priors and the global covariance
+            are not needed yet.
         """
         self._interface = interface
         self.components = {
@@ -677,15 +702,94 @@ class AnalyticMarginalization:
         self._coefficient_errors = None
         self._global_weighted_templates = None
 
+        self.linear = None
+        section = "analytic marginalization"
+        if section in interface.main_config:
+            names = [
+                name
+                for name in interface.main_config[section]
+                if interface.main_config[section].getboolean(name)
+            ]
+            if names:
+                self.linear = LinearParameters(interface, names)
+
+        # All marginalized coefficients are zero in the model itself
+        self._zero_coefficients = {}
+        for component in self.components.values():
+            for family in component.families:
+                if family.name == "broadband":
+                    self._zero_coefficients |= dict.fromkeys(family.ids, 0.0)
+        if self.linear is not None:
+            self._zero_coefficients |= dict.fromkeys(self.linear.names, 0.0)
+
+        for name in self._zero_coefficients:
+            value = interface.params.setdefault(name, 0.0)
+            if value != 0:
+                print(
+                    f"WARNING: {name} = {value} in [parameters] is analytically marginalized. "
+                    "This value does not enter the likelihood; it is only used for the model "
+                    "at fixed parameters (e.g. the fiducial model of Monte Carlo mocks)."
+                )
+
+    def get_base_model_params(self, params=None):
+        """Parameters of the model used in the likelihood.
+
+        All analytically marginalized coefficients are set to zero; their
+        contribution is accounted for by the marginalization.
+
+        Parameters
+        ----------
+        params : dict, optional
+            Parameters overriding those of the interface, by default None.
+
+        Returns
+        -------
+        dict or None
+            ``params`` with the marginalized coefficients set to zero, or ``params``
+            itself if nothing is marginalized in the model.
+        """
+        if not self._zero_coefficients:
+            return params
+
+        base_params = {} if params is None else dict(params)
+        return base_params | self._zero_coefficients
+
+    def consume_priors(self, priors):
+        """Take the priors of the ``[analytic marginalization]`` parameters.
+
+        These priors are applied by the marginalization and must not also enter
+        the prior chi2 of the sampled parameters.
+
+        Parameters
+        ----------
+        priors : dict
+            Gaussian priors ``{name: (mean, sigma)}`` read from ``[priors]``.
+
+        Returns
+        -------
+        dict
+            The remaining priors.
+        """
+        if self.linear is None:
+            return priors
+
+        self.linear.set_priors(priors)
+        return {name: prior for name, prior in priors.items() if name not in self.linear.names}
+
     def validate_configuration(self):
         """Check the marginalized coefficients against the sampled and scanned parameters.
+
+        Also validates and initializes the ``[analytic marginalization]`` parameters
+        (see ``LinearParameters.initialize``), which needs the models and the
+        covariance.
 
         Raises
         ------
         ValueError
             If a marginalized broadband coefficient is sampled, scanned or has an entry
-            in ``[priors]``, or if ``bao_amp`` is sampled or scanned while broadbands
-            are marginalized.
+            in ``[priors]``, if ``bao_amp`` is sampled or scanned while broadbands
+            are marginalized, or if the ``[analytic marginalization]`` parameters are
+            not valid.
         """
         interface = self._interface
 
@@ -710,6 +814,9 @@ class AnalyticMarginalization:
                             f"WARNING: {name} has multiplicative broadbands. They are not "
                             "applied to the analytically marginalized additive broadbands."
                         )
+
+        if self.linear is not None:
+            self.linear.initialize(varied_parameters)
 
         if not broadband_ids:
             return
@@ -784,8 +891,12 @@ class AnalyticMarginalization:
         ------
         ValueError
             If any correlation has marginalized broadbands with a Gaussian prior
-            and an amplitude factor different from one.
+            and an amplitude factor different from one, or if metal parameters are
+            marginalized (see ``LinearParameters.check_direct_model``).
         """
+        if self.linear is not None:
+            self.linear.check_direct_model()
+
         for name, component in self.components.items():
             for family in component.families:
                 if (
@@ -840,18 +951,36 @@ class AnalyticMarginalization:
         }
 
     @property
+    def num_linear_parameters(self):
+        """Number of ``[analytic marginalization]`` parameters.
+
+        Returns
+        -------
+        int
+            Number of these parameters, each counted once although it may enter
+            several correlations. They count as model parameters.
+        """
+        return 0 if self.linear is None else len(self.linear.names)
+
+    @property
     def num_coefficients(self):
         """Number of marginalized coefficients of each correlation.
 
         Returns
         -------
         dict
-            Number of coefficients keyed by correlation name, for all correlations.
+            Number of coefficients keyed by correlation name, for all correlations,
+            and the names of the ``[analytic marginalization]`` parameters under
+            ``LINEAR_PARAMETERS_KEY`` if there are any.
         """
-        return {
+        num_coefficients = {
             name: self.components[name].num_coefficients if name in self.components else 0
             for name in self._interface.corr_items
         }
+        if self.linear is not None:
+            num_coefficients[LINEAR_PARAMETERS_KEY] = list(self.linear.names)
+
+        return num_coefficients
 
     def _get_joint_masked_templates(self):
         """Templates of all correlations within the fitted bins, as one matrix.
@@ -927,24 +1056,37 @@ class AnalyticMarginalization:
 
         They do not include the uncertainty of the sampled parameters.
 
+        The errors of the per-correlation families are conditional on the
+        ``[analytic marginalization]`` coefficients, and those of the latter, under
+        ``LINEAR_PARAMETERS_KEY``, are from the last solution computed (at the best
+        fit after a minimization), with the per-correlation families marginalized.
+
         Returns
         -------
         dict
             Standard deviations keyed by correlation name, each with shape
             ``(num_coefficients,)``.
         """
+        errors = {}
+        if self.linear is not None and self.linear.last_solution is not None:
+            errors[LINEAR_PARAMETERS_KEY] = self.linear.last_solution.coefficient_errors
+
         if not self.components:
-            return {}
+            return errors
         if self._coefficient_matrices is None and self._global_coefficient_matrix is None:
             self._build_coefficient_matrices()
 
-        return self._coefficient_errors
+        return self._coefficient_errors | errors
 
-    def compute_coefficients(self, model_cf, direct=False):
+    def compute_coefficients(self, model_cf, direct=False, linear_solution=None):
         """Compute the best-fit marginalized coefficients for a given model.
 
-        For additive broadbands the coefficients are deviations from the
-        ``[parameters]`` values used in the model.
+        The model is evaluated with all marginalized coefficients set to zero. The
+        coefficients of the ``[analytic marginalization]`` parameters are solved
+        first, at the sampled parameters of the model, and their template
+        contribution is added to the model before the coefficients of the
+        per-correlation families are solved. Together this gives the joint best fit
+        of all coefficients.
 
         Parameters
         ----------
@@ -955,15 +1097,29 @@ class AnalyticMarginalization:
             True if the model was computed directly from the full power spectrum
             instead of the peak/smooth decomposition, by default False. Broadband
             coefficients are then rescaled to the normalization of that model.
+        linear_solution : LinearSolution, optional
+            Solution of the ``[analytic marginalization]`` parameters for this model,
+            if already computed, by default None.
 
         Returns
         -------
         dict
             Best-fit coefficients keyed by correlation name, each with shape
-            ``(num_coefficients,)``, for the correlations with marginalized templates.
+            ``(num_coefficients,)``, for the correlations with marginalized templates,
+            and those of the ``[analytic marginalization]`` parameters under
+            ``LINEAR_PARAMETERS_KEY``.
         """
+        coefficients = {}
+        if self.linear is not None:
+            if linear_solution is None:
+                linear_solution = self.linear.solve(model_cf)
+            coefficients[LINEAR_PARAMETERS_KEY] = linear_solution.coefficients
+
+            model_cf = {name: model.copy() for name, model in model_cf.items()}
+            self.linear.add_templates(model_cf, linear_solution.coefficients)
+
         if not self.components:
-            return {}
+            return coefficients
 
         interface = self._interface
         if self._coefficient_matrices is None and self._global_coefficient_matrix is None:
@@ -984,13 +1140,11 @@ class AnalyticMarginalization:
 
             joint_coefficients = self._global_coefficient_matrix.dot(masked_data - masked_model)
 
-            coefficients = {}
             start = 0
             for name, component in self.components.items():
                 coefficients[name] = joint_coefficients[start : start + component.num_coefficients]
                 start += component.num_coefficients
         else:
-            coefficients = {}
             for name in self.components:
                 data = interface.data[name]
                 masked_data = data.masked_mc_mock if interface.monte_carlo else data.masked_data_vec
@@ -1006,6 +1160,9 @@ class AnalyticMarginalization:
     def add_templates(self, model_cf, coefficients, direct=False):
         """Add the template contribution to the model correlation functions.
 
+        The templates of the ``[analytic marginalization]`` parameters are those of
+        the last model evaluation, so ``model_cf`` must come from that evaluation.
+
         Parameters
         ----------
         model_cf : dict
@@ -1020,11 +1177,639 @@ class AnalyticMarginalization:
         dict
             The updated ``model_cf``.
         """
+        if self.linear is not None and LINEAR_PARAMETERS_KEY in coefficients:
+            self.linear.add_templates(model_cf, coefficients[LINEAR_PARAMETERS_KEY])
+
         for name, component in self.components.items():
             if name in coefficients:
                 template_coefficients = np.asarray(coefficients[name])
                 if direct:
                     template_coefficients = template_coefficients / component.amplitude_factors
                 model_cf[name] += component.templates.dot(template_coefficients)
+
+        return model_cf
+
+
+@dataclass
+class LinearSolution:
+    """Marginalization of the ``[analytic marginalization]`` parameters for one model.
+
+    Attributes
+    ----------
+    coefficients : 1D array
+        Best-fit coefficients, including the prior, in the order of
+        ``LinearParameters.names``.
+    coefficient_errors : 1D array
+        Their standard deviations at fixed sampled parameters.
+    chi2 : float
+        Chi2 of the data at the best-fit coefficients, including their prior penalty.
+    log_normalization : float
+        Term added to minus twice the log-likelihood by the integration over the
+        coefficients: ``log det F + sum(log sigma^2) - num_flat * log(2 pi)``.
+    scaled_normal_matrix : 2D array
+        Normal matrix ``F`` with unit diagonal, used to diagnose degenerate templates.
+    """
+
+    coefficients: np.ndarray
+    coefficient_errors: np.ndarray
+    chi2: float
+    log_normalization: float
+    scaled_normal_matrix: np.ndarray
+
+
+class LinearParameters:
+    """Parameters listed in the ``[analytic marginalization]`` section of the main config.
+
+    Each parameter is one coefficient multiplying a template that may enter several
+    correlations. Supported parameters and their templates, on the model grid before
+    the distortion matrix:
+
+    - ``desi_inst_sys_amp``: DESI instrumental systematics of the auto-correlations
+      (fixed template);
+    - ``qso_rad_strength``: QSO radiation of the Lya x QSO correlations (template rebuilt
+      at every evaluation, as it depends on ``drp_QSO``);
+    - ``amp_<m1>_<m2>``: metal x metal correlations with ``metal-auto-amplitudes``
+      (fixed with ``fast_metals``, otherwise rebuilt at every evaluation);
+    - ``bias_<m>`` or ``bias_eta_<m>``: bias of a metal in the main x metal
+      correlations (rebuilt at every evaluation).
+
+    The terms enter the smooth (or full) component, so the templates carry no
+    ``bao_amp`` factor, and multiplicative broadbands are not applied to them. The
+    model of the likelihood is evaluated with all these parameters set to zero.
+
+    Attributes
+    ----------
+    names : tuple of str
+        Parameter names, in the order of the coefficient vectors.
+    prior_means, prior_sigmas : 1D array
+        Gaussian prior of each coefficient from ``[priors]``; ``prior_sigmas`` is
+        infinite for flat priors.
+    is_fixed : 1D bool array
+        Whether the template of each parameter is built once at initialization.
+    component_parameters : dict
+        Names of the parameters entering each correlation.
+    last_solution : LinearSolution or None
+        Solution of the last call to ``solve``.
+    """
+
+    def __init__(self, interface, names):
+        """Store the parameter names; the templates are built by ``initialize``.
+
+        Parameters
+        ----------
+        interface : vega.vega_interface.VegaInterface
+            Interface being initialized.
+        names : list of str
+            Parameters listed in ``[analytic marginalization]``.
+        """
+        self._interface = interface
+        self.names = tuple(names)
+        self.prior_means = np.zeros(len(names))
+        self.prior_sigmas = np.full(len(names), np.inf)
+        self.is_fixed = np.zeros(len(names), dtype=bool)
+        self.component_parameters = {}
+        self.last_solution = None
+
+        self._blocks = []
+        self._fixed_full_templates = {}
+        self._fixed_block_templates = []
+        self._weighted_fixed_templates = []
+
+    def set_priors(self, priors):
+        """Set the Gaussian priors of the parameters that have one in ``[priors]``.
+
+        Parameters
+        ----------
+        priors : dict
+            Gaussian priors ``{name: (mean, sigma)}``.
+
+        Raises
+        ------
+        ValueError
+            If a prior width is not positive.
+        """
+        for i, name in enumerate(self.names):
+            if name in priors:
+                mean, sigma = priors[name]
+                if not sigma > 0:
+                    raise ValueError(f"The prior width of {name} must be positive.")
+                self.prior_means[i] = mean
+                self.prior_sigmas[i] = sigma
+
+    def _template_sources(self, model):
+        """Parameters of this section that have a template in one correlation.
+
+        Parameters
+        ----------
+        model : vega.model.Model
+            Model of the correlation.
+
+        Returns
+        -------
+        dict
+            ``{name: is_fixed}`` for the listed parameters entering the model.
+        """
+        requested = set(self.names)
+        sources = {}
+        if model._instrumental_systematics_flag:
+            sources["desi_inst_sys_amp"] = True
+        if model.Xi_core.radiation_flag:
+            sources["qso_rad_strength"] = False
+
+        metals = model.metals
+        if metals is not None:
+            for corr_hash in model._corr_item.metal_correlations:
+                for name in metals._linear_parameters_of_pair(corr_hash, requested):
+                    # Metal x metal shapes are frozen by fast_metals; the main x metal
+                    # correlations depend on the parameters of the main tracers.
+                    sources[name] = name.startswith("amp_") and metals.fast_metals
+
+        return {name: is_fixed for name, is_fixed in sources.items() if name in requested}
+
+    def _check_metal_parameters(self, name, model):
+        """Problems of a marginalized metal parameter in one correlation.
+
+        Parameters
+        ----------
+        name : str
+            Marginalized parameter (``amp_<m1>_<m2>``, ``bias_<m>`` or ``bias_eta_<m>``).
+        model : vega.model.Model
+            Model of a correlation with metals.
+
+        Returns
+        -------
+        list of str
+            Error messages; empty if the parameter is linear in this correlation.
+        """
+        corr_name = model._corr_item.name
+        metals = model.metals
+        params = self._interface.params
+        problems = []
+
+        metal_pairs = [
+            corr_hash
+            for corr_hash in model._corr_item.metal_correlations
+            if not set(corr_hash) & set(metals.main_tracers)
+        ]
+
+        if name.startswith("amp_"):
+            if not metals.metal_auto_amplitudes and any(
+                metals.amplitude_name(*corr_hash) == name for corr_hash in metal_pairs
+            ):
+                problems.append(
+                    f"{name}: '{corr_name}' contains this metal correlation, but "
+                    "metal-auto-amplitudes is not set there."
+                )
+            return problems
+
+        metal = name.removeprefix("bias_eta_") if name.startswith("bias_eta_") else name[5:]
+        if metal in metals.main_tracers:
+            return problems
+
+        enters = any(metal in corr_hash for corr_hash in model._corr_item.metal_correlations)
+        if not enters:
+            return problems
+
+        if not model.no_metal_decomp:
+            problems.append(f"{name}: no-metal-decomp = False in '{corr_name}'.")
+        if not metals.metal_auto_amplitudes and any(metal in pair for pair in metal_pairs):
+            problems.append(
+                f"{name}: '{corr_name}' has metal x metal correlations with {metal}, which are "
+                "quadratic in its bias. Set metal-auto-amplitudes = True."
+            )
+
+        # The bias must enter linearly: beta of the metal given, not derived from the bias
+        has_beta = f"beta_{metal}" in params or (
+            metals.single_metal_beta and "beta_metals" in params
+        )
+        if not has_beta:
+            problems.append(f"{name}: beta_{metal} (or beta_metals) must be given.")
+        if name.startswith("bias_eta_") and f"bias_{metal}" in params:
+            problems.append(f"{name}: bias_{metal} is also set and would replace bias_eta_{metal}.")
+
+        return problems
+
+    def initialize(self, varied_parameters):
+        """Validate the parameters and build the fixed templates.
+
+        Evaluates the model once at the ``[parameters]`` values (with all
+        marginalized coefficients set to zero), keeps the templates of the
+        parameters that are fixed, and checks that the templates are not
+        degenerate within the fitted bins.
+
+        Parameters
+        ----------
+        varied_parameters : set of str
+            Sampled, Monte Carlo sampled and scanned parameters.
+
+        Raises
+        ------
+        ValueError
+            If a parameter is also varied, has no template, enters a correlation
+            non-linearly or with an unsupported data format, or if the templates
+            are degenerate. All problems found are reported together.
+        """
+        interface = self._interface
+        problems = []
+
+        conflicting = sorted(set(self.names) & set(varied_parameters))
+        if conflicting:
+            problems.append(f"Parameters both varied and analytically marginalized: {conflicting}")
+        if interface.model_pk:
+            problems.append("[analytic marginalization] is not supported with model_pk = True.")
+
+        # Correlations entered by each parameter
+        components = {name: [] for name in self.names}
+        fixed_flags = {name: [] for name in self.names}
+        for corr_name, model in interface.models.items():
+            sources = self._template_sources(model)
+            self.component_parameters[corr_name] = [name for name in self.names if name in sources]
+            for name, is_fixed in sources.items():
+                components[name].append(corr_name)
+                fixed_flags[name].append(is_fixed)
+
+            data = interface.data[corr_name]
+            if sources and (data.use_multipoles or data.is_direct_multipoles or data._rmu_binning):
+                problems.append(
+                    f"'{corr_name}': [analytic marginalization] supports rp/rt data only."
+                )
+
+            if model.metals is not None:
+                for name in self.names:
+                    if name.startswith(("amp_", "bias_")):
+                        problems += self._check_metal_parameters(name, model)
+
+            if sources and model.broadband is not None:
+                if model.broadband.bb_terms["pre-mul"] or model.broadband.bb_terms["post-mul"]:
+                    print(
+                        f"WARNING: {corr_name} has multiplicative broadbands. They are not "
+                        "applied to the templates of the [analytic marginalization] parameters."
+                    )
+
+        for name in self.names:
+            if not components[name]:
+                problems.append(f"{name} has no linear template in any correlation.")
+        if problems:
+            raise ValueError(
+                "Invalid [analytic marginalization] configuration:\n  " + "\n  ".join(problems)
+            )
+
+        self.is_fixed = np.array([all(fixed_flags[name]) for name in self.names])
+        for name, is_fixed in zip(self.names, self.is_fixed):
+            if name.startswith("amp_") and not is_fixed:
+                print(
+                    f"WARNING: {name} is marginalized without fast_metals: its template is "
+                    "recomputed at every evaluation."
+                )
+
+        # Evaluate the model once to capture all templates
+        for corr_name, model in interface.models.items():
+            model.linear_parameters = set(self.component_parameters[corr_name])
+        base_params = interface.marginalization.get_base_model_params()
+        model_cf = interface.compute_model(base_params, run_init=False)
+
+        fixed_columns = np.flatnonzero(self.is_fixed)
+        for corr_name, model in interface.models.items():
+            fixed_names = [self.names[j] for j in fixed_columns]
+            if any(name in self.component_parameters[corr_name] for name in fixed_names):
+                self._fixed_full_templates[corr_name] = self._distort(
+                    corr_name, {name: model.linear_templates[name] for name in fixed_names}
+                )
+
+            # From here on only the templates that change are captured
+            model.linear_parameters = {
+                name for name in model.linear_parameters if not self.is_fixed[self._index(name)]
+            }
+
+        # Data blocks of the chi2: one with a global covariance, one per correlation otherwise
+        if interface._use_global_cov:
+            self._blocks = [list(interface.corr_items)]
+        else:
+            self._blocks = [[name] for name in interface.corr_items]
+        self._fixed_block_templates = [
+            self._masked_block_templates(block, self._fixed_full_templates)
+            for block in self._blocks
+        ]
+        self._weighted_fixed_templates = [None] * len(self._blocks)
+
+        # Degenerate templates make the normal matrix singular for flat priors
+        try:
+            solution = self.solve(model_cf)
+        except VegaModelError as error:
+            raise ValueError(
+                "The templates of the [analytic marginalization] parameters are degenerate "
+                "within the fitted bins. Remove parameters or set Gaussian priors."
+            ) from error
+        eigenvalues = np.linalg.eigvalsh(solution.scaled_normal_matrix)
+        if np.any(np.isinf(self.prior_sigmas)) and (
+            eigenvalues[0] <= eigenvalues[-1] / MAX_FLAT_CONDITION_NUMBER
+        ):
+            raise ValueError(
+                "The templates of the [analytic marginalization] parameters are linearly "
+                "dependent within the fitted bins. Remove parameters or set Gaussian priors."
+            )
+        self.last_solution = None
+
+    def check_direct_model(self):
+        """Refuse marginalized metal parameters with a model computed from the full P(k).
+
+        With ``no-metal-decomp`` (required here), such a model contains no metal
+        correlations, so these parameters would have no template.
+
+        Raises
+        ------
+        ValueError
+            If a metal parameter is marginalized.
+        """
+        metal_names = [name for name in self.names if name.startswith(("amp_", "bias_"))]
+        if metal_names:
+            raise ValueError(
+                f"Analytically marginalized metal parameters {metal_names} cannot be used with "
+                "a model computed directly from the full power spectrum, which has no metals."
+            )
+
+    def _index(self, name):
+        """Column of a parameter in the coefficient vectors.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name.
+
+        Returns
+        -------
+        int
+            Index in ``names``.
+        """
+        return self.names.index(name)
+
+    def _distort(self, corr_name, templates):
+        """Propagate templates on the model grid of one correlation to its output grid.
+
+        Parameters
+        ----------
+        corr_name : str
+            Correlation name.
+        templates : dict
+            Templates keyed by parameter name, each on the model grid.
+
+        Returns
+        -------
+        2D array
+            Templates on the full (unmasked) output grid, with shape
+            ``(model_size, num_parameters)``; columns of parameters absent from
+            ``templates`` are zero.
+        """
+        model = self._interface.models[corr_name]
+        columns = [self._index(name) for name in templates]
+        undistorted = np.column_stack(list(templates.values()))
+
+        # Only the columns of the given templates go through the distortion matrix
+        if model._has_distortion_mat:
+            distorted = self._interface.data[corr_name].distortion_mat.dot(undistorted)
+        else:
+            distorted = undistorted
+
+        full_templates = np.zeros((distorted.shape[0], len(self.names)))
+        full_templates[:, columns] = distorted
+        return full_templates
+
+    def _masked_block_templates(self, block, full_templates):
+        """Templates of one data block within the fitted bins.
+
+        Parameters
+        ----------
+        block : list of str
+            Correlations of the block, in data-vector order.
+        full_templates : dict
+            Templates on the full output grid keyed by correlation name.
+
+        Returns
+        -------
+        2D array or None
+            Templates with shape ``(block_data_size, num_parameters)``, or None if no
+            correlation of the block has templates.
+        """
+        if not any(corr_name in full_templates for corr_name in block):
+            return None
+
+        rows = []
+        for corr_name in block:
+            data = self._interface.data[corr_name]
+            if corr_name in full_templates:
+                rows.append(full_templates[corr_name][data.model_mask])
+            else:
+                rows.append(np.zeros((data.data_size, len(self.names))))
+        return np.vstack(rows)
+
+    def _dynamic_full_templates(self):
+        """Templates that change between evaluations, from the last model evaluation.
+
+        Returns
+        -------
+        dict
+            Templates on the full output grid keyed by correlation name, for the
+            correlations with such templates.
+        """
+        dynamic_templates = {}
+        for corr_name, model in self._interface.models.items():
+            if model.linear_parameters:
+                dynamic_templates[corr_name] = self._distort(corr_name, model.linear_templates)
+        return dynamic_templates
+
+    def _block_data(self, block):
+        """Data vector and precision of one data block within the fitted bins.
+
+        Parameters
+        ----------
+        block : list of str
+            Correlations of the block.
+
+        Returns
+        -------
+        data_vector : 1D array
+            Data (or Monte Carlo mock) within the fitted bins.
+        precision : 2D array
+            Precision used by the chi2, after the per-correlation marginalizations.
+        """
+        interface = self._interface
+        # The Monte Carlo flag is set after the marginalization is initialized
+        monte_carlo = getattr(interface, "monte_carlo", False)
+        if interface._use_global_cov:
+            if monte_carlo:
+                data_vector = interface.analysis.current_mc_mock
+            else:
+                data_vector = np.concatenate(
+                    [interface.data[name].masked_data_vec for name in interface.corr_items]
+                )
+            return data_vector, interface.masked_global_invcov
+
+        data = interface.data[block[0]]
+        if monte_carlo:
+            return data.masked_mc_mock, data.scaled_inv_masked_cov
+        return data.masked_data_vec, data.inv_masked_cov
+
+    def _get_weighted_fixed_templates(self, block_index, precision):
+        """Precision times the fixed templates of one block, cached per precision.
+
+        Parameters
+        ----------
+        block_index : int
+            Index of the block.
+        precision : 2D array
+            Precision of the block.
+
+        Returns
+        -------
+        2D array
+            ``precision @ fixed_templates`` with shape ``(block_data_size, num_parameters)``.
+        """
+        cached = self._weighted_fixed_templates[block_index]
+        if cached is None or cached[0] is not precision:
+            weighted = precision.dot(self._fixed_block_templates[block_index])
+            # The precision is kept in the cache so that the identity check stays valid
+            self._weighted_fixed_templates[block_index] = (precision, weighted)
+            return weighted
+
+        return cached[1]
+
+    def solve(self, model_cf):
+        """Marginalize the parameters for one model.
+
+        Parameters
+        ----------
+        model_cf : dict
+            Model correlation functions keyed by correlation name, on the full output
+            grid, computed with these parameters set to zero. The templates that
+            change between evaluations are those of the same model evaluation.
+
+        Returns
+        -------
+        LinearSolution
+            Coefficients, chi2 and normalization; also stored in ``last_solution``.
+
+        Raises
+        ------
+        vega.utils.VegaModelError
+            If the normal matrix is not positive definite, i.e. the templates are
+            degenerate within the fitted bins.
+        """
+        interface = self._interface
+        num_parameters = len(self.names)
+        dynamic_full_templates = self._dynamic_full_templates()
+
+        normal_matrix = np.zeros((num_parameters, num_parameters))
+        projected_residual = np.zeros(num_parameters)
+        data_chi2 = 0.0
+        linear_blocks = []
+        for block_index, block in enumerate(self._blocks):
+            data_vector, precision = self._block_data(block)
+            masked_model = np.concatenate(
+                [model_cf[name][interface.data[name].model_mask] for name in block]
+            )
+            residual = data_vector - masked_model
+
+            fixed_templates = self._fixed_block_templates[block_index]
+            dynamic_templates = self._masked_block_templates(block, dynamic_full_templates)
+            if fixed_templates is None and dynamic_templates is None:
+                data_chi2 += residual.dot(precision.dot(residual))
+                continue
+
+            # One product of the precision with the residual and the changing templates
+            templates = np.zeros((residual.size, num_parameters))
+            weighted_templates = np.zeros((residual.size, num_parameters))
+            if dynamic_templates is not None:
+                dynamic_columns = np.flatnonzero(~self.is_fixed)
+                weighted = precision.dot(
+                    np.column_stack([residual, dynamic_templates[:, dynamic_columns]])
+                )
+                weighted_residual = weighted[:, 0]
+                templates[:, dynamic_columns] = dynamic_templates[:, dynamic_columns]
+                weighted_templates[:, dynamic_columns] = weighted[:, 1:]
+            else:
+                weighted_residual = precision.dot(residual)
+
+            if fixed_templates is not None:
+                fixed_columns = np.flatnonzero(self.is_fixed)
+                templates[:, fixed_columns] = fixed_templates[:, fixed_columns]
+                weighted_fixed = self._get_weighted_fixed_templates(block_index, precision)
+                weighted_templates[:, fixed_columns] = weighted_fixed[:, fixed_columns]
+
+            projected_residual += templates.T.dot(weighted_residual)
+            normal_matrix += templates.T.dot(weighted_templates)
+            linear_blocks.append((residual, templates, weighted_residual, weighted_templates))
+
+        # Gaussian priors; flat priors have zero prior precision
+        prior_precision = 1 / self.prior_sigmas**2
+        normal_matrix = 0.5 * (normal_matrix + normal_matrix.T)
+        normal_matrix[np.diag_indices_from(normal_matrix)] += prior_precision
+        projected_residual += prior_precision * self.prior_means
+
+        # Unit diagonal, so that the factorization does not depend on the coefficient units
+        diagonal = np.diag(normal_matrix)
+        if not np.all(diagonal > 0):
+            raise VegaModelError("A marginalized template vanishes within the fitted bins.")
+        scales = 1 / np.sqrt(diagonal)
+        scaled_normal_matrix = normal_matrix * scales[:, None] * scales[None, :]
+        try:
+            cholesky_factor = cho_factor(scaled_normal_matrix)
+        except np.linalg.LinAlgError as error:
+            raise VegaModelError("The marginalized templates are degenerate.") from error
+
+        coefficients = scales * cho_solve(cholesky_factor, scales * projected_residual)
+        scaled_inverse = cho_solve(cholesky_factor, np.eye(num_parameters))
+        coefficient_errors = scales * np.sqrt(np.clip(np.diag(scaled_inverse), 0.0, None))
+
+        log_det_normal_matrix = 2 * np.sum(np.log(np.diag(cholesky_factor[0])))
+        log_det_normal_matrix -= 2 * np.sum(np.log(scales))
+        is_flat = np.isinf(self.prior_sigmas)
+        log_normalization = (
+            log_det_normal_matrix
+            + np.sum(np.log(self.prior_sigmas[~is_flat] ** 2))
+            - np.sum(is_flat) * np.log(2 * np.pi)
+        )
+
+        # Chi2 of the residual at the best-fit coefficients. Equal to
+        # r.T P r + mu.T Lambda mu - b.T inv(F) b, but without the cancellation of
+        # large terms in that difference.
+        for residual, templates, weighted_residual, weighted_templates in linear_blocks:
+            fitted_residual = residual - templates.dot(coefficients)
+            weighted_fitted_residual = weighted_residual - weighted_templates.dot(coefficients)
+            data_chi2 += fitted_residual.dot(weighted_fitted_residual)
+        prior_offsets = (coefficients - self.prior_means)[~is_flat]
+        prior_chi2 = np.sum(prior_precision[~is_flat] * prior_offsets**2)
+
+        chi2 = data_chi2 + prior_chi2
+        self.last_solution = LinearSolution(
+            coefficients=coefficients,
+            coefficient_errors=coefficient_errors,
+            chi2=float(chi2),
+            log_normalization=float(log_normalization),
+            scaled_normal_matrix=scaled_normal_matrix,
+        )
+        return self.last_solution
+
+    def add_templates(self, model_cf, coefficients):
+        """Add the template contribution to the model correlation functions.
+
+        Parameters
+        ----------
+        model_cf : dict
+            Model correlation functions keyed by correlation name, from the last model
+            evaluation. Updated in place.
+        coefficients : 1D array
+            Coefficients in the order of ``names``.
+
+        Returns
+        -------
+        dict
+            The updated ``model_cf``.
+        """
+        dynamic_full_templates = self._dynamic_full_templates()
+        for corr_name in model_cf:
+            if corr_name in self._fixed_full_templates:
+                model_cf[corr_name] += self._fixed_full_templates[corr_name].dot(coefficients)
+            if corr_name in dynamic_full_templates:
+                model_cf[corr_name] += dynamic_full_templates[corr_name].dot(coefficients)
 
         return model_cf

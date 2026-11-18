@@ -41,6 +41,10 @@ def run_vega(config_path):
         for par, val in vega.bestfit.values.items():
             vega.params[par] = val
 
+        # Best-fit values of the analytically marginalized coefficients
+        for par, val in vega.bestfit_marginalized_values.items():
+            vega.params[par] = val
+
     vega.output.write_results(
         vega.bestfit_model,
         vega.params,

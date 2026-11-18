@@ -399,23 +399,22 @@ def test_broadband_templates_are_the_model_response(tmp_path):
         )
 
 
-def test_flat_broadband_chi2_is_independent_of_base_coefficients(tmp_path):
-    interface = VegaInterface(str(write_configs(tmp_path, broadbands=True)))
+@pytest.mark.parametrize("broadband_prior_sigma", [None, 0.05])
+def test_broadband_parameter_values_do_not_enter_the_likelihood(tmp_path, broadband_prior_sigma):
+    """Marginalized coefficients are zero in the model, whatever their [parameters] values."""
+    config = write_configs(tmp_path, broadbands=True, broadband_prior_sigma=broadband_prior_sigma)
+    interface = VegaInterface(str(config))
     shifted_params = {
         BROADBAND_IDS[0].format(name="first"): 0.02,
         BROADBAND_IDS[1].format(name="first"): -0.01,
     }
 
-    assert interface.chi2(shifted_params) == pytest.approx(interface.chi2(), rel=1e-9)
+    assert interface.chi2(shifted_params) == interface.chi2()
+    assert interface.log_lik(shifted_params) == interface.log_lik()
 
-    # The fitted deviation absorbs the shift of the base coefficients
     _, coefficients = interface.chi2(return_marg_coeff=True)
     _, shifted_coefficients = interface.chi2(shifted_params, return_marg_coeff=True)
-    component = interface.data["first"].marginalization
-    for broadband_id, shift in shifted_params.items():
-        column = component.coefficient_ids.index(broadband_id)
-        difference = coefficients["first"][column] - shifted_coefficients["first"][column]
-        assert difference == pytest.approx(shift, rel=1e-6)
+    assert np.array_equal(coefficients["first"], shifted_coefficients["first"])
 
 
 def test_degrees_of_freedom_counts(tmp_path):

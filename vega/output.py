@@ -126,7 +126,8 @@ class Output:
             bestfit_hdu = self._bestfit_hdu(minimizer)
             hdu_list.append(bestfit_hdu)
 
-        marg_coeff_hdu = self._marg_coeff_hdu(bestfit_corr_stats)
+        linear_table = getattr(minimizer, "linear_coefficient_table", None)
+        marg_coeff_hdu = self._marg_coeff_hdu(bestfit_corr_stats, linear_table)
         if marg_coeff_hdu is not None:
             hdu_list.append(marg_coeff_hdu)
 
@@ -374,7 +375,7 @@ class Output:
         return model_hdus
 
     @staticmethod
-    def _marg_coeff_hdu(bestfit_corr_stats):
+    def _marg_coeff_hdu(bestfit_corr_stats, linear_table=None):
         """Create HDU with the best-fit analytically marginalized coefficients.
 
         Parameters
@@ -382,21 +383,28 @@ class Output:
         bestfit_corr_stats : dict or None
             Best-fit statistics keyed by correlation name. Correlations with
             marginalized coefficients have a ``marg_coeff_table`` entry.
+        linear_table : dict, optional
+            Coefficients of the ``[analytic marginalization]`` parameters, with
+            ``names``, ``values``, ``errors`` and ``correlations`` (comma-separated
+            names of the correlations each parameter enters), by default None.
 
         Returns
         -------
         astropy.io.fits.hdu.table.BinTableHDU or None
             HDU with one row per coefficient, or None if nothing was marginalized.
         """
-        if bestfit_corr_stats is None:
-            return None
+        tables = []
+        if bestfit_corr_stats is not None:
+            for corr_name, stats in bestfit_corr_stats.items():
+                table = stats.get("marg_coeff_table")
+                if table is not None:
+                    tables.append(([corr_name] * len(table["names"]), table))
+        if linear_table is not None:
+            tables.append((list(linear_table["correlations"]), linear_table))
 
         correlations, names, values, errors = [], [], [], []
-        for corr_name, stats in bestfit_corr_stats.items():
-            table = stats.get("marg_coeff_table")
-            if table is None:
-                continue
-            correlations += [corr_name] * len(table["names"])
+        for table_correlations, table in tables:
+            correlations += table_correlations
             names += list(table["names"])
             values.append(table["values"])
             errors.append(table["errors"])
@@ -415,7 +423,7 @@ class Output:
         marg_coeff_hdu = fits.BinTableHDU.from_columns(columns)
         marg_coeff_hdu.name = "MARGCOEFF"
 
-        marg_coeff_hdu.header.comments["TTYPE1"] = "Correlation of the coefficient"
+        marg_coeff_hdu.header.comments["TTYPE1"] = "Correlation(s) of the coefficient"
         marg_coeff_hdu.header.comments["TTYPE2"] = "Names of marginalized coefficients"
         marg_coeff_hdu.header.comments["TTYPE3"] = "Bestfit values of the coefficients"
         marg_coeff_hdu.header.comments["TTYPE4"] = "Errors at fixed sampled parameters"
