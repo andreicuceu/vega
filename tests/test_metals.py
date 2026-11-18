@@ -19,6 +19,7 @@ added to its header) written to a temporary directory, so no data files are adde
 import configparser
 import contextlib
 import io
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,7 @@ from picca import constants as picca_constants
 from scipy.integrate import quad
 
 from vega import VegaInterface, interface_utils, redshift_weights
+from vega.metals import Metals
 from vega.utils import find_file, growth_function, normalized_growth_factor
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -753,6 +755,127 @@ def test_invalid_metal_matrix_convention_raises(setups, tmp_path):
 
     with pytest.raises(ValueError, match="metal_matrix_convention"):
         build_interface(main_ini)
+
+
+# ----------------------------------------------------------------------------------------------
+# Redshift range of the pairs: ZMIN/ZMAX header of the data file
+# ----------------------------------------------------------------------------------------------
+
+HEADER_Z_RANGE = (2.3, 2.5)  # inside the redshift range of the synthetic forest pairs
+CONFIG_Z_RANGE = (2.2, 3.0)
+
+
+def build_z_range_interface(setups, directory, header_z=None, config_z=None, rp_only=True):
+    """Initialize a synthetic lyaxlya setup with a given pair redshift range.
+
+    The data file is copied to ``directory`` with ``ZMIN``/``ZMAX`` in its header, and the
+    ``zmin``/``zmax`` of ``[data]`` are set, each only if given.
+
+    Parameters
+    ----------
+    setups : SyntheticSetups
+        Synthetic setups of the module.
+    directory : pathlib.Path
+        Output directory.
+    header_z : tuple of float, optional
+        ``(ZMIN, ZMAX)`` written to the header of the data file; none by default.
+    config_z : tuple of float, optional
+        ``(zmin, zmax)`` written to ``[data]`` of the correlation INI; none by default.
+    rp_only : bool, optional
+        Use the r_par-only metal matrices (faster, used by the reference), by default True.
+
+    Returns
+    -------
+    vega.VegaInterface
+        Initialized interface.
+    """
+    model_edits = {"rp_only_metal_mats": "True"} if rp_only else {}
+    main_ini = write_config_copy(
+        setups.main_ini(), directory, corr_edits={"model": model_edits} if model_edits else None
+    )
+
+    corr_path = directory / "lyaxlya.ini"
+    corr_config = read_config(corr_path)
+
+    data_path = directory / "data_with_z_header.fits"
+    with fits.open(corr_config["data"]["filename"]) as hdul:
+        if header_z is not None:
+            hdul[1].header["ZMIN"], hdul[1].header["ZMAX"] = header_z
+        hdul.writeto(data_path, overwrite=True)
+    corr_config["data"]["filename"] = str(data_path)
+
+    if config_z is not None:
+        corr_config["data"]["zmin"], corr_config["data"]["zmax"] = map(str, config_z)
+
+    with open(corr_path, "w") as file:
+        corr_config.write(file)
+
+    return build_interface(main_ini)[0]
+
+
+@pytest.fixture
+def reset_z_notices(monkeypatch):
+    """Make the once-per-process z-range warning and report fire again in each test."""
+    monkeypatch.setattr(Metals, "_warned_z_options", False)
+    monkeypatch.setattr(Metals, "_reported_z", set())
+
+
+def test_pair_z_range_read_from_data_header(setups, tmp_path, reset_z_notices):
+    """ZMIN/ZMAX of the data header set the range of the metal pairs and the matrices follow."""
+    name = CORRELATION_NAMES["lyaxlya"]
+    vega = build_z_range_interface(setups, tmp_path, header_z=HEADER_Z_RANGE)
+
+    assert (vega.data[name].z_min_pairs, vega.data[name].z_max_pairs) == HEADER_Z_RANGE
+    metals = vega.models[name].metals
+    assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE
+
+    # The matrices are those of the pairs inside the header range, and the cut is not trivial
+    uncut, _ = setups.interface(model_options={"rp_only_metal_mats": "True"})
+    for corr_hash in vega.corr_items[name].metal_correlations:
+        expectation, denominator = explicit_stacked_pair_expectation(vega, name, corr_hash)
+        uncut_expectation, uncut_denominator = explicit_stacked_pair_expectation(
+            uncut, name, corr_hash
+        )
+        assert np.any(denominator > 0)
+        assert not np.allclose(denominator, uncut_denominator)
+
+        row_sums = metals.rp_metal_dmats[corr_hash].sum(axis=1)
+        np.testing.assert_allclose(row_sums, expectation, rtol=1e-11, atol=1e-14)
+
+
+def test_data_header_pair_z_range_overrides_config(setups, tmp_path, reset_z_notices):
+    """The header wins over the deprecated config zmin/zmax, which only warn."""
+    name = CORRELATION_NAMES["lyaxlya"]
+    with pytest.warns(FutureWarning, match="zmin/zmax"):
+        vega = build_z_range_interface(
+            setups, tmp_path, header_z=HEADER_Z_RANGE, config_z=CONFIG_Z_RANGE, rp_only=False
+        )
+
+    metals = vega.models[name].metals
+    assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE
+
+
+def test_config_pair_z_range_used_without_header(setups, tmp_path, reset_z_notices):
+    """Without ZMIN/ZMAX in the data header the deprecated config zmin/zmax still work."""
+    name = CORRELATION_NAMES["lyaxlya"]
+    with pytest.warns(FutureWarning, match="zmin/zmax"):
+        vega = build_z_range_interface(setups, tmp_path, config_z=CONFIG_Z_RANGE, rp_only=False)
+
+    assert vega.data[name].z_min_pairs is None
+    assert vega.data[name].z_max_pairs is None
+    metals = vega.models[name].metals
+    assert (metals.zmin, metals.zmax) == CONFIG_Z_RANGE
+
+
+def test_no_pair_z_range_means_no_cut(setups, reset_z_notices):
+    """Neither header nor config: the full 0-10 range, and no deprecation warning."""
+    name = CORRELATION_NAMES["lyaxlya"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        vega, _ = setups.interface()
+
+    metals = vega.models[name].metals
+    assert (metals.zmin, metals.zmax) == (0.0, 10.0)
 
 
 # ----------------------------------------------------------------------------------------------
