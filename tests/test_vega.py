@@ -23,12 +23,12 @@ def test_vega_old():
     names = ["test_" + str(i) for i in range(8)]
     names.remove("test_3")
 
-    vega_auto = VegaInterface("examples/picca_benchmarks/configs/vega/main.ini")
+    vega_auto = VegaInterface("picca_benchmarks/main.ini")
 
     vega_auto.fiducial["Omega_de"] = None
     xi_vega_auto = vega_auto.compute_model(run_init=True)
 
-    vega_cross = VegaInterface("examples/picca_benchmarks/configs/vega/main_cross.ini")
+    vega_cross = VegaInterface("picca_benchmarks/main_cross.ini")
     vega_cross.fiducial["Omega_de"] = None
     xi_vega_cross = vega_cross.compute_model(run_init=True)
 
