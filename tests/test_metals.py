@@ -475,7 +475,7 @@ def setups(tmp_path_factory):
 # ----------------------------------------------------------------------------------------------
 
 
-def explicit_stacked_pair_expectation(vega, correlation_name, corr_hash):
+def explicit_stacked_pair_expectation(vega, correlation_name, corr_hash, z_range=(0.0, 10.0)):
     """Expectation of the estimator for a constant undistorted correlation, pair by pair.
 
     For every pair of stacked-weight elements (forest pixels, or redshift bins of the QSO
@@ -499,6 +499,8 @@ def explicit_stacked_pair_expectation(vega, correlation_name, corr_hash):
         Name of the correlation.
     corr_hash : tuple of str
         Names of the true absorbers of tracers 1 and 2 of the metal correlation.
+    z_range : tuple of float, optional
+        Range of the mean assumed redshift of the pairs, by default (0, 10) (no cut).
 
     Returns
     -------
@@ -513,11 +515,7 @@ def explicit_stacked_pair_expectation(vega, correlation_name, corr_hash):
     omega_m = vega.fiducial["Omega_m"]
     omega_de = vega.fiducial["Omega_de"]
 
-    # Redshift range of the pairs from the data header, no cut if absent
-    zmin = vega.data[correlation_name].z_min_pairs
-    zmax = vega.data[correlation_name].z_max_pairs
-    zmin = 0.0 if zmin is None else zmin
-    zmax = 10.0 if zmax is None else zmax
+    zmin, zmax = z_range
 
     true_redshifts = []
     assumed_redshifts = []
@@ -760,8 +758,11 @@ def test_invalid_metal_matrix_convention_raises(setups, tmp_path):
 HEADER_Z_RANGE = (2.3, 2.5)  # inside the redshift range of the synthetic forest pairs
 
 
-def build_z_header_interface(setups, directory, header_z):
-    """Initialize the synthetic lyaxlya setup (r_par-only matrices) with ZMIN/ZMAX in the header.
+MISSING_Z_WARNING = "Redshift bin flags ZMIN/ZMAX not found"
+
+
+def build_z_header_interface(setups, directory, header, data_edits=None):
+    """Initialize the synthetic lyaxlya setup (r_par-only matrices) with extra header keys.
 
     Parameters
     ----------
@@ -769,37 +770,44 @@ def build_z_header_interface(setups, directory, header_z):
         Synthetic setups of the module.
     directory : pathlib.Path
         Output directory, receiving the configs and the copy of the data file.
-    header_z : tuple of float
-        ``(ZMIN, ZMAX)`` written to the header of the data file.
+    header : dict
+        Keys written to the header of the data file, e.g. ``{"ZMIN": 2.3, "ZMAX": 2.5}``.
+    data_edits : dict, optional
+        Extra ``[data]`` options of the correlation INI, e.g. ``{"zmin": "2.3"}``.
 
     Returns
     -------
     vega.VegaInterface
         Initialized interface.
+    str
+        Text printed during the initialization.
     """
-    main_ini = write_config_copy(
-        setups.main_ini(), directory, corr_edits={"model": {"rp_only_metal_mats": "True"}}
-    )
+    corr_edits = {"model": {"rp_only_metal_mats": "True"}, "data": data_edits or {}}
+    main_ini = write_config_copy(setups.main_ini(), directory, corr_edits=corr_edits)
     corr_path = directory / "lyaxlya.ini"
     corr_config = read_config(corr_path)
 
     data_path = directory / "data_with_z_header.fits"
     with fits.open(corr_config["data"]["filename"]) as hdul:
-        hdul[1].header["ZMIN"], hdul[1].header["ZMAX"] = header_z
+        for key, value in header.items():
+            hdul[1].header[key] = value
         hdul.writeto(data_path, overwrite=True)
     corr_config["data"]["filename"] = str(data_path)
 
     with open(corr_path, "w") as file:
         corr_config.write(file)
 
-    return build_interface(main_ini)[0]
+    return build_interface(main_ini)
 
 
 def test_pair_z_range_read_from_data_header(setups, tmp_path):
     """ZMIN/ZMAX of the data header set the range of the metal pairs and the matrices follow."""
     name = CORRELATION_NAMES["lyaxlya"]
-    vega = build_z_header_interface(setups, tmp_path, HEADER_Z_RANGE)
+    vega, output = build_z_header_interface(
+        setups, tmp_path, dict(zip(["ZMIN", "ZMAX"], HEADER_Z_RANGE))
+    )
 
+    assert MISSING_Z_WARNING not in output
     assert (vega.data[name].z_min_pairs, vega.data[name].z_max_pairs) == HEADER_Z_RANGE
     metals = vega.models[name].metals
     assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE
@@ -807,7 +815,9 @@ def test_pair_z_range_read_from_data_header(setups, tmp_path):
     # The matrices are those of the pairs inside the header range, and the cut is not trivial
     uncut, _ = setups.interface(model_options={"rp_only_metal_mats": "True"})
     for corr_hash in vega.corr_items[name].metal_correlations:
-        expectation, denominator = explicit_stacked_pair_expectation(vega, name, corr_hash)
+        expectation, denominator = explicit_stacked_pair_expectation(
+            vega, name, corr_hash, z_range=HEADER_Z_RANGE
+        )
         _, uncut_denominator = explicit_stacked_pair_expectation(uncut, name, corr_hash)
         assert np.any(denominator > 0)
         assert not np.allclose(denominator, uncut_denominator)
@@ -816,20 +826,205 @@ def test_pair_z_range_read_from_data_header(setups, tmp_path):
         np.testing.assert_allclose(row_sums, expectation, rtol=1e-11, atol=1e-14)
 
 
-@pytest.mark.parametrize("option", ["zmin", "zmax"])
-def test_removed_z_options_in_config_raise(setups, tmp_path, option):
-    """The removed zmin/zmax options of [data] raise a ValueError pointing to the header."""
-    main_ini = write_config_copy(setups.main_ini(), tmp_path, corr_edits={"data": {option: "2.0"}})
+@pytest.mark.parametrize(
+    "header, warned",
+    [({}, True), ({"ZMIN": None, "ZMAX": None}, False)],
+    ids=["no-keys", "picca-no-cut"],
+)
+def test_missing_z_header_warns(setups, tmp_path, header, warned):
+    """Without ZMIN/ZMAX keys a warning is printed and there is no cut; None values are silent."""
+    name = CORRELATION_NAMES["lyaxlya"]
+    vega, output = build_z_header_interface(setups, tmp_path, header)
 
+    assert (MISSING_Z_WARNING in output) == warned
+    assert (vega.data[name].z_min_pairs, vega.data[name].z_max_pairs) == (None, None)
+    metals = vega.models[name].metals
+    assert (metals.zmin, metals.zmax) == (0.0, 10.0)
+
+
+@pytest.mark.parametrize(
+    "header, data_edits, raises",
+    [
+        ({"ZMIN": 2.3, "ZMAX": 2.5}, {"zmin": "2.3", "zmax": "2.5"}, False),
+        ({"ZMIN": 2.3, "ZMAX": 2.5}, {"zmin": "0.0", "zmax": "10.0"}, True),
+    ],
+    ids=["matching", "not-matching"],
+)
+def test_removed_z_options_checked_against_header(setups, tmp_path, header, data_edits, raises):
+    """zmin/zmax in [data] equal to the header range are ignored with a warning, others raise."""
+    if raises:
+        with pytest.raises(ValueError, match="do not match the pair redshift range"):
+            build_z_header_interface(setups, tmp_path, header, data_edits)
+        return
+
+    vega, output = build_z_header_interface(setups, tmp_path, header, data_edits)
+    assert "zmin/zmax options are no longer used and are ignored" in output
+    metals = vega.models[CORRELATION_NAMES["lyaxlya"]].metals
+    assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE
+
+
+@pytest.mark.parametrize("options", [{"zmin": 2.0}, {"zmax": 3.0}])
+def test_removed_z_options_in_build_config_raise(options):
+    """BuildConfig refuses zmin/zmax options other than the old defaults 0 and 10 (no header)."""
     with pytest.raises(ValueError, match="zmin/zmax options were removed"):
-        build_interface(main_ini)
+        BuildConfig(options)
 
 
-@pytest.mark.parametrize("option", ["zmin", "zmax"])
-def test_removed_z_options_in_build_config_raise(option):
-    """BuildConfig refuses the removed zmin/zmax options."""
-    with pytest.raises(ValueError, match="zmin/zmax options were removed"):
-        BuildConfig({option: 2.0})
+def test_removed_z_options_in_build_config_without_a_cut_are_ignored(capsys):
+    """BuildConfig ignores zmin = 0, zmax = 10 (as passed by lyatools) with a warning."""
+    builder = BuildConfig({"zmin": 0.0, "zmax": 10.0})
+
+    assert "zmin/zmax options are no longer used and are ignored" in capsys.readouterr().out
+    assert "zmin" not in builder.options and "zmax" not in builder.options
+
+
+# ----------------------------------------------------------------------------------------------
+# Redshift range of the pairs with multipoles and with a separate distortion matrix
+# ----------------------------------------------------------------------------------------------
+
+RMU_GRID = {"mu_nbins": 10, "r_nbins": 30, "r_max": 150.0}
+
+
+def write_rmu_file(path, header, dmat_only=False):
+    """Write a small synthetic r,mu-binned correlation (or distortion-matrix) file.
+
+    Auto-correlation layout read by ``RMuCoordinates``: ``RP`` holds mu, ``RT`` holds r, the
+    header ``RPMIN/RPMAX`` the mu range, ``RTMAX`` r_max and ``NP/NT`` the numbers of mu/r bins.
+    The data file has a smooth toy correlation, a diagonal covariance and an identity
+    distortion matrix; the distortion-matrix file has the identity and the model grid in HDU 2.
+
+    Parameters
+    ----------
+    path : pathlib.Path
+        Output file.
+    header : dict
+        Extra keys of the HDU 1 header, e.g. ``{"ZMIN": 2.3, "ZMAX": 2.5}``.
+    dmat_only : bool, optional
+        Write a distortion-matrix file instead of a correlation file, by default False.
+    """
+    mu_nbins, r_nbins, r_max = RMU_GRID["mu_nbins"], RMU_GRID["r_nbins"], RMU_GRID["r_max"]
+    mu = (0.5 + np.arange(mu_nbins)) / mu_nbins
+    r = (0.5 + np.arange(r_nbins)) * r_max / r_nbins
+    r_grid, mu_grid = (grid.ravel() for grid in np.meshgrid(r, mu))
+    size = r_grid.size
+    z_grid = np.full(size, 2.4)
+
+    grid_columns = [
+        fits.Column(name="RP", format="D", array=mu_grid),
+        fits.Column(name="RT", format="D", array=r_grid),
+        fits.Column(name="Z", format="D", array=z_grid),
+    ]
+    dm_column = fits.Column(name="DM", format=f"{size}D", array=np.eye(size))
+    if dmat_only:
+        table = fits.BinTableHDU.from_columns([dm_column])
+        hdus = [table, fits.BinTableHDU.from_columns(grid_columns)]
+        table.header["COEFMOD"] = 1
+    else:
+        xi = 1e-2 * (1.0 + mu_grid**2) * np.exp(-r_grid / 50.0)
+        table = fits.BinTableHDU.from_columns(
+            grid_columns
+            + [
+                fits.Column(name="DA", format="D", array=xi),
+                fits.Column(name="NB", format="K", array=np.full(size, 1000)),
+                fits.Column(name="CO", format=f"{size}D", array=np.diag(np.full(size, 1e-6))),
+                dm_column,
+            ]
+        )
+        hdus = [table]
+        for keyword, value in DATA_FILE_COSMOLOGY.items():
+            table.header[keyword] = value
+
+    table.header["RMU_BIN"] = True
+    table.header["RPMIN"], table.header["RPMAX"] = 0.0, 1.0
+    table.header["RTMAX"] = r_max
+    table.header["NP"], table.header["NT"] = mu_nbins, r_nbins
+    for key, value in header.items():
+        table.header[key] = value
+
+    fits.HDUList([fits.PrimaryHDU()] + hdus).writeto(path, overwrite=True)
+
+
+def build_rmu_interface(setups, directory, header, model_options, dmat_header=None):
+    """Initialize the synthetic lyaxlya setup on a synthetic r,mu-binned data file.
+
+    Parameters
+    ----------
+    setups : SyntheticSetups
+        Synthetic setups of the module.
+    directory : pathlib.Path
+        Output directory.
+    header : dict
+        Extra header keys of the data file.
+    model_options : dict
+        Extra ``[model]`` options, e.g. ``{"use_multipoles": "True"}``.
+    dmat_header : dict, optional
+        If given, a separate distortion-matrix file with these extra header keys is used.
+
+    Returns
+    -------
+    vega.VegaInterface
+        Initialized interface.
+    str
+        Text printed during the initialization.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    data_path = directory / "rmu_data.fits"
+    write_rmu_file(data_path, header)
+    data_edits = {"filename": data_path}
+    if dmat_header is not None:
+        dmat_path = directory / "rmu_dmat.fits"
+        write_rmu_file(dmat_path, dmat_header, dmat_only=True)
+        data_edits["distortion-file"] = dmat_path
+
+    main_ini = write_config_copy(
+        setups.main_ini(), directory, corr_edits={"data": data_edits, "model": model_options}
+    )
+    # The r,mu broadband polynomials do not apply to multipoles
+    corr_path = directory / "lyaxlya.ini"
+    corr_config = read_config(corr_path)
+    corr_config.remove_section("broadband")
+    with open(corr_path, "w") as file:
+        corr_config.write(file)
+
+    return build_interface(main_ini)
+
+
+def test_pair_z_range_header_with_multipoles(setups, tmp_path):
+    """With use_multipoles, ZMIN/ZMAX are read from the header and the metals are as in 2D."""
+    name = CORRELATION_NAMES["lyaxlya"]
+    header = dict(zip(["ZMIN", "ZMAX"], HEADER_Z_RANGE))
+    multipole_options = {"use_multipoles": "True", "model_multipoles": "0,2"}
+    vega, _ = build_rmu_interface(setups, tmp_path / "multipoles", header, multipole_options)
+
+    assert vega.data[name].use_multipoles
+    metals = vega.models[name].metals
+    assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE
+
+    # Same metal matrices as the same file without multipoles, different from the uncut ones
+    vega_rmu, _ = build_rmu_interface(setups, tmp_path / "rmu", header, {})
+    vega_uncut, _ = build_rmu_interface(setups, tmp_path / "uncut", {}, multipole_options)
+    rmu_dmats = vega_rmu.models[name].metals.rp_metal_dmats
+    uncut_dmats = vega_uncut.models[name].metals.rp_metal_dmats
+
+    assert list(metals.rp_metal_dmats) == list(rmu_dmats)
+    for corr_hash, dmat in metals.rp_metal_dmats.items():
+        assert np.array_equal(dmat.toarray(), rmu_dmats[corr_hash].toarray())
+        assert not np.array_equal(dmat.toarray(), uncut_dmats[corr_hash].toarray())
+
+
+@pytest.mark.parametrize(
+    "dmat_z, raises", [(HEADER_Z_RANGE, False), ((2.0, 2.5), True)], ids=["same", "different"]
+)
+def test_distortion_matrix_z_range_check(setups, tmp_path, dmat_z, raises):
+    """A separate distortion matrix must have the ZMIN/ZMAX of the data."""
+    header = dict(zip(["ZMIN", "ZMAX"], HEADER_Z_RANGE))
+    dmat_header = dict(zip(["ZMIN", "ZMAX"], dmat_z))
+
+    if raises:
+        with pytest.raises(ValueError, match="does not match the data"):
+            build_rmu_interface(setups, tmp_path, header, {}, dmat_header=dmat_header)
+    else:
+        build_rmu_interface(setups, tmp_path, header, {}, dmat_header=dmat_header)
 
 
 # ----------------------------------------------------------------------------------------------
