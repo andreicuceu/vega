@@ -9,8 +9,7 @@ import numpy as np
 from astropy.io import fits
 
 import vega
-from vega.metals import Z_OPTIONS_REMOVED
-from vega.utils import find_file
+from vega.utils import check_removed_z_options, find_file
 
 
 class BuildConfig:
@@ -66,8 +65,7 @@ class BuildConfig:
         """
         if options is None:
             options = {}
-        if "zmin" in options or "zmax" in options:
-            raise ValueError(Z_OPTIONS_REMOVED)
+        check_removed_z_options(options, "BuildConfig")
 
         self.overwrite = overwrite
         self.options = {}

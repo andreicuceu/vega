@@ -5,7 +5,13 @@ from scipy.sparse import csr_array
 
 from vega import redshift_weights
 from vega.coordinates import MultipoleCoordinates, RMuCoordinates, RtRpCoordinates
-from vega.utils import compute_log_cov_det, compute_masked_invcov, find_file, get_legendre_bins
+from vega.utils import (
+    check_removed_z_options,
+    compute_log_cov_det,
+    compute_masked_invcov,
+    find_file,
+    get_legendre_bins,
+)
 
 BLINDING_STRATEGIES = ["desi_dr3", "desi_dr3_civ"]
 
@@ -101,6 +107,11 @@ class Data:
             # Check if we have broadband
             if "broadband" in corr_item.config:
                 self.corr_item.init_broadband(self.coeff_binning_model)
+
+        # The removed zmin/zmax options are accepted only if they match the header range
+        check_removed_z_options(
+            corr_item.config["data"], corr_item.name, (self.z_min_pairs, self.z_max_pairs)
+        )
 
         if self.cosmo_params is not None:
             self.corr_item.init_cosmo(self.cosmo_params)
@@ -431,6 +442,8 @@ class Data:
         self._blinding_strat = None
         self.cosmo_params = None
         self.nb = None
+        self.z_min_pairs = None
+        self.z_max_pairs = None
 
         # Scale-cut bookkeeping (stored for plotting)
         self.r_min_cut = s_min
@@ -612,6 +625,11 @@ class Data:
         # Redshift range of the pairs (picca --z-min-pairs/--z-max-pairs), None if not cut
         self.z_min_pairs = header.get("ZMIN")
         self.z_max_pairs = header.get("ZMAX")
+        if "ZMIN" not in header or "ZMAX" not in header:
+            print(
+                f"WARNING: Redshift bin flags ZMIN/ZMAX not found in {data_path}. "
+                "Setting redshift edges to 0<z<10."
+            )
 
         # Get the number of pairs
         if "NB" in hdul[1].columns.names:
@@ -725,6 +743,34 @@ class Data:
                     f"the flag of the distortion matrix at {dmat_path}"
                 )
 
+    def _check_if_z_range_matches(self, header, dmat_path):
+        """Raise if the ZMIN/ZMAX pair redshift range of the distortion matrix is not the data one.
+
+        Skipped if the distortion matrix has no ZMIN/ZMAX (older picca).
+
+        Parameters
+        ----------
+        header : astropy.io.fits.Header
+            Header of the distortion matrix
+        dmat_path : str
+            Path to the distortion matrix file (used in messages)
+        """
+        if "ZMIN" not in header or "ZMAX" not in header:
+            return
+
+        for z_data, z_dmat in [
+            (self.z_min_pairs, header["ZMIN"]),
+            (self.z_max_pairs, header["ZMAX"]),
+        ]:
+            if z_data is None and z_dmat is None:
+                continue
+            if z_data is None or z_dmat is None or not np.isclose(z_data, z_dmat):
+                raise ValueError(
+                    f"The pair redshift range of the distortion matrix {dmat_path} "
+                    f"(ZMIN/ZMAX = {header['ZMIN']}/{header['ZMAX']}) does not match "
+                    f"the data ({self.z_min_pairs}/{self.z_max_pairs})."
+                )
+
     def _read_dmat(self, dmat_path):
         """Read a separate distortion matrix file and initialize coordinate grids.
 
@@ -739,6 +785,7 @@ class Data:
 
         if "BLINDING" in header:
             self._check_if_blinding_matches(header["BLINDING"], dmat_path)
+        self._check_if_z_range_matches(header, dmat_path)
 
         if "DM" in hdul[1].columns.names:
             self._distortion_mat = csr_array(hdul[1].data["DM"].astype(float))

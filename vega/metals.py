@@ -8,12 +8,6 @@ from scipy.sparse import csr_matrix, kron
 from . import coordinates, pktoxi, power_spectrum, redshift_weights, utils
 from . import correlation_func as corr_func
 
-Z_OPTIONS_REMOVED = (
-    "The zmin/zmax options were removed: the redshift range of the pairs is now read from the "
-    "ZMIN/ZMAX header of the correlation file. Remove zmin/zmax from your config and make sure "
-    "the header has them, or recompute the correlations with picca --z-min-pairs/--z-max-pairs."
-)
-
 
 class Metals:
     """
@@ -106,12 +100,8 @@ class Metals:
         self.rp_only_metal_mats = corr_item.config["model"].getboolean("rp_only_metal_mats", False)
 
         # Redshift range of the pairs from the data header (picca ZMIN/ZMAX), no cut if absent
-        if "zmin" in corr_item.config["data"] or "zmax" in corr_item.config["data"]:
-            raise ValueError(f"{corr_item.name}: {Z_OPTIONS_REMOVED}")
-        zmin = getattr(self._data, "z_min_pairs", None)
-        zmax = getattr(self._data, "z_max_pairs", None)
-        self.zmin = 0.0 if zmin is None else float(zmin)
-        self.zmax = 10.0 if zmax is None else float(zmax)
+        self.zmin = 0.0 if self._data.z_min_pairs is None else float(self._data.z_min_pairs)
+        self.zmax = 10.0 if self._data.z_max_pairs is None else float(self._data.z_max_pairs)
 
         self.separate_metal_auto_biases = corr_item.config["model"].getboolean(
             "separate-metal-auto-biases", False
