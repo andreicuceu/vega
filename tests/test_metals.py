@@ -808,6 +808,7 @@ def test_pair_z_range_read_from_data_header(setups, tmp_path):
     )
 
     assert MISSING_Z_WARNING not in output
+    assert f"Redshift bin flags for {name}: ZMIN = 2.3, ZMAX = 2.5" in output
     assert (vega.data[name].z_min_pairs, vega.data[name].z_max_pairs) == HEADER_Z_RANGE
     metals = vega.models[name].metals
     assert (metals.zmin, metals.zmax) == HEADER_Z_RANGE

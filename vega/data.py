@@ -84,6 +84,16 @@ class Data:
         else:
             dmat_path = corr_item.config["data"].get("distortion-file", None)
             self._read_data(data_path, corr_item.config["cuts"], dmat_path, cov_path, cov_rescale)
+            if self._z_flags_found:
+                print(
+                    f"INFO: Redshift bin flags for {corr_item.name}: "
+                    f"ZMIN = {self.z_min_pairs}, ZMAX = {self.z_max_pairs}"
+                )
+            else:
+                print(
+                    f"WARNING: Redshift bin flags ZMIN/ZMAX not found for {corr_item.name}. "
+                    "Setting redshift edges to 0<z<10."
+                )
             self.corr_item.init_coordinates(
                 self.model_coordinates, self.dist_model_coordinates, self.data_coordinates
             )
@@ -625,11 +635,7 @@ class Data:
         # Redshift range of the pairs (picca --z-min-pairs/--z-max-pairs), None if not cut
         self.z_min_pairs = header.get("ZMIN")
         self.z_max_pairs = header.get("ZMAX")
-        if "ZMIN" not in header or "ZMAX" not in header:
-            print(
-                f"WARNING: Redshift bin flags ZMIN/ZMAX not found in {data_path}. "
-                "Setting redshift edges to 0<z<10."
-            )
+        self._z_flags_found = "ZMIN" in header and "ZMAX" in header
 
         # Get the number of pairs
         if "NB" in hdul[1].columns.names:
