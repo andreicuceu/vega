@@ -113,6 +113,9 @@ MODEL_OPTIONS = {
     "smooth_scaling": False,
     # Non-linear broadening of the BAO peak (sigmaNL_per, sigmaNL_par)
     "bao_broadening": True,
+    # Do not apply small-scale non-linear corrections to the BAO peak. The LyaCoLoRe cell
+    # kernel below is applied to both the peak and the smooth component regardless.
+    "skip-nl-model-in-peak": True,
     # Smoothing of the LyaCoLoRe field on small scales: top-hat kernel of the LyaCoLoRe
     # cells [Mpc/h], with the line-of-sight width rescaled by (1 + los_smooth_amp)
     "mock-bin-size": 2.4,

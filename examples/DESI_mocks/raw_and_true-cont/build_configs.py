@@ -106,6 +106,9 @@ MODEL_OPTIONS = {
     "smooth_scaling": False,
     # Non-linear broadening of the BAO peak (sigmaNL_per, sigmaNL_par)
     "bao_broadening": True,
+    # Apply the Gaussian small-scale smoothing to the smooth component only, not to the
+    # BAO peak
+    "skip-nl-model-in-peak": True,
     # Gaussian damping of the power spectrum, describing the smoothing of the LyaCoLoRe
     # field on small scales. A single global pair of smoothing scales is used because only
     # par_sigma_smooth and per_sigma_smooth are given in PARAMETERS.
