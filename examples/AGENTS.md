@@ -21,6 +21,64 @@ The scripts in `bin/` take the path to the main config:
 
 Vega can also be run interactively through `vega.VegaInterface(path_to_main_ini)`.
 
+## Choosing an example to start from
+
+To set up a new analysis, start from the closest example below: copy its `build_configs.py`,
+change the data paths and options, and run it to generate the configs. Each of these
+directories contains a `build_configs.py` (with a docstring describing the data and model
+in detail) and the configs it generates, with paths relative to the directory. All fits
+use the four Lya correlations (lyaxlya, lyaxlyb, lyaxqso, lybxqso); to fit a subset, change
+`FIT_TYPE` and the correlation setup in the script.
+
+| Task | Directory |
+|---|---|
+| BAO fit of DESI data | `DESI_data_BAO/` |
+| Full-shape (AP / growth rate) fit of DESI data | `DESI_data_fullshape/` |
+| BAO fit of raw or true-continuum mocks | `DESI_mocks/raw_and_true-cont/` |
+| BAO fit of mocks without contaminants (continuum-fitted) | `DESI_mocks/uncontaminated/` |
+| BAO fit of mocks with contaminants and/or QSO redshift errors | `DESI_mocks/contaminated/` |
+
+- `DESI_data_BAO/`: DESI DR2 (loa) data with the current baseline model of the Lya
+  correlations (DR3 BAO setup): metals with Vega metal matrices, HCDs, UV background
+  fluctuations, QSO velocity dispersion and proximity effect, DESI instrumental
+  systematics, analytic marginalisation of the bins below r-min. Only the BAO peak is
+  rescaled (`ap_at`). Use it for any BAO fit of real data, or as the reference for the
+  baseline model options.
+- `DESI_data_fullshape/`: the same correlation model as `DESI_data_BAO/` with the full-shape
+  cosmological setup (`phi_alpha` with independent peak and smooth rescaling, free growth
+  rate, r-max = 200 Mpc/h). Comparing it with `DESI_data_BAO/` shows exactly which options
+  change between a BAO and a full-shape fit.
+- `DESI_mocks/raw_and_true-cont/`: mocks analysed with the true continuum (or raw deltas,
+  computed directly from the transmitted flux): no distortion matrix, no contaminants, no
+  QSO redshift errors. Kaiser model with BAO broadening and a Gaussian smoothing of the
+  LyaCoLoRe field, with the mock template `Abacus-Colore-2LPT/Abacus-Colore-2LPT.fits`. For
+  raw mocks, only the correlation and covariance paths change.
+- `DESI_mocks/uncontaminated/`: mocks without astrophysical contaminants, analysed like the
+  data (continuum fitting), so the distortion matrices and the analytic marginalisation of
+  small scales are included. Two versions of the small-scale smoothing of the LyaCoLoRe
+  field: `gauss_smoothing/` (Gaussian damping, free par/per_sigma_smooth) and
+  `los_smoothing/` (LyaCoLoRe cell kernel with a free line-of-sight amplitude).
+- `DESI_mocks/contaminated/`: mocks with DLAs, metals, BALs and Gaussian QSO redshift errors.
+  Adds to `uncontaminated/gauss_smoothing/` the HCD model, the metals (with Vega metal
+  matrices) and a Gaussian QSO velocity dispersion with a free drp_QSO.
+
+To tell which mock example applies: the mock analysis flavour (raw, true continuum, or
+continuum-fitted "baseline") sets the first choice; for continuum-fitted mocks, the
+contaminants in the quickquasars run (e.g. `loa-0` has none, `loa-124` has DLAs, metals
+and BALs) and the QSO catalogue used in the cross-correlations (`zcat.fits` has no
+redshift errors; `zcat_gauss_400.fits` has Gaussian errors of 400 km/s) set the second.
+
+Other material in this directory:
+
+- `main.ini`, `lyaxlya.ini`, `qsoxlya.ini`: annotated reference of every option Vega reads.
+  Use them to look up an option, not as configs to run. `qsoxqso.ini` is an experimental
+  QSO auto-correlation example.
+- `Monte_carlo_sims/`: Monte Carlo realisations and forecasts (see its README).
+- `P3D_support/`: correlation function models for a custom input P(k).
+- `eBOSS_DR16/`: reproduction of the eBOSS DR16 BAO analysis.
+- `deprecated/`: DESI DR1 (Y1) configs, kept for reference only. Do not start new analyses
+  from them.
+
 ## Creating and modifying configs
 
 - Never create or edit Vega `.ini` files by hand, including small changes to existing
