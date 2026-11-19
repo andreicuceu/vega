@@ -23,6 +23,10 @@ Vega can also be run interactively through `vega.VegaInterface(path_to_main_ini)
 
 ## Choosing an example to start from
 
+All the examples in this directory are starting points, not definitive configurations.
+Whether their model, scale cuts, priors and sampled parameters are appropriate depends on
+the data or mocks being fitted, and must be validated case by case.
+
 To set up a new analysis, start from the closest example below: copy its `build_configs.py`,
 change the data paths and options, and run it to generate the configs. Each of these
 directories contains a `build_configs.py` (with a docstring describing the data and model
