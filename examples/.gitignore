@@ -1,2 +1,16 @@
 data
 DR16_*.ini
+
+# Example analyses: only the config-building scripts and the configs they generate are
+# tracked. Fit and sampler outputs, logs, plots and test products are not.
+output_fitter/
+output_sampler/
+logs/
+*.fits
+*.fits.gz
+*.png
+*.pdf
+*.out
+*.err
+*.npy
+*.npz

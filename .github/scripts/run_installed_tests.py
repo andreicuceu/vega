@@ -35,16 +35,16 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
 
 
 def stage_tests(source: Path, stage_dir: Path) -> Path:
-    """Copy the tests and the benchmark configurations they read into a staging directory.
+    """Copy the tests, including the configurations and data they read, into a staging directory.
 
-    ``vega.utils.find_file`` resolves relative paths from the working directory, so the
-    benchmark configurations are nested as ``examples/picca_benchmarks`` inside the staged
-    tests, which become the working directory.
+    ``vega.utils.find_file`` resolves relative paths from the working directory, and all test
+    configurations (e.g. ``full_configs/`` and ``picca_benchmarks/``) use paths relative to
+    ``tests/``, so the staged ``tests`` directory becomes the working directory.
 
     Parameters
     ----------
     source : pathlib.Path
-        Vega source checkout containing ``tests/`` and ``examples/``.
+        Vega source checkout containing ``tests/``.
     stage_dir : pathlib.Path
         Empty directory outside the checkout that receives the copies.
 
@@ -56,11 +56,6 @@ def stage_tests(source: Path, stage_dir: Path) -> Path:
     staged_tests = stage_dir / "tests"
     shutil.copytree(
         source / "tests", staged_tests, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
-    )
-    shutil.copytree(
-        source / "examples" / "picca_benchmarks",
-        staged_tests / "examples" / "picca_benchmarks",
-        ignore=shutil.ignore_patterns("*.ipynb", ".ipynb_checkpoints"),
     )
     return staged_tests
 
