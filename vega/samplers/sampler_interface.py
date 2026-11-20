@@ -2,7 +2,6 @@ import os.path
 import sys
 from pathlib import Path
 
-import numpy as np
 from mpi4py import MPI
 
 from vega.parameters.param_utils import build_names
@@ -23,7 +22,8 @@ class Sampler:
         log_lik_func : callable
             Log-likelihood function that accepts a parameter dict
         derived_dict : dict, optional
-            Dictionary mapping correlation names to number of marginalized coefficients
+            Dictionary mapping correlation names to number of marginalized coefficients,
+            or to the list of their names (analytically marginalized parameters)
         """
         self.limits = limits
         self.names = list(limits.keys())
@@ -31,7 +31,10 @@ class Sampler:
         self.derived_dict = None
         if derived_dict is not None:
             self.derived_dict = derived_dict
-            self.num_derived = np.sum([num_marg for num_marg in derived_dict.values()])
+            self.num_derived = sum(
+                len(num_marg) if isinstance(num_marg, (list, tuple)) else int(num_marg)
+                for num_marg in derived_dict.values()
+            )
         else:
             self.num_derived = 0
 
@@ -86,6 +89,12 @@ class Sampler:
                 corr_names = sorted(self.derived_dict.keys())
                 for corr in corr_names:
                     num_marg = self.derived_dict[corr]
+
+                    # Named coefficients (analytically marginalized parameters)
+                    if isinstance(num_marg, (list, tuple)):
+                        latex_names |= build_names(list(num_marg))
+                        continue
+
                     for i in range(num_marg):
                         name = f"{corr}_marg_{i}"
                         latex_name = r"M_{\rm " + f"{corr}" + "}^{" + f"{i}" + "}"

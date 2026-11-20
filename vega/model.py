@@ -1,3 +1,5 @@
+import numpy as np
+
 from . import broadband_poly, metals, pktoxi, power_spectrum
 from . import correlation_func as corr_func
 
@@ -121,6 +123,12 @@ class Model:
         # Needed if passing pk model directly
         self._pktoxi_alternative = None
 
+        # Linear parameters whose unit-amplitude templates are captured at every evaluation,
+        # set by the analytic marginalization. The templates are on the model grid, before
+        # the distortion matrix and without broadbands, keyed by parameter name.
+        self.linear_parameters = set()
+        self.linear_templates = {}
+
     def _compute_model(self, pars, pk_input, component="smooth", xi_metals=None):
         """Compute a model correlation function given the input pars
         and a fiducial linear power spectrum.
@@ -166,6 +174,10 @@ class Model:
             # Protect against old caches that have not been cleaned
             self.PktoXi.cache_pars = None
             xi_model = self.Xi_core.compute(pk_model, pk_input, self.PktoXi, pars)
+
+        # Templates of the linear terms added to the smooth (or full) component below
+        if self.linear_parameters and component != "peak":
+            self._add_core_linear_templates(pars)
 
         # Save the components
         if self.save_components:
@@ -240,9 +252,10 @@ class Model:
         xi_peak = self._compute_model(pars, pk_full - pk_smooth, "peak")
 
         pars["peak"] = False
+        self._reset_linear_templates()
         xi_metals = None
         if self._corr_item.has_metals and self.no_metal_decomp:
-            xi_metals = self.metals.compute(pars, pk_full, "full")
+            xi_metals = self._compute_metals_with_templates(pars, pk_full)
 
         xi_smooth = self._compute_model(pars, pk_smooth, "smooth", xi_metals=xi_metals)
 
@@ -266,6 +279,7 @@ class Model:
             Full correlation function
         """
         pars["peak"] = False
+        self._reset_linear_templates()
         xi_full = self._compute_model(pars, pk_full, "full")
 
         return xi_full
@@ -299,10 +313,71 @@ class Model:
 
         self._pktoxi_alternative = pktoxi.PktoXi(k_grid, muk_grid, self._corr_item.config["model"])
 
+        self._reset_linear_templates()
         xi_metals = None
         if self._corr_item.has_metals and self.no_metal_decomp and not no_metals:
-            xi_metals = self.metals.compute(pars, self.fiducial["pk_full"], "full")
+            xi_metals = self._compute_metals_with_templates(pars, self.fiducial["pk_full"])
 
         xi_model = self._compute_model(pars, pk_model, "full_2D", xi_metals=xi_metals)
 
         return xi_model
+
+    def _reset_linear_templates(self):
+        """Start the templates of the requested linear parameters from zero."""
+        model_size = self._corr_item.model_coordinates.rp_grid.size
+        self.linear_templates = {name: np.zeros(model_size) for name in self.linear_parameters}
+
+    def _compute_metals_with_templates(self, pars, pk_full):
+        """Compute the metal correlations and add the templates of the metal parameters.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters
+        pk_full : 1D Array
+            Full fiducial linear power spectrum
+
+        Returns
+        -------
+        1D Array
+            Metal correlation functions on the model grid
+        """
+        # Only metal biases and metal x metal amplitudes have templates in the metals
+        metal_parameters = [
+            name for name in self.linear_parameters if name.startswith(("amp_", "bias_"))
+        ]
+        if not metal_parameters:
+            return self.metals.compute(pars, pk_full, "full")
+
+        metal_templates = dict.fromkeys(metal_parameters)
+        xi_metals = self.metals.compute(pars, pk_full, "full", linear_templates=metal_templates)
+        for name, template in metal_templates.items():
+            self.linear_templates[name] += template
+
+        return xi_metals
+
+    def _add_core_linear_templates(self, pars):
+        """Add the templates of the QSO radiation strength and the instrumental systematics.
+
+        Both terms are linear in their amplitude and are added to the smooth (or full)
+        component before the broadbands and the distortion matrix.
+
+        Parameters
+        ----------
+        pars : dict
+            Computation parameters of the current evaluation
+        """
+        if "qso_rad_strength" in self.linear_templates and self.Xi_core.radiation_flag:
+            rescaled_r, rescaled_mu = self.Xi_core.rescaled_coordinates
+            unit_pars = pars | {"qso_rad_strength": 1.0}
+            self.linear_templates["qso_rad_strength"] += self.Xi_core.compute_qso_radiation(
+                unit_pars, rescaled_r, rescaled_mu
+            )
+
+        if "desi_inst_sys_amp" in self.linear_templates and self._instrumental_systematics_flag:
+            unit_pars = {"desi_inst_sys_amp": 1.0}
+            self.linear_templates["desi_inst_sys_amp"] += (
+                self.Xi_core.compute_desi_instrumental_systematics(
+                    unit_pars, self._corr_item.data_coordinates.rp_binsize
+                )
+            )
