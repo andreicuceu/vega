@@ -47,6 +47,14 @@ Unreleased
   is now centred on zero instead of on those values; the previous results correspond to a
   Gaussian prior centred on the ``[parameters]`` values. The reported coefficients are the
   values themselves, not deviations from ``[parameters]``.
+* ``BuildConfig`` writes configs for the analytic marginalization options: with
+  ``metal-auto-amplitudes`` it writes ``amp_<m1>_<m2>`` to ``[parameters]`` for every metal x
+  metal correlation Vega builds (given values, or the bias products by default), so that
+  they can be sampled; ``fit_info["analytic_marginalization"]`` writes and validates the
+  ``[analytic marginalization]`` section, whose parameters may have entries in
+  ``fit_info["priors"]``; the correlation entries ``marginalize-broadbands`` and
+  ``broadband-prior-sigma`` are written to the ``[model]`` section of that correlation.
+  Configs built without these options are unchanged.
 * Fixed Monte Carlo mock creation without a global covariance when scale cuts are applied:
   ``Data.create_monte_carlo`` now accepts the fiducial model restricted to the fitted bins
   that ``VegaInterface.initialize_monte_carlo`` passes to it, instead of raising

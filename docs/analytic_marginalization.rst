@@ -205,6 +205,38 @@ a given ``beta_<m>`` (or ``beta_metals``), and, for ``bias_eta_<m>``, no
 power spectrum (``direct_pk``) has no metal correlations, so marginalized metal
 parameters are refused there.
 
+Generating configs with BuildConfig
+-----------------------------------
+
+``vega.BuildConfig`` writes all the options above:
+
+* ``metal-auto-amplitudes`` (``BuildConfig`` option): ``amp_<m1>_<m2>`` is written to
+  ``[parameters]`` for every metal x metal correlation that Vega builds for the
+  requested correlations (the same pair selection as ``vega.data.Data``: CIV(eff) only
+  with itself, and no pair of two names containing ``SiII``, which includes
+  SiIII(1207), without ``use_metal_autos``). Values given in the ``parameters``
+  argument of ``build`` take precedence; the others are set to the product of the
+  written metal biases, which leaves the model unchanged. With
+  ``use_metal_bias_eta`` there is no default: the amplitudes must be given, unless
+  they are marginalized (then they are written as zero). The amplitudes can be
+  sampled through ``fit_info["sample_params"]`` like any other parameter.
+* ``fit_info["analytic_marginalization"]``: list of parameters written as
+  ``<name> = True`` to ``[analytic marginalization]``. Their Gaussian priors go in
+  ``fit_info["priors"]``. ``build`` refuses parameters that are also sampled, that are
+  not among those listed above, or that are not part of the configuration (e.g.
+  ``desi_inst_sys_amp`` without ``desi-instrumental-systematics``).
+* ``marginalize-broadbands`` and ``broadband-prior-sigma``: entries of the dictionary
+  of each correlation, next to its ``broadband`` entry, written to the ``[model]``
+  section of that correlation config.
+
+For example::
+
+    builder = BuildConfig({"metals": metals, "metal-auto-amplitudes": True})
+    correlations["lyaxlya"]["marginalize-broadbands"] = True
+    correlations["lyaxlya"]["broadband-prior-sigma"] = 1e-4
+    fit_info["analytic_marginalization"] = ["desi_inst_sys_amp", "bias_SiII(1190)"]
+    builder.build(correlations, "lyaxlya_lyaxqso", fit_info, out_path, parameters)
+
 Best-fit coefficients
 ---------------------
 
