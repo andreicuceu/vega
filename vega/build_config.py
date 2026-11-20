@@ -34,6 +34,18 @@ class BuildConfig:
         "civxlya",
     ]
 
+    # Optional [Polychord] settings read by ``vega.samplers.polychord.Polychord``
+    # (``get_sampler_settings``), with the type it reads them as. They are written only
+    # when given in ``fit_info["Polychord"]``, so that the sampler defaults apply otherwise.
+    optional_polychord_settings = {
+        "precision": "float",
+        "seed": "int",
+        "resume": "bool",
+        "write_dead": "bool",
+        "cluster_posteriors": "bool",
+        "maximise": "bool",
+    }
+
     def __init__(self, options=None, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
 
@@ -189,8 +201,18 @@ class BuildConfig:
             dict), ``priors`` (parameter prior dict; sampled or analytically
             marginalized parameters only), ``analytic_marginalization`` (list of
             parameter names written as ``<name> = True`` to the ``[analytic
-            marginalization]`` section), and ``Polychord`` (PolyChord configuration
-            dict).
+            marginalization]`` section), ``marginalize_in_fit`` (bool, optional;
+            written as ``marginalize-in-fit`` to ``[control]``, so that the
+            marginalized coefficients are computed at every likelihood evaluation and
+            saved as derived parameters by the samplers; not written if absent), and
+            ``Polychord`` (PolyChord configuration dict, required with ``run_sampler``).
+            The ``Polychord`` dict may contain ``num_live`` (default
+            ``25 * len(sample_params)``), ``num_repeats`` (default ``len(sample_params)``),
+            ``do_clustering`` (default True) and ``boost_posterior`` (default 0), given
+            as strings, and ``precision`` (float), ``seed`` (int), ``resume``,
+            ``write_dead``, ``cluster_posteriors`` and ``maximise`` (bool), which are
+            written only when given, so that the defaults of
+            ``vega.samplers.polychord.Polychord`` apply otherwise.
         out_path : string
             Path to directory where to write the config files
         parameters : dict, optional
@@ -213,7 +235,9 @@ class BuildConfig:
         ValueError
             If a correlation, parameter or option is unknown or inconsistent, e.g. a
             parameter listed in ``fit_info["analytic_marginalization"]`` that is also
-            sampled, or that Vega cannot marginalize analytically in this configuration.
+            sampled, or that Vega cannot marginalize analytically in this configuration,
+            or a ``marginalize_in_fit`` or optional ``Polychord`` value that Vega cannot
+            read as the expected type.
         """
         if parameters is None:
             parameters = {}
@@ -695,7 +719,8 @@ class BuildConfig:
             (e.g. lyaxlya_lyaxqso). If unsure check the templates
             folder to see all possibilities.
         fit_info : dict
-            Fit information. Must contain a list of sampled parameters and the effective redshift.
+            Fit information. Must contain a list of sampled parameters and the effective
+            redshift. See ``build`` for the options.
         parameters : dict, optional
             Parameter values to write to the main config
 
@@ -801,6 +826,11 @@ class BuildConfig:
         config["control"] = {"run_sampler": "False"}
         if "use_template_growth_rate" in fit_info:
             config["control"]["use_template_growth_rate"] = fit_info["use_template_growth_rate"]
+        # Written only when given, so that configs built without it are unchanged
+        if "marginalize_in_fit" in fit_info:
+            config["control"]["marginalize-in-fit"] = self._format_config_value(
+                "marginalize_in_fit", fit_info["marginalize_in_fit"], "bool"
+            )
         if self.run_sampler:
             config["control"]["run_sampler"] = "True"
             config["control"]["sampler"] = self.sampler
@@ -822,6 +852,13 @@ class BuildConfig:
                 config["Polychord"]["boost_posterior"] = fit_info["Polychord"].get(
                     "boost_posterior", str(0)
                 )
+
+                # Optional settings, e.g. the evidence precision criterion and the seed
+                for key, value_type in self.optional_polychord_settings.items():
+                    if key in fit_info["Polychord"]:
+                        config["Polychord"][key] = self._format_config_value(
+                            f"Polychord[{key!r}]", fit_info["Polychord"][key], value_type
+                        )
             elif self.sampler == "PocoMC":
                 config["PocoMC"] = {}
                 config["PocoMC"]["path"] = str(self.sampler_out_path)
@@ -886,6 +923,47 @@ class BuildConfig:
             config.write(configfile)
 
         return main_path
+
+    @staticmethod
+    def _format_config_value(name, value, value_type):
+        """Format a config value and check that Vega can read it as the expected type.
+
+        Parameters
+        ----------
+        name : str
+            Name of the ``fit_info`` entry, used in the error message.
+        value : bool, int, float or str
+            Value to write.
+        value_type : {"bool", "int", "float"}
+            Type with which Vega reads the option (``getboolean``, ``getint`` or
+            ``getfloat``).
+
+        Returns
+        -------
+        str
+            ``str(value)``; Python booleans become ``"True"`` or ``"False"``.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` cannot be read as ``value_type`` by ``ConfigParser`` (a Python
+            boolean is refused for a numerical option).
+        """
+        text = str(value)
+        if value_type == "bool":
+            is_valid = text.lower() in ConfigParser.BOOLEAN_STATES
+        else:
+            # getint and getfloat convert the string with int() and float()
+            converter = int if value_type == "int" else float
+            try:
+                converter(text)
+                is_valid = not isinstance(value, bool)
+            except ValueError:
+                is_valid = False
+
+        if not is_valid:
+            raise ValueError(f"fit_info[{name!r}] = {value!r} is not a valid {value_type}.")
+        return text
 
     def _check_marginalized_params(self, marginalized_params, sample_params, config):
         """Validate the parameters of the ``[analytic marginalization]`` section.

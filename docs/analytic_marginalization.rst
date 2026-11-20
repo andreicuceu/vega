@@ -228,6 +228,8 @@ Generating configs with BuildConfig
 * ``marginalize-broadbands`` and ``broadband-prior-sigma``: entries of the dictionary
   of each correlation, next to its ``broadband`` entry, written to the ``[model]``
   section of that correlation config.
+* ``fit_info["marginalize_in_fit"]`` (bool): written as ``marginalize-in-fit`` to
+  ``[control]`` (see `Best-fit coefficients`_); absent by default.
 
 For example::
 
@@ -248,7 +250,7 @@ section of the main config:
   at the best fit, when ``minimize()`` is called.
 * ``marginalize-in-fit = True``: the coefficients are also returned at every
   likelihood evaluation that requests them, and samplers save them as derived
-  parameters.
+  parameters. ``BuildConfig`` writes it with ``fit_info["marginalize_in_fit"] = True``.
 
 The likelihood is identical in the two modes. ``bestfit_model`` and the model
 written to the output file include the template contribution. From a script::

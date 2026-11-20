@@ -553,3 +553,155 @@ def test_configs_without_new_options_unchanged(tmp_path):
     for file_name, reference in references.items():
         text = (tmp_path / file_name).read_text()
         assert strip_header(text, tmp_path) == reference.strip()
+
+
+# Main config with a PolyChord run written by BuildConfig before the optional sampler
+# settings and marginalize-in-fit were added (commit c6ec253), without the header comments.
+REFERENCE_MAIN_POLYCHORD = """
+[data sets]
+zeff = 2.33
+ini files = {root}/lyaxlya.ini
+
+[cosmo-fit type]
+cosmo fit func = ap_at
+full-shape = False
+full-shape-alpha = False
+smooth-scaling = False
+
+[fiducial]
+filename = PlanckDR16/PlanckDR16.fits
+
+[output]
+filename = {root}/output_fitter/lyaxlya
+
+[sample]
+ap = True
+at = True
+bias_LYA = True
+
+[priors]
+bias_LYA = gaussian -0.1 0.05
+
+[parameters]
+ap = 1.0
+at = 1.0
+sigmaNL_per = 0.0
+sigmaNL_par = 0.0
+bao_amp = 1.
+bias_LYA = -0.11629442782749021
+beta_LYA = 1.67
+alpha_LYA = 2.9
+bias_SiII(1190) = -0.0052
+beta_SiII(1190) = 0.5
+alpha_SiII(1190) = 1.
+
+[control]
+run_sampler = True
+sampler = Polychord
+low_mem_mode = False
+
+[Polychord]
+path = {root}/output_sampler
+name = lyaxlya
+num_live = 75
+num_repeats = 3
+do_clustering = True
+boost_posterior = 0
+"""
+
+
+def test_polychord_config_without_new_options_unchanged(tmp_path):
+    """Without the optional settings the PolyChord main config is unchanged."""
+    fit_info = default_fit_info(run_sampler=True, Polychord={})
+    BuildConfig({"metals": ["SiII(1190)"]}).build(
+        correlation_info(["lyaxlya"]), "lyaxlya", fit_info, tmp_path
+    )
+
+    text = (tmp_path / "main.ini").read_text()
+    assert strip_header(text, tmp_path) == REFERENCE_MAIN_POLYCHORD.strip()
+
+
+@pytest.mark.parametrize("run_sampler", [False, True])
+@pytest.mark.parametrize("marginalize_in_fit", [True, False, "True"])
+def test_marginalize_in_fit_written(tmp_path, run_sampler, marginalize_in_fit):
+    """marginalize-in-fit goes to [control] as a boolean, with or without a sampler."""
+    fit_info = default_fit_info(
+        run_sampler=run_sampler, Polychord={}, marginalize_in_fit=marginalize_in_fit
+    )
+    configs, _ = build_configs(
+        tmp_path, {"metals": ["SiII(1190)"]}, correlation_info(["lyaxlya"]), "lyaxlya", fit_info
+    )
+    control = configs["main"]["control"]
+
+    assert control.getboolean("marginalize-in-fit") is (str(marginalize_in_fit) == "True")
+    assert control.getboolean("run_sampler") is run_sampler
+
+
+def test_optional_polychord_settings_written(tmp_path):
+    """Given PolyChord settings are written in a form the sampler reads back."""
+    polychord_info = {
+        "num_live": "400",
+        "precision": 0.01,
+        "seed": 42,
+        "resume": False,
+        "write_dead": "False",
+        "cluster_posteriors": True,
+        "maximise": True,
+    }
+    fit_info = default_fit_info(run_sampler=True, Polychord=polychord_info)
+    configs, _ = build_configs(
+        tmp_path, {"metals": ["SiII(1190)"]}, correlation_info(["lyaxlya"]), "lyaxlya", fit_info
+    )
+    polychord = configs["main"]["Polychord"]
+
+    # Read as in vega.samplers.polychord.Polychord.get_sampler_settings
+    assert polychord.getint("num_live") == 400
+    assert polychord.getfloat("precision") == 0.01
+    assert polychord.getint("seed") == 42
+    assert polychord.getboolean("resume") is False
+    assert polychord.getboolean("write_dead") is False
+    assert polychord.getboolean("cluster_posteriors") is True
+    assert polychord.getboolean("maximise") is True
+
+    # Defaults of the existing settings are unchanged
+    assert polychord.getint("num_repeats") == 3
+    assert polychord.getboolean("do_clustering") is True
+    assert polychord.getfloat("boost_posterior") == 0.0
+
+
+def test_optional_polychord_settings_only_when_given(tmp_path):
+    """Settings not given are absent, so that the sampler defaults apply."""
+    fit_info = default_fit_info(run_sampler=True, Polychord={"seed": 7})
+    configs, _ = build_configs(
+        tmp_path, {"metals": ["SiII(1190)"]}, correlation_info(["lyaxlya"]), "lyaxlya", fit_info
+    )
+    polychord = configs["main"]["Polychord"]
+
+    assert polychord["seed"] == "7"
+    for key in BuildConfig.optional_polychord_settings:
+        if key != "seed":
+            assert key not in polychord
+    assert "marginalize-in-fit" not in configs["main"]["control"]
+
+
+@pytest.mark.parametrize(
+    "extra_info",
+    [
+        {"marginalize_in_fit": "yes please"},
+        {"run_sampler": True, "Polychord": {"resume": "maybe"}},
+        {"run_sampler": True, "Polychord": {"seed": 1.5}},
+        {"run_sampler": True, "Polychord": {"seed": True}},
+        {"run_sampler": True, "Polychord": {"precision": "small"}},
+    ],
+)
+def test_invalid_control_and_polychord_values(tmp_path, extra_info):
+    """Values that Vega cannot read as the expected type are refused."""
+    fit_info = default_fit_info(**extra_info)
+    with pytest.raises(ValueError, match="is not a valid"):
+        build_configs(
+            tmp_path,
+            {"metals": ["SiII(1190)"]},
+            correlation_info(["lyaxlya"]),
+            "lyaxlya",
+            fit_info,
+        )
