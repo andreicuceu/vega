@@ -51,7 +51,7 @@ PARAMETER_BLINDING_DIR = Path("/global/cfs/projectdirs/desicollab/science/lya/ve
 # Name of the DR3 full-shape offsets file (phi_smooth, growth_rate, alpha_smooth) inside
 # PARAMETER_BLINDING_DIR / "full-shape-blinding". Placeholder until the production file is
 # generated: while it is None, blinded DR3 full-shape fits abort.
-DR3_FS_BLINDING_FILE = None
+DR3_FS_BLINDING_FILE = "dr3_fs_blinding_23_11_2026.npz"
 
 # Discrete tracers with velocity bias b_eta = 1, so that b * beta = f. On blind data at most
 # one of bias/beta may be sampled for these tracers and bias_eta must stay fixed; otherwise the
