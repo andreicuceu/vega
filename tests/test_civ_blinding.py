@@ -1,4 +1,4 @@
-"""Check CIV blinding metadata and parameter selection without evaluating a model."""
+"""Check DR3 blinding metadata, parameter selection and blind-data restrictions."""
 
 import configparser
 from types import SimpleNamespace
@@ -84,7 +84,9 @@ def _read_correlation(data_path):
     return data
 
 
-def _blinding_interface(parameters, strategy="desi_dr3_civ", tracer_names=("CIV", "QSO")):
+def _blinding_interface(
+    parameters, strategy="desi_dr3_civ", tracer_names=("CIV", "QSO"), tracer_types=(None, None)
+):
     """Construct only the state required for parameter-blinding initialization.
 
     Parameters
@@ -95,6 +97,8 @@ def _blinding_interface(parameters, strategy="desi_dr3_civ", tracer_names=("CIV"
         Active data strategy, by default ``desi_dr3_civ``.
     tracer_names : tuple of str, optional
         Primary measurement tracers, by default ``("CIV", "QSO")``.
+    tracer_types : tuple of str or None, optional
+        Tracer types (``continuous`` or ``discrete``), by default unset.
 
     Returns
     -------
@@ -102,8 +106,8 @@ def _blinding_interface(parameters, strategy="desi_dr3_civ", tracer_names=("CIV"
         Lightweight interface without models, minimizers or parameter offsets.
     """
     correlation = CorrelationItem.__new__(CorrelationItem)
-    correlation.tracer1 = {"name": tracer_names[0]}
-    correlation.tracer2 = {"name": tracer_names[1]}
+    correlation.tracer1 = {"name": tracer_names[0], "type": tracer_types[0]}
+    correlation.tracer2 = {"name": tracer_names[1], "type": tracer_types[1]}
 
     interface = VegaInterface.__new__(VegaInterface)
     interface._blind = False
@@ -233,6 +237,7 @@ def test_dr3_full_shape_requires_configured_file(monkeypatch, strategy):
     """
     load_parameters = Mock(side_effect=AssertionError("Parameter resources must not be opened."))
     monkeypatch.setattr(utils.np, "load", load_parameters)
+    monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", None)
     interface = _blinding_interface(("phi_smooth", "growth_rate"), strategy=strategy)
 
     with pytest.raises(
@@ -428,3 +433,314 @@ def test_mixed_active_strategies_are_rejected():
     interface.data["other"] = SimpleNamespace(blind=True, blinding_strat="desi_dr3")
     with pytest.raises(ValueError, match="Different blinding strategies found in the data sets"):
         interface._init_blinding()
+
+
+def _write_full_shape_offsets(offsets):
+    """Write synthetic DR3 full-shape offsets in the obfuscated format of blind_fs.py.
+
+    Parameters
+    ----------
+    offsets : dict of str to float
+        Additive offsets keyed by parameter name.
+
+    Returns
+    -------
+    pathlib.Path
+        Path of the written file inside the redirected blinding directory.
+    """
+    file_name = "dr3_fs_blinding_test.npz"
+    output_dir = utils.PARAMETER_BLINDING_DIR / "full-shape-blinding"
+    output_dir.mkdir(parents=True)
+
+    # blind_fs.py stores sqrt(log(pi - offset)), inverted by apply_blinding
+    obfuscated = {par: np.sqrt(np.log(np.pi - offset)) for par, offset in offsets.items()}
+    np.savez(output_dir / file_name, seed=12345, **obfuscated)
+    return output_dir / file_name
+
+
+def test_dr3_full_shape_file_selection(monkeypatch):
+    """Read and apply DR3 full-shape offsets from the configured file name.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture setting the DR3 full-shape file name.
+    """
+    offsets = {"phi_smooth": 0.031, "growth_rate": -0.27, "alpha_smooth": 0.02}
+    offsets_path = _write_full_shape_offsets(offsets)
+    monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", offsets_path.name)
+
+    blinding = utils.get_blinding(["phi_smooth", "growth_rate"], "desi_dr3")
+    assert set(blinding) == {"phi_smooth", "growth_rate"}
+
+    params = {"phi_smooth": 1.0, "growth_rate": 0.97, "bias_LYA": -0.1}
+    shifted_params = utils.apply_blinding(dict(params), blinding)
+    assert shifted_params["phi_smooth"] == pytest.approx(1.0 + offsets["phi_smooth"], abs=1e-12)
+    assert shifted_params["growth_rate"] == pytest.approx(0.97 + offsets["growth_rate"], abs=1e-12)
+    assert shifted_params["bias_LYA"] == params["bias_LYA"]
+
+
+def test_dr3_full_shape_missing_file_is_rejected(monkeypatch):
+    """Abort when the configured DR3 full-shape file does not exist.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture setting the DR3 full-shape file name.
+    """
+    monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", "dr3_fs_blinding_missing.npz")
+    with pytest.raises(ValueError, match=r"^Blinding file not found: .*dr3_fs_blinding_missing"):
+        utils.get_blinding(["phi_smooth", "growth_rate"], "desi_dr3")
+
+
+def test_civ_full_shape_ignores_dr3_file(monkeypatch):
+    """Keep desi_dr3_civ full-shape fits blocked when the DR3 file is configured.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture setting the DR3 full-shape file name.
+    """
+    offsets_path = _write_full_shape_offsets({"phi_smooth": 0.01, "growth_rate": 0.1})
+    monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", offsets_path.name)
+    with pytest.raises(
+        ValueError, match=r"^No parameter-blinding file is configured for desi_dr3_"
+    ):
+        utils.get_blinding(["phi_smooth", "growth_rate"], "desi_dr3_civ")
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        ("bias_eta_QSO",),
+        ("bias_QSO", "bias_eta_QSO"),
+        ("beta_QSO", "bias_eta_QSO"),
+        ("bias_QSO", "bias_eta_QSO", "growth_rate"),
+        ("bias_DLA", "beta_DLA"),
+        ("bias_SBLA", "bias_eta_SBLA"),
+    ],
+)
+@pytest.mark.parametrize("strategy", ["desi_dr3", "desi_dr3_civ"])
+def test_discrete_tracer_rsd_bypass_is_rejected(monkeypatch, parameters, strategy):
+    """Reject discrete-tracer RSD parametrisations that measure f without the offset.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    parameters : tuple of str
+        Sampled bias, beta and velocity-bias parameters of a discrete tracer.
+    strategy : str
+        Active DR3 blinding strategy.
+    """
+    get_blinding = Mock()
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface(parameters, strategy=strategy, tracer_names=("LYA", "QSO"))
+
+    with pytest.raises(ValueError, match="Running on blind data and sampling bias"):
+        interface._init_blinding()
+    get_blinding.assert_not_called()
+
+
+def test_discrete_tracer_identified_by_type(monkeypatch):
+    """Apply the RSD restriction to discrete tracers outside the default name list.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    """
+    monkeypatch.setattr(utils, "get_blinding", Mock())
+    interface = _blinding_interface(
+        ("bias_LRG", "beta_LRG"),
+        strategy="desi_dr3",
+        tracer_names=("LYA", "LRG"),
+        tracer_types=("continuous", "discrete"),
+    )
+    with pytest.raises(ValueError, match="sampling bias_LRG and beta_LRG"):
+        interface._init_blinding()
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        ("bias_QSO",),
+        ("beta_QSO",),
+        ("bias_QSO", "growth_rate"),
+        ("bias_LYA", "bias_eta_LYA"),
+        ("bias_LYA", "beta_LYA"),
+    ],
+)
+def test_allowed_rsd_parametrisations(monkeypatch, parameters):
+    """Allow one QSO RSD parameter and any Lya bias parametrisation on blind data.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    parameters : tuple of str
+        Sampled bias parameters that keep the growth rate blinded.
+    """
+    monkeypatch.setattr(utils, "get_blinding", Mock(return_value=None))
+    interface = _blinding_interface(
+        parameters,
+        strategy="desi_dr3",
+        tracer_names=("LYA", "QSO"),
+        tracer_types=("continuous", "discrete"),
+    )
+    interface._init_blinding()
+    assert interface._blind is True
+
+
+@pytest.mark.parametrize("prior_parameter", ["growth_rate", "phi_smooth"])
+def test_priors_on_blinded_parameters_are_rejected(prior_parameter):
+    """Reject Gaussian priors on parameters that receive blinding offsets.
+
+    Parameters
+    ----------
+    prior_parameter : str
+        Blinded parameter with a prior.
+    """
+    interface = _blinding_interface(("phi_smooth", "growth_rate"), strategy="desi_dr3")
+    interface._rnsps = {"phi_smooth": 1.0, "growth_rate": 1.0}
+    interface.priors = {prior_parameter: np.array([1.0, 0.1]), "bias_LYA": np.array([-0.1, 0.01])}
+
+    with pytest.raises(ValueError, match=rf"priors on blinded parameters \['{prior_parameter}'\]"):
+        interface._check_blinded_priors()
+
+
+@pytest.mark.parametrize("offsets", [None, {"growth_rate": 1.0}])
+def test_priors_on_unblinded_parameters_are_allowed(offsets):
+    """Allow priors when no offsets are active or on parameters without offsets.
+
+    Parameters
+    ----------
+    offsets : dict or None
+        Active parameter offsets, or None for unblinded fits.
+    """
+    interface = _blinding_interface(("phi_smooth", "bias_LYA"), strategy="desi_dr3")
+    interface._rnsps = offsets
+    interface.priors = {"phi_smooth": np.array([1.0, 0.1]), "bias_LYA": np.array([-0.1, 0.01])}
+
+    # Neither prior parameter carries an offset, so the check passes
+    interface._check_blinded_priors()
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        ("phi_smooth", "alpha_smooth", "growth_rate"),
+        ("alpha_smooth",),
+        ("phi_smooth", "alpha_smooth_lyaxlya", "alpha_smooth_qsoxlya"),
+    ],
+)
+def test_alpha_smooth_parameter_selection(monkeypatch, parameters):
+    """Select sampled isotropic smooth dilations for full-shape blinding under desi_dr3.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    parameters : tuple of str
+        Sampled full-shape parameters, including per-correlation dilations.
+    """
+    get_blinding = Mock(return_value=None)
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface(parameters, strategy="desi_dr3")
+    interface._init_blinding()
+    get_blinding.assert_called_once_with(list(parameters), "desi_dr3")
+
+
+def test_fixed_alpha_smooth_is_not_blinded(monkeypatch):
+    """Leave a fixed alpha_smooth without offset so the model is unchanged.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    """
+    get_blinding = Mock(return_value=None)
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface(("phi_smooth", "growth_rate"), strategy="desi_dr3")
+    interface._init_blinding()
+    get_blinding.assert_called_once_with(["phi_smooth", "growth_rate"], "desi_dr3")
+
+
+def test_alpha_smooth_offsets_applied(monkeypatch):
+    """Apply the stored alpha_smooth offset to alpha_smooth and to every per-correlation dilation.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture setting the DR3 full-shape file name.
+    """
+    offsets = {"phi_smooth": -0.02, "growth_rate": 0.15, "alpha_smooth": 0.043}
+    offsets_path = _write_full_shape_offsets(offsets)
+    monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", offsets_path.name)
+
+    blind_pars = ["alpha_smooth", "alpha_smooth_lyaxlya", "alpha_smooth_qsoxlya", "phi_smooth"]
+    blinding = utils.get_blinding(blind_pars, "desi_dr3")
+    assert set(blinding) == set(blind_pars)
+
+    params = dict.fromkeys(blind_pars, 1.0)
+    shifted_params = utils.apply_blinding(params, blinding)
+    for par in ["alpha_smooth", "alpha_smooth_lyaxlya", "alpha_smooth_qsoxlya"]:
+        assert shifted_params[par] == pytest.approx(1.0 + offsets["alpha_smooth"], abs=1e-12)
+    assert shifted_params["phi_smooth"] == pytest.approx(1.0 + offsets["phi_smooth"], abs=1e-12)
+
+
+def test_missing_alpha_smooth_offset_is_rejected(monkeypatch):
+    """Abort when the configured file lacks an offset for a sampled parameter.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture setting the DR3 full-shape file name.
+    """
+    offsets_path = _write_full_shape_offsets({"phi_smooth": 0.01, "growth_rate": 0.1})
+    monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", offsets_path.name)
+    with pytest.raises(ValueError, match="has no offset for alpha_smooth"):
+        utils.get_blinding(["phi_smooth", "alpha_smooth"], "desi_dr3")
+
+
+@pytest.mark.parametrize("parameters", [("ap", "at", "alpha_smooth"), ("alpha", "alpha_smooth_cf")])
+def test_civ_bao_and_alpha_smooth_are_rejected(monkeypatch, parameters):
+    """Reject requests that combine CIV BAO offsets and the alpha_smooth offset.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing NumPy file loading with a forbidden operation.
+    parameters : tuple of str
+        Sampled CIV BAO parameters and isotropic smooth dilations.
+    """
+    load_parameters = Mock(side_effect=AssertionError("Parameter resources must not be opened."))
+    monkeypatch.setattr(utils.np, "load", load_parameters)
+    interface = _blinding_interface(parameters)
+
+    with pytest.raises(ValueError, match=r"^Cannot blind BAO and full-shape parameters together"):
+        interface._init_blinding()
+    load_parameters.assert_not_called()
+
+
+@pytest.mark.parametrize("strategy", ["desi_dr3", "desi_dr3_civ"])
+def test_alpha_full_must_be_fixed(strategy):
+    """Require alpha_full to be fixed, since it bypasses the alpha_smooth offset.
+
+    Parameters
+    ----------
+    strategy : str
+        Active DR3 blinding strategy.
+    """
+    interface = _blinding_interface(("alpha_full", "phi_smooth"), strategy=strategy)
+    with pytest.raises(ValueError, match="parameter alpha_full must be fixed"):
+        interface._init_blinding()
+
+
+def test_priors_on_per_correlation_alpha_smooth_are_rejected():
+    """Reject priors on per-correlation dilations that receive the alpha_smooth offset."""
+    interface = _blinding_interface(("alpha_smooth_lyaxlya",), strategy="desi_dr3")
+    interface._rnsps = {"alpha_smooth_lyaxlya": 1.0}
+    interface.priors = {"alpha_smooth_lyaxlya": np.array([1.0, 0.05])}
+    with pytest.raises(ValueError, match="priors on blinded parameters"):
+        interface._check_blinded_priors()
