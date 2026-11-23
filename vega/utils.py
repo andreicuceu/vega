@@ -35,8 +35,9 @@ VEGA_BLINDED_PARS = {
     "alpha": ["CIV", "civ"],
 }
 
-# Per-correlation isotropic smooth dilations (two-alpha-smooth) are named
-# alpha_smooth_<correlation> and all receive the alpha_smooth offset
+# Per-correlation isotropic smooth dilations (two-alpha-smooth) are named by tracer pair,
+# alpha_smooth_<tracer1>x<tracer2> (e.g. alpha_smooth_LYAxQSO), and all receive the
+# alpha_smooth offset
 ALPHA_SMOOTH_PREFIX = "alpha_smooth_"
 
 # BAO parameters without offsets under desi_dr3_civ; they must be fixed because the
@@ -49,8 +50,8 @@ FULL_SHAPE_BLINDED_PARS = ["growth_rate", "phi_smooth", "alpha_smooth"]
 PARAMETER_BLINDING_DIR = Path("/global/cfs/projectdirs/desicollab/science/lya/vega/")
 
 # Name of the DR3 full-shape offsets file (phi_smooth, growth_rate, alpha_smooth) inside
-# PARAMETER_BLINDING_DIR / "full-shape-blinding". Placeholder until the production file is
-# generated: while it is None, blinded DR3 full-shape fits abort.
+# PARAMETER_BLINDING_DIR / "full-shape-blinding", generated with blind_fs.py in
+# desi-dr3-lya-bao. Setting it to None makes blinded DR3 full-shape fits abort.
 DR3_FS_BLINDING_FILE = "dr3_fs_blinding_23_11_2026.npz"
 
 # Discrete tracers with velocity bias b_eta = 1, so that b * beta = f. On blind data at most
@@ -489,9 +490,9 @@ def compute_log_cov_det(cov_mat, data_mask):
 def get_blinding_key(par):
     """Return the name under which the offset of a parameter is stored.
 
-    Per-correlation isotropic smooth dilations (``alpha_smooth_<correlation>``,
-    used with two-alpha-smooth) share the ``alpha_smooth`` offset; every other
-    parameter is its own key.
+    Per-correlation isotropic smooth dilations (``alpha_smooth_<tracer1>x<tracer2>``,
+    e.g. ``alpha_smooth_LYAxQSO``, used with two-alpha-smooth) share the
+    ``alpha_smooth`` offset; every other parameter is its own key.
 
     Parameters
     ----------
@@ -517,7 +518,7 @@ def get_blinding(blind_pars, blinding_strat):
         Sampled parameter names requiring blinding. BAO parameters (``ap``,
         ``at``, ``alpha``) select the BAO file and full-shape parameters
         (``growth_rate``, ``phi_smooth``, ``alpha_smooth`` and
-        ``alpha_smooth_<correlation>``) the full-shape file; the two sets
+        ``alpha_smooth_<tracer1>x<tracer2>``) the full-shape file; the two sets
         cannot be combined.
     blinding_strat : str
         Blinding strategy inherited from the correlation data.
@@ -526,7 +527,7 @@ def get_blinding(blind_pars, blinding_strat):
     -------
     dict of str to float or None
         Dimensionless offsets keyed by parameter name, or ``None`` for an
-        unblinded legacy strategy. All ``alpha_smooth_<correlation>``
+        unblinded legacy strategy. All ``alpha_smooth_<tracer1>x<tracer2>``
         parameters receive the ``alpha_smooth`` offset.
 
     Raises
@@ -562,7 +563,7 @@ def get_blinding(blind_pars, blinding_strat):
     else:
         raise ValueError(f"No blinding implemented for parameters {blind_pars}")
 
-    # Resolved at call time so that the placeholder and the directory can be redirected in tests
+    # Resolved at call time so that the file name and the directory can be redirected in tests
     dr3_full_shape_file = None
     if DR3_FS_BLINDING_FILE is not None:
         dr3_full_shape_file = PARAMETER_BLINDING_DIR / "full-shape-blinding" / DR3_FS_BLINDING_FILE

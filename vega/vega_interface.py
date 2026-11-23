@@ -948,7 +948,7 @@ class VegaInterface:
             Sets the blinding flag and requests offsets for protected sampled
             parameters. CIV BAO parameters are protected only by
             ``desi_dr3_civ``. Full-shape offsets (``phi_smooth``,
-            ``growth_rate``, ``alpha_smooth`` and ``alpha_smooth_<correlation>``)
+            ``growth_rate``, ``alpha_smooth`` and ``alpha_smooth_<tracer1>x<tracer2>``)
             are requested only for sampled parameters, so fixed parameters keep
             their configured values and the model is unchanged.
 
@@ -988,7 +988,7 @@ class VegaInterface:
                     "Use the ap_at parametrisation."
                 )
 
-            # alpha_smooth_<correlation> parameters share the alpha_smooth offset
+            # alpha_smooth_<tracer1>x<tracer2> parameters share the alpha_smooth offset
             blinding_key = utils.get_blinding_key(par)
             if blinding_key not in utils.VEGA_BLINDED_PARS:
                 continue

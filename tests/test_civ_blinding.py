@@ -631,7 +631,7 @@ def test_priors_on_unblinded_parameters_are_allowed(offsets):
     [
         ("phi_smooth", "alpha_smooth", "growth_rate"),
         ("alpha_smooth",),
-        ("phi_smooth", "alpha_smooth_lyaxlya", "alpha_smooth_qsoxlya"),
+        ("phi_smooth", "alpha_smooth_LYAxLYA", "alpha_smooth_LYAxQSO"),
     ],
 )
 def test_alpha_smooth_parameter_selection(monkeypatch, parameters):
@@ -678,13 +678,13 @@ def test_alpha_smooth_offsets_applied(monkeypatch):
     offsets_path = _write_full_shape_offsets(offsets)
     monkeypatch.setattr(utils, "DR3_FS_BLINDING_FILE", offsets_path.name)
 
-    blind_pars = ["alpha_smooth", "alpha_smooth_lyaxlya", "alpha_smooth_qsoxlya", "phi_smooth"]
+    blind_pars = ["alpha_smooth", "alpha_smooth_LYAxLYA", "alpha_smooth_LYAxQSO", "phi_smooth"]
     blinding = utils.get_blinding(blind_pars, "desi_dr3")
     assert set(blinding) == set(blind_pars)
 
     params = dict.fromkeys(blind_pars, 1.0)
     shifted_params = utils.apply_blinding(params, blinding)
-    for par in ["alpha_smooth", "alpha_smooth_lyaxlya", "alpha_smooth_qsoxlya"]:
+    for par in ["alpha_smooth", "alpha_smooth_LYAxLYA", "alpha_smooth_LYAxQSO"]:
         assert shifted_params[par] == pytest.approx(1.0 + offsets["alpha_smooth"], abs=1e-12)
     assert shifted_params["phi_smooth"] == pytest.approx(1.0 + offsets["phi_smooth"], abs=1e-12)
 
@@ -703,7 +703,9 @@ def test_missing_alpha_smooth_offset_is_rejected(monkeypatch):
         utils.get_blinding(["phi_smooth", "alpha_smooth"], "desi_dr3")
 
 
-@pytest.mark.parametrize("parameters", [("ap", "at", "alpha_smooth"), ("alpha", "alpha_smooth_cf")])
+@pytest.mark.parametrize(
+    "parameters", [("ap", "at", "alpha_smooth"), ("alpha", "alpha_smooth_CIVxQSO")]
+)
 def test_civ_bao_and_alpha_smooth_are_rejected(monkeypatch, parameters):
     """Reject requests that combine CIV BAO offsets and the alpha_smooth offset.
 
@@ -739,8 +741,8 @@ def test_alpha_full_must_be_fixed(strategy):
 
 def test_priors_on_per_correlation_alpha_smooth_are_rejected():
     """Reject priors on per-correlation dilations that receive the alpha_smooth offset."""
-    interface = _blinding_interface(("alpha_smooth_lyaxlya",), strategy="desi_dr3")
-    interface._rnsps = {"alpha_smooth_lyaxlya": 1.0}
-    interface.priors = {"alpha_smooth_lyaxlya": np.array([1.0, 0.05])}
+    interface = _blinding_interface(("alpha_smooth_LYAxLYA",), strategy="desi_dr3")
+    interface._rnsps = {"alpha_smooth_LYAxLYA": 1.0}
+    interface.priors = {"alpha_smooth_LYAxLYA": np.array([1.0, 0.05])}
     with pytest.raises(ValueError, match="priors on blinded parameters"):
         interface._check_blinded_priors()
