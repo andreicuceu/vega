@@ -93,6 +93,25 @@ History
   ``Data.create_monte_carlo`` now accepts the fiducial model restricted to the fitted bins
   that ``VegaInterface.initialize_monte_carlo`` passes to it, instead of raising
   "Could not match fiducial model to data or model size".
+* The relativistic (Doppler) term of continuous x discrete cross-correlations now uses the
+  Doppler kernel ``nu_ell(r) = 1/(2 pi^2) int dk k P_lin(k) j_ell(kr)``, computed with mcfit:
+  ``xi_rel = Arel1 nu_1 L1(mu) + Arel3 nu_3 L3(mu)``, with ``Arel1 = -H f X1`` and
+  ``Arel3 = H f X3``. The previous FFTLog (``tform="rel"``) did not lower the power of k and
+  returned ``int dk k^2 P j_ell``, so values of ``Arel1``/``Arel3`` from earlier fits are not
+  comparable; typical Lya x QSO values are now ``|Arel1| ~ 1e-3``. The asymmetry term keeps
+  its kernels and normalisation, without the 2-3% scale-dependent error of the old FFTLog.
+  Both terms now rescale coordinates as the core correlation does (correlation-specific
+  ``ap``/``at`` and the data-template correction). ``Arel1``, ``Arel3`` and ``Aasy0/2/3``
+  default to 0 in the template parameters and have entries in ``default_values.txt``. The
+  picca benchmark datasets that use the relativistic correction (``test_2``, ``test_7``)
+  are no longer compared with picca.
+* Fixed ``marginalize-all-rmin-cuts`` with ``rt-min`` (or ``rp-min``) cuts: the marginalized
+  bins are now those removed by the small-scale cuts inside the large-scale cuts (``r-max``,
+  ``rt-max``, ``rp-max`` and the mu range). Before, the data and distorted-model grids of a
+  cross-correlation, which cover different r_par ranges, marginalized different numbers of
+  bins and initialization failed. Configs with ``r-min`` alone are unchanged.
+* Fixed ``velocity dispersion = lorentz_gauss``, which applied the Gaussian kernel alone; it
+  now applies both the Lorentzian and the Gaussian kernels.
 
 1.8.0 (2026-10-09)
 ------------------
