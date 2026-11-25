@@ -68,3 +68,14 @@ uv_shotnoise_amp                0.0         1.0         0.01
 bias_gamma_e                   -1.0         1.0         0.01
 lambda_HeII                     0.0       100.0         5.0
 los_smooth_amp                  0.0         2.0         0.1
+amp_SiII(1190)_SiII(1190)       -1e-2        1e-2         1e-5
+amp_SiII(1190)_SiII(1193)       -1e-2        1e-2         1e-5
+amp_SiII(1190)_SiII(1260)       -1e-2        1e-2         1e-5
+amp_SiII(1190)_SiIII(1207)      -1e-2        1e-2         1e-5
+amp_SiII(1193)_SiII(1193)       -1e-2        1e-2         1e-5
+amp_SiII(1193)_SiII(1260)       -1e-2        1e-2         1e-5
+amp_SiII(1193)_SiIII(1207)      -1e-2        1e-2         1e-5
+amp_SiII(1260)_SiII(1260)       -1e-2        1e-2         1e-5
+amp_SiII(1260)_SiIII(1207)      -1e-2        1e-2         1e-5
+amp_SiIII(1207)_SiIII(1207)     -1e-2        1e-2         1e-5
+amp_CIV(eff)_CIV(eff)           -1e-2        1e-2         1e-5

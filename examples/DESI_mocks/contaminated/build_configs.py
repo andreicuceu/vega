@@ -38,6 +38,17 @@ marginalisation of the bins below r-min, with:
   Gaussian redshift errors, and a free shift of the cross-correlations (drp_QSO) with the
   prior of the data analysis.
 
+The linear metal parameters are marginalized analytically instead of being sampled (see
+docs/analytic_marginalization.rst), with the choices of the DESI data examples
+(../../DESI_data_BAO):
+- every metal x metal correlation is scaled by its own amplitude amp_<m1>_<m2>
+  (metal-auto-amplitudes) instead of the product of the metal biases, so that the metal
+  biases enter the model linearly;
+- 14 parameters are marginalized: the biases of the four Si lines (flat priors) and the 10
+  Si x Si amplitudes (N(b1 b2, (b1 b2 / 3)^2)), where the reference biases b are the
+  fiducial metal biases of PARAMETERS (a previous fit of the v2.8.5 contaminated mocks).
+This leaves 14 sampled parameters.
+
 The configs are written to this directory with paths relative to it, so Vega must be run
 from this directory:
 
@@ -49,9 +60,11 @@ Do not edit the generated .ini files by hand; modify this script and re-run it.
 """
 
 import os
+from itertools import combinations_with_replacement
 from pathlib import Path
 
 from vega import BuildConfig
+from vega.metals import Metals
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 
@@ -80,6 +93,44 @@ FIT_TYPE = "lyaxlya_lyaxlyb_lyaxqso_lybxqso"
 
 # Metal lines included in the quickquasars spectra of the mocks
 METALS = ["SiII(1190)", "SiII(1193)", "SiIII(1207)", "SiII(1260)"]
+
+# Reference metal biases b, which centre the priors of the metal x metal amplitudes: the
+# fiducial biases of a previous fit of the v2.8.5 contaminated mocks (also used in
+# PARAMETERS below)
+METAL_BIAS_REFERENCE = {
+    "SiII(1190)": -0.00289,
+    "SiII(1193)": -0.00204,
+    "SiIII(1207)": -0.00594,
+    "SiII(1260)": -0.00341,
+}
+
+
+def get_metal_amplitude_priors(metal_bias_reference):
+    """Gaussian priors of the metal x metal amplitudes amp_<m1>_<m2>.
+
+    Vega builds one metal x metal correlation for every pair of metals, self-pairs included
+    (use_metal_autos = True). Without the amplitudes, each of them would be scaled by the
+    product of the two metal biases.
+
+    Parameters
+    ----------
+    metal_bias_reference : dict
+        Metal name -> reference bias b.
+
+    Returns
+    -------
+    dict
+        Amplitude name -> (mean, sigma) of its Gaussian prior, (b1 b2, |b1 b2| / 3).
+    """
+    priors = {}
+    for metal1, metal2 in combinations_with_replacement(metal_bias_reference, 2):
+        # Products of three-figure biases are exact at six significant figures; rounding
+        # removes the floating-point noise from the written configs
+        bias_product = float(f"{metal_bias_reference[metal1] * metal_bias_reference[metal2]:.6g}")
+        priors[Metals.amplitude_name(metal1, metal2)] = (bias_product, abs(bias_product) / 3)
+
+    return priors
+
 
 # Separation range of the fit [Mpc/h], as in the other BAO examples
 RMIN_AUTO = 30.0
@@ -182,6 +233,9 @@ MODEL_OPTIONS = {
     "new_metals": True,
     "rp_only_metal_mats": False,
     "use_metal_autos": True,
+    # Own amplitude amp_<m1>_<m2> for every metal x metal correlation, which makes the
+    # metal biases linear parameters
+    "metal-auto-amplitudes": True,
     # Analytic marginalisation of all bins below r-min, keeping them in the model and
     # matching the data binning
     "marginalize-all-rmin-cuts": True,
@@ -218,17 +272,16 @@ PARAMETERS = {
     "L0_hcd": 6.5,
     # Metals: bias, RSD parameter and redshift evolution exponent of the bias. The metal
     # absorption follows the Lya transmission field, so the RSD parameters are fixed to a
-    # value close to beta_LYA.
-    "bias_SiII(1190)": -0.00289,
+    # value close to beta_LYA. The biases (and the metal x metal amplitudes, added below)
+    # are analytically marginalized: their values do not enter the likelihood and only set
+    # the fiducial model (e.g. for Monte Carlo mocks).
+    **{f"bias_{metal}": bias for metal, bias in METAL_BIAS_REFERENCE.items()},
     "beta_SiII(1190)": 1.5,
     "alpha_SiII(1190)": 1.0,
-    "bias_SiII(1193)": -0.00204,
     "beta_SiII(1193)": 1.5,
     "alpha_SiII(1193)": 1.0,
-    "bias_SiIII(1207)": -0.00594,
     "beta_SiIII(1207)": 1.5,
     "alpha_SiIII(1207)": 1.0,
-    "bias_SiII(1260)": -0.00341,
     "beta_SiII(1260)": 1.5,
     "alpha_SiII(1260)": 1.0,
     # Gaussian smoothing scales [Mpc/h] along and across the line of sight
@@ -251,10 +304,6 @@ SAMPLE_PARAMS = {
     "bias_hcd": "-1.0 0.0 -0.0172 0.01",
     "beta_hcd": "0.0 3.0 1.15 0.1",
     "L0_hcd": "0.0 10.0 6.5 0.1",
-    "bias_SiII(1190)": "True",
-    "bias_SiII(1193)": "True",
-    "bias_SiIII(1207)": "True",
-    "bias_SiII(1260)": "True",
     "par_sigma_smooth": "True",
     "per_sigma_smooth": "True",
 }
@@ -267,6 +316,17 @@ PRIORS = {
     "L0_hcd": "gaussian 5.0 2.0",
 }
 
+# Linear parameters marginalized analytically, with their Gaussian priors in PRIORS (flat
+# prior otherwise). They must not be sampled, and their prior has no bounds.
+# - Biases of the four Si lines: flat priors
+ANALYTIC_MARGINALIZATION = [f"bias_{metal}" for metal in METALS]
+
+# - Metal x metal amplitudes, with fiducial values at the prior centres
+for name, (mean, sigma) in get_metal_amplitude_priors(METAL_BIAS_REFERENCE).items():
+    ANALYTIC_MARGINALIZATION.append(name)
+    PARAMETERS[name] = mean
+    PRIORS[name] = f"gaussian {mean:.6g} {sigma:.6g}"
+
 FIT_INFO = {
     # zeff is not given, so BuildConfig computes it from the measured correlations
     "global_cov_file": str(GLOBAL_COVARIANCE),
@@ -274,6 +334,9 @@ FIT_INFO = {
     "bias_beta_config": {"LYA": "bias_beta", "QSO": "bias_bias_eta"},
     "sample_params": SAMPLE_PARAMS,
     "priors": PRIORS,
+    "analytic_marginalization": ANALYTIC_MARGINALIZATION,
+    # To save the best-fit marginalized coefficients as derived parameters of the chain,
+    # add "marginalize_in_fit": True
     "run_sampler": True,
     "sampler": "Polychord",
     "Polychord": {

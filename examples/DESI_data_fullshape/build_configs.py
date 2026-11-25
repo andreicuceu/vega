@@ -25,6 +25,23 @@ The model of the correlation functions follows the DESI DR3 BAO baseline:
 - DESI instrumental systematics (correlated sky-subtraction noise) in the autos;
 - analytic marginalisation of the small-scale bins below the r-min cut.
 
+All the linear parameters that Vega supports are marginalized analytically instead of being
+sampled (see docs/analytic_marginalization.rst), with the same choices as in
+../DESI_data_BAO, which follow test 4 of the analytic marginalization benchmark of Vega
+PR #181 (a BAO fit):
+- every metal x metal correlation is scaled by its own amplitude amp_<m1>_<m2>
+  (metal-auto-amplitudes) instead of the product of the metal biases, so that the metal
+  biases enter the model linearly. bias_CIV(eff) only entered CIV(eff) x CIV(eff), so it is
+  replaced by amp_CIV(eff)_CIV(eff);
+- 38 parameters are marginalized: desi_inst_sys_amp (flat prior), qso_rad_strength
+  (N(0.5, 0.5^2)), the biases of the four Si lines (flat), the biases of the weakly
+  constrained metals FeII(1145), NV(1239) and SiII(1304) (N(b, b^2)), and the 29 metal x
+  metal amplitudes (N(b1 b2, (b1 b2 / 3)^2); CIV(eff) x CIV(eff): the former bias_CIV(eff)
+  prior N(-0.019, 0.005^2) propagated to b^2);
+- the reference metal biases b are the best fit of the DESI DR3 BAO baseline with sampled
+  metal biases (see METAL_BIAS_REFERENCE).
+This leaves 14 sampled parameters.
+
 The configs are written to this directory with paths relative to it, so Vega must be run
 from this directory:
 
@@ -36,9 +53,11 @@ Do not edit the generated .ini files by hand; modify this script and re-run it.
 """
 
 import os
+from itertools import combinations_with_replacement
 from pathlib import Path
 
 from vega import BuildConfig
+from vega.metals import Metals
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 
@@ -60,7 +79,7 @@ GLOBAL_COVARIANCE = FULLSHAPE_DIR / "fits/results/full-covariance-smoothed.fits"
 FIT_TYPE = "lyaxlya_lyaxlyb_lyaxqso_lybxqso"
 
 # Metal lines contaminating the Lya and Lyb regions of the forest. FeII(1145), NV(1239) and
-# SiII(1304) are only weakly constrained, so their biases are given bounded ranges below.
+# SiII(1304) are only weakly constrained, so their biases are given Gaussian priors below.
 METALS = [
     "FeII(1145)",
     "SiII(1190)",
@@ -71,6 +90,63 @@ METALS = [
     "SiII(1304)",
     "CIV(eff)",
 ]
+WEAK_METALS = ["FeII(1145)", "NV(1239)", "SiII(1304)"]
+
+# Reference metal biases b, which centre the priors of the weak-metal biases and of the
+# metal x metal amplitudes: best fit of the DESI DR3 BAO baseline (matterhorn-v1, single
+# redshift bin) with the model of ../DESI_data_BAO and sampled metal biases (Vega master
+# 68a28c7), rounded to three significant figures. CIV(eff) has its own prior below.
+METAL_BIAS_REFERENCE = {
+    "FeII(1145)": -0.00137,
+    "SiII(1190)": -0.00332,
+    "SiII(1193)": -0.00247,
+    "SiIII(1207)": -0.0133,
+    "NV(1239)": -0.00146,
+    "SiII(1260)": -0.00348,
+    "SiII(1304)": -0.00569,
+}
+
+# Prior N(mean, sigma^2) of the CIV(eff) bias, measured from the CIV forest region. It sets
+# the prior of the CIV(eff) x CIV(eff) amplitude, the only term in which CIV(eff) enters.
+CIV_BIAS_PRIOR = (-0.019, 0.005)
+
+
+def get_metal_amplitude_priors(metal_bias_reference, civ_bias_prior):
+    """Gaussian priors of the metal x metal amplitudes amp_<m1>_<m2>.
+
+    Vega builds one metal x metal correlation for every pair (self-pairs included) of the
+    metals other than CIV(eff), and CIV(eff) x CIV(eff) (use_metal_autos = True). Without
+    the amplitudes, each of them would be scaled by the product of the two metal biases.
+
+    Parameters
+    ----------
+    metal_bias_reference : dict
+        Metal name -> reference bias b, for all metals except CIV(eff).
+    civ_bias_prior : tuple of float
+        (mean, sigma) of the Gaussian prior of the CIV(eff) bias.
+
+    Returns
+    -------
+    dict
+        Amplitude name -> (mean, sigma) of its Gaussian prior: (b1 b2, |b1 b2| / 3) for the
+        pairs of metals other than CIV(eff), and the CIV(eff) bias prior propagated linearly
+        to b^2, (b^2, 2 |b| sigma_b), for CIV(eff) x CIV(eff).
+    """
+    priors = {}
+    for metal1, metal2 in combinations_with_replacement(metal_bias_reference, 2):
+        # Products of three-figure biases are exact at six significant figures; rounding
+        # removes the floating-point noise from the written configs
+        bias_product = float(f"{metal_bias_reference[metal1] * metal_bias_reference[metal2]:.6g}")
+        priors[Metals.amplitude_name(metal1, metal2)] = (bias_product, abs(bias_product) / 3)
+
+    civ_mean, civ_sigma = civ_bias_prior
+    priors[Metals.amplitude_name("CIV(eff)", "CIV(eff)")] = (
+        civ_mean**2,
+        2 * abs(civ_mean) * civ_sigma,
+    )
+
+    return priors
+
 
 # Separation range of the fit [Mpc/h]. The QSO cross-correlations start at larger r-min
 # because of the stronger non-linearities (velocity dispersion, proximity effect) of the QSO
@@ -174,6 +250,9 @@ MODEL_OPTIONS = {
     "new_metals": True,
     "rp_only_metal_mats": False,
     "use_metal_autos": True,
+    # Own amplitude amp_<m1>_<m2> for every metal x metal correlation, which makes the
+    # metal biases linear parameters
+    "metal-auto-amplitudes": True,
     # DESI instrumental systematics in the autos (desi_inst_sys_amp)
     "desi-instrumental-systematics": True,
     # Analytic marginalisation of all bins below r-min, keeping them in the model and
@@ -220,30 +299,28 @@ PARAMETERS = {
     "qso_rad_asymmetry": 0.0,
     "qso_rad_lifetime": 9e99,
     "qso_rad_decrease": 300.0,
-    # Metals: bias, RSD parameter and redshift evolution exponent of the bias
-    "bias_FeII(1145)": -0.0052,
+    # Metals: RSD parameter and redshift evolution exponent of the bias. The biases (and the
+    # metal x metal amplitudes, added below) are analytically marginalized: their values do
+    # not enter the likelihood and only set the fiducial model (e.g. for Monte Carlo mocks),
+    # so they are set to the reference biases.
+    **{f"bias_{metal}": bias for metal, bias in METAL_BIAS_REFERENCE.items()},
     "beta_FeII(1145)": 0.5,
     "alpha_FeII(1145)": 1.0,
-    "bias_SiII(1190)": -0.0052,
     "beta_SiII(1190)": 0.5,
     "alpha_SiII(1190)": 1.0,
-    "bias_SiII(1193)": -0.0024,
     "beta_SiII(1193)": 0.5,
     "alpha_SiII(1193)": 1.0,
-    "bias_SiIII(1207)": -0.0074,
     "beta_SiIII(1207)": 0.5,
     "alpha_SiIII(1207)": 1.0,
-    "bias_NV(1239)": 0.0,
     "beta_NV(1239)": 0.5,
     "alpha_NV(1239)": 1.0,
-    "bias_SiII(1260)": -0.0046,
     "beta_SiII(1260)": 0.5,
     "alpha_SiII(1260)": 1.0,
-    "bias_SiII(1304)": 0.0,
     "beta_SiII(1304)": 0.5,
     "alpha_SiII(1304)": 1.0,
-    # CIV(eff) is an effective tracer of the CIV absorbers with no redshift evolution
-    "bias_CIV(eff)": -0.01,
+    # CIV(eff) is an effective tracer of the CIV absorbers with no redshift evolution. Its
+    # bias only enters through amp_CIV(eff)_CIV(eff), and is kept at the prior centre.
+    "bias_CIV(eff)": CIV_BIAS_PRIOR[0],
     "beta_CIV(eff)": 0.5,
     "alpha_CIV(eff)": 0.0,
     # DESI instrumental systematics
@@ -268,27 +345,14 @@ SAMPLE_PARAMS = {
     "bias_QSO": "True",
     "sigma_velo_disp_lorentz_QSO": "True",
     "drp_QSO": "True",
-    "qso_rad_strength": "True",
     "bias_hcd": "-1.0 0.0 -0.05 0.01",
     "beta_hcd": "0.0 3.0 0.7 0.1",
     "L0_hcd": "0.0 10.0 6.5 0.1",
-    "bias_SiII(1190)": "True",
-    "bias_SiII(1193)": "True",
-    "bias_SiIII(1207)": "True",
-    "bias_SiII(1260)": "True",
-    "bias_CIV(eff)": "True",
-    # Weak metals: biases restricted to negative values
-    "bias_FeII(1145)": "-0.1 0.0 -0.00001 0.001",
-    "bias_NV(1239)": "-0.1 0.0 -0.00001 0.001",
-    "bias_SiII(1304)": "-0.1 0.0 -0.00001 0.001",
-    "desi_inst_sys_amp": "True",
     "bias_gamma": "True",
 }
 
 # Gaussian priors: "gaussian mean sigma"
 PRIORS = {
-    # CIV(eff) bias measured from the CIV forest region
-    "bias_CIV(eff)": "gaussian -0.019 0.005",
     # No prior on bias_QSO (unlike the BAO fit): with f sampled, a prior on bias_QSO would
     # inform the growth rate through beta_QSO = f / bias_QSO.
     "drp_QSO": "gaussian 0.0 1.0",
@@ -296,6 +360,33 @@ PRIORS = {
     "beta_hcd": "gaussian 0.50 0.09",
     "L0_hcd": "gaussian 5.0 1.0",
 }
+
+# Linear parameters marginalized analytically, with their Gaussian priors in PRIORS (flat
+# prior otherwise). They must not be sampled, and their prior has no bounds.
+# - desi_inst_sys_amp and the biases of the four Si lines: flat priors
+ANALYTIC_MARGINALIZATION = [
+    "desi_inst_sys_amp",
+    "bias_SiII(1190)",
+    "bias_SiII(1193)",
+    "bias_SiIII(1207)",
+    "bias_SiII(1260)",
+]
+
+# - Strength of the QSO transverse proximity effect: weak prior N(0.5, 0.5^2)
+ANALYTIC_MARGINALIZATION.append("qso_rad_strength")
+PRIORS["qso_rad_strength"] = "gaussian 0.5 0.5"
+
+# - Weakly constrained metals: N(b, b^2), so that a vanishing bias is 1 sigma away
+for metal in WEAK_METALS:
+    reference_bias = METAL_BIAS_REFERENCE[metal]
+    ANALYTIC_MARGINALIZATION.append(f"bias_{metal}")
+    PRIORS[f"bias_{metal}"] = f"gaussian {reference_bias} {abs(reference_bias)}"
+
+# - Metal x metal amplitudes, with fiducial values at the prior centres
+for name, (mean, sigma) in get_metal_amplitude_priors(METAL_BIAS_REFERENCE, CIV_BIAS_PRIOR).items():
+    ANALYTIC_MARGINALIZATION.append(name)
+    PARAMETERS[name] = mean
+    PRIORS[name] = f"gaussian {mean:.6g} {sigma:.6g}"
 
 FIT_INFO = {
     "zeff": 2.33,
@@ -306,6 +397,9 @@ FIT_INFO = {
     "use_template_growth_rate": "False",
     "sample_params": SAMPLE_PARAMS,
     "priors": PRIORS,
+    "analytic_marginalization": ANALYTIC_MARGINALIZATION,
+    # To save the best-fit marginalized coefficients as derived parameters of the chain
+    # (about 20% more time per likelihood evaluation), add "marginalize_in_fit": True
     "run_sampler": True,
     "sampler": "Polychord",
     "Polychord": {

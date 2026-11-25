@@ -41,6 +41,10 @@ def run_vega(config_path):
         for par, val in vega.bestfit.values.items():
             vega.params[par] = val
 
+        # Best-fit values of the analytically marginalized coefficients
+        for par, val in vega.bestfit_marginalized_values.items():
+            vega.params[par] = val
+
     vega.output.write_results(
         vega.bestfit_model,
         vega.params,
@@ -56,7 +60,7 @@ def run_vega(config_path):
     plt.rc("xtick", labelsize=14)
     plt.rc("ytick", labelsize=14)
 
-    num_pars = len(vega.sample_params["limits"])
+    num_pars = vega.num_model_params
     for name in vega.plots.data:
         # Direct-multipole components (e.g. QSO auto measured in xi_ell) get a
         # dedicated multipole plot instead of wedges/shells.

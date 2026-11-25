@@ -9,6 +9,7 @@ import numpy as np
 from astropy.io import fits
 
 import vega
+from vega.metals import Metals
 from vega.utils import check_removed_z_options, find_file
 
 
@@ -32,6 +33,18 @@ class BuildConfig:
         "civxqso",
         "civxlya",
     ]
+
+    # Optional [Polychord] settings read by ``vega.samplers.polychord.Polychord``
+    # (``get_sampler_settings``), with the type it reads them as. They are written only
+    # when given in ``fit_info["Polychord"]``, so that the sampler defaults apply otherwise.
+    optional_polychord_settings = {
+        "precision": "float",
+        "seed": "int",
+        "resume": "bool",
+        "write_dead": "bool",
+        "cluster_posteriors": "bool",
+        "maximise": "bool",
+    }
 
     def __init__(self, options=None, overwrite=False):
         """Initialize the model options that are not tracer or correlation specific.
@@ -58,10 +71,21 @@ class BuildConfig:
                 fvoigt_model: string, default exp
                 fullshape_smoothing: string from [None, 'gauss', 'gauss_iso', 'exp'], default None
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
-                    'SiII(1260)', 'CIV(eff)'], default None
+                    'SiII(1260)', 'CIV(eff)'], default None. CIV(eff) only enters through
+                    CIV(eff) x CIV(eff), so it is not written to cross-correlations with a
+                    discrete tracer (unless it is the only metal).
                 metal_matrix_convention: string from ['estimator', 'legacy'], default
                     'estimator'. Convention of the new-metal matrices (only used with
                     new_metals = True); 'legacy' reproduces the matrices of previous versions.
+                use_metal_autos: Bool, default True. Include the SiII x SiII metal
+                    correlations.
+                use_metal_bias_eta: Bool, default False. Write the metal biases as
+                    bias_eta_<metal> instead of bias_<metal>.
+                metal-auto-amplitudes: Bool, default False. Scale every metal x metal
+                    correlation by its own amplitude amp_<metal1>_<metal2> (metal names
+                    sorted) instead of the product of the metal biases. The amplitudes of
+                    all metal x metal correlations that Vega builds for the requested
+                    correlations are written to [parameters]; see ``build``.
         """
         if options is None:
             options = {}
@@ -128,9 +152,13 @@ class BuildConfig:
         self.options["metal-matrix"] = options.get("metal-matrix", {})
         self.options["rebin-metals"] = options.get("rebin-metals", None)
         self.options["use_metal_bias_eta"] = options.get("use_metal_bias_eta", False)
-        self.options["separate-metal-auto-biases"] = options.get(
-            "separate-metal-auto-biases", False
-        )
+        if "separate-metal-auto-biases" in options:
+            raise ValueError(
+                "The option 'separate-metal-auto-biases' was removed. Use "
+                "'metal-auto-amplitudes', which gives every metal x metal correlation its own "
+                "amplitude amp_<metal1>_<metal2>."
+            )
+        self.options["metal-auto-amplitudes"] = options.get("metal-auto-amplitudes", False)
         self.options["single-metal-beta"] = options.get("single-metal-beta", False)
 
         metals = options.get("metals", None)
@@ -152,8 +180,13 @@ class BuildConfig:
             Options include ``corr_path`` (str), ``metal_path`` (str),
             ``r-min`` (float, default 10), ``r-max`` (float, default 180),
             ``rt-min`` (float, default 0), ``fast_metals`` (bool, default False),
-            ``binsize`` (int, default 4; deprecated), and ``broadband``
-            (broadband configuration string).
+            ``binsize`` (int, default 4; deprecated), ``broadband``
+            (dict of broadband configuration strings), ``marginalize-broadbands``
+            (bool, default False; analytically marginalize all additive polynomial
+            broadband coefficients of this correlation, requires ``broadband``), and
+            ``broadband-prior-sigma`` (float, optional; width of the zero-mean Gaussian
+            prior of these coefficients, flat prior if absent; requires
+            ``marginalize-broadbands``).
         fit_type : string
             Name of the fit. Includes the name of the correlations with the two
             tracers separated by an "x" (e.g. lyaxqso), and different correlations
@@ -166,12 +199,30 @@ class BuildConfig:
             ``bias_eta_beta``, or ``bias_bias_eta``), ``zeff`` (float, default
             None), ``zeff_rmin`` (float, default 0), ``zeff_rmax`` (float,
             default 300), ``sample_params`` (list or parameter configuration
-            dict), ``priors`` (parameter prior dict), and ``Polychord``
-            (PolyChord configuration dict).
+            dict), ``priors`` (parameter prior dict; sampled or analytically
+            marginalized parameters only), ``analytic_marginalization`` (list of
+            parameter names written as ``<name> = True`` to the ``[analytic
+            marginalization]`` section), ``marginalize_in_fit`` (bool, optional;
+            written as ``marginalize-in-fit`` to ``[control]``, so that the
+            marginalized coefficients are computed at every likelihood evaluation and
+            saved as derived parameters by the samplers; not written if absent), and
+            ``Polychord`` (PolyChord configuration dict, required with ``run_sampler``).
+            The ``Polychord`` dict may contain ``num_live`` (default
+            ``25 * len(sample_params)``), ``num_repeats`` (default ``len(sample_params)``),
+            ``do_clustering`` (default True) and ``boost_posterior`` (default 0), given
+            as strings, and ``precision`` (float), ``seed`` (int), ``resume``,
+            ``write_dead``, ``cluster_posteriors`` and ``maximise`` (bool), which are
+            written only when given, so that the defaults of
+            ``vega.samplers.polychord.Polychord`` apply otherwise.
         out_path : string
             Path to directory where to write the config files
         parameters : dict, optional
-            Parameter values to write to the main config, by default None
+            Parameter values to write to the main config, by default None.
+            With ``metal-auto-amplitudes``, the values of the amplitudes
+            ``amp_<metal1>_<metal2>`` are taken from here; missing amplitudes are set to
+            the product ``bias_<metal1> * bias_<metal2>`` of the written metal biases, which
+            leaves the model unchanged. Amplitudes of metal pairs that Vega does not build
+            for the requested correlations are not written.
         name_extension : string, optional
             Optional string to add to the config file names, by default None
 
@@ -179,6 +230,15 @@ class BuildConfig:
         -------
         string
             Path to the main config file
+
+        Raises
+        ------
+        ValueError
+            If a correlation, parameter or option is unknown or inconsistent, e.g. a
+            parameter listed in ``fit_info["analytic_marginalization"]`` that is also
+            sampled, or that Vega cannot marginalize analytically in this configuration,
+            or a ``marginalize_in_fit`` or optional ``Polychord`` value that Vega cannot
+            read as the expected type.
         """
         if parameters is None:
             parameters = {}
@@ -224,6 +284,9 @@ class BuildConfig:
         self.corr_paths = []
         self.corr_names = []
         self.data_paths = []
+        # Amplitudes amp_<m1>_<m2> of the metal x metal correlations, collected over all
+        # correlations (filled only with metal-auto-amplitudes)
+        self.metal_auto_amplitude_names = []
         for name in components:
             # Check if we have info on the correlation
             if name not in correlations:
@@ -339,16 +402,43 @@ class BuildConfig:
                 config["metals"] = {}
                 config["metals"]["filename"] = corr_info.get("metal_path", "None")
                 config["metals"]["z evol"] = "bias_vs_z_std"
+                # CIV(eff) enters only through CIV(eff) x CIV(eff) (vega.data.Data), which a
+                # cross-correlation with a discrete tracer does not have, so it is left out
+                # there (unless it is the only metal, to keep a valid [metals] section)
+                metals_in_correlation = self.options["metals"]
+                if type1 != type2:
+                    metals_without_civ = [
+                        metal for metal in metals_in_correlation if metal != "CIV(eff)"
+                    ]
+                    if metals_without_civ:
+                        metals_in_correlation = metals_without_civ
+
                 if type1 == "continuous":
-                    config["metals"]["in tracer1"] = " ".join(self.options["metals"])
+                    config["metals"]["in tracer1"] = " ".join(metals_in_correlation)
                 if type2 == "continuous":
-                    config["metals"]["in tracer2"] = " ".join(self.options["metals"])
+                    config["metals"]["in tracer2"] = " ".join(metals_in_correlation)
 
                 if "fast_metals" in corr_info:
                     config["model"]["fast_metals"] = corr_info.get("fast_metals", "False")
 
-                if self.options["separate-metal-auto-biases"]:
-                    config["model"]["separate-metal-auto-biases"] = "True"
+                if self.options["metal-auto-amplitudes"]:
+                    config["model"]["metal-auto-amplitudes"] = "True"
+
+                    # Metal x metal correlations exist only if both tracers carry metals
+                    if type1 == "continuous" and type2 == "continuous":
+                        # Same comparison of the tracer dictionaries as in vega.data.Data
+                        # (name and type; the weights paths of new_metals only reorder the
+                        # pairs, which leaves the sorted amplitude names unchanged).
+                        same_tracer = tracer1 == tracer2 and type1 == type2
+                        amplitude_names = self.get_metal_auto_amplitude_names(
+                            self.options["metals"],
+                            self.options["metals"],
+                            same_tracer,
+                            self.options["use_metal_autos"],
+                        )
+                        for amplitude_name in amplitude_names:
+                            if amplitude_name not in self.metal_auto_amplitude_names:
+                                self.metal_auto_amplitude_names.append(amplitude_name)
 
                 if self.options["single-metal-beta"]:
                     config["model"]["single-metal-beta"] = "True"
@@ -484,6 +574,29 @@ class BuildConfig:
             for key, item in corr_info["broadband"].items():
                 config["broadband"][key] = item
 
+        # Analytic marginalization of the additive broadband polynomials. These are
+        # per-correlation entries, like the broadbands they act on; the options are written
+        # only when requested, so configs built without them are unchanged.
+        marginalize_broadbands = bool(corr_info.get("marginalize-broadbands", False))
+        if marginalize_broadbands:
+            if "broadband" not in corr_info:
+                raise ValueError(
+                    f"marginalize-broadbands is set for {name}, but no broadband was given "
+                    "in its correlation dictionary."
+                )
+            config["model"]["marginalize-broadbands"] = "True"
+
+        if "broadband-prior-sigma" in corr_info:
+            if not marginalize_broadbands:
+                raise ValueError(
+                    f"broadband-prior-sigma is set for {name} without marginalize-broadbands; "
+                    "Vega would ignore it."
+                )
+            broadband_prior_sigma = float(corr_info["broadband-prior-sigma"])
+            if not broadband_prior_sigma > 0:
+                raise ValueError(f"broadband-prior-sigma must be positive ({name}).")
+            config["model"]["broadband-prior-sigma"] = str(corr_info["broadband-prior-sigma"])
+
         if self.options["fullshape_smoothing"] is not None:
             assert self.options["fullshape_smoothing"] in ["gauss", "gauss_iso", "exp"]
             config["model"]["fullshape smoothing"] = self.options["fullshape_smoothing"]
@@ -556,6 +669,54 @@ class BuildConfig:
         zeff = np.average(zeff_list, weights=weights)
         return zeff
 
+    @staticmethod
+    def get_metal_auto_amplitude_names(
+        metals_in_tracer1, metals_in_tracer2, same_tracer, use_metal_autos=True
+    ):
+        """Amplitude names of the metal x metal correlations of one correlation.
+
+        Mirrors the pair selection of ``vega.data.Data._init_metal_correlations`` and
+        ``Data._use_correlation``: all pairs (metal1, metal2) of the metals of the two
+        tracers, with metal2 not before metal1 in the list when the two main tracers are
+        the same; CIV(eff) only with itself; SiII x SiII pairs only with
+        ``use_metal_autos``. Names follow ``vega.metals.Metals.amplitude_name``.
+
+        Parameters
+        ----------
+        metals_in_tracer1 : list of str
+            Metals contributing to the first tracer.
+        metals_in_tracer2 : list of str
+            Metals contributing to the second tracer.
+        same_tracer : bool
+            Whether the two main tracers are the same (auto-correlation).
+        use_metal_autos : bool, optional
+            Whether the SiII x SiII correlations are used, by default True.
+
+        Returns
+        -------
+        list of str
+            Unique names ``amp_<m1>_<m2>`` (metal names sorted), in the order in which
+            Vega builds the correlations.
+        """
+
+        def use_pair(metal1, metal2):
+            # Same rules as Data._use_correlation
+            if metal1 == "CIV(eff)" or metal2 == "CIV(eff)":
+                return metal1 == metal2
+            return use_metal_autos or not ("SiII" in metal1 and "SiII" in metal2)
+
+        amplitude_names = []
+        for i, metal1 in enumerate(metals_in_tracer1):
+            first_index = i if same_tracer else 0
+            for metal2 in metals_in_tracer2[first_index:]:
+                if not use_pair(metal1, metal2):
+                    continue
+                amplitude_name = Metals.amplitude_name(metal1, metal2)
+                if amplitude_name not in amplitude_names:
+                    amplitude_names.append(amplitude_name)
+
+        return amplitude_names
+
     def _build_main_config(self, fit_type, fit_info, parameters, git_hash):
         """Build the main vega configuration file
 
@@ -568,7 +729,8 @@ class BuildConfig:
             (e.g. lyaxlya_lyaxqso). If unsure check the templates
             folder to see all possibilities.
         fit_info : dict
-            Fit information. Must contain a list of sampled parameters and the effective redshift.
+            Fit information. Must contain a list of sampled parameters and the effective
+            redshift. See ``build`` for the options.
         parameters : dict, optional
             Parameter values to write to the main config
 
@@ -630,11 +792,19 @@ class BuildConfig:
         else:
             raise TypeError("The sample_params object has to be either a list or a dict.")
 
-        # Write the priors
+        # Parameters marginalized analytically by Vega instead of being sampled
+        if isinstance(fit_info.get("analytic_marginalization"), str):
+            raise TypeError("fit_info['analytic_marginalization'] must be a list of names.")
+        marginalized_params = list(fit_info.get("analytic_marginalization", []))
+
+        # Write the priors (Gaussian priors of marginalized parameters also go here)
         if "priors" in fit_info:
             config["priors"] = {}
             for par, prior in fit_info["priors"].items():
-                assert par in config["sample"], "Cannot add prior for parameter that is not sampled"
+                assert par in config["sample"] or par in marginalized_params, (
+                    "Cannot add prior for parameter that is not sampled or analytically "
+                    "marginalized"
+                )
                 config["priors"][par] = prior
 
         # Write the parameters
@@ -655,10 +825,22 @@ class BuildConfig:
                     "dictionary when calling BuildConfig."
                 )
 
+        # Write the analytically marginalized parameters
+        if marginalized_params:
+            self._check_marginalized_params(marginalized_params, sample_params, config)
+            config["analytic marginalization"] = {}
+            for param in marginalized_params:
+                config["analytic marginalization"][param] = "True"
+
         # Check if we need the sampler
         config["control"] = {"run_sampler": "False"}
         if "use_template_growth_rate" in fit_info:
             config["control"]["use_template_growth_rate"] = fit_info["use_template_growth_rate"]
+        # Written only when given, so that configs built without it are unchanged
+        if "marginalize_in_fit" in fit_info:
+            config["control"]["marginalize-in-fit"] = self._format_config_value(
+                "marginalize_in_fit", fit_info["marginalize_in_fit"], "bool"
+            )
         if self.run_sampler:
             config["control"]["run_sampler"] = "True"
             config["control"]["sampler"] = self.sampler
@@ -680,6 +862,13 @@ class BuildConfig:
                 config["Polychord"]["boost_posterior"] = fit_info["Polychord"].get(
                     "boost_posterior", str(0)
                 )
+
+                # Optional settings, e.g. the evidence precision criterion and the seed
+                for key, value_type in self.optional_polychord_settings.items():
+                    if key in fit_info["Polychord"]:
+                        config["Polychord"][key] = self._format_config_value(
+                            f"Polychord[{key!r}]", fit_info["Polychord"][key], value_type
+                        )
             elif self.sampler == "PocoMC":
                 config["PocoMC"] = {}
                 config["PocoMC"]["path"] = str(self.sampler_out_path)
@@ -744,6 +933,135 @@ class BuildConfig:
             config.write(configfile)
 
         return main_path
+
+    @staticmethod
+    def _format_config_value(name, value, value_type):
+        """Format a config value and check that Vega can read it as the expected type.
+
+        Parameters
+        ----------
+        name : str
+            Name of the ``fit_info`` entry, used in the error message.
+        value : bool, int, float or str
+            Value to write.
+        value_type : {"bool", "int", "float"}
+            Type with which Vega reads the option (``getboolean``, ``getint`` or
+            ``getfloat``).
+
+        Returns
+        -------
+        str
+            ``str(value)``; Python booleans become ``"True"`` or ``"False"``.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` cannot be read as ``value_type`` by ``ConfigParser`` (a Python
+            boolean is refused for a numerical option).
+        """
+        text = str(value)
+        if value_type == "bool":
+            is_valid = text.lower() in ConfigParser.BOOLEAN_STATES
+        else:
+            # getint and getfloat convert the string with int() and float()
+            converter = int if value_type == "int" else float
+            try:
+                converter(text)
+                is_valid = not isinstance(value, bool)
+            except ValueError:
+                is_valid = False
+
+        if not is_valid:
+            raise ValueError(f"fit_info[{name!r}] = {value!r} is not a valid {value_type}.")
+        return text
+
+    def _check_marginalized_params(self, marginalized_params, sample_params, config):
+        """Validate the parameters of the ``[analytic marginalization]`` section.
+
+        Vega marginalizes analytically only ``desi_inst_sys_amp``, ``qso_rad_strength``,
+        the metal biases (``bias_<metal>`` or ``bias_eta_<metal>``) and the metal x metal
+        amplitudes ``amp_<metal1>_<metal2>``. Vega sets missing values of marginalized
+        parameters to zero, but it still needs a template for each of them. BuildConfig
+        writes each of these parameters to ``[parameters]`` exactly when the model option
+        that creates its template is on (``desi-instrumental-systematics``,
+        ``radiation_effects``, ``metals`` with ``use_metal_bias_eta`` selecting
+        ``bias_eta_<metal>``, and ``metal-auto-amplitudes``), so a supported name that is
+        absent from the written ``[parameters]`` has no template in this configuration.
+
+        Parameters
+        ----------
+        marginalized_params : list of str
+            Parameters to marginalize analytically.
+        sample_params : list or dict
+            Sampled parameters (``fit_info["sample_params"]``).
+        config : ConfigParser
+            Main config, with the ``[parameters]`` section already written.
+
+        Raises
+        ------
+        ValueError
+            If a parameter is listed twice, is also sampled, is not a parameter that
+            Vega can marginalize analytically, or is not part of this configuration.
+        """
+        duplicates = sorted(
+            {name for name in marginalized_params if marginalized_params.count(name) > 1}
+        )
+        if duplicates:
+            raise ValueError(f"Parameters listed twice for analytic marginalization: {duplicates}")
+
+        sampled = sorted(set(marginalized_params) & set(sample_params))
+        if sampled:
+            raise ValueError(
+                f"Parameters both sampled and analytically marginalized: {sampled}. Vega "
+                "refuses this; remove them from sample_params."
+            )
+
+        metals = self.options["metals"] or []
+        metal_bias_names = {f"bias_{metal}" for metal in metals}
+        metal_bias_names |= {f"bias_eta_{metal}" for metal in metals}
+
+        def is_supported(name):
+            if name in ("desi_inst_sys_amp", "qso_rad_strength"):
+                return True
+            return name.startswith("amp_") or name in metal_bias_names
+
+        unsupported = [name for name in marginalized_params if not is_supported(name)]
+        if unsupported:
+            raise ValueError(
+                f"Vega cannot marginalize {unsupported} analytically. Supported parameters: "
+                "desi_inst_sys_amp, qso_rad_strength, bias_<metal> or bias_eta_<metal> of the "
+                "configured metals, and amp_<metal1>_<metal2>."
+            )
+
+        missing = [name for name in marginalized_params if name not in config["parameters"]]
+        if missing:
+            raise ValueError(
+                f"The analytically marginalized parameters {missing} are not part of this "
+                "configuration: they have no template. Check the model options "
+                "(desi-instrumental-systematics, radiation_effects, metals, "
+                "use_metal_bias_eta, metal-auto-amplitudes and use_metal_autos)."
+            )
+
+    def _metals_of_amplitude(self, amplitude_name):
+        """Metals of a metal x metal amplitude parameter.
+
+        Parameters
+        ----------
+        amplitude_name : str
+            Amplitude name ``amp_<metal1>_<metal2>``, metal names sorted.
+
+        Returns
+        -------
+        tuple of str
+            The two configured metals whose amplitude this is.
+        """
+        # Matched against the configured metals rather than split on "_", so that the
+        # metal names themselves are unconstrained.
+        for metal1 in self.options["metals"]:
+            for metal2 in self.options["metals"]:
+                if Metals.amplitude_name(metal1, metal2) == amplitude_name:
+                    return metal1, metal2
+        raise ValueError(f"{amplitude_name} is not an amplitude of the configured metals.")
 
     @property
     def parameters(self):
@@ -924,6 +1242,36 @@ class BuildConfig:
 
             if self.options["single-metal-beta"]:
                 new_params["beta_metals"] = get_par("beta_metals")
+
+            # Metal x metal amplitudes. The default bias product reproduces the model without
+            # metal-auto-amplitudes, as the amplitude multiplies the metal x metal correlation
+            # computed with unit biases.
+            amplitude_names = getattr(self, "metal_auto_amplitude_names", [])
+            marginalized_params = self.fit_info.get("analytic_marginalization", [])
+            for amplitude_name in amplitude_names:
+                if amplitude_name in parameters:
+                    new_params[amplitude_name] = parameters[amplitude_name]
+                    continue
+
+                metal1, metal2 = self._metals_of_amplitude(amplitude_name)
+                if not self.options["use_metal_bias_eta"]:
+                    bias1 = float(new_params[f"bias_{metal1}"])
+                    bias2 = float(new_params[f"bias_{metal2}"])
+                    new_params[amplitude_name] = bias1 * bias2
+                elif amplitude_name in marginalized_params:
+                    # The value of a marginalized amplitude does not enter the likelihood;
+                    # zero is the value Vega uses for its base model.
+                    new_params[amplitude_name] = 0.0
+                else:
+                    # bias_<metal> = bias_eta_<metal> * f / beta_<metal> depends on which
+                    # growth rate Vega uses at run time (fiducial or [parameters]), so no
+                    # default is derived here.
+                    raise ValueError(
+                        f"metal-auto-amplitudes with use_metal_bias_eta: give the value of "
+                        f"{amplitude_name} in the parameters dictionary (or marginalize it "
+                        "analytically); its default bias product is not defined from "
+                        "bias_eta_<metal>."
+                    )
 
         # Full-shape smoothing
         if self.options["fullshape_smoothing"] is not None:

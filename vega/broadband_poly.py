@@ -145,6 +145,30 @@ class BroadbandPolynomials:
         return corr
 
     @staticmethod
+    def get_coefficient_names(bb_term):
+        """Parameter names of the coefficients of a polynomial broadband term.
+
+        Parameters
+        ----------
+        bb_term : dict
+            broadband term config
+
+        Returns
+        -------
+        list of str
+            Coefficient names, with the power of the first coordinate as the outer
+            loop and the power of the second coordinate as the inner loop.
+        """
+        r1_min, r1_max, dr1 = bb_term["r1_config"]
+        r2_min, r2_max, dr2 = bb_term["r2_config"]
+
+        return [
+            f"{bb_term['name']} ({i},{j})"
+            for i in np.arange(r1_min, r1_max + 1, dr1)
+            for j in np.arange(r2_min, r2_max + 1, dr2)
+        ]
+
+    @staticmethod
     def _compute_broadband(bb_term, params, coordinates):
         """Compute broadband term.
 
@@ -176,10 +200,7 @@ class BroadbandPolynomials:
         r1_powers = np.arange(r1_min, r1_max + 1, dr1)
         r2_powers = np.arange(r2_min, r2_max + 1, dr2)
 
-        bb_params = []
-        for i in r1_powers:
-            for j in r2_powers:
-                bb_params.append(params[f"{bb_term['name']} ({i},{j})"])
+        bb_params = [params[name] for name in BroadbandPolynomials.get_coefficient_names(bb_term)]
 
         # the first dimension of bb_params is that of r1 power indices
         # the second dimension of bb_params is that of r2 power indices
