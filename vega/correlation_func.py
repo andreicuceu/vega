@@ -140,6 +140,12 @@ class CorrelationFunction:
                     " but they only work for the cross"
                 )
 
+        # Asymmetric redshift errors of the discrete tracer (cross-correlations only)
+        self.zerr_asymmetry = self._config.get("redshift-error asymmetry", None)
+        self._zerr_tracer = None
+        if self.zerr_asymmetry is not None:
+            self._init_zerr_asymmetry()
+
         self.uv_shotnoise_flag = False
         self._uv_shotnoise_tau = None
         self._uv_shotnoise_A = None
@@ -249,9 +255,110 @@ class CorrelationFunction:
         )
 
         # Compute correlation function
-        xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)
+        if self.zerr_asymmetry is None:
+            xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk, self._multipole)
+        else:
+            # Asymmetric redshift errors: the real part of the kernel ratio rescales the even part,
+            # the imaginary part gives the odd multipoles. Both are evaluated at the same rescaled
+            # coordinates, so drp and ap/at apply to them as to the rest of the core.
+            k_par = PktoXi_obj.k_grid * PktoXi_obj.muk_grid
+            even_ratio, odd_ratio = self.zerr_kernel_ratios(params, k_par)
+            pk_even = pk if even_ratio is None else pk * even_ratio
+            xi = PktoXi_obj.compute(rescaled_r, rescaled_mu, pk_even, self._multipole)
+            xi += PktoXi_obj.compute_odd(rescaled_r, rescaled_mu, pk * odd_ratio)
 
         return xi, rescaled_r, rescaled_mu
+
+    def _init_zerr_asymmetry(self):
+        """Check the configuration of the asymmetric redshift-error kernel.
+
+        Raises
+        ------
+        ValueError
+            If the option is not one of 'skewness', 'asymmetric-lorentz' or 'exponential-tail', the
+            correlation is not a continuous x discrete cross, a single multipole is requested, or
+            (for the last two forms) the velocity dispersion is not Lorentzian.
+        """
+        valid_forms = ("skewness", "asymmetric-lorentz", "exponential-tail")
+        if self.zerr_asymmetry not in valid_forms:
+            raise ValueError(
+                f"'redshift-error asymmetry' must be one of {valid_forms}, "
+                f"got {self.zerr_asymmetry}"
+            )
+        types = [self._tracer1["type"], self._tracer2["type"]]
+        if sorted(types) != ["continuous", "discrete"]:
+            raise ValueError(
+                "'redshift-error asymmetry' only applies to continuous x discrete crosses"
+            )
+        if self._multipole >= 0:
+            raise ValueError("'redshift-error asymmetry' does not support 'single_multipole'")
+        discrete = self._tracer1 if self._tracer1["type"] == "discrete" else self._tracer2
+        self._zerr_tracer = discrete["name"]
+        if self.zerr_asymmetry != "skewness":
+            if "lorentz" not in self._config.get("velocity dispersion", ""):
+                raise ValueError(
+                    f"'redshift-error asymmetry = {self.zerr_asymmetry}' requires "
+                    "'velocity dispersion = lorentz'"
+                )
+
+    def zerr_kernel_ratios(self, params, k_par):
+        """Real and imaginary parts of the redshift-error kernel relative to the symmetric one.
+
+        The positions of the discrete tracer are displaced along the line of sight by
+        Delta = chi_obs - chi_true. The cross-correlation (r_par = chi_continuous - chi_discrete)
+        becomes xi_obs(r_par) = < xi(r_par + Delta) >, i.e. the power spectrum is multiplied by the
+        characteristic function q(k_par) = < exp(i k_par Delta) >. The mean of Delta is drp (applied
+        as a coordinate shift), and the symmetric Lorentzian kernel K(k_par) = (1 + k_par^2
+        sigma^2)^(-1/2) is already in the input power spectrum, so this function returns
+        Re q / K and Im q / K for the mean-free q of each form. Positive asymmetry parameters
+        mean a tail towards larger observed distance (redshift overestimated).
+
+        Forms (parameters named <name>_<tracer>, e.g. zerr_kappa3_QSO):
+
+        - 'skewness': leading third-cumulant term, q = K (1 - i kappa3 k_par^3 / 6), i.e.
+          xi_obs = xi_sym + (kappa3 / 6) d^3 xi_sym / d r_par^3; zerr_kappa3 = <(Delta - drp)^3>
+          [(Mpc/h)^3]. Valid while kappa3^(1/3) is small compared with the scales of xi.
+        - 'asymmetric-lorentz': q = [(1 - i k_par l+)(1 + i k_par l-)]^(-1/2)
+          exp(-i k_par (l+ - l-) / 2), with l+- = sigma (1 +- epsilon), the square root of the
+          characteristic function of an asymmetric Laplace distribution (tails l+ towards
+          Delta > 0, l- towards Delta < 0), which reduces to K for epsilon = 0;
+          zerr_asymmetry = epsilon, |epsilon| < 1.
+        - 'exponential-tail': q = K exp(-i k_par tau) / (1 - i k_par tau), the symmetric kernel
+          convolved with a mean-free one-sided exponential of scale |tau| (towards Delta > 0 for
+          tau > 0); zerr_tail = tau [Mpc/h].
+
+        Parameters
+        ----------
+        params : dict
+            Computation parameters
+        k_par : ND Array
+            k_parallel on the (muk, k) grid of the power spectrum [h/Mpc]
+
+        Returns
+        -------
+        tuple
+            (even_ratio, odd_ratio): Re q / K (None when it is 1) and Im q / K on the k_par grid
+        """
+        tracer = self._zerr_tracer
+        if self.zerr_asymmetry == "skewness":
+            kappa3 = params[f"zerr_kappa3_{tracer}"]
+            return None, -kappa3 * k_par**3 / 6
+
+        sigma = params[f"sigma_velo_disp_lorentz_{tracer}"]
+        symmetric_kernel = 1.0 / np.sqrt(1 + (k_par * sigma) ** 2)
+        if self.zerr_asymmetry == "asymmetric-lorentz":
+            epsilon = params[f"zerr_asymmetry_{tracer}"]
+            if not abs(epsilon) < 1:
+                raise ValueError(f"zerr_asymmetry_{tracer} must satisfy |epsilon| < 1")
+            scale_plus, scale_minus = sigma * (1 + epsilon), sigma * (1 - epsilon)
+            # The real part of the product is >= 1, so the principal power is continuous
+            kernel = ((1 - 1j * k_par * scale_plus) * (1 + 1j * k_par * scale_minus)) ** -0.5
+            kernel *= np.exp(-1j * k_par * (scale_plus - scale_minus) / 2)
+            return kernel.real / symmetric_kernel, kernel.imag / symmetric_kernel
+
+        tau = params[f"zerr_tail_{tracer}"]
+        tail_kernel = np.exp(-1j * k_par * tau) / (1 - 1j * k_par * tau)
+        return tail_kernel.real, tail_kernel.imag
 
     def _compute_data_template_correction(self, cosmo):
         """Automatically compute a scale factor to correct between any difference

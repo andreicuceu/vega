@@ -84,3 +84,6 @@ Arel3                           -5e-2        5e-2         1e-4
 Aasy0                           -1e-3        1e-3         1e-7
 Aasy2                           -1e-3        1e-3         1e-7
 Aasy3                           -1e-3        1e-3         1e-7
+zerr_kappa3_QSO                 -2e3         2e3          1.0
+zerr_asymmetry_QSO              -0.95        0.95         0.01
+zerr_tail_QSO                   -20.0        20.0         0.1

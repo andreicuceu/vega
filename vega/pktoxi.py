@@ -282,6 +282,50 @@ class PktoXi:
             raise VegaBoundsError from exc
         return xi
 
+    def compute_odd(self, r_grid, mu_grid, pk_odd, ell_max_odd=9):
+        """Correlation function of the imaginary, odd-in-mu part of a power spectrum.
+
+        For P(k, mu) = P_even(k, mu) + i P_odd(k, mu), with P_odd odd in mu (e.g. a power spectrum
+        multiplied by the imaginary part of a line-of-sight convolution kernel), the odd part of
+
+            xi(r) = int d^3k / (2 pi)^3 P(k) exp(i k.r)
+
+        is
+
+            xi_odd(r, mu) = sum_{ell odd} (-1)^((ell + 1) / 2) L_ell(mu) / (2 pi^2)
+                            int dk k^2 P_odd,ell(k) j_ell(kr),
+            P_odd,ell(k) = (2 ell + 1) / 2 int_{-1}^{1} dmu_k L_ell(mu_k) P_odd(k, mu_k),
+
+        where (-1)^((ell + 1) / 2) = i^ell i is the phase of the plane-wave expansion times the i of
+        the imaginary part. The multipoles are computed on the mu_k in (0, 1) grid of the power
+        spectrum (P_odd L_ell is even in mu_k for odd ell) and transformed with mcfit (n = 0, no
+        phase). The Legendre polynomials in mu are not bin-averaged.
+
+        Parameters
+        ----------
+        r_grid : 1D Array
+            Grid of r coordinates for the output correlation [Mpc/h]
+        mu_grid : 1D Array
+            Grid of mu coordinates for the output correlation
+        pk_odd : ND Array
+            P_odd(k, mu_k) on the (muk, k) grid of the power spectrum
+        ell_max_odd : int, optional
+            Highest odd multipole summed, by default 9
+
+        Returns
+        -------
+        1D Array
+            xi_odd on the (r, mu) grid
+        """
+        xi_odd = np.zeros(len(r_grid))
+        for ell in range(1, ell_max_odd + 1, 2):
+            legendre_pk = special.legendre(ell)(self.muk_grid)
+            pk_ell = np.sum(self.dmuk * legendre_pk * pk_odd, axis=0) * (2 * ell + 1)
+            xi_ell = self.transform_isotropic(r_grid, pk_ell, ell, n=0)
+            phase = (-1) ** ((ell + 1) // 2)
+            xi_odd += phase * xi_ell * special.legendre(ell)(mu_grid)
+        return xi_odd
+
     @staticmethod
     def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
         """
