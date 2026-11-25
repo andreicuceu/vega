@@ -99,9 +99,9 @@ class Metals:
 
         self.rp_only_metal_mats = corr_item.config["model"].getboolean("rp_only_metal_mats", False)
 
-        # Redshift bins
-        self.zmin = corr_item.config["data"].getfloat("zmin", 0.0)
-        self.zmax = corr_item.config["data"].getfloat("zmax", 10.0)
+        # Redshift range of the pairs from the data header (picca ZMIN/ZMAX), no cut if absent
+        self.zmin = 0.0 if self._data.z_min_pairs is None else float(self._data.z_min_pairs)
+        self.zmax = 10.0 if self._data.z_max_pairs is None else float(self._data.z_max_pairs)
 
         if "separate-metal-auto-biases" in corr_item.config["model"]:
             raise ValueError(
@@ -942,7 +942,8 @@ class Metals:
         denominator weights ``w_1 w_2``. ``e_k`` is applied per leg, before the pair product.
 
         In both conventions pairs whose assumed mean redshift lies outside
-        ``[zmin, zmax]`` get zero weight.
+        ``[zmin, zmax]`` (the ``ZMIN``/``ZMAX`` header of the data, by default no cut) get zero
+        weight.
 
         Parameters
         ----------

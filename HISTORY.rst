@@ -2,8 +2,33 @@
 History
 =======
 
-Unreleased
-----------
+1.8.1 (unreleased)
+------------------
+* Added example config builders for the standard DESI analyses. Each example folder
+  contains a ``build_configs.py`` script that generates the configs with ``BuildConfig``,
+  and the generated configs, with paths relative to the folder:
+
+  * ``examples/DESI_data_BAO`` and ``examples/DESI_data_fullshape``: BAO and full-shape
+    (Alcock-Paczynski) fits of the four DESI DR2 Ly-alpha correlations, with the DESI DR3
+    BAO model of the correlations.
+  * ``examples/DESI_mocks``: BAO fits of stacks of LyaCoLoRe 2LPT DR2-like mocks, for the
+    true-continuum analysis (``raw_and_true-cont``), the uncontaminated mocks with two
+    treatments of the small-scale smoothing (``uncontaminated/gauss_smoothing`` and
+    ``uncontaminated/los_smoothing``), and the mocks with DLAs, metals, BALs and QSO
+    redshift errors (``contaminated``).
+
+* Added the ``Abacus-Colore-2LPT/Abacus-Colore-2LPT.fits`` linear power spectrum template
+  of the LyaCoLoRe 2LPT mocks.
+* Rewrote the annotated ``examples/main.ini``, ``examples/lyaxlya.ini`` and
+  ``examples/qsoxlya.ini`` to document every option Vega reads. This corrects ``ell-max``
+  to ``ell_max``, removes inline comments (which ConfigParser reads as part of the value)
+  and options that are not read, and marks ``examples/qsoxqso.ini`` as experimental.
+* Added ``examples/AGENTS.md`` with instructions to generate configs with ``BuildConfig``
+  instead of writing them by hand, and updated ``examples/README.rst``.
+* Moved the DESI DR1 (Y1) example configs to ``examples/deprecated``, and removed the
+  LyaCoLoRe and picca fitter2 benchmark examples. The Vega configs of the picca benchmark
+  test moved to ``tests/picca_benchmarks``, so the installed-wheel tests no longer stage
+  files from ``examples``.
 * Added ``vega/analytic_marginalization.py``, which holds the analytic marginalization
   of linear model parameters. The small-scale template marginalization moved there from
   ``Data`` and ``VegaInterface``; the chi2, likelihood and fit results of existing

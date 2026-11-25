@@ -10,7 +10,7 @@ from astropy.io import fits
 
 import vega
 from vega.metals import Metals
-from vega.utils import find_file
+from vega.utils import check_removed_z_options, find_file
 
 
 class BuildConfig:
@@ -87,6 +87,7 @@ class BuildConfig:
         """
         if options is None:
             options = {}
+        check_removed_z_options(options, "BuildConfig")
 
         self.overwrite = overwrite
         self.options = {}
@@ -157,8 +158,6 @@ class BuildConfig:
             )
         self.options["metal-auto-amplitudes"] = options.get("metal-auto-amplitudes", False)
         self.options["single-metal-beta"] = options.get("single-metal-beta", False)
-        self.options["zmin"] = options.get("zmin", 0.0)
-        self.options["zmax"] = options.get("zmax", 10.0)
 
         metals = options.get("metals", None)
         if metals is not None:
@@ -441,8 +440,6 @@ class BuildConfig:
 
                     config["data"]["weights-tracer1"] = corr_info.get("weights-tracer1")
                     config["data"]["weights-tracer2"] = corr_info.get("weights-tracer2")
-                    config["data"]["zmin"] = str(self.options.get("zmin"))
-                    config["data"]["zmax"] = str(self.options.get("zmax"))
 
                     config["metal-matrix"] = {}
                     if self.options["rebin-metals"] is not None:

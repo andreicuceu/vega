@@ -40,6 +40,49 @@ FULL_SHAPE_BLINDED_PARS = ["growth_rate", "phi_smooth"]
 
 PARAMETER_BLINDING_DIR = Path("/global/cfs/projectdirs/desicollab/science/lya/vega/")
 
+Z_OPTIONS_REMOVED = (
+    "The zmin/zmax options were removed: the redshift range of the pairs is now read from the "
+    "ZMIN/ZMAX header of the correlation file. Remove zmin/zmax from your config and make sure "
+    "the header has them, or recompute the correlations with picca --z-min-pairs/--z-max-pairs."
+)
+
+
+def check_removed_z_options(options, name, z_header=(None, None)):
+    """Check the removed zmin/zmax options against the pair redshift range in use.
+
+    Values equal to the ZMIN/ZMAX header of the data (0 and 10 if not cut, the values written
+    by older BuildConfig versions) are ignored with a warning; any other value raises.
+
+    Parameters
+    ----------
+    options : ConfigParser section or dict
+        [data] section of a correlation config, or the BuildConfig options
+    name : str
+        Name used in the messages
+    z_header : tuple, optional
+        (ZMIN, ZMAX) of the data header, None if not cut, by default (None, None)
+    """
+    if "zmin" not in options and "zmax" not in options:
+        return
+
+    zmin = float(options.get("zmin", 0.0))
+    zmax = float(options.get("zmax", 10.0))
+    z_used = (
+        0.0 if z_header[0] is None else float(z_header[0]),
+        10.0 if z_header[1] is None else float(z_header[1]),
+    )
+    if not np.allclose((zmin, zmax), z_used):
+        raise ValueError(
+            f"{name}: zmin/zmax = {zmin}/{zmax} do not match the pair redshift range "
+            f"{z_used[0]}/{z_used[1]} of the ZMIN/ZMAX header. {Z_OPTIONS_REMOVED}"
+        )
+
+    print(
+        f"WARNING: '{name}': the zmin/zmax options are no longer used and are ignored (the pair "
+        "redshift range comes from the ZMIN/ZMAX header of the correlation file). "
+        "Remove them from the config."
+    )
+
 
 @njit
 def sinc(x):
