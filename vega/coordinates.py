@@ -46,6 +46,30 @@ class Coordinates:
 
         return mask
 
+    def get_mask_large_scale_cuts(self, cuts_config):
+        """Build the mask of the large-scale cuts alone (rp-max, rt-max, r-max and the mu range).
+
+        Parameters
+        ----------
+        cuts_config : ConfigParser
+            Cuts section from config
+
+        Returns
+        -------
+        Array
+            Mask, True inside the large-scale cuts
+        """
+        rp_max_cut = cuts_config.getfloat("rp-max", 300.0)
+        rt_max_cut = cuts_config.getfloat("rt-max", 300.0)
+        r_max_cut = cuts_config.getfloat("r-max", 180.0)
+        mu_min_cut = cuts_config.getfloat("mu-min", -1.0)
+        mu_max_cut = cuts_config.getfloat("mu-max", +1.0)
+
+        mask = (self.rp_regular_grid < rp_max_cut) & (self.rt_regular_grid < rt_max_cut)
+        mask &= self.r_regular_grid < r_max_cut
+        mask &= (self.mu_regular_grid > mu_min_cut) & (self.mu_regular_grid < mu_max_cut)
+        return mask
+
     def get_mask_marginalization_scales(self, cuts_config, marginalization_cuts):
         """Build mask to for bins that are marginalized
 
@@ -75,7 +99,12 @@ class Coordinates:
             mask &= np.abs(self.rp_regular_grid) > rpmin
 
         if "all-rmin" in marginalization_cuts:
+            # Bins removed by the small-scale cuts (r-min, rt-min, rp-min), restricted to the
+            # large-scale cuts. For r-min alone the restriction changes nothing (r < r-min lies
+            # inside r-max), but an rt-min cut removes bins at all r_par, and the data and
+            # distorted-model grids have different r_par ranges.
             mask = ~self.get_mask_scale_cuts(cuts_config, small_scale_mask=True)
+            mask &= self.get_mask_large_scale_cuts(cuts_config)
 
         return mask
 
