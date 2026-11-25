@@ -1286,7 +1286,8 @@ class LinearParameters:
     - ``desi_inst_sys_amp``: DESI instrumental systematics of the auto-correlations
       (fixed template);
     - ``qso_rad_strength``: QSO radiation of the Lya x QSO correlations (template rebuilt
-      at every evaluation, as it depends on ``drp_QSO``);
+      at every evaluation, as it depends on ``drp_QSO``), or the name given by
+      ``radiation-strength-name`` in the component config;
     - ``amp_<m1>_<m2>``: metal x metal correlations with ``metal-auto-amplitudes``
       (fixed with ``fast_metals``, otherwise rebuilt at every evaluation);
     - ``bias_<m>`` or ``bias_eta_<m>``: bias of a metal in the main x metal
@@ -1373,7 +1374,7 @@ class LinearParameters:
         if model._instrumental_systematics_flag:
             sources["desi_inst_sys_amp"] = True
         if model.Xi_core.radiation_flag:
-            sources["qso_rad_strength"] = False
+            sources[model.Xi_core.radiation_strength_name] = False
 
         metals = model.metals
         if metals is not None:

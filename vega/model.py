@@ -367,10 +367,12 @@ class Model:
         pars : dict
             Computation parameters of the current evaluation
         """
-        if "qso_rad_strength" in self.linear_templates and self.Xi_core.radiation_flag:
+        strength_name = self.Xi_core.radiation_strength_name
+        if strength_name in self.linear_templates and self.Xi_core.radiation_flag:
+            # Unit amplitude; the template includes radiation-strength-scale
             rescaled_r, rescaled_mu = self.Xi_core.rescaled_coordinates
-            unit_pars = pars | {"qso_rad_strength": 1.0}
-            self.linear_templates["qso_rad_strength"] += self.Xi_core.compute_qso_radiation(
+            unit_pars = pars | {strength_name: 1.0}
+            self.linear_templates[strength_name] += self.Xi_core.compute_qso_radiation(
                 unit_pars, rescaled_r, rescaled_mu
             )
 

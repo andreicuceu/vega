@@ -106,18 +106,23 @@ class CorrelationFunction:
             )
         self.xi_growth = self.compute_growth(self._z, self._z_fid, self._Omega_m, self._Omega_de)
 
-        # Check for QSO radiation modeling and check if it is QSOxLYA
-        # Does this work for the QSO auto as well?
+        # Check for QSO radiation modeling and check if it is QSOxLYA. The quasar tracer can be any
+        # discrete tracer whose name starts with "QSO" (e.g. QSOF for a quasar sub-sample fitted
+        # jointly with QSO). Its amplitude is the parameter radiation-strength-name (default
+        # qso_rad_strength) times the fixed radiation-strength-scale (default 1), so that
+        # sub-samples can have separate amplitudes or amplitudes tied with a fixed ratio.
         self.radiation_flag = False
+        self.radiation_strength_name = self._config.get(
+            "radiation-strength-name", "qso_rad_strength"
+        )
+        self.radiation_strength_scale = self._config.getfloat("radiation-strength-scale", 1.0)
         if "radiation effects" in self._config:
             self.radiation_flag = self._config.getboolean("radiation effects")
-            if self.radiation_flag:
-                names = [self._tracer1["name"], self._tracer2["name"]]
-                if not ("QSO" in names and "LYA" in names):
-                    raise ValueError(
-                        "You asked for QSO radiation effects, but it"
-                        " can only be applied to the cross (QSOxLya)"
-                    )
+            if self.radiation_flag and not self._is_lya_qso_cross():
+                raise ValueError(
+                    "You asked for QSO radiation effects, but it"
+                    " can only be applied to the cross (QSOxLya)"
+                )
 
         # Check for relativistic effects and standard asymmetry
         self.relativistic_flag = False
@@ -565,6 +570,20 @@ class CorrelationFunction:
         # Growth normalized at the fiducial redshift, squared for the correlation function
         return utils.normalized_growth_factor(z_grid, z_fid, Omega_m, Omega_de) ** 2
 
+    def _is_lya_qso_cross(self):
+        """Whether the correlation is LYA x a discrete tracer whose name starts with "QSO".
+
+        Returns
+        -------
+        bool
+        """
+        tracers = (self._tracer1, self._tracer2)
+        has_lya = any(tracer["name"] == "LYA" for tracer in tracers)
+        has_qso = any(
+            tracer["type"] == "discrete" and tracer["name"].startswith("QSO") for tracer in tracers
+        )
+        return has_lya and has_qso
+
     def compute_qso_radiation(self, params, rescaled_r, rescaled_mu):
         """Model the contribution of QSO radiation to the cross
         (the transverse proximity effect)
@@ -583,8 +602,7 @@ class CorrelationFunction:
         1D
             Xi QSO radiation model
         """
-        assert "QSO" in [self._tracer1["name"], self._tracer2["name"]]
-        assert self._tracer1["name"] != self._tracer2["name"]
+        assert self._is_lya_qso_cross()
 
         # Compute the shifted r and mu grids
         delta_rp = params.get(self._delta_rp_name, 0.0)
@@ -600,7 +618,7 @@ class CorrelationFunction:
         mu_shift = rp / r_shift
 
         # Get the QSO radiation model parameters
-        strength = params["qso_rad_strength"]
+        strength = params[self.radiation_strength_name] * self.radiation_strength_scale
         asymmetry = params["qso_rad_asymmetry"]
         lifetime = params["qso_rad_lifetime"]
         decrease = params["qso_rad_decrease"]
