@@ -46,8 +46,10 @@ use the four Lya correlations (lyaxlya, lyaxlyb, lyaxqso, lybxqso); to fit a sub
   correlations (DR3 BAO setup): metals with Vega metal matrices, HCDs, UV background
   fluctuations, QSO velocity dispersion and proximity effect, DESI instrumental
   systematics, analytic marginalisation of the bins below r-min. Only the BAO peak is
-  rescaled (`ap_at`). Use it for any BAO fit of real data, or as the reference for the
-  baseline model options.
+  rescaled (`ap_at`). The linear parameters (instrumental systematics, QSO proximity
+  strength, metal biases and metal x metal amplitudes) are marginalized analytically (see
+  below). Use it for any BAO fit of real data, or as the reference for the baseline model
+  options.
 - `DESI_data_fullshape/`: the same correlation model as `DESI_data_BAO/` with the full-shape
   cosmological setup (`phi_alpha` with independent peak and smooth rescaling, free growth
   rate, r-max = 200 Mpc/h). Comparing it with `DESI_data_BAO/` shows exactly which options
@@ -64,7 +66,41 @@ use the four Lya correlations (lyaxlya, lyaxlyb, lyaxqso, lybxqso); to fit a sub
   `los_smoothing/` (LyaCoLoRe cell kernel with a free line-of-sight amplitude).
 - `DESI_mocks/contaminated/`: mocks with DLAs, metals, BALs and Gaussian QSO redshift errors.
   Adds to `uncontaminated/gauss_smoothing/` the HCD model, the metals (with Vega metal
-  matrices) and a Gaussian QSO velocity dispersion with a free drp_QSO.
+  matrices, biases and metal x metal amplitudes marginalized analytically) and a Gaussian
+  QSO velocity dispersion with a free drp_QSO.
+
+## Analytic marginalization of linear parameters
+
+`DESI_data_BAO/`, `DESI_data_fullshape/` and `DESI_mocks/contaminated/` marginalize the
+linear parameters of the model analytically instead of sampling them (see
+`docs/analytic_marginalization.rst` and the `[analytic marginalization]` section of
+`main.ini`). This reduces the number of sampled parameters (11 instead of 21 for the DR2
+BAO fit) and the cost of fits and chains, with negligible changes to the results for the
+same model and priors.
+
+- `metal-auto-amplitudes = True`: every metal x metal correlation is scaled by its own
+  amplitude `amp_<m1>_<m2>` instead of the product of the metal biases, so that the metal
+  biases enter the model linearly. `bias_CIV(eff)` only entered CIV(eff) x CIV(eff), and
+  is replaced by `amp_CIV(eff)_CIV(eff)`.
+- Marginalized in the data examples (38 parameters): `desi_inst_sys_amp` (flat prior),
+  `qso_rad_strength` (N(0.5, 0.5^2)), the four Si biases (flat), the biases of FeII(1145),
+  NV(1239) and SiII(1304) (N(b, b^2)), and the 29 metal x metal amplitudes
+  (N(b1 b2, (b1 b2 / 3)^2), and the bias_CIV(eff) prior propagated to b^2 for CIV(eff) x
+  CIV(eff)). The reference biases b are a DESI DR3 BAO best fit with sampled metal biases
+  (`METAL_BIAS_REFERENCE` in the scripts).
+- Marginalized in the contaminated mocks (14 parameters): the four Si biases (flat) and the
+  10 Si x Si amplitudes, with the same amplitude priors centred on the fiducial biases of a
+  previous fit of the v2.8.5 mocks.
+- Marginalized parameters are listed in `fit_info["analytic_marginalization"]`, have their
+  Gaussian priors in `fit_info["priors"]` (flat otherwise, without bounds) and must not be
+  sampled. Their `[parameters]` values do not enter the likelihood.
+
+**The priors of the marginalized parameters are for example purposes only.** They were
+chosen for a benchmark of the method on DESI DR3 data, and the mock priors are centred on
+biases measured on an older mock version. Before trusting the results of a new analysis,
+update the priors for the data or mocks being fitted (e.g. centre the amplitude priors on a
+fit with sampled metal biases) and validate them, for instance by comparing with a fit in
+which the same parameters are sampled.
 
 To tell which mock example applies: the mock analysis flavour (raw, true continuum, or
 continuum-fitted "baseline") sets the first choice; for continuum-fitted mocks, the

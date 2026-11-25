@@ -56,13 +56,20 @@ DESI analyses
 
 Each of the following folders contains a "build_configs.py" script, which generates the configs with ``BuildConfig``, together with the configs it generates. The configs use paths relative to their folder, so Vega must be run from inside it. The data and mock products are on NERSC.
 
-- **DESI_data_BAO**: BAO fit of the four DESI DR2 Lya correlations (Lya(Lya)xLya(Lya), Lya(Lya)xLya(Lyb), Lya(Lya)xQSO and Lya(Lyb)xQSO), with the DESI DR3 BAO model of the correlations (metals, HCDs, UV background fluctuations, QSO velocity dispersion and proximity effect, instrumental systematics, analytic marginalisation of small scales).
+- **DESI_data_BAO**: BAO fit of the four DESI DR2 Lya correlations (Lya(Lya)xLya(Lya), Lya(Lya)xLya(Lyb), Lya(Lya)xQSO and Lya(Lyb)xQSO), with the DESI DR3 BAO model of the correlations (metals, HCDs, UV background fluctuations, QSO velocity dispersion and proximity effect, instrumental systematics, analytic marginalisation of small scales). The linear parameters (instrumental systematics amplitude, QSO proximity strength, metal biases and metal x metal amplitudes) are marginalized analytically.
 - **DESI_data_fullshape**: full-shape (Alcock-Paczynski) fit of the DESI DR2 correlations, with the same correlation model as the BAO example and independent rescaling of the peak and smooth components and a free growth rate.
 - **DESI_mocks**: BAO fits of stacks of LyaCoLoRe 2LPT DESI DR2-like mocks:
 
   - **raw_and_true-cont**: true-continuum analysis of the mocks without contaminants (no distortion matrix). The raw analysis uses the same configs with different correlation files.
   - **uncontaminated**: analysis of the mocks without contaminants, with the distortion matrix. Two versions for the small-scale smoothing of the LyaCoLoRe field: a Gaussian damping (gauss_smoothing) or the LyaCoLoRe cell kernel with a free line-of-sight amplitude (los_smoothing).
-  - **contaminated**: analysis of the mocks with DLAs, metals, BALs and QSO redshift errors, with the corresponding HCD, metal and QSO velocity dispersion models.
+  - **contaminated**: analysis of the mocks with DLAs, metals, BALs and QSO redshift errors, with the corresponding HCD, metal and QSO velocity dispersion models. The metal biases and metal x metal amplitudes are marginalized analytically.
+
+Analytic marginalization of linear parameters
+---------------------------------------------
+
+The DESI_data_BAO, DESI_data_fullshape and DESI_mocks/contaminated examples marginalize the linear parameters of the model analytically instead of sampling them, which reduces the number of sampled parameters and the cost of fits and chains (see the `documentation`_ and ``docs/analytic_marginalization.rst``). Every metal x metal correlation gets its own amplitude ``amp_<m1>_<m2>`` (``metal-auto-amplitudes``), so that the metal biases enter the model linearly. The marginalized parameters are listed in the ``[analytic marginalization]`` section of "main.ini", with Gaussian priors in ``[priors]`` (flat otherwise), and do not appear in ``[sample]``. The "build_configs.py" scripts describe the chosen parameters and priors.
+
+The priors of the marginalized parameters are for example purposes only: they should be updated for the data or mocks being fitted and validated before the results are trusted.
 
 Running on the eBOSS DR16 correlations
 --------------------------------------
