@@ -85,6 +85,10 @@ History
   ``write_dead``, ``cluster_posteriors`` and ``maximise`` given in ``fit_info["Polychord"]``
   to ``[Polychord]``. Values that Vega cannot read as the expected type are refused. They
   are written only when given, so configs built without them are unchanged.
+* ``BuildConfig`` no longer lists ``CIV(eff)`` in the ``[metals]`` section of
+  cross-correlations with a discrete tracer (e.g. ``lyaxqso``). Vega only uses CIV(eff)
+  through CIV(eff) x CIV(eff) and ignored it there, so the models are unchanged. It is kept
+  if it is the only metal.
 * Fixed Monte Carlo mock creation without a global covariance when scale cuts are applied:
   ``Data.create_monte_carlo`` now accepts the fiducial model restricted to the fitted bins
   that ``VegaInterface.initialize_monte_carlo`` passes to it, instead of raising

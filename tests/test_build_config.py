@@ -34,6 +34,8 @@ for index, metal in enumerate(DR2_METALS):
 
 # Main config and correlation configs written by BuildConfig before the analytic
 # marginalization options were added (commit cd6cb40), without the header comments.
+# Since then, CIV(eff) is no longer listed in the [metals] section of cross-correlations
+# with a discrete tracer, where Vega ignores it.
 REFERENCE_LYAXLYA = """
 [data]
 name = lyaxlya
@@ -97,7 +99,7 @@ marginalize-all-rmin-cuts = False
 [metals]
 filename = lyaxqso-metals.fits
 z evol = bias_vs_z_std
-in tracer1 = SiII(1190) CIV(eff)
+in tracer1 = SiII(1190)
 """
 
 REFERENCE_MAIN = """
@@ -354,6 +356,48 @@ def test_metal_auto_amplitudes_without_siii_autos(tmp_path):
     assert "amp_SiII(1190)_SiIII(1207)" not in amplitude_names
     assert "amp_FeII(1145)_SiII(1190)" in amplitude_names
     assert "amp_SiII(1260)_SiII(1260)" not in amplitude_names
+
+
+def test_civ_left_out_of_qso_crosses(tmp_path):
+    """CIV(eff) is listed in the forest autos but not in the crosses with the quasars.
+
+    Data never builds a QSO x CIV(eff) correlation, so the entry had no effect there.
+    """
+    configs, _ = build_configs(
+        tmp_path,
+        {"metals": DR2_METALS},
+        correlation_info(["lyaxlya", "lyaxlyb", "lyaxqso", "lybxqso"]),
+        "lyaxlya_lyaxlyb_lyaxqso_lybxqso",
+        default_fit_info(),
+        parameters=dict(DR2_METAL_PARAMETERS),
+    )
+
+    metals_without_civ = [metal for metal in DR2_METALS if metal != "CIV(eff)"]
+    for name in ["lyaxlya", "lyaxlyb"]:
+        for key in ["in tracer1", "in tracer2"]:
+            assert configs[name]["metals"][key].split() == DR2_METALS
+    for name in ["lyaxqso", "lybxqso"]:
+        assert configs[name]["metals"]["in tracer1"].split() == metals_without_civ
+        assert "in tracer2" not in configs[name]["metals"]
+
+    # Data rejects the QSO x CIV(eff) pair, so the cross model is unchanged
+    data_stub = SimpleNamespace(use_metal_autos=True)
+    assert not Data._use_correlation(data_stub, "CIV(eff)", "QSO")
+    assert not Data._use_correlation(data_stub, "QSO", "CIV(eff)")
+
+
+def test_civ_only_metal_kept_in_qso_cross(tmp_path):
+    """With CIV(eff) as the only metal, the cross keeps it so that [metals] is not empty."""
+    configs, _ = build_configs(
+        tmp_path,
+        {"metals": ["CIV(eff)"]},
+        correlation_info(["lyaxqso"]),
+        "lyaxqso",
+        default_fit_info(),
+        parameters={"bias_CIV(eff)": -0.019, "beta_CIV(eff)": 0.5, "alpha_CIV(eff)": 0.0},
+    )
+
+    assert configs["lyaxqso"]["metals"]["in tracer1"] == "CIV(eff)"
 
 
 def test_metal_auto_amplitudes_qso_cross_only(tmp_path):

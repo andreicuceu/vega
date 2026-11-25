@@ -71,7 +71,9 @@ class BuildConfig:
                 fvoigt_model: string, default exp
                 fullshape_smoothing: string from [None, 'gauss', 'gauss_iso', 'exp'], default None
                 metals: List can include ['all', 'SiII(1190)', 'SiII(1193)', 'SiIII(1207)',
-                    'SiII(1260)', 'CIV(eff)'], default None
+                    'SiII(1260)', 'CIV(eff)'], default None. CIV(eff) only enters through
+                    CIV(eff) x CIV(eff), so it is not written to cross-correlations with a
+                    discrete tracer (unless it is the only metal).
                 metal_matrix_convention: string from ['estimator', 'legacy'], default
                     'estimator'. Convention of the new-metal matrices (only used with
                     new_metals = True); 'legacy' reproduces the matrices of previous versions.
@@ -400,10 +402,21 @@ class BuildConfig:
                 config["metals"] = {}
                 config["metals"]["filename"] = corr_info.get("metal_path", "None")
                 config["metals"]["z evol"] = "bias_vs_z_std"
+                # CIV(eff) enters only through CIV(eff) x CIV(eff) (vega.data.Data), which a
+                # cross-correlation with a discrete tracer does not have, so it is left out
+                # there (unless it is the only metal, to keep a valid [metals] section)
+                metals_in_correlation = self.options["metals"]
+                if type1 != type2:
+                    metals_without_civ = [
+                        metal for metal in metals_in_correlation if metal != "CIV(eff)"
+                    ]
+                    if metals_without_civ:
+                        metals_in_correlation = metals_without_civ
+
                 if type1 == "continuous":
-                    config["metals"]["in tracer1"] = " ".join(self.options["metals"])
+                    config["metals"]["in tracer1"] = " ".join(metals_in_correlation)
                 if type2 == "continuous":
-                    config["metals"]["in tracer2"] = " ".join(self.options["metals"])
+                    config["metals"]["in tracer2"] = " ".join(metals_in_correlation)
 
                 if "fast_metals" in corr_info:
                     config["model"]["fast_metals"] = corr_info.get("fast_metals", "False")
