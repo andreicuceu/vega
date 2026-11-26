@@ -519,20 +519,20 @@ def test_civ_full_shape_ignores_dr3_file(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "parameters",
+    "parameters, tracer",
     [
-        ("bias_eta_QSO",),
-        ("bias_QSO", "bias_eta_QSO"),
-        ("beta_QSO", "bias_eta_QSO"),
-        ("bias_QSO", "bias_eta_QSO", "growth_rate"),
-        ("bias_DLA", "beta_DLA"),
-        ("bias_SBLA", "bias_eta_SBLA"),
-        ("beta_QSO",),
-        ("beta_DLA", "growth_rate"),
+        (("bias_eta_QSO",), "QSO"),
+        (("bias_QSO", "bias_eta_QSO"), "QSO"),
+        (("beta_QSO", "bias_eta_QSO"), "QSO"),
+        (("bias_QSO", "bias_eta_QSO", "growth_rate"), "QSO"),
+        (("bias_DLA", "beta_DLA"), "DLA"),
+        (("bias_SBLA", "bias_eta_SBLA"), "SBLA"),
+        (("beta_QSO",), "QSO"),
+        (("beta_DLA", "growth_rate"), "DLA"),
     ],
 )
 @pytest.mark.parametrize("strategy", ["desi_dr3", "desi_dr3_civ"])
-def test_discrete_tracer_rsd_bypass_is_rejected(monkeypatch, parameters, strategy):
+def test_discrete_tracer_rsd_bypass_is_rejected(monkeypatch, parameters, tracer, strategy):
     """Reject discrete-tracer RSD parametrisations that measure f without the offset.
 
     Parameters
@@ -541,12 +541,14 @@ def test_discrete_tracer_rsd_bypass_is_rejected(monkeypatch, parameters, strateg
         Fixture recording calls to parameter file selection.
     parameters : tuple of str
         Sampled bias, beta and velocity-bias parameters of a discrete tracer.
+    tracer : str
+        Discrete tracer cross-correlated with Lya.
     strategy : str
         Active DR3 blinding strategy.
     """
     get_blinding = Mock()
     monkeypatch.setattr(utils, "get_blinding", get_blinding)
-    interface = _blinding_interface(parameters, strategy=strategy, tracer_names=("LYA", "QSO"))
+    interface = _blinding_interface(parameters, strategy=strategy, tracer_names=("LYA", tracer))
 
     with pytest.raises(ValueError, match="Running on blind data and sampling (bias_eta|beta)_"):
         interface._init_blinding()
@@ -727,7 +729,12 @@ def test_fixed_alpha_smooth_is_not_blinded(monkeypatch):
     """
     get_blinding = Mock(return_value=None)
     monkeypatch.setattr(utils, "get_blinding", get_blinding)
-    interface = _blinding_interface(("phi_smooth", "growth_rate"), strategy="desi_dr3")
+    interface = _blinding_interface(
+        ("phi_smooth", "growth_rate"),
+        strategy="desi_dr3",
+        tracer_names=("LYA", "QSO"),
+        fixed_parameters={"alpha_smooth": 1.0, "alpha_smooth_LYAxQSO": 1.0},
+    )
     interface._init_blinding()
     get_blinding.assert_called_once_with(["phi_smooth", "growth_rate"], "desi_dr3")
 
@@ -812,3 +819,62 @@ def test_priors_on_per_correlation_alpha_smooth_are_rejected():
     interface.priors = {"alpha_smooth_LYAxLYA": np.array([1.0, 0.05])}
     with pytest.raises(ValueError, match="priors on blinded parameters"):
         interface._check_blinded_priors()
+
+
+def test_absent_discrete_tracers_are_not_checked(monkeypatch):
+    """Ignore QSO RSD parameters in a full-shape fit without QSO correlations.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    """
+    get_blinding = Mock(return_value={"phi_smooth": 0.1})
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface(
+        ("phi_smooth", "beta_QSO"),
+        strategy="desi_dr3",
+        tracer_names=("LYA", "LYA"),
+        fixed_parameters={"bias_eta_QSO": 1.0},
+    )
+    interface._init_blinding()
+    get_blinding.assert_called_once_with(["phi_smooth"], "desi_dr3")
+
+
+@pytest.mark.parametrize("parameter", ["alpha_full", "ap_full"])
+def test_blind_fixed_parameter_not_unity_is_rejected(monkeypatch, parameter):
+    """Reject a fixed BLIND_FIXED_PARS value that the blinded model would replace by 1.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture supplying synthetic offsets.
+    parameter : str
+        Parameter evaluated at 1 when offsets are applied.
+    """
+    monkeypatch.setattr(utils, "get_blinding", Mock(return_value={"phi_smooth": 0.1}))
+    interface = _blinding_interface(
+        ("phi_smooth",), strategy="desi_dr3", fixed_parameters={parameter: 1.02}
+    )
+    with pytest.raises(ValueError, match=f"Running on blind data with {parameter} = 1.02"):
+        interface._init_blinding()
+
+
+@pytest.mark.parametrize("offsets", [{"phi_smooth": 0.1}, None])
+def test_blind_fixed_parameter_at_unity_is_allowed(monkeypatch, offsets):
+    """Allow fixed BLIND_FIXED_PARS at 1, and any value when no offsets are applied.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture supplying synthetic offsets.
+    offsets : dict of str to float or None
+        Offsets returned by ``get_blinding``; None for a strategy without offsets.
+    """
+    monkeypatch.setattr(utils, "get_blinding", Mock(return_value=offsets))
+    alpha_full = 1.0 if offsets is not None else 1.02
+    interface = _blinding_interface(
+        ("phi_smooth",), strategy="desi_dr3", fixed_parameters={"alpha_full": alpha_full}
+    )
+    interface._init_blinding()
+    assert interface._rnsps == offsets

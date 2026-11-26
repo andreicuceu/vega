@@ -1055,7 +1055,10 @@ class VegaInterface:
             ``desi_dr3_civ``. Full-shape offsets (``phi_smooth``,
             ``growth_rate``, ``alpha_smooth`` and ``alpha_smooth_<tracer1>x<tracer2>``)
             are requested only for sampled parameters, so fixed parameters keep
-            their configured values and the model is unchanged.
+            their configured values and the model is unchanged. Once offsets are
+            loaded, the parameters in ``utils.BLIND_FIXED_PARS`` are evaluated at
+            1 (see ``_get_lcl_prms``), so a fixed value other than 1 is rejected
+            rather than silently replaced.
 
         Raises
         ------
@@ -1065,7 +1068,9 @@ class VegaInterface:
             ``desi_dr3_civ``), BAO and full-shape parameters are blinded
             together, the RSD parametrisation of a discrete tracer bypasses
             the growth-rate offset (see ``_check_blind_rsd_parametrisation``),
-            or the required parameter-blinding file is unavailable.
+            a parameter in ``utils.BLIND_FIXED_PARS`` is fixed to a value other
+            than 1 while offsets are applied, or the required parameter-blinding
+            file is unavailable.
         """
         blinding_strat = None
         for data_obj in self.data.values():
@@ -1114,6 +1119,15 @@ class VegaInterface:
         if len(blind_pars) > 0:
             self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
 
+        # With offsets applied, _get_lcl_prms evaluates these parameters at 1
+        if self._rnsps is not None:
+            for par in utils.BLIND_FIXED_PARS:
+                if par in self.params and self.params[par] != 1.0:
+                    raise ValueError(
+                        f"Running on blind data with {par} = {self.params[par]}. Blinded fits "
+                        f"evaluate {par} at 1; set it to 1 or remove it from [parameters]."
+                    )
+
     def _check_blind_rsd_parametrisation(self, is_full_shape_blind):
         """Reject RSD parametrisations of discrete tracers that bypass growth-rate blinding.
 
@@ -1133,8 +1147,9 @@ class VegaInterface:
         does not enter the terms of that tracer and its RSD amplitude b * beta
         follows the sampled bias instead of f.
 
-        Discrete tracers are those listed in ``utils.VELOCITY_BIAS_FIXED_TRACERS``
-        and any tracer of type ``discrete`` in the correlation items.
+        Discrete tracers are the tracers of the correlation items that are
+        listed in ``utils.VELOCITY_BIAS_FIXED_TRACERS`` or have type
+        ``discrete``; tracers absent from the fit are not checked.
 
         Parameters
         ----------
@@ -1149,10 +1164,11 @@ class VegaInterface:
             If beta or bias_eta of a discrete tracer is sampled, or, in blind
             full-shape fits, if beta of a discrete tracer is fixed.
         """
-        discrete_tracers = set(utils.VELOCITY_BIAS_FIXED_TRACERS)
+        discrete_tracers = set()
         for corr in self.corr_items.values():
             for tracer in (corr.tracer1, corr.tracer2):
-                if tracer.get("type") == "discrete":
+                is_velocity_bias_fixed = tracer["name"] in utils.VELOCITY_BIAS_FIXED_TRACERS
+                if is_velocity_bias_fixed or tracer.get("type") == "discrete":
                     discrete_tracers.add(tracer["name"])
 
         sampled_pars = self.sample_params["limits"]
