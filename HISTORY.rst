@@ -2,7 +2,7 @@
 History
 =======
 
-1.8.1 (unreleased)
+1.8.1 (2026-11-25)
 ------------------
 * Added example config builders for the standard DESI analyses. Each example folder
   contains a ``build_configs.py`` script that generates the configs with ``BuildConfig``,
