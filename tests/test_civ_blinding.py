@@ -85,7 +85,11 @@ def _read_correlation(data_path):
 
 
 def _blinding_interface(
-    parameters, strategy="desi_dr3_civ", tracer_names=("CIV", "QSO"), tracer_types=(None, None)
+    parameters,
+    strategy="desi_dr3_civ",
+    tracer_names=("CIV", "QSO"),
+    tracer_types=(None, None),
+    fixed_parameters=None,
 ):
     """Construct only the state required for parameter-blinding initialization.
 
@@ -99,6 +103,8 @@ def _blinding_interface(
         Primary measurement tracers, by default ``("CIV", "QSO")``.
     tracer_types : tuple of str or None, optional
         Tracer types (``continuous`` or ``discrete``), by default unset.
+    fixed_parameters : dict of str to float, optional
+        Fixed parameter values from ``[parameters]``, by default none.
 
     Returns
     -------
@@ -115,6 +121,9 @@ def _blinding_interface(
     interface.data = {"correlation": SimpleNamespace(blind=True, blinding_strat=strategy)}
     interface.corr_items = {"correlation": correlation}
     interface.sample_params = {"limits": dict.fromkeys(parameters, (0.5, 1.5))}
+
+    # Sampled parameters also appear in [parameters], with their starting values
+    interface.params = dict.fromkeys(parameters, 1.0) | (fixed_parameters or {})
     return interface
 
 
@@ -588,6 +597,62 @@ def test_allowed_rsd_parametrisations(monkeypatch, parameters):
         strategy="desi_dr3",
         tracer_names=("LYA", "QSO"),
         tracer_types=("continuous", "discrete"),
+    )
+    interface._init_blinding()
+    assert interface._blind is True
+
+
+@pytest.mark.parametrize(
+    "parameters, fixed_tracer",
+    [
+        (("bias_QSO", "growth_rate"), "QSO"),
+        (("bias_QSO", "phi_smooth"), "QSO"),
+        (("bias_DLA", "alpha_smooth_LYAxDLA"), "DLA"),
+    ],
+)
+def test_fixed_discrete_tracer_beta_rejected_in_full_shape(monkeypatch, parameters, fixed_tracer):
+    """Reject a fixed beta of a discrete tracer when full-shape offsets are requested.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    parameters : tuple of str
+        Sampled parameters, including a blinded full-shape parameter.
+    fixed_tracer : str
+        Discrete tracer whose beta is fixed in ``[parameters]``.
+    """
+    get_blinding = Mock()
+    monkeypatch.setattr(utils, "get_blinding", get_blinding)
+    interface = _blinding_interface(
+        parameters,
+        strategy="desi_dr3",
+        tracer_names=("LYA", fixed_tracer),
+        fixed_parameters={f"beta_{fixed_tracer}": 0.26, f"bias_eta_{fixed_tracer}": 1.0},
+    )
+
+    with pytest.raises(ValueError, match=f"blind full-shape fit with beta_{fixed_tracer} fixed"):
+        interface._init_blinding()
+    get_blinding.assert_not_called()
+
+
+@pytest.mark.parametrize("parameters", [("bias_QSO",), ("bias_QSO", "ap", "at")])
+def test_fixed_discrete_tracer_beta_allowed_without_full_shape(monkeypatch, parameters):
+    """Allow a fixed beta of a discrete tracer when no full-shape offsets are requested.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture recording calls to parameter file selection.
+    parameters : tuple of str
+        Sampled parameters without blinded full-shape parameters.
+    """
+    monkeypatch.setattr(utils, "get_blinding", Mock(return_value=None))
+    interface = _blinding_interface(
+        parameters,
+        strategy="desi_dr3",
+        tracer_names=("LYA", "QSO"),
+        fixed_parameters={"beta_QSO": 0.26},
     )
     interface._init_blinding()
     assert interface._blind is True

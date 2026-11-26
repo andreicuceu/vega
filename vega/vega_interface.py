@@ -1105,12 +1105,16 @@ class VegaInterface:
             if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items.values()]):
                 blind_pars += [par]
 
-        self._check_blind_rsd_parametrisation()
+        # Full-shape offsets are requested, so growth_rate must enter every discrete tracer
+        is_full_shape_blind = any(
+            utils.get_blinding_key(par) in utils.FULL_SHAPE_BLINDED_PARS for par in blind_pars
+        )
+        self._check_blind_rsd_parametrisation(is_full_shape_blind)
 
         if len(blind_pars) > 0:
             self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
 
-    def _check_blind_rsd_parametrisation(self):
+    def _check_blind_rsd_parametrisation(self, is_full_shape_blind):
         """Reject RSD parametrisations of discrete tracers that bypass growth-rate blinding.
 
         For a discrete tracer with velocity bias b_eta = 1 the model uses
@@ -1124,13 +1128,26 @@ class VegaInterface:
         constrains b_eta * (f + offset) and a second run with b_eta fixed
         recovers the offset.
 
+        In blind full-shape fits a fixed beta (set in ``[parameters]``) is also
+        rejected: it is likewise used as given, so the blinded ``growth_rate``
+        does not enter the terms of that tracer and its RSD amplitude b * beta
+        follows the sampled bias instead of f.
+
         Discrete tracers are those listed in ``utils.VELOCITY_BIAS_FIXED_TRACERS``
         and any tracer of type ``discrete`` in the correlation items.
+
+        Parameters
+        ----------
+        is_full_shape_blind : bool
+            Whether full-shape offsets are requested, i.e. whether ``growth_rate``,
+            ``phi_smooth``, ``alpha_smooth`` or ``alpha_smooth_<tracer1>x<tracer2>``
+            is sampled on blind data.
 
         Raises
         ------
         ValueError
-            If beta or bias_eta of a discrete tracer is sampled.
+            If beta or bias_eta of a discrete tracer is sampled, or, in blind
+            full-shape fits, if beta of a discrete tracer is fixed.
         """
         discrete_tracers = set(utils.VELOCITY_BIAS_FIXED_TRACERS)
         for corr in self.corr_items.values():
@@ -1151,6 +1168,13 @@ class VegaInterface:
                     f"Running on blind data and sampling beta_{tracer}. The RSD parameter of "
                     "discrete tracers must follow from growth_rate; sample bias and fix "
                     "bias_eta instead."
+                )
+
+            if is_full_shape_blind and f"beta_{tracer}" in self.params:
+                raise ValueError(
+                    f"Running a blind full-shape fit with beta_{tracer} fixed. The RSD parameter "
+                    "of discrete tracers must follow from growth_rate; remove beta_"
+                    f"{tracer} from [parameters] and set bias_{tracer} and bias_eta_{tracer}."
                 )
 
     def _check_blinded_priors(self):
