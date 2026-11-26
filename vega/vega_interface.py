@@ -189,6 +189,7 @@ class VegaInterface:
                     raise ValueError(
                         f"Prior specified for a parameter that is not sampled: {param}"
                     )
+        self._check_blinded_priors()
 
         # Read the global covariance
         cov_scale = self.main_config["control"].getfloat("cov_scale", None)
@@ -1051,7 +1052,13 @@ class VegaInterface:
         None
             Sets the blinding flag and requests offsets for protected sampled
             parameters. CIV BAO parameters are protected only by
-            ``desi_dr3_civ``.
+            ``desi_dr3_civ``. Full-shape offsets (``phi_smooth``,
+            ``growth_rate``, ``alpha_smooth`` and ``alpha_smooth_<tracer1>x<tracer2>``)
+            are requested only for sampled parameters, so fixed parameters keep
+            their configured values and the model is unchanged. Once offsets are
+            loaded, the parameters in ``utils.BLIND_FIXED_PARS`` are evaluated at
+            1 (see ``_get_lcl_prms``), so a fixed value other than 1 is rejected
+            rather than silently replaced.
 
         Raises
         ------
@@ -1059,7 +1066,11 @@ class VegaInterface:
             If active data strategies differ, protected parameters must be
             fixed (including ``phi``, ``aiso``, ``epsilon`` and ``aap`` under
             ``desi_dr3_civ``), BAO and full-shape parameters are blinded
-            together, or the required parameter-blinding file is unavailable.
+            together, the RSD parametrisation of a discrete tracer bypasses
+            the growth-rate offset (see ``_check_blind_rsd_parametrisation``),
+            a parameter in ``utils.BLIND_FIXED_PARS`` is fixed to a value other
+            than 1 while offsets are applied, or the required parameter-blinding
+            file is unavailable.
         """
         blinding_strat = None
         for data_obj in self.data.values():
@@ -1087,23 +1098,123 @@ class VegaInterface:
                     "Use the ap_at parametrisation."
                 )
 
-            if par not in utils.VEGA_BLINDED_PARS:
+            # alpha_smooth_<tracer1>x<tracer2> parameters share the alpha_smooth offset
+            blinding_key = utils.get_blinding_key(par)
+            if blinding_key not in utils.VEGA_BLINDED_PARS:
                 continue
 
-            if par in utils.BAO_BLINDED_PARS and blinding_strat != "desi_dr3_civ":
+            if blinding_key in utils.BAO_BLINDED_PARS and blinding_strat != "desi_dr3_civ":
                 continue
 
-            tracers = utils.VEGA_BLINDED_PARS[par]
+            tracers = utils.VEGA_BLINDED_PARS[blinding_key]
             if any([corr.check_if_blind_corr(tracers) for corr in self.corr_items.values()]):
                 blind_pars += [par]
+
+        # Full-shape offsets are requested, so growth_rate must enter every discrete tracer
+        is_full_shape_blind = any(
+            utils.get_blinding_key(par) in utils.FULL_SHAPE_BLINDED_PARS for par in blind_pars
+        )
+        self._check_blind_rsd_parametrisation(is_full_shape_blind)
 
         if len(blind_pars) > 0:
             self._rnsps = utils.get_blinding(blind_pars, blinding_strat)
 
-        if ("bias_QSO" in self.sample_params["limits"]) and (
-            "beta_QSO" in self.sample_params["limits"]
-        ):
-            raise ValueError("Running on blind data and sampling bias_QSO and beta_QSO.")
+        # With offsets applied, _get_lcl_prms evaluates these parameters at 1
+        if self._rnsps is not None:
+            for par in utils.BLIND_FIXED_PARS:
+                if par in self.params and self.params[par] != 1.0:
+                    raise ValueError(
+                        f"Running on blind data with {par} = {self.params[par]}. Blinded fits "
+                        f"evaluate {par} at 1; set it to 1 or remove it from [parameters]."
+                    )
+
+    def _check_blind_rsd_parametrisation(self, is_full_shape_blind):
+        """Reject RSD parametrisations of discrete tracers that bypass growth-rate blinding.
+
+        For a discrete tracer with velocity bias b_eta = 1 the model uses
+        beta = b_eta * f / b, so the cross-correlation constrains
+        b * beta = b_eta * f. A sampled beta is used as given
+        (``utils._tracer_bias_beta``), so ``growth_rate`` and its offset never
+        enter the terms of that tracer, and b * beta is an unblinded measurement
+        of f whether or not bias is also sampled. Sampling bias_eta together with
+        growth_rate fixed likewise measures f without the offset. Sampling
+        bias_eta is rejected even when growth_rate is sampled, since the fit then
+        constrains b_eta * (f + offset) and a second run with b_eta fixed
+        recovers the offset.
+
+        In blind full-shape fits a fixed beta (set in ``[parameters]``) is also
+        rejected: it is likewise used as given, so the blinded ``growth_rate``
+        does not enter the terms of that tracer and its RSD amplitude b * beta
+        follows the sampled bias instead of f.
+
+        Discrete tracers are the tracers of the correlation items that are
+        listed in ``utils.VELOCITY_BIAS_FIXED_TRACERS`` or have type
+        ``discrete``; tracers absent from the fit are not checked.
+
+        Parameters
+        ----------
+        is_full_shape_blind : bool
+            Whether full-shape offsets are requested, i.e. whether ``growth_rate``,
+            ``phi_smooth``, ``alpha_smooth`` or ``alpha_smooth_<tracer1>x<tracer2>``
+            is sampled on blind data.
+
+        Raises
+        ------
+        ValueError
+            If beta or bias_eta of a discrete tracer is sampled, or, in blind
+            full-shape fits, if beta of a discrete tracer is fixed.
+        """
+        discrete_tracers = set()
+        for corr in self.corr_items.values():
+            for tracer in (corr.tracer1, corr.tracer2):
+                is_velocity_bias_fixed = tracer["name"] in utils.VELOCITY_BIAS_FIXED_TRACERS
+                if is_velocity_bias_fixed or tracer.get("type") == "discrete":
+                    discrete_tracers.add(tracer["name"])
+
+        sampled_pars = self.sample_params["limits"]
+        for tracer in sorted(discrete_tracers):
+            if f"bias_eta_{tracer}" in sampled_pars:
+                raise ValueError(
+                    f"Running on blind data and sampling bias_eta_{tracer}. The velocity bias "
+                    "of discrete tracers must be fixed; sample bias and growth_rate instead."
+                )
+
+            if f"beta_{tracer}" in sampled_pars:
+                raise ValueError(
+                    f"Running on blind data and sampling beta_{tracer}. The RSD parameter of "
+                    "discrete tracers must follow from growth_rate; sample bias and fix "
+                    "bias_eta instead."
+                )
+
+            if is_full_shape_blind and f"beta_{tracer}" in self.params:
+                raise ValueError(
+                    f"Running a blind full-shape fit with beta_{tracer} fixed. The RSD parameter "
+                    "of discrete tracers must follow from growth_rate; remove beta_"
+                    f"{tracer} from [parameters] and set bias_{tracer} and bias_eta_{tracer}."
+                )
+
+    def _check_blinded_priors(self):
+        """Reject Gaussian priors on parameters that receive blinding offsets.
+
+        Priors are evaluated on the shifted parameters (sampled value plus
+        offset), so a prior centred at mu pulls the sampled posterior towards
+        mu minus the offset. Comparing runs with and without such a prior, or a
+        prior that dominates the data, would reveal the offset.
+
+        Raises
+        ------
+        ValueError
+            If a prior is set on any parameter with a blinding offset.
+        """
+        if self._rnsps is None:
+            return
+
+        blinded_priors = [par for par in self.priors if par in self._rnsps]
+        if len(blinded_priors) > 0:
+            raise ValueError(
+                f"Running on blind data with priors on blinded parameters {blinded_priors}. "
+                "Remove these priors from [priors]."
+            )
 
     def read_global_cov(self, global_cov_file, scale=None):
         """Read the joint covariance matrix from file and prepare it for chi2 computation.
