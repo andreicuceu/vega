@@ -1115,11 +1115,14 @@ class VegaInterface:
 
         For a discrete tracer with velocity bias b_eta = 1 the model uses
         beta = b_eta * f / b, so the cross-correlation constrains
-        b * beta = b_eta * f. Sampling both bias and beta, or sampling bias_eta
-        together with growth_rate fixed, therefore measures f without the
-        ``growth_rate`` offset. Sampling bias_eta is rejected even when
-        growth_rate is sampled, since the fit then constrains
-        b_eta * (f + offset) and a second run with b_eta fixed recovers the offset.
+        b * beta = b_eta * f. A sampled beta is used as given
+        (``utils._tracer_bias_beta``), so ``growth_rate`` and its offset never
+        enter the terms of that tracer, and b * beta is an unblinded measurement
+        of f whether or not bias is also sampled. Sampling bias_eta together with
+        growth_rate fixed likewise measures f without the offset. Sampling
+        bias_eta is rejected even when growth_rate is sampled, since the fit then
+        constrains b_eta * (f + offset) and a second run with b_eta fixed
+        recovers the offset.
 
         Discrete tracers are those listed in ``utils.VELOCITY_BIAS_FIXED_TRACERS``
         and any tracer of type ``discrete`` in the correlation items.
@@ -1127,7 +1130,7 @@ class VegaInterface:
         Raises
         ------
         ValueError
-            If bias and beta, or bias_eta, of a discrete tracer are sampled.
+            If beta or bias_eta of a discrete tracer is sampled.
         """
         discrete_tracers = set(utils.VELOCITY_BIAS_FIXED_TRACERS)
         for corr in self.corr_items.values():
@@ -1143,9 +1146,11 @@ class VegaInterface:
                     "of discrete tracers must be fixed; sample bias and growth_rate instead."
                 )
 
-            if f"bias_{tracer}" in sampled_pars and f"beta_{tracer}" in sampled_pars:
+            if f"beta_{tracer}" in sampled_pars:
                 raise ValueError(
-                    f"Running on blind data and sampling bias_{tracer} and beta_{tracer}."
+                    f"Running on blind data and sampling beta_{tracer}. The RSD parameter of "
+                    "discrete tracers must follow from growth_rate; sample bias and fix "
+                    "bias_eta instead."
                 )
 
     def _check_blinded_priors(self):

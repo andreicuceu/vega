@@ -54,9 +54,9 @@ PARAMETER_BLINDING_DIR = Path("/global/cfs/projectdirs/desicollab/science/lya/ve
 # desi-dr3-lya-bao. Setting it to None makes blinded DR3 full-shape fits abort.
 DR3_FS_BLINDING_FILE = "dr3_fs_blinding_23_11_2026.npz"
 
-# Discrete tracers with velocity bias b_eta = 1, so that b * beta = f. On blind data at most
-# one of bias/beta may be sampled for these tracers and bias_eta must stay fixed; otherwise the
-# fitted RSD amplitude is an unblinded measurement of the growth rate
+# Discrete tracers with velocity bias b_eta = 1, so that b * beta = f. On blind data neither
+# beta nor bias_eta may be sampled for these tracers; otherwise the fitted RSD amplitude is an
+# unblinded measurement of the growth rate
 VELOCITY_BIAS_FIXED_TRACERS = ["QSO", "DLA", "SBLA"]
 
 Z_OPTIONS_REMOVED = (

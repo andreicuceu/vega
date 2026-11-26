@@ -415,7 +415,7 @@ def test_standard_dr3_bao_file_selection_returns_none(monkeypatch):
 
 @pytest.mark.parametrize("parameters", [("ap_full",), ("bias_QSO", "beta_QSO")])
 def test_existing_blind_parameter_restrictions(parameters):
-    """Retain restrictions on fixed parameters and simultaneous QSO bias sampling.
+    """Retain restrictions on fixed parameters and on sampling the QSO RSD parameter.
 
     Parameters
     ----------
@@ -518,6 +518,8 @@ def test_civ_full_shape_ignores_dr3_file(monkeypatch):
         ("bias_QSO", "bias_eta_QSO", "growth_rate"),
         ("bias_DLA", "beta_DLA"),
         ("bias_SBLA", "bias_eta_SBLA"),
+        ("beta_QSO",),
+        ("beta_DLA", "growth_rate"),
     ],
 )
 @pytest.mark.parametrize("strategy", ["desi_dr3", "desi_dr3_civ"])
@@ -537,7 +539,7 @@ def test_discrete_tracer_rsd_bypass_is_rejected(monkeypatch, parameters, strateg
     monkeypatch.setattr(utils, "get_blinding", get_blinding)
     interface = _blinding_interface(parameters, strategy=strategy, tracer_names=("LYA", "QSO"))
 
-    with pytest.raises(ValueError, match="Running on blind data and sampling bias"):
+    with pytest.raises(ValueError, match="Running on blind data and sampling (bias_eta|beta)_"):
         interface._init_blinding()
     get_blinding.assert_not_called()
 
@@ -557,7 +559,7 @@ def test_discrete_tracer_identified_by_type(monkeypatch):
         tracer_names=("LYA", "LRG"),
         tracer_types=("continuous", "discrete"),
     )
-    with pytest.raises(ValueError, match="sampling bias_LRG and beta_LRG"):
+    with pytest.raises(ValueError, match="sampling beta_LRG"):
         interface._init_blinding()
 
 
@@ -565,14 +567,13 @@ def test_discrete_tracer_identified_by_type(monkeypatch):
     "parameters",
     [
         ("bias_QSO",),
-        ("beta_QSO",),
         ("bias_QSO", "growth_rate"),
         ("bias_LYA", "bias_eta_LYA"),
         ("bias_LYA", "beta_LYA"),
     ],
 )
 def test_allowed_rsd_parametrisations(monkeypatch, parameters):
-    """Allow one QSO RSD parameter and any Lya bias parametrisation on blind data.
+    """Allow a sampled QSO bias and any Lya bias parametrisation on blind data.
 
     Parameters
     ----------
