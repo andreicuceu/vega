@@ -38,6 +38,7 @@ class PktoXi:
         self._old_fftlog = config.getboolean("old_fftlog", False)
         self._extrap = config.getboolean("fht_extrap", False)
         fht_lowring = config.getboolean("fht_lowring", True)
+        self._fht_lowring = fht_lowring
 
         # Initialize the multipole values we will need (only even ells)
         self.ell_vals = tuple(np.arange(0, self.ell_max + 1, 2))
@@ -60,6 +61,10 @@ class PktoXi:
                 self.legendre_xi[ell] = special.legendre(ell)
 
         self.cache_pars = None
+
+        # FFTLog objects for transforms of the isotropic linear P(k), built on first use by the
+        # relativistic and asymmetry terms; keyed by (ell, n)
+        self._isotropic_fftlog_objects = {}
 
     @classmethod
     def init_from_Pk(cls, pk, config, dmu_smooth_xiell=0):
@@ -230,10 +235,61 @@ class PktoXi:
         full_xi = np.sum(xi_ell_arr, axis=0)
         return full_xi
 
+    def transform_isotropic(self, r_grid, pk, ell, n):
+        """Hankel transform of an isotropic power spectrum with an extra power of k, using mcfit.
+
+        Computes
+
+            xi_ell^n(r) = 1 / (2 pi^2) int dk k^(2 + n) P(k) j_ell(kr),
+
+        without the i^ell phase factor (mcfit ignores it when n is given), and interpolates it to
+        r_grid (cubic in log r, as in compute).
+
+        Parameters
+        ----------
+        r_grid : 1D Array
+            Separations at which the transform is evaluated [Mpc/h]
+        pk : 1D Array
+            Isotropic power spectrum on self.k_grid
+        ell : int
+            Order of the spherical Bessel function
+        n : int
+            Extra power of k in the integrand (-1 for the Doppler terms, 0 for the standard kernel)
+
+        Returns
+        -------
+        1D Array
+            xi_ell^n on r_grid (0 where r = 0)
+
+        Raises
+        ------
+        VegaBoundsError
+            If r_grid is outside the range of the FFTLog output.
+        """
+        key = (ell, n)
+        if key not in self._isotropic_fftlog_objects:
+            self._isotropic_fftlog_objects[key] = P2xi(
+                self.k_grid, l=ell, n=n, lowring=self._fht_lowring
+            )
+        r_fft, xi_fft = self._isotropic_fftlog_objects[key](pk, extrap=self._extrap)
+        xi_interp = interpolate.interp1d(np.log(r_fft), xi_fft, kind="cubic")
+
+        mask = r_grid != 0
+        xi = np.zeros(len(r_grid))
+        try:
+            xi[mask] = xi_interp(np.log(r_grid[mask]))
+        except ValueError as exc:
+            raise VegaBoundsError from exc
+        return xi
+
     @staticmethod
     def Pk2Mp(ar, k, pk, ell_vals, muk, dmuk, tform=None):
         """
-        This function is outdated and will be removed
+        This function is outdated and will be removed. It is only used by the old_fftlog path
+        (pk_to_xi); the relativistic and asymmetry terms use transform_isotropic. Known issues:
+        tform="rel" does not lower the power of k (it returns int dk k^2 P j_ell, not
+        int dk k P j_ell), and the output is offset by half a log-r bin (2-3% scale-dependent
+        error).
         Implementation of FFTLog from A.J.S. Hamilton (2000)
         assumes log(k) are equally spaced
         """
@@ -322,8 +378,18 @@ class PktoXi:
         return full_xi
 
     def pk_to_xi_relativistic(self, r_grid, mu_grid, pk, params):
-        """Calculate the cross-correlation contribution from
-        relativistic effects (Bonvin et al. 2014).
+        """Calculate the cross-correlation contribution from the Doppler (velocity) terms
+        (Bonvin et al. 2014; Irsic, Di Dio & Viel 2016).
+
+        A term proportional to the line-of-sight velocity in either tracer gives an odd power
+        spectrum P_odd(k, mu) = i (H f / k) [X1 L1(mu) + X3 L3(mu)] P_lin(k), whose correlation
+        function is
+
+            xi_rel(r, mu) = Arel1 nu_1(r) L1(mu) + Arel3 nu_3(r) L3(mu),
+            nu_ell(r) = 1 / (2 pi^2) int dk k P_lin(k) j_ell(kr),
+
+        with Arel1 = -H f X1 and Arel3 = H f X3, for xi(r) = <delta_1(x + r) delta_2(x)> and r_par
+        along tracer 1 minus tracer 2 (picca: r_par = chi_forest - chi_QSO).
 
         Parameters
         ----------
@@ -331,25 +397,21 @@ class PktoXi:
             Grid of r coordinates for the output correlation
         mu_grid : 1D Array
             Grid of mu coordinates for the output correlation
-        pk : ND Array
-            Input power spectrum
+        pk : 1D Array
+            Isotropic linear power spectrum (the template, without bias, growth or damping)
         params : dict
-            Computation parameters
+            Computation parameters (Arel1, Arel3)
 
         Returns
         -------
         1D Array
             Output xi relativistic
         """
-        # Compute the dipole and octupole terms
-        ell_vals = [1, 3]
-        xi = self.Pk2Mp(r_grid, self.k_grid, pk, ell_vals, self.muk_grid, self.dmuk, tform="rel")
+        nu_1 = self.transform_isotropic(r_grid, pk, ell=1, n=-1)
+        nu_3 = self.transform_isotropic(r_grid, pk, ell=3, n=-1)
 
-        # Get the relativistic parameters and sum over the monopoles
-        A_rel_1 = params["Arel1"]
-        A_rel_3 = params["Arel3"]
-        xi_rel = A_rel_1 * xi[1 // 2, :] * special.legendre(1)(mu_grid)
-        xi_rel += A_rel_3 * xi[3 // 2, :] * special.legendre(3)(mu_grid)
+        xi_rel = params["Arel1"] * nu_1 * special.legendre(1)(mu_grid)
+        xi_rel += params["Arel3"] * nu_3 * special.legendre(3)(mu_grid)
         return xi_rel
 
     def pk_to_xi_asymmetry(self, r_grid, mu_grid, pk, params):
@@ -372,9 +434,12 @@ class PktoXi:
         1D Array
             Output xi asymmetry
         """
-        # Compute the monopole and quadrupole terms
-        ell_vals = [0, 2]
-        xi = self.Pk2Mp(r_grid, self.k_grid, pk, ell_vals, self.muk_grid, self.dmuk, tform="asy")
+        # Monopole and quadrupole kernels, int dk k^2 P(k) j_ell(kr) without the 1/(2 pi^2) and
+        # (-1)^(ell/2) factors, which keeps the normalisation and sign of the Aasy parameters of the
+        # previous (Pk2Mp) code
+        xi = np.array(
+            [2 * np.pi**2 * self.transform_isotropic(r_grid, pk, ell=ell, n=0) for ell in (0, 2)]
+        )
 
         # Get the asymmetry parameters and sum over the monopoles
         A_asy_0 = params["Aasy0"]

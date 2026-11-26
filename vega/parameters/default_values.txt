@@ -79,3 +79,8 @@ amp_SiII(1260)_SiII(1260)       -1e-2        1e-2         1e-5
 amp_SiII(1260)_SiIII(1207)      -1e-2        1e-2         1e-5
 amp_SiIII(1207)_SiIII(1207)     -1e-2        1e-2         1e-5
 amp_CIV(eff)_CIV(eff)           -1e-2        1e-2         1e-5
+Arel1                           -5e-2        5e-2         1e-4
+Arel3                           -5e-2        5e-2         1e-4
+Aasy0                           -1e-3        1e-3         1e-7
+Aasy2                           -1e-3        1e-3         1e-7
+Aasy3                           -1e-3        1e-3         1e-7

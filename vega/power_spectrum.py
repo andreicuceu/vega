@@ -186,13 +186,15 @@ class PowerSpectrum:
         # add velocity dispersion
         if "velocity dispersion" in self._config:
             smoothing_type = self._config.get("velocity dispersion")
-            if "gauss" in smoothing_type:
+            # "lorentz_gauss" (both kernels) must be tested first: it also contains "gauss"
+            # and "lorentz", which previously selected the Gaussian kernel alone
+            if smoothing_type == "lorentz_gauss":
+                pk_full *= self.compute_velocity_dispersion_lorentz(params)
+                pk_full *= self.compute_velocity_dispersion_gauss(params)
+            elif "gauss" in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_gauss(params)
             elif "lorentz" in smoothing_type:
                 pk_full *= self.compute_velocity_dispersion_lorentz(params)
-            elif "lorentz_gauss" in smoothing_type:
-                pk_full *= self.compute_velocity_dispersion_lorentz(params)
-                pk_full *= self.compute_velocity_dispersion_gauss(params)
             else:
                 raise ValueError('"velocity dispersion" must be of type "gauss" or "lorentz".')
 

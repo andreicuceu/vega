@@ -611,13 +611,13 @@ class CorrelationFunction:
         return xi_rad
 
     def compute_xi_relativistic(self, pk, PktoXi_obj, params):
-        """Calculate the cross-correlation contribution from
-        relativistic effects (Bonvin et al. 2014).
+        """Calculate the cross-correlation contribution from the Doppler (velocity) terms
+        (Bonvin et al. 2014), see PktoXi.pk_to_xi_relativistic.
 
         Parameters
         ----------
-        pk : ND Array
-            Input power spectrum
+        pk : 1D Array
+            Isotropic linear power spectrum
         PktoXi_obj : vega.PktoXi
             An instance of the transform object used to turn Pk into Xi
         params : dict
@@ -631,10 +631,16 @@ class CorrelationFunction:
         assert "continuous" in [self._tracer1["type"], self._tracer2["type"]]
         assert self._tracer1["type"] != self._tracer2["type"]
 
-        # Get rescaled Xi coordinates
-        delta_rp = params.get(self._delta_rp_name, 0.0)
-        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
+        # Get rescaled Xi coordinates, as in compute_core
+        delta_rp = 0.0
+        if self._delta_rp_name is not None:
+            delta_rp = params.get(self._delta_rp_name, 0.0)
+        ap, at = self._scale_params.get_ap_at(
+            params, corr_name=self._corr_name, metal_corr=self._metal_corr
+        )
+        rescaled_r, rescaled_mu = self._rescale_coords(
+            self._r, self._mu, ap * self._ap_dt, at * self._at_dt, delta_rp
+        )
 
         # Compute the correlation function
         xi_rel = PktoXi_obj.pk_to_xi_relativistic(rescaled_r, rescaled_mu, pk, params)
@@ -662,10 +668,16 @@ class CorrelationFunction:
         assert "continuous" in [self._tracer1["type"], self._tracer2["type"]]
         assert self._tracer1["type"] != self._tracer2["type"]
 
-        # Get rescaled Xi coordinates
-        delta_rp = params.get(self._delta_rp_name, 0.0)
-        ap, at = self._scale_params.get_ap_at(params, metal_corr=self._metal_corr)
-        rescaled_r, rescaled_mu = self._rescale_coords(self._r, self._mu, ap, at, delta_rp)
+        # Get rescaled Xi coordinates, as in compute_core
+        delta_rp = 0.0
+        if self._delta_rp_name is not None:
+            delta_rp = params.get(self._delta_rp_name, 0.0)
+        ap, at = self._scale_params.get_ap_at(
+            params, corr_name=self._corr_name, metal_corr=self._metal_corr
+        )
+        rescaled_r, rescaled_mu = self._rescale_coords(
+            self._r, self._mu, ap * self._ap_dt, at * self._at_dt, delta_rp
+        )
 
         # Compute the correlation function
         xi_asy = PktoXi_obj.pk_to_xi_asymmetry(rescaled_r, rescaled_mu, pk, params)

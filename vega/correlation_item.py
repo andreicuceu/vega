@@ -274,10 +274,16 @@ class CorrelationItem:
             rt_nbins = self.model_coordinates.rt_nbins
             cb = rp_nbins // rp_nbins_dist
 
-            # Get the mask in the distorted space
-            mask_dist_model = self.dist_model_coordinates.get_mask_scale_cuts(
-                self.config["cuts"], small_scale_mask=True
-            ).reshape(rp_nbins_dist, rt_nbins_dist)
+            # Get the mask in the distorted space: True outside the marginalised bins, which are
+            # those removed by the small-scale cuts inside the large-scale cuts (as in
+            # Coordinates.get_mask_marginalization_scales)
+            cuts_config = self.config["cuts"]
+            small_scale_mask = self.dist_model_coordinates.get_mask_scale_cuts(
+                cuts_config, small_scale_mask=True
+            )
+            large_scale_mask = self.dist_model_coordinates.get_mask_large_scale_cuts(cuts_config)
+            mask_dist_model = small_scale_mask | ~large_scale_mask
+            mask_dist_model = mask_dist_model.reshape(rp_nbins_dist, rt_nbins_dist)
 
             # Build the mask in the undistorted space
             mask_model = np.zeros((rp_nbins, rt_nbins))

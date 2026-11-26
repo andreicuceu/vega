@@ -22,6 +22,12 @@ def test_vega_old():
     hdul = fits.open(find_file("data/picca_bench_data.fits"))
     names = ["test_" + str(i) for i in range(8)]
     names.remove("test_3")
+    # test_2 and test_7 use the relativistic correction. The picca reference contains the kernel
+    # of picca's old fitter, int dk k^2 P j_ell (the old FFTLog did not lower the power of k), with
+    # Arel in that normalisation; Vega now uses the Doppler kernel int dk k P j_ell / (2 pi^2),
+    # tested in test_xi_relativistic.py. The rest of the model is checked on the other datasets.
+    names.remove("test_2")
+    names.remove("test_7")
 
     vega_auto = VegaInterface("picca_benchmarks/main.ini")
 
