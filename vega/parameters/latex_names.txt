@@ -51,3 +51,14 @@ BB-lyalya_lyalya-0-broadband_sky-scale-sky A_{sky,lya}
 BB-lyalya_lyalya-0-broadband_sky-sigma-sky \sigma_{sky,lya}
 BB-lyalya_lyalyb-0-broadband_sky-scale-sky A_{sky,lyb}
 BB-lyalya_lyalyb-0-broadband_sky-sigma-sky \sigma_{sky,lyb}
+amp_SiII(1190)_SiII(1190) A_{\rm SiII(1190)\times SiII(1190)}
+amp_SiII(1190)_SiII(1193) A_{\rm SiII(1190)\times SiII(1193)}
+amp_SiII(1190)_SiII(1260) A_{\rm SiII(1190)\times SiII(1260)}
+amp_SiII(1190)_SiIII(1207) A_{\rm SiII(1190)\times SiIII(1207)}
+amp_SiII(1193)_SiII(1193) A_{\rm SiII(1193)\times SiII(1193)}
+amp_SiII(1193)_SiII(1260) A_{\rm SiII(1193)\times SiII(1260)}
+amp_SiII(1193)_SiIII(1207) A_{\rm SiII(1193)\times SiIII(1207)}
+amp_SiII(1260)_SiII(1260) A_{\rm SiII(1260)\times SiII(1260)}
+amp_SiII(1260)_SiIII(1207) A_{\rm SiII(1260)\times SiIII(1207)}
+amp_SiIII(1207)_SiIII(1207) A_{\rm SiIII(1207)\times SiIII(1207)}
+amp_CIV(eff)_CIV(eff) A_{\rm CIV(eff)\times CIV(eff)}

@@ -145,6 +145,10 @@ class CorrelationFunction:
         # Place holder for interpolation function for DESI intrumental systematics
         self.desi_instrumental_systematics_interp = None
 
+        # Rescaled (r, mu) of the last call to compute; the analytic marginalization uses
+        # them to evaluate the QSO radiation template at the same parameters.
+        self.rescaled_coordinates = None
+
         apply_data_template_correction = self._config.getboolean(
             "apply-data-template-correction", False
         )
@@ -177,6 +181,7 @@ class CorrelationFunction:
         """
         # Compute the core
         xi, rescaled_r, rescaled_mu = self.compute_core(pk, PktoXi_obj, params)
+        self.rescaled_coordinates = (rescaled_r, rescaled_mu)
 
         # Add bias evolution
         xi *= self.compute_bias_evol(params)
